@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Post-Fight Interview{% endblock %}
+
+{% block content %}
+<div style="max-width:680px;margin:0 auto;">
+
+{# Header #}
+<div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
+    <div style="font-size:.7rem;letter-spacing:.2em;color:var(--text-muted);
+                text-transform:uppercase;margin-bottom:4px;">
+        🎤 Post-Fight Interview
+    </div>
+    <h1 style="font-family:var(--font-display);font-size:1.8rem;
+               color:var(--text-bright);margin:0 0 4px;">
+        {{ iv.fighter_name }}
+    </h1>
+    <div style="font-size:.82rem;color:var(--text-muted);">
+        {% if iv.role == 'winner' %}
+        <span style="color:var(--neon-green);">Victory</span>
+        {% else %}
+        <span style="color:var(--blood-red);">Defeat</span>
+        {% endif %}
+        over {{ iv.opponent_name }}
+        via {{ iv.method }} · {{ iv.event_name }}
+    </div>
+</div>
+
+{# Media reactions if any #}
+{% if media_reactions %}
+<div class="card mb-lg">
+    <div class="card-header"><h3>📺 Media Reaction</h3></div>
+    <div style="padding:0;">
+        {% for r in media_reactions[:3] %}
+        <div style="display:flex;align-items:flex-start;gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <span style="font-size:1.1rem;flex-shrink:0;">{{ r.icon if r.icon is defined else '📰' }}</span>
+            <div>
+                <div style="font-size:.82rem;color:var(--text-bright);">{{ r.headline if r.headline is defined else r }}</div>
+                {% if r.outlet is defined %}
+                <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">{{ r.outlet }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# Interview choices #}
+<div class="card">
+    <div class="card-header">
+        <h3>What do you say?</h3>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+            Your response shapes your public image and rivalry heat.
+        </div>
+    </div>
+    <form action="{{ url_for('interview', fight_id=fight_id, fighter_id=iv.fighter_id) }}"
+          method="POST">
+
+        {# Call-out target for winner call_out choice #}
+        <input type="hidden" name="call_out_id" id="call_out_id" value="">
+
+        <div style="padding:var(--spacing-md);display:flex;flex-direction:column;gap:var(--spacing-sm);">
+            {% for key, label in iv.choices %}
+            <label style="display:flex;align-items:center;gap:var(--spacing-md);
+                          padding:var(--spacing-md);border-radius:6px;cursor:pointer;
+                          background:var(--bg-dark);border:2px solid var(--border-color);
+                          transition:border-color .15s;"
+                   onmouseover="this.style.borderColor='var(--info)'"
+                   onmouseout="if(!this.querySelector('input').checked) this.style.borderColor='var(--border-color)'">
+                <input type="radio" name="choice" value="{{ key }}" style="flex-shrink:0;"
+                       onclick="this.closest('form').querySelectorAll('label').forEach(l=>{
+                           l.style.borderColor=l.querySelector('input').checked?'var(--info)':'var(--border-color)'})">
+                <div>
+                    <div style="font-family:var(--font-display);font-size:.9rem;
+                                color:var(--text-bright);">
+                        {% if key == 'humble' %}🙏
+                        {% elif key == 'trash_talk' %}🔥
+                        {% elif key == 'call_out' %}⚔️
+                        {% elif key == 'respectful' %}🤝
+                        {% elif key == 'emotional' %}❤️
+                        {% elif key == 'thank_sponsors' %}💰
+                        {% elif key == 'accept_defeat' %}✊
+                        {% elif key == 'demand_rematch' %}↩️
+                        {% elif key == 'cite_injury' %}🩹
+                        {% elif key == 'question_decision' %}⚖️
+                        {% elif key == 'retirement_hint' %}🌅
+                        {% elif key == 'blame_camp' %}😤
+                        {% endif %}
+                        {{ label.split(' — ')[0] }}
+                    </div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:1px;">
+                        {{ label.split(' — ')[1] if ' — ' in label else '' }}
+                    </div>
+                </div>
+            </label>
+            {% endfor %}
+        </div>
+
+        <div style="padding:0 var(--spacing-md) var(--spacing-md);">
+            <button type="submit" class="btn btn-primary btn-block btn-lg">
+                Give Interview →
+            </button>
+        </div>
+    </form>
+</div>
+
+<div style="text-align:center;margin-top:var(--spacing-lg);">
+    <a href="{{ url_for('dashboard') }}" style="font-size:.8rem;color:var(--text-muted);">
+        Skip interview → Dashboard
+    </a>
+</div>
+
+</div>
+{% endblock %}

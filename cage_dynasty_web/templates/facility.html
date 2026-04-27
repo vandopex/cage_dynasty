@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Facility{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">🏗️ Facility</h1>
+    <div class="page-subtitle">Upgrade your training facility</div>
+</div>
+
+{% set tiers = [
+    ('GARAGE',   '🔧', 'Bare bones. Stat cap 65.',      0),
+    ('LOCAL',    '🏠', 'Decent setup. Stat cap 72.',    50000),
+    ('REGIONAL', '🏢', 'Solid facility. Stat cap 80.', 150000),
+    ('NATIONAL', '🏙️', 'Top facility. Stat cap 90.',   400000),
+    ('ELITE',    '⭐', 'World class. Stat cap 100.',    1000000),
+] %}
+
+{% if facility and facility.get('current_tier') %}
+{% set current = facility.current_tier %}
+{% else %}
+{% set current = 'GARAGE' %}
+{% endif %}
+
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--spacing-md);">
+{% for key, icon, desc, cost in tiers %}
+{% set is_current = (key == current) %}
+{% set tier_order = ['GARAGE','LOCAL','REGIONAL','NATIONAL','ELITE'] %}
+{% set is_upgrade = tier_order.index(key) == tier_order.index(current) + 1 %}
+<div class="card" style="border-color:{% if is_current %}var(--gold){% elif is_upgrade %}var(--info){% else %}var(--border-color){% endif %};
+                          opacity:{% if tier_order.index(key) > tier_order.index(current) + 1 %}0.5{% else %}1{% endif %};">
+    {% if is_current %}<div style="height:3px;background:var(--gold);"></div>{% endif %}
+    <div style="padding:var(--spacing-lg);text-align:center;">
+        <div style="font-size:2rem;margin-bottom:8px;">{{ icon }}</div>
+        <div style="font-family:var(--font-display);font-size:.9rem;color:{% if is_current %}var(--gold){% else %}var(--text-bright){% endif %};">
+            {{ key }}
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:4px;line-height:1.4;">{{ desc }}</div>
+        {% if is_current %}
+        <div style="margin-top:var(--spacing-md);font-size:.7rem;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;">Current</div>
+        {% elif is_upgrade %}
+        <div style="margin-top:var(--spacing-md);">
+            <div style="font-size:.75rem;color:var(--info);margin-bottom:6px;">${{ "{:,}".format(cost) }}</div>
+            <form action="/facility/upgrade" method="POST" style="margin:0;">
+                <button type="submit" class="btn btn-primary btn-sm btn-block"
+                        style="font-size:.72rem;">Upgrade →</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<div class="card mt-lg">
+    <div class="card-header"><h3>🏋️ Facility Benefits</h3></div>
+    <div style="padding:var(--spacing-lg);">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
+            <div>
+                <div style="font-size:.8rem;color:var(--text-muted);line-height:1.8;">
+                    <div>🔧 Garage — Stats hard-capped at <strong>65</strong></div>
+                    <div>🏠 Local — Stats hard-capped at <strong>72</strong></div>
+                    <div>🏢 Regional — Stats hard-capped at <strong>80</strong></div>
+                    <div>🏙️ National — Stats hard-capped at <strong>90</strong></div>
+                    <div>⭐ Elite — Stats hard-capped at <strong>100</strong></div>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:.8rem;color:var(--text-muted);line-height:1.8;">
+                    <div>Higher tiers unlock better coaches</div>
+                    <div>Larger roster capacity at higher tiers</div>
+                    <div>Reduced injury rates at better facilities</div>
+                    <div>Attract higher-potential prospects</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

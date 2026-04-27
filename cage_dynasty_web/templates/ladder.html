@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{{ current_division }} Ladder{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">🪜 Division Ladder</h1>
+    <div class="page-subtitle">{{ current_division }} · Week {{ week }}</div>
+</div>
+
+{# Division tabs #}
+{% set div_abbrev = {
+    'Strawweight':'STR','Flyweight':'FLY','Bantamweight':'BAN','Featherweight':'FEA',
+    'Lightweight':'LGT','Welterweight':'WEL','Middleweight':'MID',
+    'Light Heavyweight':'LHW','Heavyweight':'HVY'
+} %}
+<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
+    {% for div in divisions %}
+    <a href="{{ url_for('division_ladder', division=div) }}"
+       style="padding:6px 12px;border-radius:4px;text-decoration:none;font-size:.78rem;
+              font-family:var(--font-display);
+              background:{% if div == current_division %}var(--blood-red){% else %}var(--bg-dark){% endif %};
+              color:{% if div == current_division %}white{% else %}var(--text-muted){% endif %};
+              border:1px solid {% if div == current_division %}var(--blood-red){% else %}var(--border-color){% endif %};">
+        {{ div_abbrev.get(div, div[:3]) }}
+    </a>
+    {% endfor %}
+</div>
+
+{# Player status banner — show BEFORE the ladder so player knows their state #}
+{% if player_fighter %}
+<div style="display:flex;align-items:center;justify-content:space-between;
+            padding:var(--spacing-md) var(--spacing-lg);border-radius:8px;
+            margin-bottom:var(--spacing-lg);
+            background:{% if player_available %}rgba(0,230,118,.08){% else %}rgba(255,255,255,.04){% endif %};
+            border:1px solid {% if player_available %}rgba(0,230,118,.3){% else %}var(--border-color){% endif %};">
+    <div style="display:flex;align-items:center;gap:var(--spacing-md);">
+        <div style="font-size:1.2rem;">
+            {% if player_available %}✅{% elif 'Scheduled' in (player_status or '') %}📅{% else %}⏳{% endif %}
+        </div>
+        <div>
+            <div style="font-family:var(--font-display);font-size:.9rem;color:var(--text-bright);">
+                {{ player_fighter.name }}
+                <span style="font-size:.65rem;color:var(--info);margin-left:6px;">YOU</span>
+            </div>
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:1px;">
+                {% if player_available %}
+                    🟢 Available to fight — challenge anyone on the ladder
+                {% else %}
+                    {{ player_status }}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div style="font-family:var(--font-display);font-size:.85rem;
+                color:{% if player_fighter.is_champion %}var(--gold){% elif player_fighter.ranking %}var(--info){% else %}var(--text-muted){% endif %};">
+        {% if player_fighter.is_champion %}🏆 Champion
+        {% elif player_fighter.ranking %}#{{ player_fighter.ranking }}
+        {% else %}Unranked{% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Macros ── #}
+{# Build availability info for any fighter #}
+{# Returns dict-like values via set #}
+
+{# ── Fighter row macro ── #}
+{% macro fighter_row(fighter, rank_label, tier='mid') %}
+{% set fid       = fighter.fighter_id %}
+{% set is_player = player_fighter and fid == player_fighter.fighter_id %}
+{% set sched     = scheduled_map.get(fid) %}
+{% set cd_week   = cooldowns.get(fid, 0) %}
+{% set on_cd     = (not sched) and cd_week > week %}
+{% set available = (not sched) and (not on_cd) %}
+
+<div style="display:grid;grid-template-columns:36px 1fr auto;gap:var(--spacing-md);
+            align-items:center;padding:var(--spacing-sm) var(--spacing-md);
+            border-bottom:1px solid var(--border-color);
+            {% if is_player %}background:rgba(41,182,246,.06);border-left:3px solid var(--info);{% else %}border-left:3px solid transparent;{% endif %}
+            transition:background .12s;"
+     onmouseover="this.style.background='{% if is_player %}rgba(41,182,246,.1){% else %}var(--bg-dark){% endif %}'"
+     onmouseout="this.style.background='{% if is_player %}rgba(41,182,246,.06){% else %}transparent{% endif %}'">
+
+    {# Rank #}
+    <div style="font-family:var(--font-display);text-align:center;
+                font-size:{% if tier == 'champ' %}1rem{% else %}.85rem{% endif %};
+                color:{% if tier == 'champ' %}var(--gold){% elif tier == 'top' %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+        {{ rank_label }}
+    </div>
+
+    {# Fighter info #}
+    <div>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <a href="{{ url_for('fighter_profile', fighter_id=fid) }}"
+               style="font-family:var(--font-display);font-size:.92rem;text-decoration:none;
+                      color:{% if tier == 'champ' %}var(--gold){% elif is_player %}var(--info){% else %}var(--text-bright){% endif %};">
+                {{ fighter.name }}
+            </a>
+            {% if is_player %}
+            <span style="font-size:.58rem;color:var(--info);font-family:var(--font-display);
+                         border:1px solid var(--info);padding:0 4px;border-radius:3px;">YOU</span>
+            {% endif %}
+            {% if fighter.momentum_tag is defined and fighter.momentum_tag %}
+            <span style="font-size:.62rem;color:var(--text-muted);
+                         background:rgba(255,255,255,.05);border-radius:3px;
+                         padding:1px 5px;">{{ fighter.momentum_tag }}</span>
+            {% elif fighter.win_streak and fighter.win_streak >= 3 %}
+            <span style="font-size:.65rem;color:var(--neon-green);">🔥{{ fighter.win_streak }}W</span>
+            {% endif %}
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;display:flex;gap:8px;">
+            <span>{{ fighter.record_str }}</span>
+            <span>{{ fighter.overall_rating }} OVR</span>
+            <span>{{ fighter.fighting_style }}</span>
+        </div>
+        {# Availability status line #}
+        <div style="font-size:.65rem;margin-top:3px;">
+            {% if fighter.is_injured is defined and fighter.is_injured %}
+            <span style="color:var(--blood-red);">
+                🤕 Injured — {{ fighter.injury_weeks_out }}w out
+                {% if fighter.injury_desc %} · {{ fighter.injury_desc }}{% endif %}
+            </span>
+            {% elif sched %}
+            <span style="color:var(--warning);">
+                📅 Fighting {{ sched.opponent }} · {{ sched.event }} (Wk {{ sched.week }})
+            </span>
+            {% elif on_cd %}
+            <span style="color:var(--text-muted);">
+                ⏳ Available Week {{ cd_week }}
+                ({{ cd_week - week }}w)
+            </span>
+            {% else %}
+            <span style="color:var(--neon-green);">🟢 Available</span>
+            {% endif %}
+        </div>
+    </div>
+
+    {# Actions #}
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+        {% if player_in_division and player_fighter and not is_player %}
+            {% if player_available and available %}
+            <form action="{{ url_for('challenge_fighter',
+                            player_fighter_id=player_fighter.fighter_id,
+                            target_id=fid) }}" method="POST">
+                <button type="submit"
+                        style="padding:4px 10px;font-family:var(--font-display);font-size:.72rem;
+                               background:rgba(0,230,118,.15);border:1px solid var(--neon-green);
+                               border-radius:4px;color:var(--neon-green);cursor:pointer;">
+                    Challenge
+                </button>
+            </form>
+            {% elif not player_available %}
+            <span style="font-size:.62rem;color:var(--text-muted);">You're unavailable</span>
+            {% else %}
+            <span style="font-size:.62rem;color:var(--text-muted);">Unavailable</span>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{# ── Champion ── #}
+{% if champion %}
+<div class="card mb-lg" style="border-color:var(--gold);">
+    <div style="height:3px;background:linear-gradient(90deg,var(--gold-dark),var(--gold));"></div>
+    <div style="padding:6px var(--spacing-md);background:rgba(255,215,0,.06);
+                font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--gold);">
+        🏆 {{ current_division }} Champion
+    </div>
+    {{ fighter_row(champion, 'C', tier='champ') }}
+</div>
+{% endif %}
+
+{# ── Top Contenders (#1-5) ── #}
+{% if contenders %}
+<div class="card mb-lg">
+    <div style="padding:6px var(--spacing-md);background:var(--bg-dark);
+                font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--blood-red);
+                border-bottom:1px solid var(--border-color);">
+        ⚔️ Top Contenders
+    </div>
+    {% for fighter in contenders %}
+    {{ fighter_row(fighter, '#' ~ fighter.ranking, tier='top') }}
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ── Ranked (#6-15) ── #}
+{% if ranked %}
+<div class="card mb-lg">
+    <div style="padding:6px var(--spacing-md);background:var(--bg-dark);
+                font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);
+                border-bottom:1px solid var(--border-color);">
+        📊 Ranked Fighters
+    </div>
+    {% for fighter in ranked %}
+    {{ fighter_row(fighter, '#' ~ fighter.ranking, tier='mid') }}
+    {% endfor %}
+</div>
+{% endif %}
+
+{# ── Unranked ── #}
+{% if unranked %}
+<div class="card mb-lg">
+    <div style="padding:6px var(--spacing-md);background:var(--bg-dark);
+                font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);
+                border-bottom:1px solid var(--border-color);">
+        📋 Unranked
+    </div>
+    {% for fighter in unranked %}
+    {{ fighter_row(fighter, 'UR', tier='low') }}
+    {% endfor %}
+</div>
+{% endif %}
+
+{% if not champion and not contenders and not ranked %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+        No fighters in this division yet.
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

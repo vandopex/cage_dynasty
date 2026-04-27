@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}Sign Your First Fighter{% endblock %}
+
+{% block content %}
+
+{% set style_cfg = {
+    "Muay Thai":         {"icon":"🦵","color":"#ff6b35","class":"Striker"},
+    "Boxer":             {"icon":"🥊","color":"#ff4466","class":"Striker"},
+    "Orthodox Boxer":    {"icon":"🥊","color":"#ff4466","class":"Striker"},
+    "Kickboxer":         {"icon":"🦶","color":"#ffa726","class":"Striker"},
+    "Wrestler":          {"icon":"🤼","color":"#4a9eff","class":"Grappler"},
+    "BJJ Specialist":    {"icon":"🥋","color":"#a78bfa","class":"Grappler"},
+    "Submission Artist": {"icon":"🥋","color":"#a78bfa","class":"Grappler"},
+    "Ground & Pound":    {"icon":"👊","color":"#ef5350","class":"Fighter"},
+    "Sambo":             {"icon":"⚔️","color":"#ef5350","class":"Fighter"},
+    "Clinch Fighter":    {"icon":"💪","color":"#26c6da","class":"Fighter"},
+    "Counter Striker":   {"icon":"🎯","color":"#66bb6a","class":"Striker"},
+    "Point Fighter":     {"icon":"🎯","color":"#66bb6a","class":"Striker"},
+    "Brawler":           {"icon":"💥","color":"#ff5252","class":"Fighter"},
+    "Pressure Fighter":  {"icon":"⬆️","color":"#ff5252","class":"Fighter"},
+    "Judo":              {"icon":"🏅","color":"#7e57c2","class":"Grappler"},
+    "Balanced":          {"icon":"⚖️","color":"#9e9e9e","class":"Fighter"},
+    "Hybrid":            {"icon":"⚖️","color":"#9e9e9e","class":"Fighter"},
+} %}
+
+{% set trait_icons = {
+    "Glass Cannon":"💥","Iron Chin":"🪨","Cardio Machine":"💨",
+    "Knockout Artist":"⚡","Submission Ace":"🔒","Wrestler's Base":"🤼",
+    "Pressure Fighter":"⬆️","Counter Striker":"↩️","Fast Starter":"🚀",
+    "Slow Starter":"🐢","Big Game Hunter":"🎯","Choke Artist":"😰",
+    "Gym Rat":"💪","Injury Prone":"🩹","Durable":"🛡️","Veteran Savvy":"🧠",
+} %}
+
+{% set grade_cfg = {
+    "A+": {"color":"#ffd700","label":"GENERATIONAL PROSPECT"},
+    "A":  {"color":"#ffd700","label":"ELITE PROSPECT"},
+    "A-": {"color":"#ffe44d","label":"ELITE PROSPECT"},
+    "B+": {"color":"#00e676","label":"HIGH POTENTIAL"},
+    "B":  {"color":"#00e676","label":"HIGH POTENTIAL"},
+    "B-": {"color":"#4caf50","label":"SOLID POTENTIAL"},
+    "C+": {"color":"#29b6f6","label":"AVERAGE PROSPECT"},
+    "C":  {"color":"#29b6f6","label":"AVERAGE PROSPECT"},
+    "C-": {"color":"#78909c","label":"DEVELOPMENTAL"},
+    "D":  {"color":"#616161","label":"PROJECT FIGHTER"},
+} %}
+
+<div style="max-width:1020px;margin:0 auto;">
+
+    {# ── Progress ── #}
+    <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:var(--spacing-xl);">
+        {% for step, label, done in [("1","Camp",true),("2","Fighter",false),("3","Coach",false)] %}
+        <div style="text-align:center;">
+            <div style="width:36px;height:36px;border-radius:50%;
+                        background:{% if done %}var(--success){% elif label=='Fighter' %}var(--gold){% else %}var(--bg-card){% endif %};
+                        color:{% if done or label=='Fighter' %}var(--bg-darkest){% else %}var(--text-muted){% endif %};
+                        display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-display);font-size:.9rem;margin:0 auto;
+                        border:2px solid {% if done %}var(--success){% elif label=='Fighter' %}var(--gold){% else %}var(--border-color){% endif %};">
+                {% if done %}✓{% else %}{{ step }}{% endif %}
+            </div>
+            <div style="font-size:.68rem;margin-top:4px;text-transform:uppercase;letter-spacing:.06em;
+                        color:{% if done %}var(--success){% elif label=='Fighter' %}var(--gold){% else %}var(--text-muted){% endif %};">
+                {{ label }}
+            </div>
+        </div>
+        {% if not loop.last %}
+        <div style="width:64px;height:2px;margin-bottom:16px;
+                    background:{% if done %}var(--success){% else %}var(--border-color){% endif %};"></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    {# ── Header ── #}
+    <div style="text-align:center;margin-bottom:var(--spacing-xl);">
+        <h2 style="font-family:var(--font-display);font-size:2rem;color:var(--text-bright);margin:0 0 4px;">
+            SIGN YOUR FIRST FIGHTER
+        </h2>
+        <div style="color:var(--text-muted);font-size:.85rem;">{{ camp_name }} &middot; These prospects are looking for a home camp</div>
+    </div>
+
+    <form method="POST" action="{{ url_for('setup_fighter') }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:var(--spacing-md);">
+            {% for prospect in prospects %}
+            {% set scfg = style_cfg.get(prospect.style, {"icon":"🥊","color":"#9e9e9e","class":"Fighter"}) %}
+            {% if prospect.display_grade is defined and prospect.display_grade %}
+                {% set dg = prospect.display_grade %}
+            {% else %}
+                {# Compute display grade from ceiling so E/H/A/L never appears #}
+                {% set c = prospect.potential %}
+                {% if c >= 94 %}{% set dg = "A+" %}
+                {% elif c >= 88 %}{% set dg = "A" %}
+                {% elif c >= 83 %}{% set dg = "A-" %}
+                {% elif c >= 78 %}{% set dg = "B+" %}
+                {% elif c >= 73 %}{% set dg = "B" %}
+                {% elif c >= 65 %}{% set dg = "B-" %}
+                {% elif c >= 58 %}{% set dg = "C+" %}
+                {% elif c >= 50 %}{% set dg = "C" %}
+                {% elif c >= 42 %}{% set dg = "C-" %}
+                {% else %}{% set dg = "D" %}{% endif %}
+            {% endif %}
+            {% set gcfg = grade_cfg.get(dg, {"color":"#9e9e9e","label":"PROSPECT"}) %}
+            {% set traits = prospect.traits[:3] if prospect.traits else [] %}
+
+            <label onclick="selectFighter(this, '{{ prospect.id }}')"
+                   id="fcard-{{ loop.index }}"
+                   style="display:block;cursor:pointer;border-radius:10px;overflow:hidden;
+                          background:var(--bg-card);
+                          border:2px solid {% if loop.first %}{{ scfg.color }}{% else %}var(--border-color){% endif %};
+                          transition:border-color .15s,transform .15s,box-shadow .15s;
+                          position:relative;">
+                <input type="radio" name="fighter_id" value="{{ prospect.id }}"
+                       {% if loop.first %}checked{% endif %} style="display:none;">
+
+                {# Accent strip + archetype block #}
+                <div style="height:5px;background:{{ scfg.color }};"></div>
+
+                <div style="padding:var(--spacing-md) var(--spacing-md) 0;">
+
+                    {# Top row: style archetype + potential grade #}
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:var(--spacing-sm);">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <div style="width:42px;height:42px;border-radius:8px;
+                                        background:{{ scfg.color }}22;border:1px solid {{ scfg.color }}55;
+                                        display:flex;align-items:center;justify-content:center;font-size:1.4rem;">
+                                {{ scfg.icon }}
+                            </div>
+                            <div>
+                                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                                             color:{{ scfg.color }};font-weight:700;">{{ scfg.class }}</div>
+                                {% if scfg.class|lower != prospect.style|lower %}
+                                <div style="font-size:.7rem;color:var(--text-muted);">{{ prospect.style }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-family:var(--font-display);font-size:1.6rem;line-height:1;
+                                         color:{{ gcfg.color }};">{{ dg }}</div>
+                            <div style="font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;
+                                         color:{{ gcfg.color }};opacity:.8;">Potential</div>
+                        </div>
+                    </div>
+
+                    {# Name + nickname #}
+                    <div style="margin-bottom:var(--spacing-sm);">
+                        <div style="font-family:var(--font-display);font-size:1.35rem;
+                                     color:var(--text-bright);line-height:1.1;">{{ prospect.name }}</div>
+                        {% if prospect.nickname %}
+                        <div style="font-size:.78rem;color:var(--text-muted);font-style:italic;">
+                            "{{ prospect.nickname }}"
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    {# Meta row #}
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--spacing-md);">
+                        <span style="font-size:.68rem;padding:2px 7px;border-radius:3px;
+                                      background:rgba(255,255,255,.06);color:var(--text-muted);">
+                            {{ prospect.weight_class }}
+                        </span>
+                        <span style="font-size:.68rem;padding:2px 7px;border-radius:3px;
+                                      background:rgba(255,255,255,.06);color:var(--text-muted);">
+                            Age {{ prospect.age }}
+                        </span>
+                        <span style="font-size:.68rem;padding:2px 7px;border-radius:3px;
+                                      background:rgba(255,255,255,.06);color:var(--text-muted);">
+                            🌍 {{ prospect.country }}
+                        </span>
+                    </div>
+
+                    {# OVR stats #}
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-sm);
+                                margin-bottom:var(--spacing-sm);">
+                        <div style="background:rgba(0,0,0,.25);border-radius:6px;padding:8px;text-align:center;">
+                            <div style="font-family:var(--font-display);font-size:1.5rem;color:var(--info);">
+                                {{ prospect.overall }}
+                            </div>
+                            <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;
+                                         color:var(--text-muted);">Current</div>
+                        </div>
+                        <div style="background:rgba(0,0,0,.25);border-radius:6px;padding:8px;text-align:center;">
+                            <div style="font-family:var(--font-display);font-size:1.5rem;color:{{ gcfg.color }};">
+                                {{ dg }}
+                            </div>
+                            <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;
+                                         color:var(--text-muted);">Potential</div>
+                        </div>
+                    </div>
+
+                    {# Potential bar #}
+                    <div style="margin-bottom:var(--spacing-sm);">
+                        <div style="height:6px;background:rgba(255,255,255,.07);border-radius:3px;
+                                    position:relative;overflow:hidden;">
+                            <div style="position:absolute;left:0;top:0;height:100%;
+                                        width:{{ prospect.potential }}%;
+                                        background:{{ gcfg.color }}30;border-radius:3px;"></div>
+                            <div style="position:absolute;left:0;top:0;height:100%;
+                                        width:{{ prospect.overall }}%;
+                                        background:{{ scfg.color }};border-radius:3px;"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+                {# Traits strip #}
+                {% if traits %}
+                <div style="padding:var(--spacing-sm) var(--spacing-md);
+                            border-top:1px solid var(--border-color);
+                            display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    <span style="font-size:.6rem;text-transform:uppercase;letter-spacing:.08em;
+                                  color:var(--text-muted);">Traits</span>
+                    {% for trait in traits %}
+                    {% set ticon = trait_icons.get(trait, "⭐") %}
+                    <span title="{{ trait }}"
+                          style="font-size:.7rem;padding:2px 6px;border-radius:3px;
+                                  background:rgba(255,255,255,.06);color:var(--text-bright);
+                                  display:flex;align-items:center;gap:3px;">
+                        {{ ticon }} <span style="font-size:.65rem;color:var(--text-muted);">{{ trait }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="padding:var(--spacing-sm) var(--spacing-md);
+                            border-top:1px solid var(--border-color);">
+                    <span style="font-size:.7rem;color:var(--text-muted);">No traits yet — will develop through training</span>
+                </div>
+                {% endif %}
+
+                {# Grade label bottom bar #}
+                <div style="padding:6px var(--spacing-md);background:{{ gcfg.color }}12;
+                            border-top:1px solid {{ gcfg.color }}33;text-align:center;">
+                    <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;
+                                  color:{{ gcfg.color }};font-weight:700;">{{ gcfg.label }}</span>
+                </div>
+
+            </label>
+            {% endfor %}
+        </div>
+
+        <div style="margin-top:var(--spacing-xl);">
+            <button type="submit" class="btn btn-success btn-lg btn-block">
+                Continue to Coach Selection →
+            </button>
+        </div>
+    </form>
+
+    <div style="text-align:center;margin-top:var(--spacing-md);">
+        <a href="{{ url_for('setup_camp') }}" class="text-muted" style="font-size:.82rem;">← Back to Camp Setup</a>
+    </div>
+</div>
+
+<style>
+label[id^="fcard-"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0,0,0,.4);
+}
+</style>
+
+<script>
+function selectFighter(el, id) {
+    document.querySelectorAll('label[id^="fcard-"]').forEach(c => {
+        c.style.borderColor = 'var(--border-color)';
+    });
+    // Get the accent color from the top strip
+    const strip = el.querySelector('div[style*="height:5px"]');
+    const color = strip ? strip.style.background : 'var(--gold)';
+    el.style.borderColor = color;
+    el.querySelector('input').checked = true;
+}
+</script>
+{% endblock %}

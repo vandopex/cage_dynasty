@@ -1,0 +1,570 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week }} Recap{% endblock %}
+
+{% block content %}
+
+{# ── Helpers ── #}
+{% macro rank_badge(new_rank, delta) %}
+{% if new_rank == 0 %}
+<span style="color:var(--gold);font-family:var(--font-display);">🏆 Champ</span>
+{% elif new_rank %}
+<span style="color:var(--info);font-family:var(--font-display);">#{{ new_rank }}</span>
+{% if delta and delta > 0 %}<span style="color:var(--neon-green);font-size:.75em;"> ▲{{ delta }}</span>
+{% elif delta and delta < 0 %}<span style="color:var(--blood-red);font-size:.75em;"> ▼{{ delta|abs }}</span>
+{% endif %}
+{% else %}
+<span style="color:var(--text-muted);">UR</span>
+{% endif %}
+{% endmacro %}
+
+{# ── Header ── #}
+<div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
+    <div style="font-size:.72rem;letter-spacing:.2em;color:var(--text-muted);
+                text-transform:uppercase;margin-bottom:4px;">DFC — Week {{ week }}</div>
+    <h1 style="font-family:var(--font-display);font-size:2.4rem;
+               color:var(--text-bright);margin:0;">Weekend Recap</h1>
+</div>
+
+{# ── Training week / next fight banner ── #}
+{% if recap.upcoming_fight %}
+{% set uf = recap.upcoming_fight %}
+<div style="display:flex;align-items:center;justify-content:space-between;
+            padding:var(--spacing-md) var(--spacing-lg);
+            background:var(--bg-card);border-radius:8px;border:1px solid var(--border-color);
+            margin-bottom:var(--spacing-lg);">
+    <div style="display:flex;align-items:center;gap:var(--spacing-md);">
+        <span style="font-size:1.5rem;">🏋️</span>
+        <div>
+            <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);">
+                Training Week
+            </div>
+            <div style="font-family:var(--font-display);color:var(--text-bright);">
+                {% if uf.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=uf.fighter1_id) }}" style="color:var(--text-bright);text-decoration:none;">{{ uf.fighter1_name }}</a>{% else %}{{ uf.fighter1_name }}{% endif %} vs {% if uf.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=uf.fighter2_id) }}" style="color:var(--text-bright);text-decoration:none;">{{ uf.fighter2_name }}</a>{% else %}{{ uf.fighter2_name }}{% endif %}
+                <span style="color:var(--text-muted);font-size:.8rem;font-family:inherit;">
+                    &nbsp;·&nbsp; {{ uf.event_name }} &nbsp;·&nbsp;
+                    {{ uf.weeks_until }}w out
+                </span>
+            </div>
+        </div>
+    </div>
+    <a href="{{ url_for('upcoming_events') }}" class="btn btn-outline btn-sm">View Card →</a>
+</div>
+{% endif %}
+
+{# ── Player fight result (if any) ── #}
+{% if recap.player_fights %}
+{% for fight in recap.player_fights %}
+{% set player_won = fight.winner_id in player_ids %}
+<div class="card mb-lg" style="border-color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+    <div style="height:4px;background:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};"></div>
+    <div style="padding:var(--spacing-lg);display:flex;align-items:center;gap:var(--spacing-lg);
+                background:{% if player_won %}rgba(0,230,118,.05){% else %}rgba(211,47,47,.05){% endif %};">
+        <div style="font-size:3rem;">{% if player_won %}🏆{% else %}💀{% endif %}</div>
+        <div style="flex:1;">
+            <div style="font-family:var(--font-display);font-size:2rem;
+                        color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                {% if player_won %}VICTORY{% else %}DEFEAT{% endif %}
+            </div>
+            <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);margin-top:4px;">
+                {% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %} def. {% if fight.loser_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.loser_id) }}" style="color:inherit;text-decoration:none;">{{ fight.loser_name }}</a>{% else %}{{ fight.loser_name }}{% endif %}
+            </div>
+            <div style="font-size:.82rem;color:var(--text-muted);margin-top:2px;">
+                via {{ fight.method }}{% if fight.method not in ('DEC','UNY DEC') %} (R{{ fight.round_finished }}){% endif %}
+                &nbsp;·&nbsp; {{ fight.event_name }}
+            </div>
+        </div>
+        <div style="text-align:center;">
+            {% set w_delta = fight.winner_rank_delta if fight.winner_id in player_ids else fight.loser_rank_delta %}
+            {% set w_new   = fight.winner_new_rank   if fight.winner_id in player_ids else fight.loser_new_rank %}
+            {{ rank_badge(w_new, w_delta) }}
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
+
+{# ── FOTN Banner — player fight #}
+{% if fotn_player_fight %}
+<div style="margin-bottom:var(--spacing-lg);padding:var(--spacing-lg);
+            background:linear-gradient(135deg,rgba(255,107,0,.15),rgba(255,215,0,.15));
+            border:1px solid var(--gold);border-radius:8px;
+            text-align:center;position:relative;overflow:hidden;">
+    <div style="position:absolute;top:0;left:0;right:0;height:3px;
+                background:linear-gradient(90deg,var(--blood-red),var(--gold),var(--blood-red));"></div>
+    <div style="font-size:2rem;margin-bottom:4px;">🔥</div>
+    <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--gold);
+                letter-spacing:.05em;margin-bottom:4px;">
+        FIGHT OF THE NIGHT
+    </div>
+    <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);
+                margin-bottom:var(--spacing-sm);">
+        {% if fotn_player_fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fotn_player_fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fotn_player_fight.fighter1_name }}</a>{% else %}{{ fotn_player_fight.fighter1_name }}{% endif %} vs {% if fotn_player_fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fotn_player_fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fotn_player_fight.fighter2_name }}</a>{% else %}{{ fotn_player_fight.fighter2_name }}{% endif %}
+    </div>
+    <div style="font-size:.85rem;color:var(--text-secondary);margin-bottom:var(--spacing-md);">
+        Your fight was selected Fight of the Night
+    </div>
+    <div style="display:inline-flex;align-items:center;gap:var(--spacing-md);
+                padding:var(--spacing-sm) var(--spacing-xl);
+                background:rgba(255,215,0,.15);border:1px solid rgba(255,215,0,.4);
+                border-radius:30px;">
+        <span style="font-size:1.2rem;">💰</span>
+        <span style="font-family:var(--font-display);font-size:1.1rem;color:var(--gold);">
+            +$50,000 bonus
+        </span>
+        <span style="font-size:.75rem;color:var(--text-muted);">added to camp balance</span>
+    </div>
+</div>
+{% endif %}
+
+{# ── 2-column layout ── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);align-items:start;">
+
+    {# ════ LEFT: Card results + Notable ════ #}
+    <div>
+
+    {# ── DFC Card Results ── #}
+    {% if recap.ai_event %}
+    {% set all_fights = recap.ai_event.fights if recap.ai_event.fights is defined else [] %}
+    {% set slot_order  = ['main_event','co_main','main_card','prelim','early_prelim'] %}
+    {% set slot_labels = {'main_event':'🏆 Main Event','co_main':'⭐ Co-Main',
+                          'main_card':'🥊 Main Card','prelim':'📋 Prelims','early_prelim':'📋 Early Prelims'} %}
+    {% set method_colors = {'KO':'var(--blood-red)','TKO':'var(--blood-red)',
+                             'SUB':'var(--info)','DEC':'var(--text-muted)'} %}
+    <div class="card mb-lg">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <h3>📋 DFC Card Results</h3>
+            <span class="text-muted text-sm">{{ recap.ai_event.event_name }}</span>
+        </div>
+        <div style="padding:0;">
+            {% for slot in slot_order %}
+            {% set slot_fights = all_fights | selectattr('card_slot','equalto',slot) | list %}
+            {% if slot_fights %}
+            <div style="padding:4px var(--spacing-md);background:var(--bg-dark);
+                        border-bottom:1px solid var(--border-color);
+                        font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:{% if slot == 'main_event' %}var(--gold){% elif slot == 'co_main' %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+                {{ slot_labels.get(slot, slot) }}
+            </div>
+            {% for fight in slot_fights %}
+            <div style="display:flex;align-items:center;gap:8px;
+                        padding:8px var(--spacing-md);
+                        border-bottom:1px solid var(--border-color);
+                        {% if fight.get('is_fotn') %}background:rgba(255,215,0,.04);{% endif %}">
+                {# Method badge #}
+                <div style="flex-shrink:0;text-align:center;min-width:58px;">
+                    <span style="font-size:.65rem;font-family:var(--font-display);
+                                 padding:2px 5px;border-radius:2px;display:block;
+                                 background:{% if fight.method in ('KO','TKO') %}rgba(211,47,47,.2){% elif fight.method == 'SUB' %}rgba(41,182,246,.2){% else %}rgba(255,255,255,.05){% endif %};
+                                 color:{{ method_colors.get(fight.method, 'var(--text-muted)') }};">
+                        {{ fight.method }}
+                    </span>
+                    {% if fight.get('weight_class') %}
+                    <span style="font-size:.55rem;color:var(--text-muted);display:block;margin-top:1px;
+                                 text-transform:uppercase;letter-spacing:.04em;">
+                        {% if fight.weight_class %}<a href="{{ url_for('rankings', division=fight.weight_class) }}" style="color:inherit;text-decoration:none;">{{ fight.weight_class[:3] }}</a>{% endif %}
+                    </span>
+                    {% endif %}
+                </div>
+                {# Names with PRE-fight ranks inline #}
+                <div style="flex:1;min-width:0;font-size:.82rem;">
+                    {# Calculate pre-fight ranks: old = new + delta (delta = old - new) #}
+                    {% set w_new   = fight.get('winner_new_rank') %}
+                    {% set w_delta = fight.get('winner_rank_delta') %}
+                    {% set l_new   = fight.get('loser_new_rank') %}
+                    {% set l_delta = fight.get('loser_rank_delta') %}
+                    {# Pre-fight rank = new_rank + delta (since delta = pre - post) #}
+                    {% if w_delta is not none and w_new is not none %}
+                        {% set w_pre = w_new + w_delta %}
+                    {% else %}
+                        {% set w_pre = w_new %}
+                    {% endif %}
+                    {% if l_delta is not none and l_new is not none %}
+                        {% set l_pre = l_new + l_delta %}
+                    {% else %}
+                        {% set l_pre = l_new %}
+                    {% endif %}
+                    <span style="color:var(--neon-green);font-family:var(--font-display);">
+                        {% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %}
+                    </span>
+                    {% if w_pre == 0 %}<span style="color:var(--gold);font-size:.72em;"> C</span>
+                    {% elif w_pre %}<span style="color:var(--info);font-size:.72em;"> #{{ w_pre }}</span>{% endif %}
+                    <span style="color:var(--text-muted);font-size:.75em;"> def. </span>
+                    <span style="color:var(--text-secondary);">{% if fight.loser_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.loser_id) }}" style="color:inherit;text-decoration:none;">{{ fight.loser_name }}</a>{% else %}{{ fight.loser_name }}{% endif %}</span>
+                    {% if l_pre == 0 %}<span style="color:var(--gold);font-size:.72em;"> C</span>
+                    {% elif l_pre %}<span style="color:var(--text-muted);font-size:.72em;"> #{{ l_pre }}</span>{% endif %}
+                    {% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC') %}
+                    <span style="color:var(--text-muted);font-size:.75em;"> · R{{ fight.get('round', fight.get('round_finished','?')) }}</span>
+                    {% endif %}
+                    {# AND NEW / AND STILL for title fights #}
+                    {% if fight.get('is_title_fight') or (w_new == 0 and l_pre == 0) or (w_new == 0 and w_pre != 0) %}
+                        {% if l_pre == 0 and w_pre != 0 %}
+                        {# Champ lost — new champion crowned #}
+                        <span style="font-family:var(--font-display);font-size:.72em;
+                                     color:var(--gold);font-weight:bold;
+                                     background:rgba(255,215,0,.15);padding:1px 5px;
+                                     border-radius:3px;margin-left:4px;">AND NEW</span>
+                        {% elif w_pre == 0 and w_new == 0 %}
+                        {# Champ won — defended #}
+                        <span style="font-family:var(--font-display);font-size:.72em;
+                                     color:var(--text-muted);
+                                     border:1px solid rgba(255,255,255,.2);padding:1px 5px;
+                                     border-radius:3px;margin-left:4px;">AND STILL</span>
+                        {% endif %}
+                    {% endif %}
+
+                </div>
+                {# Rank change #}
+                <div style="text-align:right;font-size:.75rem;flex-shrink:0;min-width:60px;">
+                    {% set w_new   = fight.get('winner_new_rank') %}
+                    {% set w_delta = fight.get('winner_rank_delta') %}
+                    {% if w_new is not none %}
+                    → {{ rank_badge(w_new, w_delta) }}
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endfor %}
+
+            {# Unslotted fallback #}
+            {% set unslotted = all_fights | rejectattr('card_slot','defined') | list %}
+            {% for fight in unslotted %}
+            <div style="display:flex;align-items:center;gap:8px;padding:8px var(--spacing-md);
+                        border-bottom:1px solid var(--border-color);">
+                <span style="font-size:.65rem;font-family:var(--font-display);padding:2px 5px;
+                             border-radius:2px;background:rgba(255,255,255,.05);color:var(--text-muted);">
+                    {{ fight.method }}
+                </span>
+                <div style="flex:1;font-size:.82rem;">
+                    <span style="color:var(--neon-green);font-family:var(--font-display);">{% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %}</span>
+                    <span style="color:var(--text-muted);"> def. </span>
+                    <span style="color:var(--text-secondary);">{% if fight.loser_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.loser_id) }}" style="color:inherit;text-decoration:none;">{{ fight.loser_name }}</a>{% else %}{{ fight.loser_name }}{% endif %}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Notable Moments ── #}
+    {% if notable %}
+    <div class="card mb-lg">
+        <div class="card-header"><h3>⚡ Notable Moments</h3></div>
+        <div style="padding:0;">
+            {% for n in notable %}
+            <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                        padding:var(--spacing-sm) var(--spacing-md);
+                        border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                <span style="font-size:1.1rem;flex-shrink:0;">{{ n.icon }}</span>
+                <span style="font-size:.82rem;color:{{ n.color }};font-family:var(--font-display);">{{ n.text }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Coach's Corner ── #}
+    {% if digest and digest.observations %}
+    <div class="card" style="border-color:rgba(255,215,0,.2);">
+        <div class="card-header" style="border-bottom:1px solid rgba(255,215,0,.15);
+                                        display:flex;justify-content:space-between;align-items:center;">
+            <h3 style="color:var(--gold);">{{ digest.icon }} Coach's Corner</h3>
+            <span style="font-size:.72rem;color:var(--text-muted);font-family:var(--font-display);">
+                {{ digest.coach_name }} · {{ digest.coach_spec | title }} · {{ digest.coach_rating }} RTG
+            </span>
+        </div>
+        <div style="padding:0;">
+            {% for hl in digest.highlights %}
+            <div style="padding:var(--spacing-sm) var(--spacing-md);
+                        background:rgba(211,47,47,.06);border-bottom:1px solid rgba(211,47,47,.2);
+                        font-size:.72rem;color:var(--blood-red);">
+                {{ hl.icon }} {{ hl.text }}
+            </div>
+            {% endfor %}
+            {% for obs in digest.observations %}
+            <div style="padding:var(--spacing-md);
+                        border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                <div style="display:flex;align-items:center;gap:var(--spacing-sm);margin-bottom:6px;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=obs.fighter_id) }}"
+                       style="font-family:var(--font-display);font-size:.8rem;
+                              color:var(--text-bright);text-decoration:none;">
+                        {{ obs.fighter_name }}
+                    </a>
+                    <span style="margin-left:auto;font-size:.65rem;color:{{ obs.fatigue_color }};">
+                        {{ obs.fatigue_label }}
+                    </span>
+                    <span style="font-size:.68rem;">{{ obs.intensity_emoji }}</span>
+                    <span style="font-size:.62rem;color:var(--text-muted);">
+                        {{ obs.focus }} · {{ obs.intensity }}{% if obs.is_fight_camp %} · <span style="color:var(--gold);">Fight Camp</span>{% endif %}
+                    </span>
+                </div>
+                <div style="font-size:.78rem;color:var(--text-secondary);font-style:italic;
+                            line-height:1.5;border-left:2px solid rgba(255,215,0,.2);
+                            padding-left:var(--spacing-sm);">
+                    "{{ obs.quote }}"
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    </div>{# end left #}
+
+    {# ════ RIGHT: Your fighters + Finances + Headlines ════ #}
+    <div>
+
+    {# ── Your Fighters ── #}
+    {% if recap.player_rankings %}
+    <div class="card mb-lg">
+        <div class="card-header" style="border-bottom:2px solid var(--info);">
+            <h3>📊 Your Fighters</h3>
+        </div>
+        {% for fid, fdata in recap.player_rankings.items() %}
+        {% set rank = fdata.ranking %}
+        {% set wc   = fdata.get('weight_class','') %}
+        {% set tot  = fdata.get('total_ranked', 15) %}
+        {% if rank == 0 %}
+            {% set rcolor = 'var(--gold)' %}
+            {% set rlabel = '🏆 Champion' %}
+            {% set rdesc  = wc ~ ' Champion' %}
+        {% elif rank and rank <= 5 %}
+            {% set rcolor = 'var(--blood-red)' %}
+            {% set rlabel = '#' ~ rank %}
+            {% set rdesc  = 'Title contender — top 5 in ' ~ wc %}
+        {% elif rank %}
+            {% set rcolor = 'var(--info)' %}
+            {% set rlabel = '#' ~ rank %}
+            {% set rdesc  = 'Ranked ' ~ wc ~ ' · ' ~ rank ~ ' of ' ~ tot %}
+        {% else %}
+            {% set rcolor = 'var(--text-muted)' %}
+            {% set rlabel = 'Unranked' %}
+            {% set rdesc  = 'Win fights to break into the ' ~ wc ~ ' rankings' %}
+        {% endif %}
+        <div style="padding:var(--spacing-lg);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <div style="display:flex;justify-content:space-between;align-items:center;
+                        margin-bottom:var(--spacing-sm);">
+                <div>
+                    <span style="font-family:var(--font-display);font-size:1.05rem;
+                                 color:var(--text-bright);">{{ fdata.name }}</span>
+                    <span class="text-muted text-sm" style="margin-left:8px;">{{ fdata.record }}</span>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-family:var(--font-display);font-size:1.3rem;color:{{ rcolor }};">{{ rlabel }}</div>
+                    <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">{{ wc }}</div>
+                </div>
+            </div>
+            <div style="font-size:.75rem;color:{{ rcolor }};margin-bottom:var(--spacing-sm);">{{ rdesc }}</div>
+            {% if rank and rank > 0 %}
+            <div>
+                <div style="display:flex;justify-content:space-between;font-size:.62rem;
+                            color:var(--text-muted);margin-bottom:3px;">
+                    <span>🏆</span><span>#5</span><span>#10</span><span>#15</span>
+                </div>
+                <div style="background:var(--bg-dark);border-radius:3px;height:6px;
+                            position:relative;overflow:visible;">
+                    {% set fill_pct = ((16 - rank) / 15 * 100)|int %}
+                    <div style="width:{{ fill_pct }}%;height:100%;
+                                background:linear-gradient(90deg,{{ rcolor }},{{ rcolor }}88);
+                                border-radius:3px;"></div>
+                    {% set dot_pct = ((rank - 1) / 14 * 100)|int %}
+                    <div style="position:absolute;top:-3px;left:{{ dot_pct }}%;
+                                width:12px;height:12px;border-radius:50%;
+                                background:{{ rcolor }};transform:translateX(-50%);
+                                border:2px solid var(--bg-card);"></div>
+                </div>
+            </div>
+            {% else %}
+            <div style="font-size:.72rem;color:var(--text-muted);font-style:italic;">
+                💡 Beat a ranked opponent to enter the top 15
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+
+    {# ── Training Report (Leather-style stat deltas) ── #}
+    {% if training_report %}
+    <div class="card mb-lg">
+        <div class="card-header"><h3>📈 Training Report</h3></div>
+        <div style="padding:0;">
+            {% for fid, tr in training_report.items() %}
+            {% set ovr_delta = tr.ovr_delta or 0 %}
+            <div style="padding:var(--spacing-md);
+                        border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+
+                {# Fighter name + OVR change #}
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            margin-bottom:var(--spacing-sm);">
+                    <div>
+                        <span style="font-family:var(--font-display);font-size:.95rem;
+                                     color:var(--text-bright);">{{ tr.name }}</span>
+                        <span style="font-size:.68rem;color:var(--text-muted);margin-left:8px;">
+                            {{ tr.focus }} · {{ tr.intensity }}
+                            {% if tr.is_fight_camp %}<span style="color:var(--gold);"> · Fight Camp</span>{% endif %}
+                        </span>
+                    </div>
+                    <div style="text-align:right;">
+                        {% if ovr_delta > 0 %}
+                        <span style="font-family:var(--font-display);font-size:1rem;
+                                     color:var(--neon-green);">+{{ ovr_delta }} OVR</span>
+                        {% elif ovr_delta < 0 %}
+                        <span style="font-family:var(--font-display);font-size:1rem;
+                                     color:var(--warning);">{{ ovr_delta }} OVR</span>
+                        {% elif tr.gains %}
+                        {# Show cumulative camp gains instead of "OVR pending" #}
+                        {% set totals = tr.camp_totals if tr.camp_totals is defined else {} %}
+                        {% set top_stat = namespace(name='', val=0) %}
+                        {% for stat, val in totals.items() %}
+                            {% if val > top_stat.val %}
+                                {% set top_stat.name = stat %}
+                                {% set top_stat.val  = val %}
+                            {% endif %}
+                        {% endfor %}
+                        {% if top_stat.name %}
+                        <span style="font-size:.72rem;color:var(--neon-green);">
+                            {{ top_stat.name | replace('_',' ') | title }} +{{ '%.1f'|format(top_stat.val) }} this camp
+                        </span>
+                        {% else %}
+                        <span style="font-size:.72rem;color:var(--text-muted);">
+                            Gaining — check back next week
+                        </span>
+                        {% endif %}
+                        {% else %}
+                        <span style="font-size:.72rem;color:var(--text-muted);">—</span>
+                        {% endif %}
+                    </div>
+                </div>
+
+                {# Stat gains — show each improved stat as a delta pill #}
+                {% if tr.gains %}
+                <div style="display:flex;flex-wrap:wrap;gap:4px;">
+                    {% for stat, gain in tr.gains.items() %}
+                    <div style="display:flex;align-items:center;gap:4px;
+                                padding:2px 8px;border-radius:3px;
+                                background:{% if '(coach)' in stat %}rgba(255,215,0,.1){% else %}rgba(0,230,118,.1){% endif %};
+                                border:1px solid {% if '(coach)' in stat %}rgba(255,215,0,.3){% else %}rgba(0,230,118,.25){% endif %};">
+                        <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.04em;
+                                     color:var(--text-muted);">
+                            {{ stat | replace('_', ' ') | replace(' (coach)', '') | title }}
+                        </span>
+                        <span style="font-family:var(--font-display);font-size:.75rem;
+                                     color:{% if '(coach)' in stat %}var(--gold){% else %}var(--neon-green){% endif %};">
+                            +{{ "%.1f"|format(gain) }}
+                        </span>
+                        {% if '(coach)' in stat %}
+                        <span style="font-size:.55rem;color:var(--gold);">🧑‍🏫</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div style="font-size:.72rem;color:var(--text-muted);font-style:italic;">
+                    {% if tr.intensity == 'REST' %}
+                    😴 Recovery week — fatigue reduced, no stat gains
+                    {% else %}
+                    Approaching stat ceiling — diminishing returns
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# ── Weekly Finances ── #}
+    <div class="card mb-lg">
+        <div class="card-header"><h3>💰 Weekly Finances</h3></div>
+        <div style="padding:var(--spacing-lg);">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--spacing-md);text-align:center;">
+                <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);">
+                    <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--neon-green);">
+                        ${{ "{:,}".format(finances.balance) }}
+                    </div>
+                    <div class="text-muted text-sm">Camp Balance</div>
+                </div>
+                <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);">
+                    <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--blood-red-light);">
+                        -${{ "{:,}".format(finances.overhead) }}
+                    </div>
+                    <div class="text-muted text-sm">Weekly Overhead</div>
+                </div>
+                <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);
+                            border:1px solid {% if finances.weeks_runway < 8 %}var(--blood-red){% elif finances.weeks_runway < 20 %}var(--warning){% else %}var(--border-color){% endif %};">
+                    <div style="font-family:var(--font-display);font-size:1.15rem;
+                                color:{% if finances.weeks_runway < 8 %}var(--blood-red-light){% elif finances.weeks_runway < 20 %}var(--warning){% else %}var(--text-bright){% endif %};">
+                        {{ finances.weeks_runway }}
+                    </div>
+                    <div class="text-muted text-sm">Weeks Runway</div>
+                </div>
+            </div>
+            {% if finances.purses_earned %}
+            <div style="margin-top:var(--spacing-md);text-align:center;font-size:.78rem;color:var(--neon-green);">
+                +${{ "{:,}".format(finances.purses_earned) }} earned in purses this week
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {# ── This Week's Headlines ── #}
+    {% if news %}
+    <div class="card">
+        <div class="card-header"><h3>📰 This Week's Headlines</h3></div>
+        <div style="padding:0;">
+            {# Major stories first — title changes, FOTN, player results, injuries #}
+            {% set major_cats = ['title','fotn','player_result','injury'] %}
+            {% set major_items = news | selectattr('category', 'in', major_cats) | list %}
+            {% set regular_items = news | rejectattr('category', 'in', major_cats) | list %}
+            {% set shown = namespace(n=0) %}
+
+            {% for item in (major_items + regular_items)[:8] %}
+            {% set is_major = item.category in major_cats %}
+            {% set shown.n = shown.n + 1 %}
+            <div style="display:flex;align-items:flex-start;gap:var(--spacing-sm);
+                        padding:{% if is_major %}var(--spacing-md){% else %}var(--spacing-sm){% endif %} var(--spacing-md);
+                        {% if is_major %}background:rgba(255,255,255,.02);
+                        border-left:3px solid {% if item.category == 'title' %}var(--gold){% elif item.category == 'fotn' %}var(--gold){% elif item.category == 'player_result' %}var(--neon-green){% else %}var(--blood-red){% endif %};{% endif %}
+                        border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                <span style="flex-shrink:0;font-size:{% if is_major %}1.1rem{% else %}.9rem{% endif %};margin-top:1px;">
+                    {{ item.icon }}
+                </span>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:{% if is_major %}.88rem{% else %}.8rem{% endif %};
+                                color:var(--text-bright);line-height:1.4;
+                                {% if is_major %}font-family:var(--font-display);{% endif %}">
+                        {{ item.headline }}
+                    </div>
+                    <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;">
+                        <span>Week {{ item.week }}</span>
+                        {% if item.winner_id %}
+                        <span>·</span>
+                        <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
+                           style="color:var(--neon-green);text-decoration:none;">Winner →</a>
+                        {% endif %}
+                        {% if item.loser_id %}
+                        <a href="{{ url_for('fighter_profile', fighter_id=item.loser_id) }}"
+                           style="color:var(--text-muted);text-decoration:none;">Loser →</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    </div>{# end right #}
+</div>
+
+{# ── Continue ── #}
+<div style="text-align:center;padding:var(--spacing-xl) 0;">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg"
+       style="font-size:1.1rem;min-width:240px;">Continue →</a>
+</div>
+
+{% endblock %}

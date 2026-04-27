@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Watchlist{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">👀 Watchlist</h1>
+    <div class="page-subtitle">Fighters you're tracking</div>
+</div>
+
+{% if not entries %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;">
+        <div style="font-size:3rem;margin-bottom:var(--spacing-md);">👀</div>
+        <h3>Watchlist Empty</h3>
+        <p class="text-muted">Add fighters from the Division Ladder or Rankings pages.</p>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div style="padding:0;">
+        {% for e in entries %}
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                    padding:var(--spacing-md);border-bottom:1px solid var(--border-color);">
+            <span style="font-size:1.2rem;flex-shrink:0;">{{ e.category_icon }}</span>
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=e.fighter_id) }}"
+                       style="font-family:var(--font-display);font-size:.95rem;color:var(--text-bright);text-decoration:none;">
+                        {{ e.fighter_name }}
+                    </a>
+                    {% if e.is_champion %}<span class="badge badge-champion" style="font-size:.58rem;">🏆 CHAMP</span>
+                    {% elif e.ranking %}<span class="badge badge-ranked" style="font-size:.58rem;">#{{ e.ranking }}</span>{% endif %}
+                </div>
+                <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">
+                    {{ e.record_str }} · {{ e.weight_class }} · {{ e.overall_rating }} OVR
+                    · Added {{ e.added_date }}
+                </div>
+                {% if e.notes %}
+                <div style="margin-top:4px;">
+                    {% for note in e.notes[-2:] %}
+                    <div style="font-size:.7rem;color:var(--text-secondary);font-style:italic;">📝 {{ note }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex-shrink:0;">
+                <span style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;">{{ e.category }}</span>
+                <span style="font-size:.62rem;padding:1px 5px;border-radius:3px;
+                             background:{% if e.priority=='HIGH' %}rgba(211,47,47,.2){% elif e.priority=='MEDIUM' %}rgba(255,167,38,.2){% else %}rgba(255,255,255,.05){% endif %};
+                             color:{% if e.priority=='HIGH' %}var(--blood-red){% elif e.priority=='MEDIUM' %}var(--warning){% else %}var(--text-muted){% endif %};">
+                    {{ e.priority }}
+                </span>
+                <form action="{{ url_for('watchlist_remove', fighter_id=e.fighter_id) }}" method="POST" style="margin:0;">
+                    <button type="submit" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:.7rem;">Remove ✕</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{# Note form #}
+<div class="card mt-lg">
+    <div class="card-header"><h3>📝 Add Note</h3></div>
+    <div style="padding:var(--spacing-md);">
+        <form action="{{ url_for('watchlist_note', fighter_id=entries[0].fighter_id if entries else 'none') }}" method="POST">
+            <div style="display:flex;gap:8px;">
+                <input type="text" name="note" placeholder="Add a scouting note..."
+                       style="flex:1;padding:8px;background:var(--bg-dark);border:1px solid var(--border-color);
+                              border-radius:4px;color:var(--text-bright);">
+                <button type="submit" class="btn btn-outline">Add</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

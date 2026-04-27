@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% block title %}Create Your Camp{% endblock %}
+
+{% block content %}
+<div style="max-width:760px;margin:0 auto;">
+
+    {# ── Progress ── #}
+    <div style="display:flex;align-items:center;justify-content:center;gap:0;margin-bottom:var(--spacing-xl);">
+        {% for step, label, active in [("1","Camp",true),("2","Coach",false),("3","Fighter",false)] %}
+        <div style="text-align:center;">
+            <div style="width:36px;height:36px;border-radius:50%;
+                        background:{% if active %}var(--gold){% else %}var(--bg-card){% endif %};
+                        color:{% if active %}var(--bg-darkest){% else %}var(--text-muted){% endif %};
+                        display:flex;align-items:center;justify-content:center;
+                        font-family:var(--font-display);font-size:.9rem;margin:0 auto;
+                        border:2px solid {% if active %}var(--gold){% else %}var(--border-color){% endif %};">
+                {{ step }}
+            </div>
+            <div style="font-size:.68rem;margin-top:4px;text-transform:uppercase;letter-spacing:.06em;
+                        color:{% if active %}var(--gold){% else %}var(--text-muted){% endif %};">
+                {{ label }}
+            </div>
+        </div>
+        {% if not loop.last %}
+        <div style="width:64px;height:2px;margin-bottom:16px;background:var(--border-color);"></div>
+        {% endif %}
+        {% endfor %}
+    </div>
+
+    {# ── Header ── #}
+    <div style="text-align:center;margin-bottom:var(--spacing-xl);">
+        <h2 style="font-family:var(--font-display);font-size:2rem;color:var(--text-bright);margin:0 0 4px;">
+            FOUND YOUR CAMP
+        </h2>
+        <div style="color:var(--text-muted);font-size:.85rem;">Every dynasty starts somewhere. Yours starts here.</div>
+    </div>
+
+    <div class="card">
+        <div style="height:3px;background:linear-gradient(90deg,var(--blood-red),var(--gold));"></div>
+        <div class="card-body" style="padding:var(--spacing-xl);">
+            <form method="POST" action="{{ url_for('setup_camp') }}">
+
+                {# ── Camp Name ── #}
+                <div style="margin-bottom:var(--spacing-xl);">
+                    <label style="display:block;font-size:.72rem;text-transform:uppercase;
+                                   letter-spacing:.1em;color:var(--text-muted);margin-bottom:8px;">
+                        Camp Name
+                    </label>
+                    <div style="display:flex;gap:8px;align-items:stretch;">
+                        <input type="text" name="camp_name" id="camp-name-input"
+                               class="form-control"
+                               placeholder="Name your camp..."
+                               required maxlength="30"
+                               style="flex:1;font-family:var(--font-display);font-size:1.1rem;
+                                      letter-spacing:.03em;">
+                        <button type="button" onclick="randomName()"
+                                style="padding:0 14px;background:var(--bg-dark);border:1px solid var(--border-color);
+                                       border-radius:6px;color:var(--text-muted);cursor:pointer;
+                                       font-size:1rem;transition:all .15s;white-space:nowrap;"
+                                title="Random name"
+                                onmouseover="this.style.borderColor='var(--gold)';this.style.color='var(--gold)'"
+                                onmouseout="this.style.borderColor='var(--border-color)';this.style.color='var(--text-muted)'">
+                            🎲 Random
+                        </button>
+                    </div>
+                    <div style="margin-top:6px;font-size:.7rem;color:var(--text-muted);">
+                        Hit 🎲 to cycle through names, or type your own
+                    </div>
+                </div>
+
+                {# ── Location ── #}
+                <div style="margin-bottom:var(--spacing-xl);">
+                    <label style="display:block;font-size:.72rem;text-transform:uppercase;
+                                   letter-spacing:.1em;color:var(--text-muted);margin-bottom:8px;">
+                        Location
+                    </label>
+                    <input type="hidden" name="camp_location" id="camp-location-val" value="{{ locations[0] }}">
+                    <div style="display:flex;flex-wrap:wrap;gap:6px;" id="location-pills">
+                        {% for location in locations %}
+                        <button type="button"
+                                onclick="selectLocation(this, '{{ location }}')"
+                                class="loc-pill"
+                                style="padding:5px 12px;border-radius:20px;font-size:.78rem;cursor:pointer;
+                                       transition:all .15s;
+                                       background:{% if loop.first %}var(--gold){% else %}var(--bg-dark){% endif %};
+                                       color:{% if loop.first %}var(--bg-darkest){% else %}var(--text-muted){% endif %};
+                                       border:1px solid {% if loop.first %}var(--gold){% else %}var(--border-color){% endif %};">
+                            {{ location }}
+                        </button>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# ── Garage Tier Card ── #}
+                <div style="margin-bottom:var(--spacing-xl);">
+                    <label style="display:block;font-size:.72rem;text-transform:uppercase;
+                                   letter-spacing:.1em;color:var(--text-muted);margin-bottom:8px;">
+                        Starting Tier
+                    </label>
+                    <input type="hidden" name="camp_tier" value="GARAGE">
+
+                    <div style="border-radius:8px;background:var(--bg-dark);
+                                border:1px solid var(--border-color);border-left:4px solid var(--gold);
+                                padding:var(--spacing-lg);overflow:hidden;">
+
+                        <div style="display:flex;align-items:flex-start;gap:var(--spacing-lg);">
+                            <div style="font-size:2.5rem;line-height:1;">🏚️</div>
+                            <div style="flex:1;">
+                                <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">
+                                    <span style="font-family:var(--font-display);font-size:1.25rem;
+                                                 color:var(--gold);">Garage Gym</span>
+                                    <span style="font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;
+                                                 color:var(--text-muted);padding:2px 6px;background:rgba(255,255,255,.05);
+                                                 border-radius:3px;">Starting Tier</span>
+                                </div>
+                                <div style="font-size:.82rem;color:var(--text-muted);margin-bottom:var(--spacing-md);
+                                            line-height:1.5;">
+                                    Bare concrete, used equipment, and a dream. Every champion started
+                                    somewhere — this is your somewhere.
+                                </div>
+
+                                {# 3-stat quick breakdown #}
+                                <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--spacing-sm);">
+                                    <div style="text-align:center;background:rgba(0,0,0,.25);
+                                                border-radius:6px;padding:10px 6px;">
+                                        <div style="font-size:1.1rem;margin-bottom:2px;">💰</div>
+                                        <div style="font-family:var(--font-display);font-size:1rem;
+                                                     color:var(--success);">$50,000</div>
+                                        <div style="font-size:.62rem;color:var(--text-muted);
+                                                    text-transform:uppercase;letter-spacing:.06em;">Budget</div>
+                                    </div>
+                                    <div style="text-align:center;background:rgba(0,0,0,.25);
+                                                border-radius:6px;padding:10px 6px;">
+                                        <div style="font-size:1.1rem;margin-bottom:2px;">👥</div>
+                                        <div style="font-family:var(--font-display);font-size:1rem;
+                                                     color:var(--info);">3 Fighters</div>
+                                        <div style="font-size:.62rem;color:var(--text-muted);
+                                                    text-transform:uppercase;letter-spacing:.06em;">Roster Cap</div>
+                                    </div>
+                                    <div style="text-align:center;background:rgba(0,0,0,.25);
+                                                border-radius:6px;padding:10px 6px;">
+                                        <div style="font-size:1.1rem;margin-bottom:2px;">📈</div>
+                                        <div style="font-family:var(--font-display);font-size:1rem;
+                                                     color:var(--gold);">65 Cap</div>
+                                        <div style="font-size:.62rem;color:var(--text-muted);
+                                                    text-transform:uppercase;letter-spacing:.06em;">Stat Ceiling</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:var(--spacing-md);padding-top:var(--spacing-md);
+                                    border-top:1px solid var(--border-color);
+                                    font-size:.72rem;color:var(--text-muted);">
+                            💡 Upgrade to Local Gym, Regional Center, and beyond as your camp earns prestige.
+                            Higher tiers unlock better stat ceilings, larger rosters, and elite coaches.
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-lg btn-block">
+                    Continue to Fighter Selection →
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div style="text-align:center;margin-top:var(--spacing-md);">
+        <a href="{{ url_for('new_game') }}" class="text-muted" style="font-size:.82rem;">← Back to Menu</a>
+    </div>
+</div>
+
+<script>
+const CAMP_NAMES = [
+    "Iron Will MMA","Apex Combat Sports","Hardwood MMA","Venom Fight Team",
+    "Titan Athletics","Wolfpack MMA","Steel City Combat","Grind House MMA",
+    "Black Belt Academy","Uprising Fight Club","Alpha Dog MMA","Summit Combat",
+    "Ironclad Athletics","Predator MMA","Renegade Fight Team","Phoenix Combat",
+    "Gold Standard MMA","Warpath Athletics","Killshot Training Center","The Pit MMA",
+    "Last Man Standing","Roughneck MMA","Gladiator Academy","Zero Hour Fight Team",
+    "Combat Zone Athletics","Relentless MMA","Detonator Fight Club","Savage Nation MMA",
+    "Hardknocks Athletics","Dominant Force MMA","No Mercy Fight Team","Crucible MMA",
+    "Elevate Combat Sports","Warzone Athletics","Conviction MMA","Blueprint Fight Team",
+    "Boneyard MMA","Siege Athletics","Undertaker Fight Club","Foundation Combat",
+    "Foxhole MMA","Centurion Athletics","Rampage Fight Team","Legacy Combat",
+    "Frontline MMA","Badlands Athletics","Barrage Fight Club","Lockdown MMA",
+    "Havoc Combat Sports","Stonehenge Athletics",
+];
+let nameIdx = Math.floor(Math.random() * CAMP_NAMES.length);
+
+function randomName() {
+    const input = document.getElementById('camp-name-input');
+    input.value = CAMP_NAMES[nameIdx % CAMP_NAMES.length];
+    nameIdx++;
+}
+
+function selectLocation(btn, loc) {
+    document.querySelectorAll('.loc-pill').forEach(p => {
+        p.style.background = 'var(--bg-dark)';
+        p.style.color = 'var(--text-muted)';
+        p.style.borderColor = 'var(--border-color)';
+    });
+    btn.style.background = 'var(--gold)';
+    btn.style.color = 'var(--bg-darkest)';
+    btn.style.borderColor = 'var(--gold)';
+    document.getElementById('camp-location-val').value = loc;
+}
+
+// Pre-fill with a random name on load so the field isn't blank
+window.addEventListener('DOMContentLoaded', () => {
+    randomName();
+});
+</script>
+{% endblock %}

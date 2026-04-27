@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Hire Your Coach{% endblock %}
+
+{% block content %}
+<div style="max-width:860px;margin:0 auto;">
+
+<div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
+    <div style="font-size:.7rem;letter-spacing:.2em;color:var(--text-muted);
+                text-transform:uppercase;margin-bottom:4px;">Step 3 of 3</div>
+    <h1 style="font-family:var(--font-display);font-size:2rem;color:var(--text-bright);margin:0;">
+        Hire Your Head Coach
+    </h1>
+    <p style="color:var(--text-muted);margin-top:var(--spacing-sm);font-size:.85rem;">
+        Your coach shapes how your fighters develop. Each archetype trains a different
+        group of stats — choose based on your fighter's style and your long-term plan.
+    </p>
+</div>
+
+{# Archetype legend #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
+            margin-bottom:var(--spacing-lg);">
+    {% for label, icon, color, desc in [
+        ('Striking Coach',  '🥊', 'var(--blood-red)',   'Boxing · Kicks · Clinch · Defense'),
+        ('Grappling Coach', '🤼', 'var(--info)',         'Takedowns · TD Def · Subs · Guard'),
+        ('S&C Coach',       '💪', 'var(--neon-green)',   'Strength &amp; Conditioning — builds physical durability'),
+        ('Head Coach',      '🧠', 'var(--gold)',         'Fight IQ · Composure · Heart'),
+    ] %}
+    <div style="padding:var(--spacing-sm);background:var(--bg-dark);border-radius:6px;
+                border:1px solid rgba(255,255,255,.06);text-align:center;">
+        <div style="font-size:1.3rem;margin-bottom:3px;">{{ icon }}</div>
+        <div style="font-family:var(--font-display);font-size:.72rem;color:{{ color }};margin-bottom:3px;">
+            {{ label }}
+        </div>
+        <div style="font-size:.6rem;color:var(--text-muted);">{{ desc }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<form action="{{ url_for('setup_coach') }}" method="POST">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--spacing-md);
+                margin-bottom:var(--spacing-lg);">
+        {% for coach in coaches %}
+
+        {% set arch_color = {
+            'Striking':  'var(--blood-red)',
+            'Grappling': 'var(--info)',
+            'S&C':       'var(--neon-green)',
+            'MMA':       'var(--gold)',
+        }.get(coach.specialty, 'var(--text-muted)') %}
+
+        <label style="cursor:pointer;">
+            <input type="radio" name="coach_id" value="{{ coach.id }}"
+                   style="display:none;" class="coach-radio">
+            <div class="coach-card" data-coach="{{ coach.id }}"
+                 style="padding:var(--spacing-lg);background:var(--bg-dark);
+                        border-radius:8px;border:2px solid var(--border-color);
+                        transition:border-color .15s,background .15s;height:100%;
+                        box-sizing:border-box;">
+
+                {# Header #}
+                <div style="display:flex;justify-content:space-between;
+                            align-items:flex-start;margin-bottom:var(--spacing-md);">
+                    <div>
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                            <span style="font-size:1.2rem;">{{ coach.icon or '👤' }}</span>
+                            <span style="font-family:var(--font-display);font-size:1rem;
+                                         color:var(--text-bright);">{{ coach.name }}</span>
+                        </div>
+                        <div style="font-size:.7rem;color:{{ arch_color }};
+                                    font-family:var(--font-display);text-transform:uppercase;
+                                    letter-spacing:.06em;">
+                            {{ coach.label or coach.specialty }}
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-family:var(--font-display);font-size:1.3rem;
+                                    color:{{ arch_color }};">{{ coach.rating }}</div>
+                        <div style="font-size:.62rem;color:var(--text-muted);">rating</div>
+                    </div>
+                </div>
+
+                {# Description #}
+                <div style="font-size:.75rem;color:var(--text-secondary);
+                            margin-bottom:var(--spacing-md);line-height:1.5;">
+                    {{ coach.description }}
+                </div>
+
+                {# Stats trained #}
+                {% if coach.focus %}
+                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--spacing-md);">
+                    {% for stat in coach.focus %}
+                    <span style="font-size:.6rem;padding:2px 6px;border-radius:3px;
+                                 background:rgba(255,255,255,.05);
+                                 border:1px solid rgba(255,255,255,.1);
+                                 color:var(--text-muted);">{{ stat }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                {# Salary #}
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            padding-top:var(--spacing-sm);
+                            border-top:1px solid var(--border-color);">
+                    <div style="font-size:.7rem;color:var(--text-muted);">Weekly salary</div>
+                    <div style="font-family:var(--font-display);font-size:.9rem;
+                                color:var(--neon-green);">${{ "{:,}".format(coach.salary) }}</div>
+                </div>
+
+            </div>
+        </label>
+        {% endfor %}
+    </div>
+
+    <div style="text-align:center;">
+        <button type="submit" id="hire-btn" disabled
+                style="padding:var(--spacing-md) var(--spacing-xl);
+                       font-family:var(--font-display);font-size:1rem;
+                       background:rgba(0,230,118,.15);border:1px solid var(--neon-green);
+                       border-radius:6px;color:var(--neon-green);cursor:pointer;
+                       opacity:.4;transition:opacity .15s;"
+                id="hire-btn">
+            Hire Coach & Start Game →
+        </button>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:var(--spacing-sm);">
+            Select a coach above to continue
+        </div>
+    </div>
+</form>
+
+</div>
+
+<script>
+document.querySelectorAll('.coach-card').forEach(card => {
+    card.addEventListener('click', () => {
+        // Deselect all
+        document.querySelectorAll('.coach-card').forEach(c => {
+            c.style.borderColor = 'var(--border-color)';
+            c.style.background  = 'var(--bg-dark)';
+        });
+        // Select this one
+        card.style.borderColor = 'var(--neon-green)';
+        card.style.background  = 'rgba(0,230,118,.06)';
+        // Check the radio
+        const coachId = card.dataset.coach;
+        document.querySelector(`input[value="${coachId}"]`).checked = true;
+        // Enable button
+        const btn = document.getElementById('hire-btn');
+        btn.disabled = false;
+        btn.style.opacity = '1';
+    });
+});
+</script>
+
+{% endblock %}

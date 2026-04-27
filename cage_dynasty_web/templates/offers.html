@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Fight Offers{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">📨 Fight Offers</h1>
+    <div class="page-subtitle">Review and negotiate fight contracts</div>
+</div>
+
+{% if not offers_by_fighter %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;">
+        <div style="font-size:3rem;margin-bottom:var(--spacing-md);">📭</div>
+        <h3>No Fight Offers</h3>
+        <p class="text-muted" style="max-width:400px;margin:0 auto var(--spacing-lg);">
+            Challenge opponents from the Division Ladder to generate fight offers,
+            or advance weeks to receive offers from the promotion.
+        </p>
+        <a href="{{ url_for('division_ladder') }}" class="btn btn-primary">Division Ladder →</a>
+    </div>
+</div>
+{% else %}
+
+{% for fighter_id, data in offers_by_fighter.items() %}
+{% set fighter = data.fighter %}
+{% set offers  = data.offers %}
+
+<div class="card mb-lg">
+
+    {# Fighter header #}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:var(--spacing-md) var(--spacing-lg);
+                border-bottom:1px solid var(--border-color);
+                background:var(--bg-dark);">
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);">
+            <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}"
+               style="font-family:var(--font-display);font-size:1.1rem;
+                      color:var(--text-bright);text-decoration:none;">
+                {{ fighter.name }}
+            </a>
+            {% if fighter.is_champion %}
+            <span class="badge badge-champion" style="font-size:.6rem;">🏆 CHAMP</span>
+            {% elif fighter.ranking %}
+            <span class="badge badge-ranked" style="font-size:.6rem;">#{{ fighter.ranking }}</span>
+            {% endif %}
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);">
+            {{ fighter.record_str }} · {{ fighter.weight_class }} · {{ fighter.overall_rating }} OVR
+            <span style="margin-left:8px;" class="badge">{{ offers|length }} offer{{ 's' if offers|length > 1 else '' }}</span>
+        </div>
+    </div>
+
+    {# Offers #}
+    {% for offer in offers %}
+    {% set is_title = offer.is_title_fight %}
+
+    <div style="border-bottom:{% if not loop.last %}2px solid var(--border-color){% else %}none{% endif %};">
+
+        {# Title fight banner #}
+        {% if is_title %}
+        <div style="padding:6px var(--spacing-lg);
+                    background:linear-gradient(90deg,var(--gold-dark),var(--gold));
+                    font-family:var(--font-display);font-size:.75rem;
+                    letter-spacing:.12em;text-transform:uppercase;color:var(--bg-darkest);">
+            🏆 Title Fight — Belt on the Line
+        </div>
+        {% endif %}
+
+        {# Matchup #}
+        <div style="display:grid;grid-template-columns:1fr 80px 1fr;
+                    gap:var(--spacing-md);padding:var(--spacing-lg);align-items:center;">
+
+            {# Your fighter #}
+            <div style="text-align:right;">
+                <div style="font-family:var(--font-display);font-size:1.2rem;
+                            color:var(--neon-green);">{{ fighter.name }}</div>
+                <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">
+                    {{ fighter.record_str }}
+                    {% if fighter.ranking %} · #{{ fighter.ranking }}
+                    {% elif fighter.is_champion %} · 🏆{% endif %}
+                </div>
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:var(--info);margin-top:4px;">{{ fighter.overall_rating }}</div>
+            </div>
+
+            {# VS #}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:var(--blood-red);">VS</div>
+                <div style="font-size:.62rem;color:var(--text-muted);margin-top:2px;">
+                    {{ offer.weight_class[:3] if offer.weight_class else '' }}
+                </div>
+            </div>
+
+            {# Opponent #}
+            <div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-family:var(--font-display);font-size:1.2rem;
+                                color:var(--text-bright);">{{ offer.opponent_name }}</span>
+                    {% if offer.opponent_momentum %}
+                    <span style="font-size:.62rem;color:var(--text-muted);
+                                 background:rgba(255,255,255,.05);border-radius:3px;
+                                 padding:1px 5px;">{{ offer.opponent_momentum }}</span>
+                    {% endif %}
+                </div>
+                <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">
+                    {{ offer.opponent_record }}
+                    {% if offer.opponent_rank %}
+                     · #{{ offer.opponent_rank }}
+                    {% endif %}
+                </div>
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:var(--info);margin-top:4px;">{{ offer.opponent_rating }}</div>
+            </div>
+        </div>
+
+        {# Details row #}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);
+                    gap:var(--spacing-md);padding:0 var(--spacing-lg) var(--spacing-md);">
+            <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                        text-align:center;">
+                <div style="font-family:var(--font-display);font-size:1rem;color:var(--neon-green);">
+                    ${{ "{:,}".format(offer.purse) }}
+                </div>
+                <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                            margin-top:2px;">Fight Purse</div>
+            </div>
+            <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                        text-align:center;">
+                <div style="font-family:var(--font-display);font-size:1rem;color:var(--gold);">
+                    +${{ "{:,}".format(offer.win_bonus) }}
+                </div>
+                <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                            margin-top:2px;">Win Bonus</div>
+            </div>
+            <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                        text-align:center;">
+                <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);">
+                    {{ offer.weeks_away }}w
+                </div>
+                <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                            margin-top:2px;">{{ offer.event_name }}</div>
+            </div>
+            <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                        text-align:center;">
+                <div style="font-family:var(--font-display);font-size:1rem;
+                            color:{% if offer.matchup_quality == 'Excellent' %}var(--gold)
+                                  {% elif offer.matchup_quality == 'Good' %}var(--neon-green)
+                                  {% elif offer.matchup_quality == 'Fair' %}var(--warning)
+                                  {% else %}var(--blood-red){% endif %};">
+                    {{ offer.matchup_quality }}
+                </div>
+                <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                            margin-top:2px;">Matchup</div>
+            </div>
+        </div>
+
+        {# Risk / Reward / Accept chance #}
+        <div style="display:flex;align-items:center;gap:var(--spacing-xl);
+                    padding:var(--spacing-sm) var(--spacing-lg) var(--spacing-md);
+                    border-top:1px solid var(--border-color);">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:.68rem;color:var(--text-muted);text-transform:uppercase;
+                             letter-spacing:.06em;">Risk</span>
+                <div style="display:flex;gap:2px;">
+                    {% for i in range(5) %}
+                    <span style="font-size:.8rem;
+                                 color:{% if i < offer.risk_level %}var(--blood-red){% else %}rgba(255,255,255,.1){% endif %};">★</span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:.68rem;color:var(--text-muted);text-transform:uppercase;
+                             letter-spacing:.06em;">Reward</span>
+                <div style="display:flex;gap:2px;">
+                    {% for i in range(5) %}
+                    <span style="font-size:.8rem;
+                                 color:{% if i < offer.reward_level %}var(--gold){% else %}rgba(255,255,255,.1){% endif %};">★</span>
+                    {% endfor %}
+                </div>
+            </div>
+            <div style="margin-left:auto;font-size:.72rem;color:var(--text-muted);">
+                Acceptance: <span style="color:var(--info);">{{ offer.accept_chance }}%</span>
+            </div>
+        </div>
+
+        {# Action buttons #}
+        <div style="display:flex;gap:var(--spacing-sm);padding:var(--spacing-md) var(--spacing-lg);
+                    border-top:1px solid var(--border-color);">
+            <form action="{{ url_for('accept_offer', offer_id=offer.offer_id) }}" method="POST"
+                  style="flex:1;">
+                <button type="submit"
+                        style="width:100%;padding:var(--spacing-md);
+                               background:{% if is_title %}var(--gold){% else %}rgba(0,230,118,.15){% endif %};
+                               border:1px solid {% if is_title %}var(--gold){% else %}var(--neon-green){% endif %};
+                               border-radius:6px;font-family:var(--font-display);
+                               font-size:.9rem;
+                               color:{% if is_title %}var(--bg-darkest){% else %}var(--neon-green){% endif %};
+                               cursor:pointer;transition:opacity .15s;"
+                        onmouseover="this.style.opacity='.85'"
+                        onmouseout="this.style.opacity='1'">
+                    {% if is_title %}🏆 Accept Title Fight{% else %}✅ Accept & Negotiate{% endif %}
+                </button>
+            </form>
+            <form action="{{ url_for('decline_offer', offer_id=offer.offer_id) }}" method="POST">
+                <button type="submit"
+                        style="padding:var(--spacing-md) var(--spacing-lg);
+                               background:none;border:1px solid var(--border-color);
+                               border-radius:6px;font-size:.82rem;color:var(--text-muted);
+                               cursor:pointer;">
+                    Decline
+                </button>
+            </form>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endfor %}
+
+{% endif %}
+{% endblock %}

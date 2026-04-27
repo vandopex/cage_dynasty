@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}{{ event.event_name }}{% endblock %}
+
+{% block content %}
+
+{# ── Header ── #}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;
+            margin-bottom:var(--spacing-lg);">
+    <div>
+        <div style="font-size:.7rem;letter-spacing:.2em;color:var(--text-muted);
+                    text-transform:uppercase;margin-bottom:4px;">
+            DFC — Week {{ event.week }}
+        </div>
+        <h1 style="font-family:var(--font-display);font-size:2rem;
+                   color:var(--text-bright);margin:0;">{{ event.event_name }}</h1>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
+            {{ event.fights|length }} fights
+            {% if event.fotn and event.fotn.fighter1_name %}
+            · 🔥 FOTN: {{ event.fotn.fighter1_name }} vs {{ event.fotn.fighter2_name }}
+            {% endif %}
+        </div>
+    </div>
+    <a href="{{ url_for('archives') }}" class="btn btn-outline">← Archives</a>
+</div>
+
+{# ── FOTN banner ── #}
+{% if event.fotn and event.fotn.fight_id %}
+<div style="display:flex;align-items:center;gap:var(--spacing-lg);
+            padding:var(--spacing-md) var(--spacing-lg);
+            background:linear-gradient(135deg,rgba(255,107,0,.1),rgba(255,215,0,.1));
+            border:1px solid rgba(255,215,0,.4);border-radius:8px;
+            margin-bottom:var(--spacing-lg);">
+    <span style="font-size:1.8rem;">🔥</span>
+    <div>
+        <div style="font-family:var(--font-display);font-size:.7rem;
+                    text-transform:uppercase;letter-spacing:.1em;color:var(--gold);">
+            Fight of the Night
+        </div>
+        <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);">
+            {{ event.fotn.fighter1_name }} vs {{ event.fotn.fighter2_name }}
+        </div>
+    </div>
+    <div style="margin-left:auto;font-size:.82rem;color:var(--gold);">
+        ${{ "{:,}".format(event.fotn.bonus) }} bonus each
+    </div>
+</div>
+{% endif %}
+
+{# ── Slot helpers ── #}
+{% set slot_order = ['main_event','co_main','main_card','prelim','early_prelim'] %}
+{% set slot_labels = {
+    'main_event': '🏆 Main Event',
+    'co_main':    '⭐ Co-Main Event',
+    'main_card':  '🥊 Main Card',
+    'prelim':     '📋 Prelims',
+    'early_prelim': '📋 Early Prelims',
+} %}
+{% set method_color = {
+    'KO':'var(--blood-red)','TKO':'var(--blood-red)',
+    'SUB':'var(--info)','DEC':'var(--text-muted)',
+    'UNY DEC':'var(--text-muted)','SPLIT DEC':'var(--text-muted)',
+} %}
+
+<div class="card">
+    <div style="padding:0;">
+        {% for slot in slot_order %}
+        {% set slot_fights = event.fights | selectattr('card_slot','equalto',slot) | list %}
+        {% if slot_fights %}
+
+        {# Slot header #}
+        <div style="padding:6px var(--spacing-md);background:var(--bg-dark);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                    color:{% if slot == 'main_event' %}var(--gold){% elif slot == 'co_main' %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+            {{ slot_labels.get(slot, slot) }}
+        </div>
+
+        {% for fight in slot_fights %}
+        {% set is_player = fight.winner_id in player_ids or fight.loser_id in player_ids %}
+        {% set is_fotn = fight.is_fotn if fight.is_fotn is defined else false %}
+        {% set method  = fight.method or 'DEC' %}
+        {% set mcolor  = method_color.get(method, 'var(--text-muted)') %}
+
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;
+                    gap:var(--spacing-md);align-items:center;
+                    padding:var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    {% if is_player %}background:rgba(41,182,246,.04);{% endif %}
+                    {% if is_fotn %}border-left:3px solid var(--gold);{% else %}border-left:3px solid transparent;{% endif %}">
+
+            {# Fighter 1 #}
+            <div style="text-align:right;">
+                <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+                    {% set f1_ranked = fight.fighter1_id and rankings.get(fight.fighter1_id) %}
+                    {% if f1_ranked %}
+                    <span style="font-size:.65rem;
+                                 color:{% if f1_ranked.is_champion %}var(--gold){% else %}var(--info){% endif %};">
+                        {% if f1_ranked.is_champion %}C{% else %}#{{ f1_ranked.ranking }}{% endif %}
+                    </span>
+                    {% endif %}
+                    <a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) if fight.fighter1_id else '#' }}"
+                       style="font-family:var(--font-display);font-size:.95rem;text-decoration:none;
+                              color:{% if fight.winner_id == fight.fighter1_id %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                        {{ fight.fighter1_name }}
+                    </a>
+                    {% if fight.winner_id == fight.fighter1_id %}
+                    <span style="font-size:.65rem;color:var(--neon-green);">W</span>
+                    {% else %}
+                    <span style="font-size:.65rem;color:var(--blood-red);">L</span>
+                    {% endif %}
+                </div>
+                {% if fight.fighter1_id and rankings.get(fight.fighter1_id) %}
+                <div style="font-size:.65rem;color:var(--text-muted);margin-top:1px;text-align:right;">
+                    {{ rankings[fight.fighter1_id].record_str }}
+                </div>
+                {% endif %}
+            </div>
+
+            {# Center — method + round #}
+            <div style="text-align:center;min-width:90px;">
+                {% if fight.is_title_fight %}
+                <div style="font-size:.58rem;color:var(--gold);text-transform:uppercase;
+                            letter-spacing:.06em;margin-bottom:2px;">TITLE</div>
+                {% endif %}
+                <div style="font-family:var(--font-display);font-size:.85rem;color:{{ mcolor }};">
+                    {{ method }}
+                </div>
+                {% if method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC') %}
+                <div style="font-size:.65rem;color:var(--text-muted);">
+                    R{{ fight.round_finished }}{% if fight.time %} · {{ fight.time }}{% endif %}
+                </div>
+                {% endif %}
+                {% if is_fotn %}
+                <div style="font-size:.65rem;color:var(--gold);margin-top:2px;">🔥 FOTN</div>
+                {% endif %}
+                {# Watch link if commentary exists #}
+                {% if fight.fight_id %}
+                <a href="{{ url_for('watch_fight', fight_id=fight.fight_id) }}"
+                   style="font-size:.6rem;color:var(--text-muted);display:block;
+                          margin-top:3px;text-decoration:underline;">
+                    Watch →
+                </a>
+                {% endif %}
+            </div>
+
+            {# Fighter 2 #}
+            <div>
+                <div style="display:flex;align-items:center;gap:6px;">
+                    {% if fight.winner_id == fight.fighter2_id %}
+                    <span style="font-size:.65rem;color:var(--neon-green);">W</span>
+                    {% else %}
+                    <span style="font-size:.65rem;color:var(--blood-red);">L</span>
+                    {% endif %}
+                    <a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) if fight.fighter2_id else '#' }}"
+                       style="font-family:var(--font-display);font-size:.95rem;text-decoration:none;
+                              color:{% if fight.winner_id == fight.fighter2_id %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                        {{ fight.fighter2_name }}
+                    </a>
+                    {% set f2_ranked = fight.fighter2_id and rankings.get(fight.fighter2_id) %}
+                    {% if f2_ranked %}
+                    <span style="font-size:.65rem;
+                                 color:{% if f2_ranked.is_champion %}var(--gold){% else %}var(--info){% endif %};">
+                        {% if f2_ranked.is_champion %}C{% else %}#{{ f2_ranked.ranking }}{% endif %}
+                    </span>
+                    {% endif %}
+                </div>
+                {% if fight.fighter2_id and rankings.get(fight.fighter2_id) %}
+                <div style="font-size:.65rem;color:var(--text-muted);margin-top:1px;">
+                    {{ rankings[fight.fighter2_id].record_str }}
+                </div>
+                {% endif %}
+            </div>
+
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endfor %}
+
+        {# Unslotted fallback #}
+        {% set unslotted = event.fights | rejectattr('card_slot','defined') | list %}
+        {% for fight in unslotted %}
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                    padding:var(--spacing-md);border-bottom:1px solid var(--border-color);">
+            <span style="font-size:.75rem;font-family:var(--font-display);
+                         color:{% if fight.method in ('KO','TKO') %}var(--blood-red){% elif fight.method == 'SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
+                {{ fight.method }}
+            </span>
+            <span style="font-family:var(--font-display);color:var(--neon-green);">{{ fight.winner_name }}</span>
+            <span style="color:var(--text-muted);font-size:.8rem;">def.</span>
+            <span style="color:var(--text-secondary);">{{ fight.loser_name }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

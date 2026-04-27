@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}My Roster{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--spacing-lg);">
+    <div>
+        <h1 style="font-family:var(--font-display);font-size:1.8rem;color:var(--text-bright);margin:0;">
+            👥 {{ camp.name }}
+        </h1>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
+            {{ fighters|length }} / {{ camp.max_fighters }} fighters
+            <span style="margin-left:8px;" class="badge tier-{{ camp.tier|lower }}">{{ camp.tier }}</span>
+        </div>
+    </div>
+    <div style="display:flex;gap:8px;">
+        {% for s, label in [('rating','OVR'),('record','Record'),('division','Division'),('name','Name')] %}
+        <a href="?sort={{ s }}" class="btn btn-sm {% if sort_by == s %}btn-primary{% else %}btn-outline{% endif %}">{{ label }}</a>
+        {% endfor %}
+    </div>
+</div>
+
+{% if not fighters %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;">
+        <div style="font-size:3rem;margin-bottom:var(--spacing-md);">👥</div>
+        <h3>No Fighters Yet</h3>
+        <p class="text-muted">Sign prospects to build your roster.</p>
+        <a href="{{ url_for('prospects') }}" class="btn btn-primary">Browse Prospects</a>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div style="padding:0;">
+        {% for f in fighters %}
+        {% set plan = training_plans.get(f.fighter_id, {}) %}
+        {% set sched = scheduled_map.get(f.fighter_id) %}
+        {% set intensity = plan.get('intensity','—') %}
+        {% set icolors = {'REST':'var(--neon-green)','LIGHT':'var(--info)','MODERATE':'var(--warning)','INTENSE':'#ff6b35','EXTREME':'var(--blood-red)'} %}
+        {% set icolor = icolors.get(intensity,'var(--text-muted)') %}
+
+        <a href="{{ url_for('fighter_profile', fighter_id=f.fighter_id) }}"
+           style="display:grid;grid-template-columns:3px 44px 1fr auto auto;
+                  gap:var(--spacing-md);align-items:center;padding:var(--spacing-md);
+                  border-bottom:1px solid var(--border-color);text-decoration:none;
+                  transition:background .15s;"
+           onmouseover="this.style.background='var(--bg-dark)'"
+           onmouseout="this.style.background='transparent'">
+
+            {# Intensity stripe #}
+            <div style="width:3px;height:48px;border-radius:2px;background:{{ icolor }};flex-shrink:0;"></div>
+
+            {# OVR box #}
+            <div style="text-align:center;background:var(--bg-dark);border-radius:6px;padding:6px 0;">
+                <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--info);">{{ f.overall_rating }}</div>
+                <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;">OVR</div>
+            </div>
+
+            {# Fighter info #}
+            <div>
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=f.fighter_id) }}" style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);text-decoration:none;">{{ f.name }}</a>
+                    {% if f.is_champion %}<span class="badge badge-champion" style="font-size:.58rem;">🏆 CHAMP</span>
+                    {% elif f.ranking %}<span class="badge badge-ranked" style="font-size:.58rem;">#{{ f.ranking }}</span>{% endif %}
+                    {% if f.win_streak >= 3 %}<span style="font-size:.72rem;color:var(--neon-green);">🔥 W{{ f.win_streak }}</span>{% endif %}
+                </div>
+                <div style="font-size:.75rem;color:var(--text-muted);display:flex;gap:8px;flex-wrap:wrap;">
+                    <span>{{ f.record_str }}</span>
+                    <span>·</span>
+                    <span>{{ f.weight_class }}</span>
+                    <span>·</span>
+                    <span>{{ f.fighting_style }}</span>
+                    {% if sched %}
+                    <span>·</span>
+                    <span style="color:var(--gold);">⚔️ {{ sched.event_name }}</span>
+                    {% endif %}
+                </div>
+                {# Condition bar #}
+                <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+                    <div style="width:80px;height:3px;background:rgba(255,255,255,.08);border-radius:2px;overflow:hidden;">
+                        <div style="width:{{ 100 - f.fatigue }}%;height:100%;
+                                    background:{% if f.fatigue < 40 %}var(--neon-green){% elif f.fatigue < 70 %}var(--warning){% else %}var(--blood-red){% endif %};
+                                    border-radius:2px;"></div>
+                    </div>
+                    <span style="font-size:.62rem;color:var(--text-muted);">{{ 100 - f.fatigue }}% condition</span>
+                </div>
+            </div>
+
+            {# Training intensity #}
+            <div style="text-align:center;min-width:56px;">
+                <div style="font-size:.62rem;color:{{ icolor }};text-transform:uppercase;letter-spacing:.06em;">{{ intensity }}</div>
+                <div style="font-size:.7rem;color:var(--text-muted);">{{ plan.get('focus','—') | replace('_',' ') | title if plan else '—' }}</div>
+            </div>
+
+            {# Action #}
+            <div>
+                <span class="btn btn-outline btn-sm">Train →</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

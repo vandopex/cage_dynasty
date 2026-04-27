@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}New Game{% endblock %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 0 auto; text-align: center; padding: var(--spacing-xl);">
+    
+    <div style="font-size: 4rem; margin-bottom: var(--spacing-lg);">⚔️</div>
+    
+    <h1 style="font-size: 3rem; color: var(--gold); text-shadow: 0 0 20px rgba(255, 215, 0, 0.5); margin-bottom: var(--spacing-sm);">
+        CAGE DYNASTY
+    </h1>
+    
+    <p class="text-muted" style="font-size: 1.25rem; margin-bottom: var(--spacing-xl);">
+        MMA Management Simulation
+    </p>
+    
+    <div class="card" style="max-width: 500px; margin: 0 auto;">
+        <div class="card-body p-lg">
+            <h3 style="margin-bottom: var(--spacing-lg);">Start Your Journey</h3>
+            
+            <p class="text-secondary mb-lg">
+                Build your training camp from the ground up. Hire coaches, sign fighters, 
+                and climb your way to the top of the Dynasty Fighting Championship.
+            </p>
+            
+            <a href="{{ url_for('setup_camp') }}" class="btn btn-gold btn-lg btn-block" style="margin-bottom: var(--spacing-md);">
+                🆕 New Game
+            </a>
+            
+            <a href="{{ url_for('saves_menu') }}" class="btn btn-outline btn-lg btn-block">
+                📂 Load Game
+            </a>
+        </div>
+    </div>
+    
+    <div class="mt-lg text-muted" style="font-size: 0.85rem;">
+        Version 0.4.0 Web Edition
+    </div>
+</div>
+{% endblock %}

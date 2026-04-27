@@ -1,0 +1,575 @@
+{% extends "base.html" %}
+{% block title %}{{ fighter.name }}{% endblock %}
+
+{% block content %}
+
+{# ── Trait icons + descriptions (baked in so no backend needed) ── #}
+{% set trait_data = {
+    "Glass Cannon":    {"icon":"💥","color":"var(--blood-red)",    "desc":"Hits like a truck, but can't take a punch"},
+    "Iron Chin":       {"icon":"🪨","color":"var(--neon-green)",   "desc":"Can walk through fire"},
+    "Cardio Machine":  {"icon":"💨","color":"var(--info)",         "desc":"Could go five rounds at championship pace"},
+    "Durable":         {"icon":"🛡️","color":"var(--neon-green)",  "desc":"Built to last"},
+    "Injury Prone":    {"icon":"🩹","color":"var(--warning)",      "desc":"Made of glass"},
+    "Knockout Artist": {"icon":"⚡","color":"var(--blood-red)",    "desc":"Touch of death in both hands"},
+    "Southpaw":        {"icon":"⭐","color":"var(--info)",         "desc":"Unorthodox stance creates angles"},
+    "Submission Ace":  {"icon":"🔒","color":"var(--info)",         "desc":"Dangerous submission threat anywhere"},
+    "Wrestler's Base": {"icon":"🤼","color":"var(--info)",         "desc":"Nearly impossible to take down"},
+    "Pressure Fighter":{"icon":"⬆️","color":"var(--blood-red)",   "desc":"Relentless forward pressure"},
+    "Counter Striker": {"icon":"↩️","color":"var(--gold)",         "desc":"Times opponents perfectly"},
+    "Fast Starter":    {"icon":"🚀","color":"var(--neon-green)",   "desc":"Explodes early, dangerous first round"},
+    "Slow Starter":    {"icon":"🐢","color":"var(--text-muted)",   "desc":"Dangerous in championship rounds"},
+    "Big Game Hunter": {"icon":"🎯","color":"var(--gold)",         "desc":"Rises to the occasion"},
+    "Choke Artist":    {"icon":"😰","color":"var(--blood-red)",    "desc":"Struggles under pressure"},
+    "Gym Rat":         {"icon":"💪","color":"var(--neon-green)",   "desc":"Trains harder than anyone"},
+    "Veteran Savvy":   {"icon":"🧠","color":"var(--gold)",         "desc":"Experience over everything"},
+    "Killer Instinct": {"icon":"☠️","color":"var(--blood-red)",   "desc":"Senses blood and goes for the finish"},
+} %}
+
+{# ── Style icons ── #}
+{% set style_icons = {
+    "Orthodox Boxer":"🥊","Muay Thai":"🦵","Wrestler":"🤼","BJJ Specialist":"🥋",
+    "Kickboxer":"🦶","Brawler":"💥","Counter Striker":"↩️","Point Fighter":"🎯",
+    "Pressure Fighter":"⬆️","Ground & Pound":"👊","Clinch Fighter":"💪",
+    "Sprawl & Brawl":"🛡️","Sambo":"⚔️","Judo":"🔄","Hybrid":"⚡",
+} %}
+{% set style_icon = style_icons.get(fighter.fighting_style, "🥊") %}
+
+{# ── Career phase ── #}
+{% if fighter.age < 24 %}{% set phase = "Prospect" %}{% set phase_color = "var(--neon-green)" %}
+{% elif fighter.age < 27 %}{% set phase = "Rising" %}{% set phase_color = "var(--info)" %}
+{% elif fighter.age < 31 %}{% set phase = "Prime" %}{% set phase_color = "var(--gold)" %}
+{% elif fighter.age < 34 %}{% set phase = "Veteran" %}{% set phase_color = "var(--warning)" %}
+{% else %}{% set phase = "Late Career" %}{% set phase_color = "var(--text-muted)" %}{% endif %}
+
+{# ── Record breakdown ── #}
+{% set wins = fighter.wins %}
+{% set losses = fighter.losses %}
+{% set ko_w = fighter.ko_wins %}
+{% set sub_w = fighter.sub_wins %}
+{% set dec_w = wins - ko_w - sub_w %}
+
+{# ═══════════════════════════════════════════════════════════
+   HERO BLOCK
+══════════════════════════════════════════════════════════════ #}
+<div class="card mb-lg" style="overflow:hidden;
+     border-color:{% if fighter.is_champion %}var(--gold){% else %}var(--border-color){% endif %};">
+
+    {# Champion gold top bar #}
+    {% if fighter.is_champion %}
+    <div style="height:4px;background:linear-gradient(90deg,var(--gold-dark),var(--gold),var(--gold-dark));"></div>
+    {% endif %}
+
+    <div style="display:grid;grid-template-columns:1fr auto;gap:0;">
+
+        {# Left — identity #}
+        <div style="padding:var(--spacing-xl);">
+
+            {# Camp / division context #}
+            <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.15em;
+                        color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+                {% if camp %}<a href="{{ url_for('camp_detail', camp_id=camp.camp_id) }}"
+                   style="color:var(--text-muted);text-decoration:none;">{{ camp.name }}</a> · {% endif %}
+                <a href="{{ url_for('rankings', division=fighter.weight_class) }}" style="color:inherit;text-decoration:none;">{{ fighter.weight_class }}</a>
+                {% if fighter.is_champion %} ·
+                    <span style="color:var(--gold);">🏆 Champion</span>
+                {% elif fighter.ranking %} ·
+                    <span style="color:var(--info);">#{{ fighter.ranking }} Ranked</span>
+                {% endif %}
+            </div>
+
+            {# Name #}
+            <h1 style="font-family:var(--font-display);font-size:2.4rem;
+                       color:var(--text-bright);margin:0 0 4px;line-height:1.1;">
+                {{ fighter.name }}
+            </h1>
+
+            {# Nickname #}
+            {% if fighter.nickname %}
+            <div style="font-family:var(--font-display);font-size:1.1rem;
+                        color:var(--text-muted);font-style:italic;margin-bottom:var(--spacing-sm);">
+                "{{ fighter.nickname }}"
+            </div>
+            {% endif %}
+
+            {# Record — Leather style: W(KO+TKO+SUB)-L-D #}
+            <div style="font-family:var(--font-display);font-size:2rem;
+                        color:var(--text-bright);margin-bottom:var(--spacing-sm);letter-spacing:-.01em;">
+                <span style="color:var(--neon-green);">{{ wins }}</span>
+                <span style="font-size:1rem;color:var(--neon-green);">({{ ko_w }}KO · {{ sub_w }}SUB)</span>
+                <span style="color:var(--text-muted);font-size:1.4rem;"> – </span>
+                <span style="color:var(--blood-red);">{{ losses }}</span>
+            </div>
+
+            {# Style as character class #}
+            <div style="display:inline-flex;align-items:center;gap:8px;
+                        padding:6px 14px;border-radius:20px;margin-bottom:var(--spacing-md);
+                        background:rgba(255,255,255,.06);border:1px solid var(--border-color);">
+                <span style="font-size:1.1rem;">{{ style_icon }}</span>
+                <span style="font-family:var(--font-display);font-size:.85rem;color:var(--text-bright);">
+                    {{ fighter.fighting_style }}
+                </span>
+            </div>
+
+            {# Bio row #}
+            <div style="display:flex;gap:var(--spacing-lg);flex-wrap:wrap;
+                        font-size:.78rem;color:var(--text-muted);">
+                <span>🌍 {{ fighter.country }}</span>
+                <span>🎂 {{ fighter.age }} yrs
+                    <span style="font-size:.7rem;color:{{ phase_color }};margin-left:4px;">{{ phase }}</span>
+                </span>
+                {% if fighter.height %}<span>📏 {{ fighter.height }}</span>{% endif %}
+                {% if fighter.reach %}<span>↔️ {{ fighter.reach }}" reach</span>{% endif %}
+            </div>
+
+            {# Streak #}
+            {% if fighter.win_streak >= 3 %}
+            <div style="margin-top:var(--spacing-md);">
+                <span style="font-family:var(--font-display);font-size:.9rem;color:var(--neon-green);">
+                    🔥 {{ fighter.win_streak }}-Fight Win Streak
+                </span>
+            </div>
+            {% elif fighter.lose_streak >= 2 %}
+            <div style="margin-top:var(--spacing-md);">
+                <span style="font-family:var(--font-display);font-size:.9rem;color:var(--blood-red);">
+                    📉 {{ fighter.lose_streak }}-Fight Losing Streak
+                </span>
+            </div>
+            {% endif %}
+
+        </div>
+
+        {# Right — OVR + condition + actions #}
+        <div style="min-width:160px;background:var(--bg-dark);padding:var(--spacing-xl);
+                    display:flex;flex-direction:column;align-items:center;justify-content:center;
+                    gap:var(--spacing-md);border-left:1px solid var(--border-color);">
+
+            {# OVR circle #}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);font-size:3rem;line-height:1;
+                            color:{% if fighter.overall_rating >= 85 %}var(--gold){% elif fighter.overall_rating >= 70 %}var(--neon-green){% else %}var(--info){% endif %};">
+                    {{ fighter.overall_rating }}
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.15em;
+                            color:var(--text-muted);margin-top:2px;">Overall</div>
+            </div>
+
+            {# Development trajectory — no hard numbers, feel it #}
+            {% set potential = fighter.potential %}
+            {% set room = potential - fighter.overall_rating %}
+            {% set age = fighter.age if fighter.age is defined else 26 %}
+            {# Trajectory label: combines room + age into a human read #}
+            {% if room <= 2 %}
+                {% set traj_label = "Peak Form" %}
+                {% set traj_color = "var(--gold)" %}
+                {% set traj_icon  = "⭐" %}
+            {% elif room <= 8 %}
+                {% set traj_label = "Maturing" %}
+                {% set traj_color = "var(--warning)" %}
+                {% set traj_icon  = "📈" %}
+            {% elif room <= 18 %}
+                {% set traj_label = "Developing" %}
+                {% set traj_color = "var(--neon-green)" %}
+                {% set traj_icon  = "🟢" %}
+            {% else %}
+                {% set traj_label = "Raw Talent" %}
+                {% set traj_color = "var(--info)" %}
+                {% set traj_icon  = "💎" %}
+            {% endif %}
+            <div style="width:100%;">
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            margin-bottom:4px;">
+                    <span style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;
+                                 color:var(--text-muted);">Development</span>
+                    <span style="font-size:.68rem;color:{{ traj_color }};">
+                        {{ traj_icon }} {{ traj_label }}
+                    </span>
+                </div>
+                <div style="height:6px;background:rgba(255,255,255,.08);border-radius:3px;
+                            position:relative;overflow:hidden;">
+                    {# Ghost bar shows approximate ceiling zone, not exact number #}
+                    <div style="position:absolute;top:0;left:0;
+                                width:{{ [potential + 5, 100]|min }}%;height:100%;
+                                background:{{ traj_color }}22;border-radius:3px;"></div>
+                    <div style="position:absolute;top:0;left:0;
+                                width:{{ fighter.overall_rating }}%;height:100%;
+                                background:{% if fighter.overall_rating >= 85 %}var(--gold){% elif fighter.overall_rating >= 70 %}var(--neon-green){% else %}var(--info){% endif %};
+                                border-radius:3px;"></div>
+                </div>
+            </div>
+
+            {# Injury status — if injured, show above condition #}
+            {% if fighter.is_injured is defined and fighter.is_injured %}
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--spacing-sm);
+                        padding:var(--spacing-sm) var(--spacing-md);
+                        background:rgba(220,50,50,.1);border-radius:6px;
+                        border:1px solid rgba(220,50,50,.3);">
+                <span style="font-size:1.1rem;">🤕</span>
+                <div>
+                    <div style="font-size:.78rem;color:var(--blood-red);font-family:var(--font-display);">
+                        INJURED — {{ fighter.injury_weeks_out }}w recovery
+                    </div>
+                    <div style="font-size:.68rem;color:var(--text-muted);">
+                        {{ fighter.injury_desc or 'Undisclosed injury' }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {# Condition #}
+            <div style="width:100%;">
+                <div style="font-size:.6rem;color:var(--text-muted);margin-bottom:3px;text-align:center;">
+                    Condition {{ 100 - fighter.fatigue }}%
+                </div>
+                <div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
+                    <div style="width:{{ 100 - fighter.fatigue }}%;height:100%;border-radius:3px;
+                                background:{% if fighter.fatigue < 40 %}var(--neon-green){% elif fighter.fatigue < 70 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
+                </div>
+            </div>
+
+            {# Watchlist toggle #}
+            {% if not on_watchlist %}
+            <form action="{{ url_for('watchlist_add', fighter_id=fighter.fighter_id) }}" method="POST"
+                  style="width:100%;">
+                <input type="hidden" name="category" value="SCOUT">
+                <input type="hidden" name="priority" value="NONE">
+                <button type="submit" class="btn btn-outline btn-sm btn-block"
+                        style="font-size:.7rem;">👀 Watch</button>
+            </form>
+            {% else %}
+            <form action="{{ url_for('watchlist_remove', fighter_id=fighter.fighter_id) }}" method="POST"
+                  style="width:100%;">
+                <button type="submit" class="btn btn-sm btn-block"
+                        style="font-size:.7rem;background:rgba(41,182,246,.1);
+                               border:1px solid var(--info);color:var(--info);">
+                    ✓ Watching
+                </button>
+            </form>
+            {% endif %}
+
+            {# Challenge button #}
+            <a href="{{ url_for('division_ladder', division=fighter.weight_class) }}"
+               class="btn btn-outline btn-sm btn-block" style="font-size:.7rem;text-align:center;">
+                ⚔️ Challenge
+            </a>
+        </div>
+    </div>
+</div>
+
+{# ── Contract status — player fighters only ── #}
+{% if contract_status %}
+<div class="card mb-lg" style="border-color:{% if contract_status.warning %}rgba(255,180,0,.3){% else %}var(--border-color){% endif %};">
+    <div class="card-header">
+        <h3>📋 Contract</h3>
+        <span style="font-size:.72rem;color:{{ contract_status.morale_color }};">
+            {{ contract_status.morale_label }}
+        </span>
+    </div>
+    <div style="padding:var(--spacing-md);">
+        {# Fights remaining bar #}
+        <div style="margin-bottom:var(--spacing-md);">
+            <div style="display:flex;justify-content:space-between;font-size:.72rem;
+                        color:var(--text-muted);margin-bottom:4px;">
+                <span>{{ contract_status.contract_label }}</span>
+                {% if contract_status.is_holdout %}
+                <span style="color:var(--blood-red);">⚠️ HOLDOUT — {{ contract_status.holdout_weeks }}/{{ 4 }}w</span>
+                {% endif %}
+            </div>
+            <div style="height:8px;background:rgba(255,255,255,.08);border-radius:4px;overflow:hidden;">
+                {% set pct = (contract_status.fights_remaining / contract_status.total_fights * 100)|int %}
+                <div style="width:{{ pct }}%;height:100%;border-radius:4px;
+                            background:{% if pct <= 20 %}var(--blood-red){% elif pct <= 50 %}var(--warning){% else %}var(--neon-green){% endif %};
+                            transition:width .3s;"></div>
+            </div>
+        </div>
+
+        {# Re-sign section #}
+        {% if contract_status.warning or contract_status.fights_remaining <= 2 %}
+        <div style="border-top:1px solid var(--border-color);padding-top:var(--spacing-md);">
+            <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+                Re-sign with a new contract:
+            </div>
+            <form action="{{ url_for('resign_fighter', fighter_id=fighter.fighter_id) }}" method="POST">
+                <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--spacing-sm);">
+                    {% for opt in contract_options %}
+                    <label style="cursor:{% if opt.available %}pointer{% else %}not-allowed{% endif %};
+                                  opacity:{% if opt.available %}1{% else %}0.4{% endif %};">
+                        <input type="radio" name="contract_fights" value="{{ opt.fights }}"
+                               {% if loop.first and opt.available %}checked{% endif %}
+                               {% if not opt.available %}disabled{% endif %}
+                               style="display:none;">
+                        <div onclick="if(!this.previousElementSibling.disabled){this.closest('form').querySelectorAll('.opt-btn').forEach(b=>b.style.borderColor='var(--border-color)');this.style.borderColor='var(--info)';this.previousElementSibling.checked=true}"
+                             class="opt-btn"
+                             style="padding:4px 10px;border-radius:5px;font-size:.7rem;
+                                    background:var(--bg-dark);
+                                    border:2px solid {% if loop.first and opt.available %}var(--info){% else %}var(--border-color){% endif %};">
+                            {{ opt.fights }}-fight
+                            {% if opt.premium > 1.0 %}<span style="color:var(--text-muted);"> +{{ ((opt.premium-1)*100)|int }}%</span>{% endif %}
+                            {% if not opt.available %}<span style="font-size:.6rem;color:var(--text-muted);"> 🔒</span>{% endif %}
+                        </div>
+                    </label>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm btn-block">
+                    ✅ Re-sign {{ fighter.name }}
+                </button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════
+   TRAITS
+══════════════════════════════════════════════════════════════ #}
+{% if fighter.traits %}
+<div class="card mb-lg">
+    <div class="card-header">
+        <h3>⭐ Traits</h3>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+                gap:var(--spacing-sm);padding:var(--spacing-md);">
+        {% for trait in fighter.traits %}
+        {% set td = trait_data.get(trait, {"icon":"⭐","color":"var(--text-muted)","desc":""}) %}
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:var(--spacing-sm);
+                    background:var(--bg-dark);border-radius:6px;
+                    border-left:3px solid {{ td.color }};">
+            <span style="font-size:1.2rem;flex-shrink:0;">{{ td.icon }}</span>
+            <div>
+                <div style="font-family:var(--font-display);font-size:.85rem;
+                            color:{{ td.color }};">{{ trait }}</div>
+                {% if td.desc %}
+                <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;
+                            font-style:italic;line-height:1.3;">{{ td.desc }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════
+   STATS — 2 column
+══════════════════════════════════════════════════════════════ #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);">
+
+    {# ── Left: Striking + Physical ── #}
+    <div>
+        {% macro stat_block(title, icon, pairs) %}
+        <div class="card mb-md">
+            <div style="padding:var(--spacing-sm) var(--spacing-md);
+                        border-bottom:1px solid var(--border-color);
+                        font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:var(--text-muted);">{{ icon }} {{ title }}</div>
+            <div style="padding:var(--spacing-sm) var(--spacing-md);">
+                {% for name, value in pairs %}
+                {% if value is not none %}
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                    <span style="font-size:.72rem;color:var(--text-muted);width:90px;flex-shrink:0;">{{ name }}</span>
+                    <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+                        <div style="width:{{ value }}%;height:100%;border-radius:3px;
+                                    background:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}rgba(255,255,255,.2){% endif %};"></div>
+                    </div>
+                    <span style="font-family:var(--font-display);font-size:.82rem;width:26px;text-align:right;flex-shrink:0;
+                                 color:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}var(--text-muted){% endif %};">
+                        {{ value }}
+                    </span>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endmacro %}
+
+        {{ stat_block("Striking", "👊", attributes.striking) }}
+        {{ stat_block("Physical", "💪", attributes.physical) }}
+    </div>
+
+    {# ── Right: Grappling + Mental ── #}
+    <div>
+        {{ stat_block("Grappling", "🥋", attributes.grappling) }}
+        {{ stat_block("Mental", "🧠", attributes.mental) }}
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════
+   SCOUTING + RIVALRIES row
+══════════════════════════════════════════════════════════════ #}
+{% if scouting or rivalries %}
+<div style="display:grid;grid-template-columns:{% if rivalries %}1fr 1fr{% else %}1fr{% endif %};
+            gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);">
+
+    {# Scouting report #}
+    {% if scouting %}
+    <div class="card">
+        <div class="card-header"><h3>📋 Scout Report</h3></div>
+        <div style="padding:var(--spacing-md);">
+            {% if scouting.strengths %}
+            <div style="margin-bottom:var(--spacing-sm);">
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                            color:var(--neon-green);margin-bottom:4px;">Strengths</div>
+                {% for s in scouting.strengths %}
+                <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0;">
+                    ✅ {{ s.attr }}{% if s.value %} ({{ s.value }}){% endif %}
+                    {% if s.desc %} — <span style="font-style:italic;">{{ s.desc }}</span>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% if scouting.weaknesses %}
+            <div>
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                            color:var(--blood-red);margin-bottom:4px;">Weaknesses</div>
+                {% for w in scouting.weaknesses %}
+                <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0;">
+                    ⚠️ {{ w.attr }}{% if w.value %} ({{ w.value }}){% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Rivalries #}
+    {% if rivalries %}
+    <div class="card">
+        <div class="card-header"><h3>👊 Rivalries</h3></div>
+        <div style="padding:0;">
+            {% for r in rivalries[:4] %}
+            <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                        padding:var(--spacing-sm) var(--spacing-md);
+                        border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;
+                            background:{{ r.heat_color }};"></div>
+                <div style="flex:1;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=r.opponent_id) }}"
+                       style="font-family:var(--font-display);font-size:.85rem;
+                              color:var(--text-bright);text-decoration:none;">
+                        {% if r.opponent_id %}<a href="{{ url_for('fighter_profile', fighter_id=r.opponent_id) }}" style="color:inherit;text-decoration:none;">{{ r.opponent_name }}</a>{% else %}{{ r.opponent_name }}{% endif %}
+                    </a>
+                    <div style="font-size:.65rem;color:var(--text-muted);margin-top:1px;">
+                        {{ r.stage_display }} · {{ r.fights }} fights · {{ r.type }}
+                    </div>
+                </div>
+                <div style="font-size:.68rem;padding:2px 6px;border-radius:3px;
+                            color:{{ r.heat_color }};
+                            background:{{ r.heat_color }}22;">
+                    {{ r.stage_display }}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════
+   FIGHT HISTORY
+══════════════════════════════════════════════════════════════ #}
+<div class="card mb-lg">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>📜 Fight History</h3>
+        <span style="font-size:.75rem;color:var(--text-muted);">{{ wins }}W · {{ losses }}L</span>
+    </div>
+    <div style="padding:0;">
+        {% set history = fighter.fight_history %}
+        {% if history %}
+        {% for fight in history|reverse %}
+        {% if loop.index <= 10 %}
+        {% set is_win = fight.result == 'W' %}
+        {% set method = fight.method or 'DEC' %}
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    border-left:3px solid {% if is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+
+            {# Result badge #}
+            <div style="flex-shrink:0;text-align:center;min-width:32px;">
+                <span style="font-family:var(--font-display);font-size:.75rem;
+                             color:{% if is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                    {% if is_win %}WIN{% else %}LOSS{% endif %}
+                </span>
+            </div>
+
+            {# Opponent + event #}
+            <div style="flex:1;min-width:0;">
+                <div style="font-family:var(--font-display);font-size:.9rem;color:var(--text-bright);">
+                    {% if fight.opponent_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.opponent_id) }}" style="color:inherit;text-decoration:none;">{{ fight.opponent_name }}</a>{% else %}{{ fight.opponent_name }}{% endif %}
+                </div>
+                <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">
+                    {{ fight.event_name }}
+                </div>
+            </div>
+
+            {# Method + Watch link #}
+            <div style="flex-shrink:0;text-align:right;">
+                <div style="font-size:.72rem;font-family:var(--font-display);
+                             color:{% if method in ('KO','TKO') %}var(--blood-red){% elif method == 'SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
+                    {{ method }}
+                </div>
+                {% if fight.round_finished %}
+                <div style="font-size:.62rem;color:var(--text-muted);">R{{ fight.round_finished }}</div>
+                {% endif %}
+                {% if fight.fight_id %}
+                <a href="{{ url_for('watch_fight', fight_id=fight.fight_id) }}"
+                   style="font-size:.6rem;color:var(--text-muted);text-decoration:underline;
+                          display:block;margin-top:2px;">Watch</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% else %}
+        <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+            No fight history yet
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ═══════════════════════════════════════════════════════════
+   DIVISION RANKINGS CONTEXT
+══════════════════════════════════════════════════════════════ #}
+<div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>🪜 <a href="{{ url_for('rankings', division=fighter.weight_class) }}" style="color:inherit;text-decoration:none;">{{ fighter.weight_class }}</a></h3>
+        <a href="{{ url_for('division_ladder', division=fighter.weight_class) }}"
+           class="btn btn-outline btn-sm">Full Ladder →</a>
+    </div>
+    <div style="padding:0;">
+        {% for r in division_rankings %}
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                    padding:7px var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    {% if r.fighter_id == fighter.fighter_id %}
+                    background:rgba(41,182,246,.06);border-left:3px solid var(--info);
+                    {% else %}border-left:3px solid transparent;{% endif %}">
+            <div style="font-family:var(--font-display);font-size:.85rem;width:30px;text-align:center;
+                        flex-shrink:0;
+                        color:{% if r.is_champion %}var(--gold){% elif r.ranking and r.ranking <= 3 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                {% if r.is_champion %}C{% elif r.ranking %}{{ r.ranking }}{% else %}UR{% endif %}
+            </div>
+            <a href="{{ url_for('fighter_profile', fighter_id=r.fighter_id) }}"
+               style="flex:1;font-size:.85rem;text-decoration:none;
+                      color:{% if r.fighter_id == fighter.fighter_id %}var(--info){% else %}var(--text-bright){% endif %};
+                      font-family:{% if r.is_champion %}var(--font-display){% else %}inherit{% endif %};">
+                {% if r.fighter_id %}<a href="{{ url_for('fighter_profile', fighter_id=r.fighter_id) }}" style="color:inherit;text-decoration:none;">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}
+                {% if r.fighter_id == fighter.fighter_id %}
+                <span style="font-size:.6rem;color:var(--info);margin-left:4px;">← this fighter</span>
+                {% endif %}
+            </a>
+            <span style="font-size:.75rem;color:var(--text-muted);">{{ r.record_str }}</span>
+            <span style="font-family:var(--font-display);font-size:.82rem;
+                         color:{% if r.overall_rating >= 85 %}var(--gold){% elif r.overall_rating >= 70 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                {{ r.overall_rating }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

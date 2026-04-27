@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Archives{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">📚 Archives</h1>
+    <div class="page-subtitle">Past events and fight history</div>
+</div>
+
+{% if not events %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+        No completed events yet.
+    </div>
+</div>
+{% else %}
+{% for event in events %}
+<div class="card mb-md">
+    <div style="display:flex;justify-content:space-between;align-items:center;
+                padding:var(--spacing-md);border-bottom:1px solid var(--border-color);">
+        <div>
+            <span style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);">
+                {{ event.event_name }}
+            </span>
+            <span style="font-size:.72rem;color:var(--text-muted);margin-left:8px;">
+                {{ event.fights|length if event.fights is defined else 0 }} fights
+            </span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <span class="badge">Week {{ event.week }}</span>
+            <a href="{{ url_for('event_detail', event_id=event.event_id) }}"
+               class="btn btn-outline btn-sm">View →</a>
+        </div>
+    </div>
+    {# Show top 3 fights inline #}
+    {% if event.fights %}
+    <div style="padding:0;">
+        {% for fight in event.fights[:4] %}
+        {% set r1 = rankings.get(fight.get('fighter1_id',''), {}) %}
+        {% set r2 = rankings.get(fight.get('fighter2_id',''), {}) %}
+        <div style="display:flex;align-items:center;gap:8px;
+                    padding:5px var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <span style="font-size:.65rem;padding:1px 5px;border-radius:2px;
+                         font-family:var(--font-display);flex-shrink:0;
+                         background:{% if fight.get('method') in ('KO','TKO') %}rgba(211,47,47,.2){% elif fight.get('method')=='SUB' %}rgba(41,182,246,.2){% else %}rgba(255,255,255,.05){% endif %};
+                         color:{% if fight.get('method') in ('KO','TKO') %}var(--blood-red){% elif fight.get('method')=='SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
+                {{ fight.get('method','DEC') }}
+            </span>
+            <span style="font-size:.8rem;color:var(--neon-green);font-family:var(--font-display);">
+                {% if fight.get('winner_id') %}<a href="{{ url_for('fighter_profile', fighter_id=fight.get('winner_id')) }}" style="color:var(--neon-green);text-decoration:none;">{{ fight.get('winner_name','') }}</a>{% else %}{{ fight.get('winner_name','') }}{% endif %}
+            </span>
+            {% if r1.get('is_champion') or r2.get('is_champion') %}
+            <span style="font-size:.62rem;color:var(--gold);">C</span>
+            {% elif fight.get('winner_new_rank') %}
+            <span style="font-size:.62rem;color:var(--info);">→ #{{ fight.winner_new_rank }}</span>
+            {% endif %}
+            <span style="font-size:.72rem;color:var(--text-muted);">def. {% if fight.get('loser_id') %}<a href="{{ url_for('fighter_profile', fighter_id=fight.get('loser_id')) }}" style="color:inherit;text-decoration:none;">{{ fight.get('loser_name','') }}</a>{% else %}{{ fight.get('loser_name','') }}{% endif %}</span>
+            {% if fight.get('is_fotn') %}<span style="font-size:.72rem;color:var(--gold);">🔥</span>{% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

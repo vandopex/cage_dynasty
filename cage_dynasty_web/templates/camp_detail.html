@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}{{ camp.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1 class="page-title">
+            {% if camp.is_player %}⭐{% endif %}
+            {{ camp.name }}
+        </h1>
+        <div class="page-subtitle">
+            <span class="badge tier-{{ camp.tier|lower }}">{{ camp.tier }}</span>
+            {{ camp.location }}
+        </div>
+    </div>
+    {% if camp.is_player %}
+    <a href="{{ url_for('training') }}" class="btn btn-primary">Manage Training</a>
+    {% endif %}
+</div>
+
+{# ── Camp personality badge ── #}
+{% if not camp.is_player and arch_name is defined and arch_name %}
+<div class="card mb-lg" style="border-color:rgba(255,255,255,.08);">
+    <div style="padding:var(--spacing-md);display:flex;align-items:center;gap:var(--spacing-md);">
+        <div style="font-size:2rem;flex-shrink:0;">{{ arch_emoji }}</div>
+        <div>
+            <div style="font-family:var(--font-display);font-size:.95rem;color:var(--text-bright);">
+                {{ arch_name }}
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+                {{ arch_desc }}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Camp Stats -->
+<div class="grid grid-4 mb-lg">
+    <div class="stat-box">
+        <div class="stat-value">{{ fighters|length }}</div>
+        <div class="stat-label">Fighters</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value gold">{{ champions|length }}</div>
+        <div class="stat-label">Champions</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ camp.record_str }}</div>
+        <div class="stat-label">Record</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ camp.win_percentage }}%</div>
+        <div class="stat-label">Win Rate</div>
+    </div>
+</div>
+
+<!-- Coach Info -->
+<div class="card mb-lg">
+    <div class="card-header">
+        <h4>🎯 Coaching Staff</h4>
+    </div>
+    <div class="card-body">
+        <div class="flex items-center gap-lg">
+            <div style="font-size: 3rem;">👨‍🏫</div>
+            <div>
+                <div style="font-family: var(--font-display); font-size: 1.25rem;">{{ camp.head_coach_name }}</div>
+                <div class="text-muted">Head Coach</div>
+            </div>
+            <div style="margin-left: auto; text-align: right;">
+                <div style="font-family: var(--font-display); font-size: 1.5rem; color: var(--info);">{{ camp.head_coach_rating }}</div>
+                <div class="text-muted">Rating</div>
+            </div>
+            <div class="text-right">
+                <span class="badge badge-info">{{ camp.head_coach_specialty }}</span>
+                <div class="text-muted text-sm mt-sm">Specialty</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if champions %}
+<!-- Champions -->
+<div class="card mb-lg card-champion">
+    <div class="card-header">
+        <h4 style="color: var(--bg-darkest);">🏆 Champions</h4>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% for fighter in champions %}
+        <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}" class="fighter-card champion" style="border-radius: 0; border: none; border-bottom: 1px solid var(--border-color);">
+            <div class="fighter-avatar champion">👤</div>
+            <div class="fighter-info">
+                <div class="fighter-name text-gold">{{ fighter.name }}</div>
+                <div class="fighter-meta">
+                    <span class="fighter-record">{{ fighter.record_str }}</span>
+                    <span class="text-muted">•</span>
+                    <span>{{ fighter.weight_class }} Champion</span>
+                </div>
+            </div>
+            <div class="fighter-rating">{{ fighter.overall_rating }}</div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% if ranked %}
+<!-- Ranked Fighters -->
+<div class="card mb-lg">
+    <div class="card-header">
+        <h4>📊 Ranked Fighters</h4>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% for fighter in ranked %}
+        <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}" class="fighter-card" style="border-radius: 0; border: none; border-bottom: 1px solid var(--border-color);">
+            <div class="ladder-rank">#{{ fighter.ranking }}</div>
+            <div class="fighter-info">
+                <div class="fighter-name">{{ fighter.name }}</div>
+                <div class="fighter-meta">
+                    <span class="fighter-record">{{ fighter.record_str }}</span>
+                    <span class="text-muted">•</span>
+                    <span>{{ fighter.weight_class }}</span>
+                </div>
+            </div>
+            <div class="fighter-rating">{{ fighter.overall_rating }}</div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<!-- Full Roster -->
+<div class="card">
+    <div class="card-header">
+        <h4>👥 Full Roster ({{ fighters|length }})</h4>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Name</th>
+                        <th>Division</th>
+                        <th>Record</th>
+                        <th>Rating</th>
+                        <th>Style</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fighter in fighters %}
+                    <tr class="{% if fighter.is_champion %}champion-row{% endif %}">
+                        <td class="rank-cell {% if fighter.is_champion %}rank-champion{% endif %}">
+                            {% if fighter.is_champion %}C{% elif fighter.ranking %}{{ fighter.ranking }}{% else %}UR{% endif %}
+                        </td>
+                        <td>
+                            <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}" class="{% if fighter.is_champion %}text-gold{% endif %}">
+                                {{ fighter.name }}
+                            </a>
+                        </td>
+                        <td>{{ fighter.division_abbrev }}</td>
+                        <td>{{ fighter.record_str }}</td>
+                        <td>{{ fighter.overall_rating }}</td>
+                        <td class="text-muted">{{ fighter.fighting_style }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

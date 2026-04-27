@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Save / Load{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">💾 Save / Load Game</h1>
+</div>
+
+{# Manual slots (slot1-3) #}
+<div style="display:grid;grid-template-columns:repeat(3,1fr);
+            gap:var(--spacing-lg);margin-bottom:var(--spacing-xl);">
+{% for save in saves if save.slot != 'autosave' %}
+{% set has_data = save.exists %}
+<div class="card" style="border-color:{% if has_data %}var(--info){% else %}var(--border-color){% endif %};">
+    <div style="height:3px;background:{% if has_data %}var(--info){% else %}var(--border-color){% endif %};"></div>
+    <div style="padding:var(--spacing-lg);text-align:center;">
+        <div style="font-size:2rem;margin-bottom:var(--spacing-sm);">
+            {% if has_data %}💾{% else %}📭{% endif %}
+        </div>
+        <div style="font-family:var(--font-display);font-size:1rem;
+                    color:var(--text-bright);margin-bottom:4px;">
+            {{ save.label }}
+        </div>
+        {% if has_data %}
+        <div style="font-size:.88rem;color:var(--info);font-family:var(--font-display);margin-bottom:2px;">
+            {{ save.camp_name }}
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);">
+            {{ save.fighter_name }} · {{ save.record }}
+        </div>
+        <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">Week {{ save.week }}</div>
+        {% if save.saved_at %}
+        <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">
+            {{ save.saved_at[:16] | replace('T',' ') }}
+        </div>
+        {% endif %}
+        {% else %}
+        <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
+            Empty slot
+        </div>
+        {% endif %}
+    </div>
+    <div style="padding:0 var(--spacing-md) var(--spacing-md);
+                display:flex;flex-direction:column;gap:6px;">
+        {% if week %}
+        <form action="{{ url_for('save_game_slot', slot=save.slot) }}" method="POST">
+            <button type="submit" class="btn btn-primary btn-block">
+                {% if has_data %}Overwrite{% else %}Save Here{% endif %}
+            </button>
+        </form>
+        {% endif %}
+        {% if has_data %}
+        <form action="{{ url_for('load_game_slot', slot=save.slot) }}" method="POST">
+            <button type="submit" class="btn btn-outline btn-block">Load</button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endfor %}
+</div>
+
+{# Autosave slot #}
+{% for save in saves if save.slot == 'autosave' %}
+{% if save.exists %}
+<div class="card" style="border-color:rgba(255,167,38,.3);max-width:400px;margin:0 auto var(--spacing-xl);">
+    <div style="height:3px;background:var(--warning);"></div>
+    <div style="display:flex;align-items:center;gap:var(--spacing-lg);padding:var(--spacing-lg);">
+        <div style="font-size:1.5rem;">🔄</div>
+        <div style="flex:1;">
+            <div style="font-family:var(--font-display);font-size:.85rem;color:var(--warning);
+                        text-transform:uppercase;letter-spacing:.08em;">Autosave</div>
+            <div style="font-size:.82rem;color:var(--text-bright);margin-top:2px;">
+                {{ save.camp_name }} — Week {{ save.week }}
+            </div>
+            <div style="font-size:.7rem;color:var(--text-muted);margin-top:1px;">
+                Saved {{ save.saved_at[:16] | replace('T',' ') if save.saved_at else '' }}
+                · Auto-saves every 5 weeks
+            </div>
+        </div>
+        <form action="{{ url_for('load_game_slot', slot='autosave') }}" method="POST">
+            <button type="submit" class="btn btn-outline btn-sm">Load</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if not week %}
+<div style="text-align:center;font-size:.8rem;color:var(--text-muted);margin-bottom:var(--spacing-lg);">
+    Start a new game to enable saving.
+</div>
+{% endif %}
+
+<div style="text-align:center;">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline">← Dashboard</a>
+</div>
+{% endblock %}

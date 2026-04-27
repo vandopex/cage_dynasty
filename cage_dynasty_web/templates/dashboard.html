@@ -1,0 +1,449 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+
+{# ── Intensity helpers ── #}
+{% set intensity_color = {
+    "REST":     "#00e676",
+    "LIGHT":    "#29b6f6",
+    "MODERATE": "#ffa726",
+    "INTENSE":  "#ff6b35",
+    "EXTREME":  "#ff4466",
+} %}
+{% set intensity_icon = {
+    "REST":"😴","LIGHT":"🚶","MODERATE":"🏃","INTENSE":"💪","EXTREME":"🔥"
+} %}
+
+{# ── Page header ── #}
+<div style="display:flex;align-items:flex-start;justify-content:space-between;
+            flex-wrap:wrap;gap:var(--spacing-md);margin-bottom:var(--spacing-lg);">
+    <div>
+        <h1 style="font-family:var(--font-display);font-size:1.8rem;
+                   color:var(--text-bright);margin:0 0 4px;">
+            {% if camp.camp_id %}<a href="{{ url_for('camp_detail', camp_id=camp.camp_id) }}" style="color:inherit;text-decoration:none;">{{ camp.name }}</a>{% else %}{{ camp.name }}{% endif %}
+        </h1>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="badge tier-{{ camp.tier|lower }}">{{ camp.tier }}</span>
+            <span class="text-muted text-sm">{{ camp.location }}</span>
+            <span class="text-muted text-sm">·</span>
+            <span class="text-muted text-sm">Week {{ week }}</span>
+        </div>
+    </div>
+    <form action="{{ url_for('advance_week') }}" method="POST">
+        <button type="submit" class="btn btn-primary btn-lg">⏩ Advance Week</button>
+    </form>
+</div>
+
+{# ── 4-stat header ── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-md);
+            margin-bottom:var(--spacing-lg);">
+    {# Balance #}
+    <div class="stat-box" style="position:relative;overflow:hidden;">
+        <div class="stat-value success">${{ "{:,}".format(balance) }}</div>
+        <div class="stat-label">Balance</div>
+        {# Runway warning #}
+        {% if runway < 8 %}
+        <div style="position:absolute;bottom:0;left:0;right:0;height:3px;
+                    background:var(--blood-red);"></div>
+        {% elif runway < 20 %}
+        <div style="position:absolute;bottom:0;left:0;right:0;height:3px;
+                    background:var(--warning);"></div>
+        {% endif %}
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ fighters|length }}/{{ camp.max_fighters }}</div>
+        <div class="stat-label">Roster</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value gold">{{ camp.championships }}</div>
+        <div class="stat-label">Titles Won</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ camp.record_str }}</div>
+        <div class="stat-label">Camp Record</div>
+    </div>
+</div>
+
+{# ── Alerts row ── #}
+{% if offer_count > 0 or pending_interviews or scout_tips %}
+<div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
+    {% if offer_count > 0 %}
+    <a href="{{ url_for('fight_offers') }}"
+       style="display:flex;align-items:center;gap:8px;padding:8px 16px;
+              background:rgba(211,47,47,.15);border:1px solid var(--blood-red);
+              border-radius:6px;text-decoration:none;flex:1;min-width:200px;">
+        <span style="font-size:1.1rem;">📨</span>
+        <span style="font-family:var(--font-display);color:var(--blood-red-light);font-size:.95rem;">
+            {{ offer_count }} Fight Offer{{ 's' if offer_count > 1 else '' }}
+        </span>
+        <span style="margin-left:auto;font-size:.75rem;color:var(--blood-red-light);">View →</span>
+    </a>
+    {% endif %}
+    {% if scout_tips %}
+    {% set tip = scout_tips[0] %}
+    <a href="{{ url_for('amateur_circuit') }}"
+       style="display:flex;align-items:center;gap:8px;padding:8px 16px;
+              background:rgba(41,182,246,.1);border:1px solid var(--info);
+              border-radius:6px;text-decoration:none;flex:1;min-width:200px;">
+        <span style="font-size:1.1rem;">👀</span>
+        <span style="font-size:.82rem;color:var(--info);line-height:1.3;">
+            {{ tip.headline[:60] }}{% if tip.headline|length > 60 %}…{% endif %}
+        </span>
+    </a>
+    {% endif %}
+</div>
+{% endif %}
+
+{# ── Main 2-column layout ── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
+            align-items:start;">
+
+    {# ════ LEFT COLUMN ════ #}
+    <div>
+
+        {# ── Your Fighters ── #}
+        <div class="card mb-lg">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>🥊 Your Fighters</h3>
+                <a href="{{ url_for('roster') }}" class="btn btn-outline btn-sm">Roster →</a>
+            </div>
+            <div style="padding:0;">
+                {% for fighter in fighters %}
+                {% set plan = training_plans.get(fighter.fighter_id, {}) %}
+                {% set intensity = plan.get('intensity','MODERATE') %}
+                {% set icolor = intensity_color.get(intensity, '#9e9e9e') %}
+                {% set iicon  = intensity_icon.get(intensity, '🏃') %}
+
+                <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}"
+                   style="display:flex;align-items:center;gap:var(--spacing-md);
+                          padding:var(--spacing-md);
+                          border-bottom:1px solid var(--border-color);
+                          text-decoration:none;transition:background .15s;"
+                   onmouseover="this.style.background='var(--bg-dark)'"
+                   onmouseout="this.style.background='transparent'">
+
+                    {# Left accent bar = intensity color #}
+                    <div style="width:3px;height:44px;border-radius:2px;flex-shrink:0;
+                                background:{{ icolor }};"></div>
+
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
+                            <span style="font-family:var(--font-display);font-size:1rem;
+                                      color:var(--text-bright);">{{ fighter.name }}</span>
+                            {% if fighter.is_champion %}
+                            <span class="badge badge-champion" style="font-size:.6rem;">🏆 CHAMP</span>
+                            {% elif fighter.ranking %}
+                            <span class="badge badge-ranked" style="font-size:.6rem;">#{{ fighter.ranking }}</span>
+                            {% endif %}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;
+                                    color:var(--text-muted);margin-bottom:4px;">
+                            <span>{{ fighter.record_str }}</span>
+                            <span>·</span>
+                            <span>{{ fighter.division_abbrev }}</span>
+                            <span>·</span>
+                            <span class="text-info">{{ fighter.overall_rating }} OVR</span>
+                            {% if fighter.win_streak >= 2 %}
+                            <span style="color:var(--neon-green);">🔥 W{{ fighter.win_streak }}</span>
+                            {% elif fighter.lose_streak >= 2 %}
+                            <span style="color:var(--blood-red-light);">📉 L{{ fighter.lose_streak }}</span>
+                            {% endif %}
+                        </div>
+                        {# Condition bar #}
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <div style="flex:1;height:4px;background:rgba(255,255,255,.08);
+                                        border-radius:2px;overflow:hidden;">
+                                <div style="width:{{ 100 - fighter.fatigue }}%;height:100%;
+                                            background:{{ fighter.condition_color if fighter.condition_color else 'var(--neon-green)' }};
+                                            border-radius:2px;"></div>
+                            </div>
+                            <span style="font-size:.65rem;color:var(--text-muted);white-space:nowrap;">
+                                {{ 100 - fighter.fatigue }}% condition
+                            </span>
+                        </div>
+                    </div>
+
+                    {# Training intensity badge #}
+                    <div style="text-align:center;flex-shrink:0;">
+                        <div style="font-size:1.1rem;">{{ iicon }}</div>
+                        <div style="font-size:.58rem;color:{{ icolor }};text-transform:uppercase;
+                                    letter-spacing:.06em;margin-top:1px;">{{ intensity }}</div>
+                    </div>
+                </a>
+                {% else %}
+                <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+                    No fighters on your roster.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# ── Scheduled Fights ── #}
+        {% if scheduled_fights %}
+        <div class="card mb-lg">
+            <div class="card-header"><h3>⚔️ Scheduled Fights</h3></div>
+            <div style="padding:0;">
+                {% for fight in scheduled_fights %}
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            padding:var(--spacing-md);
+                            border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                    <div>
+                        <div style="font-family:var(--font-display);font-size:.95rem;
+                                    color:var(--text-bright);">
+                            {{ fight.fighter.name if fight.fighter is defined else '?' }}
+                            <span style="color:var(--text-muted);font-size:.8rem;">vs</span>
+                            {{ fight.fighter2_name }}
+                        </div>
+                        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+                            {{ fight.event_name }}
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        {% if fight.weeks_until <= 1 %}
+                        <span class="badge badge-warning">FIGHT WEEK</span>
+                        {% elif fight.weeks_until <= 3 %}
+                        <span style="font-family:var(--font-display);color:var(--gold);font-size:.9rem;">
+                            {{ fight.weeks_until }}w out
+                        </span>
+                        {% else %}
+                        <span style="font-size:.85rem;color:var(--text-muted);">{{ fight.weeks_until }} weeks</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Financial Pulse ── #}
+        <div class="card">
+            <div class="card-header"><h3>💰 Financial Pulse</h3></div>
+            <div style="padding:var(--spacing-lg);">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--spacing-md);
+                            text-align:center;">
+                    <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);">
+                        <div style="font-family:var(--font-display);font-size:1.1rem;
+                                    color:var(--success);">${{ "{:,}".format(balance) }}</div>
+                        <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;
+                                    letter-spacing:.06em;margin-top:2px;">Balance</div>
+                    </div>
+                    <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);">
+                        <div style="font-family:var(--font-display);font-size:1.1rem;
+                                    color:var(--blood-red-light);">-${{ "{:,}".format(overhead) }}</div>
+                        <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;
+                                    letter-spacing:.06em;margin-top:2px;">Weekly Cost</div>
+                    </div>
+                    <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);
+                                border:1px solid {% if runway < 8 %}var(--blood-red){% elif runway < 20 %}var(--warning){% else %}var(--border-color){% endif %};">
+                        <div style="font-family:var(--font-display);font-size:1.1rem;
+                                    color:{% if runway < 8 %}var(--blood-red-light){% elif runway < 20 %}var(--warning){% else %}var(--text-bright){% endif %};">
+                            {{ runway }}w
+                        </div>
+                        <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;
+                                    letter-spacing:.06em;margin-top:2px;">Runway</div>
+                    </div>
+                </div>
+                {% if runway < 8 %}
+                <div style="margin-top:var(--spacing-sm);font-size:.75rem;color:var(--blood-red-light);
+                            text-align:center;">
+                    ⚠️ Less than 2 months of funding remaining
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+
+    {# ════ RIGHT COLUMN ════ #}
+    <div>
+
+        {# ── Upcoming Card Preview ── #}
+        {% if player_card %}
+        <div class="card mb-lg" style="border-color:rgba(255,215,0,.25);">
+            <div class="card-header" style="border-bottom:1px solid rgba(255,215,0,.15);">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <h3 style="color:var(--gold);">📅 {{ player_card.event_name }}</h3>
+                    <span style="font-size:.75rem;color:var(--text-muted);">
+                        {{ player_card.weeks_out }}w away
+                    </span>
+                </div>
+            </div>
+            <div style="padding:0;">
+                {% set slot_order = {"main_event":0,"co_main":1,"main_card":2,"prelim":3,"early_prelim":4} %}
+                {% set slot_icons = {"main_event":"🏆","co_main":"⭐","main_card":"🥊","prelim":"📋","early_prelim":"📋"} %}
+                {% set player_ids = fighters | map(attribute='fighter_id') | list %}
+
+                {% for fight in player_card.fights | sort(attribute='card_slot') %}
+                {% set is_player = fight.fighter1_id in player_ids or fight.fighter2_id in player_ids %}
+                {% set slot = fight.get('card_slot','prelim') if fight.get else fight.card_slot if fight.card_slot is defined else 'prelim' %}
+                {% set slot_icon = slot_icons.get(slot, '📋') %}
+
+                {% set wc = fight.get('weight_class','') if fight.get else '' %}
+                {% set wc_abbr = {
+                    'Strawweight':'STR','Flyweight':'FLY','Bantamweight':'BAN',
+                    'Featherweight':'FEA','Lightweight':'LIG','Welterweight':'WEL',
+                    'Middleweight':'MID','Light Heavyweight':'LHW','Heavyweight':'HVY'
+                }.get(wc, wc[:3].upper() if wc else '') %}
+                {% set r1 = fight.get('fighter1_rank') if fight.get else None %}
+                {% set r2 = fight.get('fighter2_rank') if fight.get else None %}
+                {% set is_title = (fight.get('is_title_fight') if fight.get else False) %}
+
+                <div style="display:flex;align-items:center;gap:6px;
+                            padding:7px var(--spacing-md);
+                            {% if is_player %}background:rgba(255,215,0,.06);border-left:3px solid var(--gold);
+                            {% else %}border-left:3px solid transparent;{% endif %}
+                            border-bottom:1px solid var(--border-color);">
+                    <span style="font-size:.8rem;flex-shrink:0;">{{ slot_icon }}</span>
+                    {# Weight class badge #}
+                    {% if wc_abbr %}
+                    <span style="font-size:.58rem;color:var(--text-muted);
+                                 background:rgba(255,255,255,.06);border-radius:3px;
+                                 padding:1px 4px;flex-shrink:0;font-family:var(--font-display);">
+                        {{ wc_abbr }}
+                    </span>
+                    {% endif %}
+                    {# Fighter 1 with rank #}
+                    <span style="font-size:.75rem;color:{% if is_player %}var(--gold){% else %}var(--text-bright){% endif %};
+                                 font-family:{% if is_player %}var(--font-display){% else %}inherit{% endif %};">
+                        {% if is_title %}<span style="font-size:.6rem;color:var(--gold);margin-right:2px;">C</span>{% elif r1 %}<span style="font-size:.6rem;color:var(--info);margin-right:2px;">#{{ r1 }}</span>{% endif %}{% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %}
+                    </span>
+                    <span style="font-size:.65rem;color:var(--text-muted);flex-shrink:0;">vs</span>
+                    {# Fighter 2 with rank #}
+                    <span style="font-size:.75rem;color:{% if is_player %}var(--gold){% else %}var(--text-bright){% endif %};
+                                 font-family:{% if is_player %}var(--font-display){% else %}inherit{% endif %};">
+                        {% if r2 %}<span style="font-size:.6rem;color:var(--info);margin-right:2px;">#{{ r2 }}</span>{% endif %}{% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %}
+                    </span>
+                </div>
+                {% endfor %}
+            </div>
+            <div style="padding:var(--spacing-sm) var(--spacing-md);">
+                <a href="{{ url_for('upcoming_events') }}" style="font-size:.75rem;color:var(--text-muted);">
+                    View full card →
+                </a>
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── Coach's Corner ── #}
+        {% if digest and digest.observations %}
+        <div class="card mb-lg" style="border-color:rgba(255,255,255,.08);">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>{{ digest.icon }} Coach's Corner</h3>
+                <span style="font-size:.72rem;color:var(--text-muted);font-family:var(--font-display);">
+                    {{ digest.coach_name }}
+                    <span style="color:rgba(255,255,255,.2);margin:0 4px;">·</span>
+                    {{ digest.coach_spec | title }}
+                    <span style="color:rgba(255,255,255,.2);margin:0 4px;">·</span>
+                    {{ digest.coach_rating }} RTG
+                </span>
+            </div>
+            <div style="padding:0;">
+                {% for obs in digest.observations %}
+                <div style="padding:var(--spacing-md);
+                            border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                    {# Fighter status row #}
+                    <div style="display:flex;align-items:center;gap:var(--spacing-sm);
+                                margin-bottom:var(--spacing-sm);">
+                        <a href="{{ url_for('fighter_profile', fighter_id=obs.fighter_id) }}"
+                           style="font-family:var(--font-display);font-size:.82rem;
+                                  color:var(--text-bright);text-decoration:none;">
+                            {{ obs.fighter_name }}
+                        </a>
+                        <span style="font-size:.62rem;color:var(--text-muted);">{{ obs.record }}</span>
+                        <span style="margin-left:auto;font-size:.65rem;
+                                     color:{{ obs.fatigue_color }};">
+                            {{ obs.fatigue_label }}
+                        </span>
+                        <span style="font-size:.7rem;">{{ obs.intensity_emoji }}</span>
+                        <span style="font-size:.62rem;color:var(--text-muted);">
+                            {{ obs.focus }} · {{ obs.intensity }}{% if obs.is_fight_camp %} · <span style="color:var(--gold);">Fight Camp</span>{% endif %}
+                        </span>
+                    </div>
+                    {# Coach quote #}
+                    <div style="font-size:.78rem;color:var(--text-secondary);
+                                font-style:italic;line-height:1.5;
+                                border-left:2px solid rgba(255,255,255,.1);
+                                padding-left:var(--spacing-sm);">
+                        "{{ obs.quote }}"
+                    </div>
+                </div>
+                {% endfor %}
+                {% for h in digest.highlights %}
+                <div style="padding:var(--spacing-sm) var(--spacing-md);
+                            background:rgba(211,47,47,.06);
+                            border-top:1px solid rgba(211,47,47,.2);
+                            font-size:.72rem;color:var(--blood-red);">
+                    {{ h.icon }} {{ h.text }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# ── DFC Headlines ── #}
+        <div class="card mb-lg">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>📰 DFC Headlines</h3>
+                <a href="{{ url_for('news_feed') }}" class="btn btn-outline btn-sm">All →</a>
+            </div>
+            <div style="padding:0;">
+                {% for item in news[:8] %}
+                {% set is_major = item.category in ('title','fotn','player_result','injury') %}
+                <div style="display:flex;align-items:flex-start;gap:var(--spacing-sm);
+                            padding:var(--spacing-sm) var(--spacing-md);
+                            {% if is_major %}background:rgba(255,215,0,.03);
+                            border-left:3px solid {% if item.category == 'title' %}var(--gold){% elif item.category == 'fotn' %}var(--gold){% elif item.category == 'player_result' %}var(--neon-green){% else %}var(--blood-red){% endif %};{% endif %}
+                            border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                    <span style="flex-shrink:0;font-size:.9rem;margin-top:1px;">{{ item.icon }}</span>
+                    <div style="min-width:0;flex:1;">
+                        <div style="font-size:.8rem;color:{% if is_major %}var(--text-bright){% else %}var(--text-bright){% endif %};
+                                    line-height:1.4;{% if is_major %}font-family:var(--font-display);{% endif %}">
+                            {{ item.headline }}
+                        </div>
+                        <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;display:flex;gap:6px;">
+                            <span>Week {{ item.week }}</span>
+                            {% if item.winner_id %}
+                            <span>·</span>
+                            <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
+                               style="color:var(--neon-green);text-decoration:none;">View →</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div style="padding:var(--spacing-lg);text-align:center;color:var(--text-muted);">
+                    No news yet.
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# ── Pending interviews ── #}
+        {% if pending_interviews %}
+        <div class="card" style="border-color:rgba(255,215,0,.2);">
+            <div class="card-header" style="border-bottom:1px solid rgba(255,215,0,.1);">
+                <h3 style="color:var(--gold);">🎤 Post-Fight Interviews</h3>
+            </div>
+            <div style="padding:0;">
+                {% for iv in pending_interviews %}
+                <div style="display:flex;justify-content:space-between;align-items:center;
+                            padding:var(--spacing-md);
+                            border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                    <div style="font-size:.85rem;color:var(--text-bright);">
+                        {{ iv.fighter_name }} — {{ iv.fight_summary }}
+                    </div>
+                    <a href="{{ url_for('interview', fight_id=iv.fight_id, fighter_id=iv.fighter_id) }}"
+                       class="btn btn-sm btn-outline">
+                        Do Interview
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+{% endblock %}

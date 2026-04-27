@@ -1,0 +1,456 @@
+{% extends "base.html" %}
+{% block title %}Fight Camp{% endblock %}
+
+{% block content %}
+
+{# ── Fight info header ── #}
+<div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
+    <div style="font-size:.72rem;letter-spacing:.2em;color:var(--text-muted);
+                text-transform:uppercase;margin-bottom:4px;">
+        {{ data.fight.event_name }}  ·  {{ data.fight.weeks_until }}w out
+    </div>
+    <h1 style="font-family:var(--font-display);font-size:2rem;color:var(--text-bright);margin:0;">
+        🏕️ Fight Camp
+    </h1>
+</div>
+
+{# ── Fighter vs Fighter ── #}
+<div class="card mb-lg">
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:var(--spacing-lg);
+                padding:var(--spacing-lg);align-items:center;">
+
+        {# Player #}
+        <div style="text-align:right;">
+            <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--text-bright);">
+                {{ data.player.name }}
+            </div>
+            <div style="font-size:.8rem;color:var(--text-muted);margin-top:2px;">
+                {{ data.player.record_str }}
+                {% if data.player.ranking %} · #{{ data.player.ranking }}{% else %} · Unranked{% endif %}
+            </div>
+            <div style="font-size:.75rem;color:var(--info);margin-top:2px;">{{ data.player.fighting_style }}</div>
+
+            {# Condition bar #}
+            <div style="margin-top:var(--spacing-sm);">
+                <div style="font-size:.65rem;color:var(--text-muted);margin-bottom:3px;text-align:right;">
+                    Condition: {{ condition_pct }}%
+                    {% if fatigue > 60 %}<span style="color:var(--warning);"> ⚠️ Tired</span>
+                    {% elif fatigue > 80 %}<span style="color:var(--blood-red);"> 🔴 Exhausted</span>{% endif %}
+                </div>
+                <div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
+                    <div style="width:{{ condition_pct }}%;height:100%;border-radius:3px;
+                                background:{% if condition_pct > 70 %}var(--neon-green){% elif condition_pct > 40 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
+                </div>
+            </div>
+
+            {# Key stats #}
+            <div style="display:flex;gap:var(--spacing-sm);justify-content:flex-end;
+                        margin-top:var(--spacing-md);flex-wrap:wrap;">
+                {% for label, val in [
+                    ('Boxing', data.player.boxing),
+                    ('Kicks', data.player.kicks),
+                    ('Wrestling', data.player.takedowns),
+                    ('BJJ', data.player.submissions),
+                    ('Chin', data.player.chin),
+                    ('Cardio', data.player.cardio),
+                ] %}
+                <div style="text-align:center;background:var(--bg-dark);border-radius:4px;
+                            padding:4px 8px;min-width:44px;">
+                    <div style="font-family:var(--font-display);font-size:.95rem;color:var(--info);">{{ val or '—' }}</div>
+                    <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">{{ label }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# VS #}
+        <div style="text-align:center;">
+            <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--blood-red);">VS</div>
+            <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:var(--text-muted);margin-top:4px;">{{ data.fight.weight_class }}</div>
+        </div>
+
+        {# Opponent #}
+        <div style="text-align:left;">
+            <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--text-bright);">
+                {{ data.opponent.name }}
+            </div>
+            <div style="font-size:.8rem;color:var(--text-muted);margin-top:2px;">
+                {{ data.opponent.record_str }}
+                {% if data.opponent.ranking %} · #{{ data.opponent.ranking }}{% else %} · Unranked{% endif %}
+            </div>
+            <div style="font-size:.75rem;color:var(--blood-red-light);margin-top:2px;">{{ data.opponent.fighting_style }}</div>
+
+            <div style="display:flex;gap:var(--spacing-sm);margin-top:var(--spacing-md);flex-wrap:wrap;">
+                {% for label, val in [
+                    ('Boxing', data.opponent.boxing),
+                    ('Kicks', data.opponent.kicks),
+                    ('Wrestling', data.opponent.takedowns),
+                    ('BJJ', data.opponent.submissions),
+                    ('Chin', data.opponent.chin),
+                    ('Cardio', data.opponent.cardio),
+                ] %}
+                <div style="text-align:center;background:var(--bg-dark);border-radius:4px;
+                            padding:4px 8px;min-width:44px;">
+                    <div style="font-family:var(--font-display);font-size:.95rem;color:var(--blood-red-light);">{{ val or '—' }}</div>
+                    <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">{{ label }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# ── Coach's Corner ── #}
+{% set cs = data.coach_suggestion %}
+{% if cs %}
+<div class="card mb-lg" style="border-color:rgba(255,215,0,.3);">
+    <div style="height:3px;background:linear-gradient(90deg,var(--gold),var(--blood-red));"></div>
+    <div style="padding:var(--spacing-lg);">
+        <div style="display:flex;align-items:flex-start;gap:var(--spacing-lg);">
+            <div style="flex:1;">
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                            color:var(--gold);margin-bottom:var(--spacing-sm);">
+                    🧠 Coach's Corner
+                    <span style="margin-left:8px;color:var(--text-muted);">Confidence: {{ cs.confidence }}</span>
+                </div>
+                {% if cs.coach_quote %}
+                <div style="font-style:italic;color:var(--text-secondary);line-height:1.6;font-size:.88rem;
+                            border-left:2px solid var(--gold);padding-left:var(--spacing-md);">
+                    "{{ cs.coach_quote }}"
+                </div>
+                {% endif %}
+                {% if cs.bias_note %}
+                <div style="margin-top:var(--spacing-sm);font-size:.75rem;color:var(--warning);">{{ cs.bias_note }}</div>
+                {% endif %}
+            </div>
+            <div style="flex-shrink:0;text-align:center;min-width:120px;">
+                <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;
+                            color:var(--text-muted);margin-bottom:var(--spacing-sm);">Recommends</div>
+                <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                            border:1px solid rgba(255,215,0,.2);margin-bottom:4px;">
+                    <div style="font-size:.62rem;color:var(--text-muted);">Gameplan</div>
+                    <div style="font-family:var(--font-display);font-size:.9rem;color:var(--gold);">
+                        {% for g in gameplan_options %}{% if g.key == rec_gameplan %}{{ g.name }}{% endif %}{% endfor %}
+                    </div>
+                </div>
+                <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                            border:1px solid rgba(255,215,0,.2);margin-bottom:4px;">
+                    <div style="font-size:.62rem;color:var(--text-muted);">Focus</div>
+                    <div style="font-family:var(--font-display);font-size:.9rem;color:var(--gold);">
+                        {{ rec_focus | replace('_',' ') | title }}
+                    </div>
+                </div>
+                <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
+                            border:1px solid rgba(255,215,0,.2);">
+                    <div style="font-size:.62rem;color:var(--text-muted);">Intensity</div>
+                    <div style="font-family:var(--font-display);font-size:.9rem;color:var(--gold);">{{ rec_intensity }}</div>
+                </div>
+            </div>
+        </div>
+
+        {# Accept Coach's Plan button #}
+        <div style="margin-top:var(--spacing-lg);">
+            <form action="{{ url_for('save_fight_camp', fight_id=data.fight.fight_id) }}" method="POST">
+                <input type="hidden" name="gameplan"       value="{{ rec_gameplan }}">
+                <input type="hidden" name="training_focus" value="{{ rec_focus }}">
+                <input type="hidden" name="intensity"      value="{{ rec_intensity }}">
+                <button type="submit"
+                        style="width:100%;padding:var(--spacing-md);
+                               background:linear-gradient(90deg,rgba(255,215,0,.15),rgba(255,215,0,.08));
+                               border:1px solid var(--gold);border-radius:6px;
+                               font-family:var(--font-display);font-size:1rem;color:var(--gold);
+                               cursor:pointer;transition:all .15s;"
+                        onmouseover="this.style.background='rgba(255,215,0,.25)'"
+                        onmouseout="this.style.background='linear-gradient(90deg,rgba(255,215,0,.15),rgba(255,215,0,.08))'">
+                    ✅ Accept Coach's Gameplan
+                </button>
+            </form>
+            <div style="text-align:center;margin-top:6px;font-size:.7rem;color:var(--text-muted);">
+                — or customize below —
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+{# ── Opponent Tendencies — scouting report ── #}
+{% if data.tendencies %}
+<div class="card mb-lg">
+    <div class="card-header">
+        <h3>🔍 Scout Report</h3>
+        <span style="font-size:.72rem;color:var(--text-muted);">
+            {{ data.opponent.name }} · {{ data.opponent.record_str }}
+        </span>
+    </div>
+    <div style="padding:0;">
+        {% for t in data.tendencies %}
+        <div style="display:flex;align-items:flex-start;gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <span style="font-size:1.1rem;flex-shrink:0;line-height:1.4;">{{ t.icon }}</span>
+            <span style="font-size:.8rem;color:var(--text-bright);line-height:1.5;">{{ t.text }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Tale of the Tape ── #}
+{% if data.tale_of_tape %}
+{% set tot = data.tale_of_tape %}
+<div class="card mb-lg">
+    <div class="card-header"><h3>⚔️ Matchup Analysis</h3></div>
+    <div style="padding:var(--spacing-md);">
+        {# 4 advantage pills #}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
+                    margin-bottom:var(--spacing-md);">
+            {% for label, adv in [
+                ('Striking',   tot.striking_adv),
+                ('Grappling',  tot.grappling_adv),
+                ('Physical',   tot.physical_adv),
+                ('Experience', tot.experience_adv),
+            ] %}
+            <div style="text-align:center;padding:var(--spacing-sm);border-radius:6px;
+                        background:var(--bg-dark);
+                        border:1px solid {% if adv == 'fighter1' or adv == 'You' %}var(--neon-green){% elif adv == 'fighter2' or adv == 'Opponent' %}var(--blood-red){% else %}var(--border-color){% endif %};">
+                <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;
+                            color:var(--text-muted);margin-bottom:3px;">{{ label }}</div>
+                <div style="font-family:var(--font-display);font-size:.82rem;
+                            color:{% if adv == 'fighter1' or adv == 'You' %}var(--neon-green)
+                                  {% elif adv == 'fighter2' or adv == 'Opponent' %}var(--blood-red)
+                                  {% else %}var(--text-muted){% endif %};">
+                    {% if adv == 'fighter1' or adv == 'You' %}You ✓
+                    {% elif adv == 'fighter2' or adv == 'Opponent' %}Opponent
+                    {% else %}Even{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {# Stat comparisons #}
+        {% if tot.comparisons %}
+        <div style="display:flex;flex-direction:column;gap:4px;">
+            {% for c in tot.comparisons %}
+            {% set edge = c.edge %}
+            {% set v1   = c.val1 or 0 %}
+            {% set v2   = c.val2 or 0 %}
+            <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;align-items:center;">
+                {# Your bar — fills right to left #}
+                <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
+                    <span style="font-family:var(--font-display);font-size:.78rem;
+                                 color:{% if v1 > v2 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                        {{ v1 }}
+                    </span>
+                    <div style="width:70px;height:5px;background:rgba(255,255,255,.06);
+                                border-radius:3px;overflow:hidden;">
+                        <div style="width:{{ v1 }}%;height:100%;border-radius:3px;float:right;
+                                    background:{% if v1 >= v2 %}var(--neon-green){% else %}rgba(255,255,255,.15){% endif %};"></div>
+                    </div>
+                </div>
+                {# Stat name #}
+                <div style="text-align:center;font-size:.65rem;color:var(--text-muted);
+                            text-transform:uppercase;letter-spacing:.04em;">{{ c.name }}</div>
+                {# Opponent bar #}
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <div style="width:70px;height:5px;background:rgba(255,255,255,.06);
+                                border-radius:3px;overflow:hidden;">
+                        <div style="width:{{ v2 }}%;height:100%;border-radius:3px;
+                                    background:{% if v2 >= v1 %}var(--blood-red-light){% else %}rgba(255,255,255,.15){% endif %};"></div>
+                    </div>
+                    <span style="font-family:var(--font-display);font-size:.78rem;
+                                 color:{% if v2 > v1 %}var(--blood-red-light){% else %}var(--text-muted){% endif %};">
+                        {{ v2 }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Custom fight camp form ── #}
+<form action="{{ url_for('save_fight_camp', fight_id=data.fight.fight_id) }}" method="POST" id="camp-form">
+
+    {# ── 01 Gameplan ── #}
+    <div class="card mb-lg">
+        <div class="card-header">
+            <span style="font-family:var(--font-display);font-size:.7rem;color:var(--text-muted);
+                         text-transform:uppercase;letter-spacing:.15em;">01</span>
+            <h3 style="display:inline;margin-left:var(--spacing-sm);">Game Plan</h3>
+            <span style="font-size:.75rem;color:var(--text-muted);margin-left:8px;">
+                How does your fighter approach this fight?
+            </span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
+                    padding:var(--spacing-md);">
+            {% for g in gameplan_options %}
+            {% set is_rec = (g.key == rec_gameplan) %}
+            {% set is_existing = (data.existing_gameplan == g.key) %}
+            <label onclick="selectCard(this,'gameplan-group')"
+                   class="gameplan-card"
+                   style="display:block;cursor:pointer;border-radius:8px;
+                          background:var(--bg-dark);
+                          border:2px solid {% if is_rec %}var(--gold){% elif is_existing %}var(--info){% else %}var(--border-color){% endif %};
+                          padding:var(--spacing-md);text-align:center;
+                          position:relative;transition:border-color .15s;">
+                {% if is_rec %}
+                <div style="position:absolute;top:-8px;left:50%;transform:translateX(-50%);
+                            font-size:.55rem;text-transform:uppercase;letter-spacing:.08em;
+                            padding:2px 6px;background:var(--gold);color:var(--bg-darkest);
+                            border-radius:3px;font-weight:700;white-space:nowrap;">Coach pick</div>
+                {% endif %}
+                <input type="radio" name="gameplan" value="{{ g.key }}"
+                       {% if is_existing or (not data.existing_gameplan and is_rec) %}checked{% endif %}
+                       style="display:none;" class="gameplan-group">
+                <div style="font-size:1.4rem;margin-bottom:4px;">{{ g.icon }}</div>
+                <div style="font-family:var(--font-display);font-size:.85rem;color:var(--text-bright);
+                            margin-bottom:2px;">{{ g.name }}</div>
+                <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;
+                            color:{% if is_rec %}var(--gold){% else %}var(--text-muted){% endif %};
+                            margin-bottom:var(--spacing-sm);">{{ g.style }}</div>
+                <div style="font-size:.7rem;color:var(--text-muted);line-height:1.4;margin-bottom:var(--spacing-sm);">
+                    {{ g.desc }}
+                </div>
+                <div style="font-size:.65rem;color:var(--neon-green);line-height:1.4;">↑ {{ g.boosts }}</div>
+                <div style="font-size:.65rem;color:var(--blood-red-light);line-height:1.4;margin-top:2px;">↓ {{ g.sacrifices }}</div>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── 02 Training Focus ── #}
+    <div class="card mb-lg">
+        <div class="card-header">
+            <span style="font-family:var(--font-display);font-size:.7rem;color:var(--text-muted);
+                         text-transform:uppercase;letter-spacing:.15em;">02</span>
+            <h3 style="display:inline;margin-left:var(--spacing-sm);">Camp Focus</h3>
+            <span style="font-size:.75rem;color:var(--text-muted);margin-left:8px;">
+                What does this camp build?
+            </span>
+        </div>
+        <div style="padding:var(--spacing-md);">
+            {% for group in focus_groups %}
+            <div style="margin-bottom:var(--spacing-md);">
+                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                            color:{{ group.color }};margin-bottom:var(--spacing-sm);">
+                    {{ group.label }}
+                </div>
+                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);">
+                    {% for fkey, fname, ficon, fdesc in group.options %}
+                    {% set is_rec = (fkey == rec_focus) %}
+                    {% set is_existing = (data.existing_focus == fkey) %}
+                    <label onclick="selectCard(this,'focus-group')"
+                           class="focus-card"
+                           style="display:block;cursor:pointer;border-radius:6px;
+                                  background:var(--bg-dark);
+                                  border:2px solid {% if is_rec %}var(--gold){% elif is_existing %}var(--info){% else %}var(--border-color){% endif %};
+                                  padding:var(--spacing-sm);text-align:center;
+                                  position:relative;transition:border-color .15s;">
+                        {% if is_rec %}
+                        <div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);
+                                    font-size:.52rem;text-transform:uppercase;letter-spacing:.06em;
+                                    padding:1px 5px;background:var(--gold);color:var(--bg-darkest);
+                                    border-radius:3px;font-weight:700;white-space:nowrap;">Coach</div>
+                        {% endif %}
+                        <input type="radio" name="training_focus" value="{{ fkey }}"
+                               {% if is_existing or (not data.existing_focus and is_rec) %}checked{% endif %}
+                               style="display:none;" class="focus-group">
+                        <div style="font-size:1.2rem;margin-bottom:2px;">{{ ficon }}</div>
+                        <div style="font-family:var(--font-display);font-size:.78rem;color:var(--text-bright);">{{ fname }}</div>
+                        <div style="font-size:.62rem;color:var(--text-muted);margin-top:2px;line-height:1.3;">{{ fdesc }}</div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── 03 Intensity ── #}
+    <div class="card mb-lg">
+        <div class="card-header">
+            <span style="font-family:var(--font-display);font-size:.7rem;color:var(--text-muted);
+                         text-transform:uppercase;letter-spacing:.15em;">03</span>
+            <h3 style="display:inline;margin-left:var(--spacing-sm);">Intensity</h3>
+            <span style="font-size:.75rem;color:var(--text-muted);margin-left:8px;">
+                How hard does camp push?
+            </span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
+                    padding:var(--spacing-md);">
+            {% set iicons = {'LIGHT':'🚶','MODERATE':'🏃','INTENSE':'🔥','EXTREME':'⚡'} %}
+            {# Realistic intensity cap: taper near fight night #}
+            {% set weeks_out = data.weeks_until or data.fight.weeks_until or 4 %}
+            {% set max_intensity = 'EXTREME' if weeks_out >= 4 else 'INTENSE' if weeks_out >= 3 else 'MODERATE' if weeks_out >= 2 else 'LIGHT' %}
+            {% set intensity_rank = {'LIGHT':1,'MODERATE':2,'INTENSE':3,'EXTREME':4} %}
+            {% for ikey, iname, igains, idesc, iclr in intensity_options %}
+            {% set is_rec = (ikey == rec_intensity) %}
+            {% set is_existing = (data.existing_intensity == ikey) %}
+            {% set is_capped = intensity_rank.get(ikey,0) > intensity_rank.get(max_intensity,4) %}
+            <label onclick="selectCard(this,'intensity-group')"
+                   style="display:block;cursor:pointer;border-radius:6px;
+                          background:var(--bg-dark);
+                          border:2px solid {% if is_rec %}var(--gold){% elif is_existing %}var(--info){% else %}var(--border-color){% endif %};
+                          padding:var(--spacing-md);text-align:center;
+                          position:relative;transition:border-color .15s;">
+                {% if is_rec %}
+                <div style="position:absolute;top:-7px;left:50%;transform:translateX(-50%);
+                            font-size:.52rem;text-transform:uppercase;letter-spacing:.06em;
+                            padding:1px 5px;background:var(--gold);color:var(--bg-darkest);
+                            border-radius:3px;font-weight:700;white-space:nowrap;">Coach</div>
+                {% endif %}
+                <input type="radio" name="intensity" value="{{ ikey }}"
+                       {% if is_existing or (not data.existing_intensity and is_rec) %}checked{% endif %}
+                       style="display:none;" class="intensity-group">
+                <div style="font-size:1.4rem;margin-bottom:4px;">{{ iicons.get(ikey,'🏃') }}</div>
+                <div style="font-family:var(--font-display);font-size:.9rem;
+                            color:{% if is_capped %}var(--text-muted){% else %}var(--text-bright){% endif %};
+                            margin-bottom:2px;">{{ iname }}</div>
+                <div style="font-size:.7rem;color:var(--neon-green);margin-bottom:2px;">{{ igains }}</div>
+                <div style="font-size:.65rem;color:var(--text-muted);">{{ idesc }}</div>
+                {% if is_capped %}
+                <div style="font-size:.6rem;color:var(--text-muted);margin-top:4px;">Not recommended {{ weeks_out }}w out</div>
+                {% elif ikey == 'EXTREME' and fatigue > 50 %}
+                <div style="font-size:.6rem;color:var(--warning);margin-top:4px;">⚠️ High fatigue risk</div>
+                {% endif %}
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-lg btn-block" style="margin-bottom:var(--spacing-xl);">
+        ✅ Lock In Fight Camp
+    </button>
+</form>
+
+<div style="text-align:center;margin-bottom:var(--spacing-xl);">
+    <a href="{{ url_for('dashboard') }}" class="text-muted" style="font-size:.82rem;">← Back to Dashboard</a>
+</div>
+
+<style>
+.gameplan-card:hover, .focus-card:hover { border-color: var(--info) !important; }
+</style>
+
+<script>
+function selectCard(el, groupClass) {
+    el.closest('div').querySelectorAll('label').forEach(l => {
+        if (!l.querySelector(`input.${groupClass}[value="${el.querySelector('input').value}"]`)) {
+            // Only clear if not the coach-recommended one's permanent gold
+        }
+        const inp = l.querySelector('input');
+        if (inp) {
+            // Reset border unless it's coach-recommended
+            const isRec = l.querySelector('[style*="Coach"]');
+            if (!isRec) l.style.borderColor = 'var(--border-color)';
+        }
+    });
+    el.style.borderColor = 'var(--info)';
+    const inp = el.querySelector('input');
+    if (inp) inp.checked = true;
+}
+</script>
+
+{% endblock %}

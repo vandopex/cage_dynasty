@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}Fight Night — {{ fight.event_name }}{% endblock %}
+
+{% block content %}
+<div style="max-width:800px;margin:0 auto;">
+
+{# Header #}
+<div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
+    <div style="font-family:var(--font-display);font-size:.8rem;letter-spacing:.25em;
+                color:var(--blood-red);text-transform:uppercase;margin-bottom:var(--spacing-sm);">
+        ⚔️ Fight Night
+    </div>
+    <h1 style="font-family:var(--font-display);font-size:2.4rem;color:var(--text-bright);margin:0;">
+        {{ fight.event_name or ("DFC Week " ~ week) }}
+    </h1>
+    <div class="text-muted" style="margin-top:4px;">Week {{ week }}</div>
+</div>
+
+{# Your fight card #}
+<div class="card mb-lg" style="border-color:var(--gold);background:rgba(255,215,0,.04);">
+    <div style="height:3px;background:linear-gradient(90deg,var(--blood-red),var(--gold));"></div>
+    <div style="padding:var(--spacing-lg);">
+        <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.15em;
+                    color:var(--gold);margin-bottom:var(--spacing-sm);">⭐ Your Fight</div>
+
+        {# Tale of the Tape #}
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:var(--spacing-lg);
+                    align-items:center;margin-bottom:var(--spacing-lg);">
+            <div style="text-align:right;">
+                <div style="font-family:var(--font-display);font-size:1.5rem;color:var(--gold);">
+                    {{ fight.fighter1_name }}
+                </div>
+                {% if fighter1 %}
+                <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">
+                    {{ fighter1.record_str }} · {{ fighter1.fighting_style }}
+                </div>
+                <div style="font-size:.75rem;color:var(--info);margin-top:1px;">{{ fighter1.overall_rating }} OVR</div>
+                {% endif %}
+            </div>
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--blood-red);">VS</div>
+                <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">
+                    {{ fight.weight_class if fight.weight_class is defined else '' }}
+                    {% if fight.is_title_fight %}
+                    <span style="color:var(--gold);display:block;">🏆 Title Fight</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div style="text-align:left;">
+                <div style="font-family:var(--font-display);font-size:1.5rem;color:var(--text-bright);">
+                    {{ fight.fighter2_name }}
+                </div>
+                {% if fighter2 %}
+                <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">
+                    {{ fighter2.record_str }} · {{ fighter2.fighting_style }}
+                </div>
+                <div style="font-size:.75rem;color:var(--info);margin-top:1px;">{{ fighter2.overall_rating }} OVR</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {# Watch / Sim buttons #}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-md);">
+            <a href="{{ url_for('watch_fight', fight_id=fight.fight_id) }}"
+               style="display:flex;align-items:center;justify-content:center;gap:var(--spacing-md);
+                      padding:var(--spacing-md);background:var(--blood-red);border-radius:6px;
+                      text-decoration:none;transition:opacity .15s;"
+               onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+                <span style="font-size:1.5rem;">📺</span>
+                <div>
+                    <div style="font-family:var(--font-display);font-size:1rem;color:white;">Watch</div>
+                    <div style="font-size:.7rem;color:rgba(255,255,255,.7);">Full play-by-play</div>
+                </div>
+            </a>
+            <form action="{{ url_for('sim_fight') }}" method="POST" style="margin:0;">
+                <button type="submit"
+                        style="width:100%;display:flex;align-items:center;justify-content:center;
+                               gap:var(--spacing-md);padding:var(--spacing-md);
+                               background:var(--bg-dark);border:1px solid var(--border-color);
+                               border-radius:6px;cursor:pointer;transition:border-color .15s;"
+                        onmouseover="this.style.borderColor='var(--info)'"
+                        onmouseout="this.style.borderColor='var(--border-color)'">
+                    <span style="font-size:1.5rem;">⚡</span>
+                    <div style="text-align:left;">
+                        <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);">Sim</div>
+                        <div style="font-size:.7rem;color:var(--text-muted);">Skip to results</div>
+                    </div>
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{# Rest of the card — AI fights #}
+{% set all_fights = (fight.player_fights or []) + (fight.ai_fights or []) %}
+{% if all_fights %}
+<div class="card">
+    <div class="card-header">
+        <h3>📋 {{ fight.event_name }} — Full Card</h3>
+    </div>
+    <div style="padding:0;">
+        {% set slot_order = ['main_event','co_main','main_card','prelim','early_prelim'] %}
+        {% set slot_labels = {'main_event':'🏆 Main Event','co_main':'⭐ Co-Main',
+                              'main_card':'🥊 Main Card','prelim':'📋 Prelims'} %}
+        {% set player_fid = fight.fighter1_id %}
+
+        {% for slot in slot_order %}
+        {% set slot_fights = all_fights | selectattr('card_slot','equalto',slot) | list %}
+        {% if slot_fights %}
+        <div style="padding:3px var(--spacing-md);background:var(--bg-dark);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;
+                    color:var(--text-muted);">{{ slot_labels.get(slot,slot) }}</div>
+        {% for f in slot_fights %}
+        {% set is_player = (f.get('fighter1_id') == player_fid or f.get('fighter2_id') == player_fid) %}
+        <div style="display:flex;align-items:center;gap:8px;padding:7px var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    {% if is_player %}background:rgba(255,215,0,.04);{% endif %}">
+            {% if is_player %}
+            <span style="font-size:.65rem;color:var(--gold);flex-shrink:0;min-width:24px;">YOU</span>
+            {% else %}
+            <span style="min-width:24px;"></span>
+            {% endif %}
+            <div style="flex:1;font-size:.82rem;">
+                <span style="font-family:var(--font-display);
+                             color:{% if is_player %}var(--gold){% else %}var(--text-bright){% endif %};">
+                    {{ f.get('fighter1_name','?') }}
+                </span>
+                <span style="color:var(--text-muted);"> vs </span>
+                <span style="color:var(--text-secondary);">{{ f.get('fighter2_name','?') }}</span>
+                {% if f.get('is_title_fight') %}<span style="color:var(--gold);font-size:.72rem;"> 🏆</span>{% endif %}
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endfor %}
+
+        {# Unslotted fights #}
+        {% set unslotted = all_fights | rejectattr('card_slot','defined') | list %}
+        {% for f in unslotted %}
+        <div style="display:flex;align-items:center;gap:8px;padding:7px var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);">
+            <span style="min-width:24px;"></span>
+            <div style="flex:1;font-size:.82rem;color:var(--text-bright);">
+                {{ f.get('fighter1_name','?') }} <span style="color:var(--text-muted);">vs</span> {{ f.get('fighter2_name','?') }}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}

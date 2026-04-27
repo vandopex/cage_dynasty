@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+
+{% block title %}Champions History{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">🏆 Champions History</h1>
+    <div class="page-subtitle">Belt lineage and title history</div>
+</div>
+
+<!-- Division Tabs -->
+<div class="tabs">
+    {% for div in divisions %}
+    <a href="{{ url_for('champions_history', division=div) }}" class="tab {% if div == current_division %}active{% endif %}">
+        {{ div[:3] if div != 'Light Heavyweight' else 'LHW' }}
+    </a>
+    {% endfor %}
+</div>
+
+<!-- Current Champion -->
+{% if champion %}
+<div class="card card-champion mb-lg">
+    <div class="card-header">
+        <h4 style="color: var(--bg-darkest);">Current {{ current_division }} Champion</h4>
+    </div>
+    <div class="card-body">
+        <div class="flex items-center gap-lg">
+            <div class="tape-photo" style="width: 100px; height: 100px; font-size: 2.5rem; border-color: var(--gold);">👤</div>
+            <div style="flex: 1;">
+                <div style="font-family: var(--font-display); font-size: 1.75rem; color: var(--gold);">{{ champion.name }}</div>
+                {% if champion.nickname %}
+                <div class="text-muted" style="font-style: italic;">"{{ champion.nickname }}"</div>
+                {% endif %}
+                <div style="font-family: var(--font-display); font-size: 1.25rem; margin-top: var(--spacing-sm);">{{ champion.record_str }}</div>
+                <div class="flex gap-md mt-md">
+                    <span class="badge badge-champion">REIGNING CHAMPION</span>
+                    {% if champion.win_streak >= 2 %}
+                    <span class="streak win">🔥 {{ champion.win_streak }} Fight Win Streak</span>
+                    {% endif %}
+                </div>
+            </div>
+            <a href="{{ url_for('fighter_profile', fighter_id=champion.fighter_id) }}" class="btn btn-gold btn-lg">View Profile</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Division Stats -->
+<div class="grid grid-3 mb-lg">
+    <div class="stat-box">
+        <div class="stat-value gold">{{ total_changes }}</div>
+        <div class="stat-label">Title Changes</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ most_defenses }}</div>
+        <div class="stat-label">Most Defenses (Single Reign)</div>
+    </div>
+    <div class="stat-box">
+        <div class="stat-value">{{ reigns|length }}</div>
+        <div class="stat-label">Total Reigns</div>
+    </div>
+</div>
+
+<!-- Belt Lineage -->
+<div class="card">
+    <div class="card-header">
+        <h4>📜 Belt Lineage</h4>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        <div class="reign-list">
+            {% for reign in reigns %}
+            <div class="reign-item {% if reign.is_active %}active{% endif %}">
+                <div class="reign-number">{{ loop.index }}</div>
+                <div class="reign-info">
+                    <div class="reign-champion">
+                        {{ reign.champion_name }}
+                        {% if reign.is_active %}
+                        <span class="badge badge-champion" style="margin-left: var(--spacing-sm);">CURRENT</span>
+                        {% endif %}
+                    </div>
+                    <div class="reign-details">
+                        <div>
+                            {% if reign.won_method == 'Inaugural' %}
+                            🏆 Inaugural Champion at {{ reign.won_event }}
+                            {% else %}
+                            Won from {{ reign.won_from_name or 'Previous Champion' }} via {{ reign.won_method }} at {{ reign.won_event }}
+                            {% endif %}
+                        </div>
+                        <div class="mt-sm">
+                            <span class="text-info">{{ reign.successful_defenses }} successful defense{{ 's' if reign.successful_defenses != 1 else '' }}</span>
+                            {% if not reign.is_active and reign.lost_to_name %}
+                            <span class="text-muted"> • Lost to {{ reign.lost_to_name }} via {{ reign.lost_method }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="p-lg text-center text-muted">
+                No championship history yet for this division.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}

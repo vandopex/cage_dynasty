@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}{% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %} vs {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %}{% endblock %}
+
+{% block content %}
+<div style="max-width:780px;margin:0 auto;">
+
+{# ── Result banner ── #}
+{% set is_finish = fight.method in ('KO','TKO','SUB') %}
+<div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
+    <div style="font-size:.7rem;letter-spacing:.2em;color:var(--text-muted);
+                text-transform:uppercase;margin-bottom:4px;">
+        {{ fight.event_name }} · {{ fight.weight_class }}
+        {% if fight.is_title_fight %} · <span style="color:var(--gold);">🏆 Title Fight</span>{% endif %}
+    </div>
+    <div style="font-family:var(--font-display);font-size:2.2rem;color:var(--text-bright);
+                margin:var(--spacing-sm) 0;">
+        {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %}
+        <span style="color:var(--text-muted);font-size:1.2rem;"> vs </span>
+        {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %}
+    </div>
+    {# Result pill #}
+    <div style="display:inline-flex;align-items:center;gap:10px;
+                padding:var(--spacing-sm) var(--spacing-lg);
+                border-radius:30px;margin-top:var(--spacing-sm);
+                background:{% if is_finish %}rgba(211,47,47,.15){% else %}rgba(255,255,255,.06){% endif %};
+                border:1px solid {% if is_finish %}var(--blood-red){% else %}var(--border-color){% endif %};">
+        <span style="font-family:var(--font-display);font-size:1.2rem;color:var(--neon-green);">
+            {% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %}
+        </span>
+        <span style="font-size:.8rem;color:var(--text-muted);">wins by</span>
+        <span style="font-family:var(--font-display);font-size:1.1rem;
+                     color:{% if fight.method in ('KO','TKO') %}var(--blood-red){% elif fight.method == 'SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
+            {{ fight.method }}
+        </span>
+        {% if fight.round_finished and is_finish %}
+        <span style="font-size:.8rem;color:var(--text-muted);">R{{ fight.round_finished }} ({{ fight.time }})</span>
+        {% endif %}
+    </div>
+</div>
+
+
+{# ── FOTN Banner ── #}
+{% if fight.is_fotn %}
+<div style="margin-bottom:var(--spacing-lg);padding:var(--spacing-md) var(--spacing-xl);
+            background:linear-gradient(135deg,rgba(255,107,0,.12),rgba(255,215,0,.12));
+            border:1px solid rgba(255,215,0,.5);border-radius:8px;
+            display:flex;align-items:center;justify-content:center;gap:var(--spacing-lg);">
+    <span style="font-size:2rem;">🔥</span>
+    <div style="text-align:center;">
+        <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--gold);letter-spacing:.08em;">
+            FIGHT OF THE NIGHT
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+            $50,000 bonus awarded to each fighter
+        </div>
+    </div>
+    <span style="font-size:2rem;">🔥</span>
+</div>
+{% endif %}
+
+{# ── Scorecard (if decision) ── #}
+{% if scorecard and fight.method not in ('KO','TKO','SUB') %}
+<div class="card mb-lg">
+    <div class="card-header"><h3>🗳️ Judges' Scorecard</h3></div>
+    <div style="padding:var(--spacing-md);">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+            <thead>
+                <tr>
+                    <th style="text-align:left;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">Judge</th>
+                    <th style="text-align:center;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">{{ fight.fighter1_name }}</th>
+                    <th style="text-align:center;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">{{ fight.fighter2_name }}</th>
+                    <th style="text-align:center;padding:6px;color:var(--text-bright);border-bottom:1px solid var(--border-color);">Winner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for judge in scorecard.judges %}
+                {% set f1 = judge.f1_score if judge.f1_score is defined else judge.get('f1_score', 0) if judge.get is defined else 0 %}
+                {% set f2 = judge.f2_score if judge.f2_score is defined else judge.get('f2_score', 0) if judge.get is defined else 0 %}
+                <tr>
+                    <td style="padding:6px;color:var(--text-muted);">Judge {{ loop.index }}</td>
+                    <td style="text-align:center;padding:6px;
+                               color:{% if f1 > f2 %}var(--neon-green){% elif f2 > f1 %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+                        {{ f1 }}
+                    </td>
+                    <td style="text-align:center;padding:6px;
+                               color:{% if f2 > f1 %}var(--neon-green){% elif f1 > f2 %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+                        {{ f2 }}
+                    </td>
+                    <td style="text-align:center;padding:6px;font-size:.75rem;color:var(--text-muted);">
+                        {% if f1 > f2 %}{{ fight.fighter1_name }}{% elif f2 > f1 %}{{ fight.fighter2_name }}{% else %}Draw{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div style="margin-top:var(--spacing-sm);font-size:.72rem;color:var(--text-muted);text-align:center;">
+            {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %} (left) · {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %} (right)
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{# ── Commentary ── #}
+{% if rounds %}
+{% for round in rounds %}
+<div class="card mb-md">
+    {# Round header #}
+    {% if round.num > 0 %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:var(--spacing-sm) var(--spacing-md);
+                background:var(--bg-dark);border-bottom:1px solid var(--border-color);">
+        <span style="font-family:var(--font-display);font-size:.8rem;
+                     text-transform:uppercase;letter-spacing:.12em;color:var(--text-bright);">
+            Round {{ round.num }}
+        </span>
+        {# Finish indicator on the fatal round #}
+        {% if is_finish and round.num == fight.round_finished %}
+        <span style="font-size:.72rem;font-family:var(--font-display);
+                     color:{% if fight.method in ('KO','TKO') %}var(--blood-red){% else %}var(--info){% endif %};">
+            {{ fight.method }} — {{ fight.time }}
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Commentary lines #}
+    <div style="padding:var(--spacing-md);font-family:'Courier New',monospace;font-size:.8rem;
+                line-height:1.8;color:var(--text-secondary);">
+        {% for line in round.lines %}
+        {% set first_char = line[0] if line else '' %}
+        {# Highlight key moments #}
+        {% if 'KNOCKED DOWN' in line or 'KNOCKDOWN' in line or 'KO!' in line %}
+        <div style="color:var(--blood-red);font-weight:700;padding:2px 0;">{{ line }}</div>
+        {% elif 'TAPS OUT' in line or 'SUBMISSION' in line or 'taps' in line.lower() %}
+        <div style="color:var(--info);font-weight:700;padding:2px 0;">{{ line }}</div>
+        {% elif 'TKO' in line and 'STOPPED' in line %}
+        <div style="color:var(--blood-red);font-weight:700;padding:2px 0;">{{ line }}</div>
+        {% elif line.startswith('===') or line.startswith('---') %}
+        <div style="color:var(--text-muted);border-top:1px solid var(--border-color);
+                    margin:var(--spacing-sm) 0;padding-top:var(--spacing-sm);">{{ line }}</div>
+        {% elif 'Round' in line and ':' in line %}
+        <div style="color:var(--gold);font-weight:600;margin-top:var(--spacing-sm);">{{ line }}</div>
+        {% elif line.startswith('►') or line.startswith('>') %}
+        <div style="color:var(--text-bright);padding:1px 0;">{{ line }}</div>
+        {% else %}
+        <div style="padding:1px 0;">{{ line }}</div>
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+{# No commentary stored — show basic result #}
+<div class="card mb-lg">
+    <div style="padding:var(--spacing-xl);text-align:center;">
+        <div style="font-size:3rem;margin-bottom:var(--spacing-md);">📺</div>
+        <h3>No Commentary Available</h3>
+        <p class="text-muted">Full commentary is stored for player fights only. AI-only events run in summary mode.</p>
+    </div>
+</div>
+{% endif %}
+
+{# ── Navigation ── #}
+<div style="display:flex;justify-content:space-between;align-items:center;
+            padding:var(--spacing-lg) 0 var(--spacing-xl);">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline">← Dashboard</a>
+    <a href="{{ url_for('week_results') }}"
+       style="padding:var(--spacing-md) var(--spacing-xl);
+              font-family:var(--font-display);font-size:1rem;
+              background:rgba(0,230,118,.15);border:1px solid var(--neon-green);
+              border-radius:6px;color:var(--neon-green);text-decoration:none;">
+        Week Recap →
+    </a>
+    <a href="{{ url_for('archives') }}" class="btn btn-outline">Archives</a>
+</div>
+
+</div>
+{% endblock %}

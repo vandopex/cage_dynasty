@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Rankings{% endblock %}
+
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">📊 DFC Rankings</h1>
+</div>
+
+{# Division tabs #}
+{% set div_abbrev = {
+    'Strawweight':'STR','Flyweight':'FLY','Bantamweight':'BAN','Featherweight':'FEA',
+    'Lightweight':'LIG','Welterweight':'WEL','Middleweight':'MID',
+    'Light Heavyweight':'LHW','Heavyweight':'HEA'
+} %}
+<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
+    {% for div in divisions %}
+    <a href="{{ url_for('rankings', division=div) }}"
+       style="padding:6px 12px;border-radius:4px;text-decoration:none;font-size:.78rem;
+              font-family:var(--font-display);
+              background:{% if div == current_division %}var(--blood-red){% else %}var(--bg-dark){% endif %};
+              color:{% if div == current_division %}white{% else %}var(--text-muted){% endif %};
+              border:1px solid {% if div == current_division %}var(--blood-red){% else %}var(--border-color){% endif %};">
+        {{ div_abbrev.get(div, div[:3]) }}
+    </a>
+    {% endfor %}
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
+
+    {# ── Division Rankings ── #}
+    <div>
+        <div class="card">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>{{ current_division }}</h3>
+                {% if champion %}
+                <a href="{{ url_for('fighter_profile', fighter_id=champion.fighter_id) }}"
+                   style="font-size:.75rem;color:var(--gold);text-decoration:none;font-family:var(--font-display);">
+                    🏆 {{ champion.name }}
+                </a>
+                {% endif %}
+            </div>
+            <div style="padding:0;">
+                {# Champion #}
+                {% if champion %}
+                <a href="{{ url_for('fighter_profile', fighter_id=champion.fighter_id) }}"
+                   style="display:flex;align-items:center;gap:var(--spacing-md);
+                          padding:var(--spacing-md);border-bottom:2px solid var(--gold);
+                          text-decoration:none;background:rgba(255,215,0,.05);">
+                    <div style="font-family:var(--font-display);font-size:1rem;color:var(--gold);
+                                width:28px;text-align:center;">C</div>
+                    <div style="flex:1;">
+                        <div style="font-family:var(--font-display);color:var(--gold);">{{ champion.name }}</div>
+                        <div style="font-size:.72rem;color:var(--text-muted);">
+                            {{ champion.record_str }} · {{ champion.fighting_style }}
+                            {% if champion.win_streak >= 3 %} · 🔥{{ champion.win_streak }}W{% endif %}
+                        </div>
+                    </div>
+                    <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--gold);">
+                        {{ champion.overall_rating }}
+                    </div>
+                </a>
+                {% endif %}
+
+                {# Ranked fighters #}
+                {% for fighter in division_rankings if not fighter.is_champion %}
+                <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}"
+                   style="display:flex;align-items:center;gap:var(--spacing-md);
+                          padding:var(--spacing-sm) var(--spacing-md);
+                          border-bottom:1px solid var(--border-color);
+                          text-decoration:none;transition:background .15s;"
+                   onmouseover="this.style.background='var(--bg-dark)'"
+                   onmouseout="this.style.background='transparent'">
+                    <div style="font-family:var(--font-display);font-size:.85rem;
+                                color:{% if fighter.ranking and fighter.ranking <= 3 %}var(--neon-green){% else %}var(--text-muted){% endif %};
+                                width:28px;text-align:center;flex-shrink:0;">
+                        {{ fighter.ranking or 'UR' }}
+                    </div>
+                    {# Mini rank bar #}
+                    <div style="width:3px;height:32px;border-radius:2px;flex-shrink:0;
+                                background:{% if fighter.ranking and fighter.ranking <= 3 %}var(--neon-green){% elif fighter.ranking and fighter.ranking <= 8 %}var(--info){% else %}rgba(255,255,255,.15){% endif %};"></div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.88rem;color:var(--text-bright);
+                                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            {{ fighter.name }}
+                            {% if fighter.win_streak >= 3 %}
+                            <span style="font-size:.68rem;color:var(--neon-green);margin-left:4px;">🔥{{ fighter.win_streak }}W</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">
+                            {{ fighter.record_str }} · {{ fighter.fighting_style }}
+                        </div>
+                    </div>
+                    <div style="font-family:var(--font-display);font-size:.9rem;flex-shrink:0;
+                                color:{% if fighter.overall_rating >= 85 %}var(--gold){% elif fighter.overall_rating >= 70 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                        {{ fighter.overall_rating }}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    {# ── Right column: P4P + GOAT ── #}
+    <div>
+        {# Pound for Pound #}
+        <div class="card mb-lg">
+            <div class="card-header"><h3>⚡ Pound for Pound Top 15</h3></div>
+            <div style="padding:0;">
+                {% for fighter in p4p_rankings %}
+                <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}"
+                   style="display:flex;align-items:center;gap:var(--spacing-md);
+                          padding:var(--spacing-sm) var(--spacing-md);
+                          border-bottom:1px solid var(--border-color);
+                          text-decoration:none;transition:background .15s;"
+                   onmouseover="this.style.background='var(--bg-dark)'"
+                   onmouseout="this.style.background='transparent'">
+                    <div style="font-family:var(--font-display);font-size:.8rem;
+                                color:var(--text-muted);width:22px;text-align:center;flex-shrink:0;">
+                        {{ loop.index }}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:.85rem;color:var(--text-bright);">{{ fighter.name }}</span>
+                            {% if fighter.is_champion %}
+                            <span style="font-size:.6rem;color:var(--gold);">🏆</span>
+                            {% endif %}
+                        </div>
+                        <div style="font-size:.65rem;color:var(--text-muted);margin-top:1px;">
+                            {{ fighter.record_str }} · {{ fighter.weight_class }}
+                        </div>
+                    </div>
+                    <div style="font-family:var(--font-display);font-size:.88rem;flex-shrink:0;
+                                color:{% if fighter.overall_rating >= 85 %}var(--gold){% elif fighter.overall_rating >= 70 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                        {{ fighter.overall_rating }}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        {# GOAT Rankings #}
+        {% if goat_rankings %}
+        <div class="card">
+            <div class="card-header"><h3>🐐 GOAT Rankings</h3></div>
+            <div style="padding:0;">
+                {% for fighter in goat_rankings[:10] %}
+                <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}"
+                   style="display:flex;align-items:center;gap:var(--spacing-md);
+                          padding:var(--spacing-sm) var(--spacing-md);
+                          border-bottom:1px solid var(--border-color);
+                          text-decoration:none;transition:background .15s;"
+                   onmouseover="this.style.background='var(--bg-dark)'"
+                   onmouseout="this.style.background='transparent'">
+                    <div style="font-family:var(--font-display);font-size:.8rem;
+                                color:{% if loop.index == 1 %}var(--gold){% else %}var(--text-muted){% endif %};
+                                width:22px;text-align:center;">
+                        {{ loop.index }}
+                    </div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:.85rem;color:var(--text-bright);">{{ fighter.name }}</div>
+                        <div style="font-size:.65rem;color:var(--text-muted);margin-top:1px;">
+                            {{ fighter.wins }}W ({{ fighter.ko_wins }}KO · {{ fighter.sub_wins }}SUB) · {{ fighter.weight_class }}
+                        </div>
+                    </div>
+                    <div style="font-family:var(--font-display);font-size:.78rem;
+                                color:var(--text-muted);flex-shrink:0;">
+                        {{ fighter.wins * 10 + fighter.ko_wins * 5 - fighter.losses * 2 }}pts
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

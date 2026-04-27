@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}Training Camps{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">Training Camps</h1>
+    <div class="page-subtitle">Browse all camps in the DFC</div>
+</div>
+
+{% for tier in ['ELITE', 'NATIONAL', 'REGIONAL', 'LOCAL', 'GARAGE'] %}
+{% set camps = camps_by_tier[tier] %}
+{% if camps %}
+<div class="ladder-section">
+    <div class="ladder-title" style="{% if tier == 'ELITE' %}background: linear-gradient(135deg, var(--gold-dark), var(--gold)); color: var(--bg-darkest);{% endif %}">
+        <span style="font-size: 1.25rem;">
+            {% if tier == 'ELITE' %}⭐{% elif tier == 'NATIONAL' %}🏢{% elif tier == 'REGIONAL' %}🏠{% elif tier == 'LOCAL' %}🏚️{% else %}🔧{% endif %}
+        </span>
+        <h4 style="margin: 0; {% if tier == 'ELITE' %}color: var(--bg-darkest);{% endif %}">{{ tier }} Gyms</h4>
+        <span class="text-{% if tier == 'ELITE' %}dark{% else %}muted{% endif %} text-sm" style="margin-left: auto;">{{ camps|length }} camps</span>
+    </div>
+    <div class="ladder-list">
+        {% for data in camps %}
+        {% set camp = data.camp %}
+        <a href="{{ url_for('camp_detail', camp_id=camp.camp_id) }}" class="ladder-item {% if camp.is_player %}player{% endif %}" style="text-decoration: none; color: inherit;">
+            <div style="width: 40px; text-align: center;">
+                {% if camp.is_player %}⭐{% else %}🏟️{% endif %}
+            </div>
+            <div class="ladder-fighter-info">
+                <div class="ladder-fighter-name">
+                    {{ camp.name }}
+                    {% if camp.is_player %}
+                    <span class="badge badge-info" style="margin-left: var(--spacing-sm);">YOUR CAMP</span>
+                    {% endif %}
+                </div>
+                <div class="ladder-fighter-meta">
+                    {{ camp.location }} • {{ data.fighter_count }} fighters
+                    {% if data.champions > 0 %}
+                    • <span class="text-gold">{{ data.champions }} 🏆</span>
+                    {% endif %}
+                    {% if data.ranked > 0 %}
+                    • {{ data.ranked }} ranked
+                    {% endif %}
+                </div>
+            </div>
+            <div class="flex items-center gap-md">
+                <div class="text-right">
+                    <div style="font-family: var(--font-display);">{{ camp.record_str }}</div>
+                    <div class="text-muted text-sm">{{ camp.win_percentage }}% win rate</div>
+                </div>
+                <span class="text-muted">→</span>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}DFC News Feed{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📰 DFC News Feed</h1>
+</div>
+
+<!-- Category filters -->
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
+    {% set cats = [
+        ('all',      'All',        'btn-primary',  ''),
+        ('title',    '🏆 Titles',  'btn-gold',     'title'),
+        ('fight',    '🥊 Fights',  'btn-danger',   'fight'),
+        ('streak',   '🔥 Streaks', 'btn-warning',  'streak'),
+        ('record',   '📊 Records', 'btn-success',  'record'),
+        ('signing',  '📝 Signings','btn-primary',  'signing'),
+        ('training', '💪 Training','btn-primary',  'training'),
+        ('injury',   '🏥 Injuries','btn-primary',  'injury'),
+        ('scouting', '👀 Scouting','btn-primary',  'scouting'),
+        ('facility', '🏗️ Facility','btn-primary',  'facility'),
+    ] %}
+    {% for cat_id, label, style, _ in cats %}
+    <a href="{{ url_for('news_feed', category=cat_id) }}"
+       class="btn btn-sm {% if current_category == cat_id %}{{ style }}{% else %}btn-outline{% endif %}">
+        {{ label }}
+    </a>
+    {% endfor %}
+</div>
+
+<div class="card">
+    <div class="card-body" style="padding:0;">
+        {% for item in news %}
+        <div class="news-item {{ item.category }}"
+             style="display:flex;align-items:flex-start;gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);">
+            <div style="font-size:1.2rem;flex-shrink:0;padding-top:2px;">{{ item.icon }}</div>
+            <div style="flex:1;">
+                <div style="color:var(--text-bright);font-size:.9rem;line-height:1.4;">
+                    {{ item.headline }}
+                </div>
+                <div class="text-muted" style="font-size:.72rem;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                    <span>Week {{ item.week }}</span>
+                    <span>•</span>
+                    <span style="text-transform:capitalize;color:var(--text-secondary);">{{ item.category }}</span>
+                    {% if item.winner_id %}
+                    <span>•</span>
+                    <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
+                       style="color:var(--neon-green);text-decoration:none;font-size:.68rem;">Winner →</a>
+                    {% endif %}
+                    {% if item.loser_id %}
+                    <a href="{{ url_for('fighter_profile', fighter_id=item.loser_id) }}"
+                       style="color:var(--text-muted);text-decoration:none;font-size:.68rem;">Loser →</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="p-lg text-center text-muted">No news in this category yet.</div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

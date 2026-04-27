@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Upcoming Events{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">📅 Upcoming Events</h1>
+    <div class="page-subtitle">{{ events|length }} cards scheduled</div>
+</div>
+
+{% macro rank_tag(fid) %}
+{%- set r = rankings.get(fid, {}) -%}
+{%- if r.get('is_champion') -%}
+<span style="font-size:.65rem;color:var(--gold);font-family:var(--font-display);">C</span>
+{%- elif r.get('ranking') -%}
+<span style="font-size:.65rem;color:var(--info);font-family:var(--font-display);">#{{ r.ranking }}</span>
+{%- else -%}
+<span style="font-size:.62rem;color:var(--text-muted);">UR</span>
+{%- endif -%}
+{% endmacro %}
+
+{% set slot_labels = {'main_event':'🏆 Main Event','co_main':'⭐ Co-Main',
+                      'main_card':'🥊 Main Card','prelim':'📋 Prelims','early_prelim':'📋 Early Prelims'} %}
+{% set slot_order  = ['main_event','co_main','main_card','prelim','early_prelim'] %}
+
+{% if not events %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+        <div style="font-size:3rem;margin-bottom:var(--spacing-md);">📅</div>
+        <h3>No Upcoming Events</h3>
+    </div>
+</div>
+{% endif %}
+
+{% for event in events %}
+{% set weeks_out = event.week - week %}
+<div class="card mb-lg" {% if event.player_has_fight %}style="border-color:rgba(255,215,0,.25);"{% endif %}>
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+            <h3 style="margin:0;{% if event.player_has_fight %}color:var(--gold);{% endif %}">
+                {{ event.event_name }}
+                {% if event.player_has_fight %}<span style="font-size:.7rem;margin-left:6px;">⭐ YOUR FIGHT</span>{% endif %}
+            </h3>
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">{{ event.fights|length }} fights</div>
+        </div>
+        <span class="badge {% if weeks_out == 1 %}badge-warning{% else %}badge-info{% endif %}">
+            {% if weeks_out == 1 %}NEXT WEEK{% else %}{{ weeks_out }} weeks away{% endif %}
+        </span>
+    </div>
+    <div style="padding:0;">
+        {% for slot in slot_order %}
+        {% set slot_fights = event.fights | selectattr('card_slot','equalto',slot) | list %}
+        {% if slot_fights %}
+        <div style="padding:3px var(--spacing-md);background:var(--bg-dark);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.62rem;text-transform:uppercase;letter-spacing:.1em;
+                    color:{% if slot == 'main_event' %}var(--gold){% elif slot == 'co_main' %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+            {{ slot_labels.get(slot,slot) }}
+        </div>
+        {% for fight in slot_fights %}
+        <div style="display:grid;grid-template-columns:44px 1fr 20px 1fr;gap:8px;align-items:center;
+                    padding:7px var(--spacing-md);border-bottom:1px solid var(--border-color);">
+            <span style="font-size:.62rem;text-align:center;padding:2px 4px;border-radius:2px;
+                         background:rgba(255,255,255,.05);color:var(--text-muted);font-family:var(--font-display);">
+                {{ (fight.weight_class or '')[:3] | upper }}
+            </span>
+            <div style="display:flex;align-items:center;gap:4px;min-width:0;">
+                {{ rank_tag(fight.fighter1_id) }}
+                <a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) if fight.fighter1_id else '#' }}"
+                   style="font-size:.82rem;color:var(--text-bright);text-decoration:none;
+                          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    {{ fight.fighter1_name }}
+                </a>
+                {% if fight.is_title_fight %}<span style="font-size:.6rem;color:var(--gold);">TITLE</span>{% endif %}
+            </div>
+            <div style="text-align:center;font-size:.7rem;color:var(--text-muted);">vs</div>
+            <div style="display:flex;align-items:center;gap:4px;min-width:0;justify-content:flex-end;">
+                <a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) if fight.fighter2_id else '#' }}"
+                   style="font-size:.82rem;color:var(--text-bright);text-decoration:none;
+                          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    {{ fight.fighter2_name }}
+                </a>
+                {{ rank_tag(fight.fighter2_id) }}
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endfor %}
+
+        {# Fights with no slot #}
+        {% set unslotted = event.fights | rejectattr('card_slot','defined') | list %}
+        {% for fight in unslotted %}
+        <div style="display:grid;grid-template-columns:44px 1fr 20px 1fr;gap:8px;align-items:center;
+                    padding:7px var(--spacing-md);border-bottom:1px solid var(--border-color);">
+            <span style="font-size:.62rem;text-align:center;padding:2px 4px;border-radius:2px;
+                         background:rgba(255,255,255,.05);color:var(--text-muted);">
+                {{ (fight.weight_class or '')[:3] | upper }}
+            </span>
+            <div style="font-size:.82rem;color:var(--text-bright);">{{ fight.fighter1_name }}</div>
+            <div style="text-align:center;font-size:.7rem;color:var(--text-muted);">vs</div>
+            <div style="font-size:.82rem;color:var(--text-bright);text-align:right;">{{ fight.fighter2_name }}</div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endfor %}
+{% endblock %}

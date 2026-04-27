@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Record Book{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">📊 DFC Record Book</h1>
+    <div class="page-subtitle">All-time records and milestones</div>
+</div>
+
+{% if not records %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+        Records accumulate as fights are completed. Advance a few weeks.
+    </div>
+</div>
+{% else %}
+
+{% macro record_table(title, icon, data, unit) %}
+<div class="card mb-lg">
+    <div class="card-header"><h3>{{ icon }} {{ title }}</h3></div>
+    <div style="padding:0;">
+        {% if data %}
+        {% for row in data %}
+        {% set f = row.fighter %}
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <div style="font-family:var(--font-display);font-size:1.1rem;
+                        color:{% if loop.index == 1 %}var(--gold){% else %}var(--text-muted){% endif %};
+                        width:24px;text-align:center;">{{ loop.index }}</div>
+            <a href="{{ url_for('fighter_profile', fighter_id=f.fighter_id) }}"
+               style="flex:1;text-decoration:none;color:var(--text-bright);font-family:var(--font-display);">
+                {{ f.name }}
+                <span style="font-size:.72rem;color:var(--text-muted);font-family:inherit;margin-left:4px;">
+                    {{ f.record_str }} · {{ f.weight_class }}
+                </span>
+            </a>
+            <div style="font-family:var(--font-display);font-size:1.2rem;
+                        color:{% if loop.index == 1 %}var(--gold){% else %}var(--info){% endif %};">
+                {{ row.value }} <span style="font-size:.7rem;color:var(--text-muted);">{{ unit }}</span>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div style="padding:var(--spacing-md);color:var(--text-muted);font-size:.8rem;text-align:center;">
+            No records yet
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
+    <div>
+        {{ record_table("Most Wins", "🏆", records.get('most_wins',[]), "W") }}
+        {{ record_table("Most KO Wins", "💥", records.get('most_ko',[]), "KO") }}
+        {{ record_table("Most Submissions", "🥋", records.get('most_sub',[]), "SUB") }}
+    </div>
+    <div>
+        {{ record_table("Active Win Streak", "🔥", records.get('active_streak',[]), "W") }}
+        {{ record_table("Longest Win Streak", "📈", records.get('longest_streak',[]), "W") }}
+        {{ record_table("Most Fights", "⚔️", records.get('most_fights',[]), "fights") }}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Training{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <div>
+        <h1 class="page-title">🏋️ Training Center</h1>
+        <div class="page-subtitle">Set weekly training for your fighters</div>
+    </div>
+</div>
+
+{# Camp + Coach overview #}
+<div class="card mb-lg">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-md);padding:var(--spacing-lg);">
+        <div class="stat-box">
+            <div class="stat-value">{{ camp.tier }}</div>
+            <div class="stat-label">Facility</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value text-info">{{ coach.get('rating', '—') if coach else '—' }}</div>
+            <div class="stat-label">Coach Rating</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value text-sm" style="font-size:.9rem;">{{ coach.get('specialty', '—') | title if coach else '—' }}</div>
+            <div class="stat-label">Specialty</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-value">{{ fighters|length }}</div>
+            <div class="stat-label">Fighters</div>
+        </div>
+    </div>
+</div>
+
+{% if not fighters %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+        No fighters to train. <a href="{{ url_for('prospects') }}">Sign prospects →</a>
+    </div>
+</div>
+{% endif %}
+
+{% for fighter in fighters %}
+{% set plan = training_plans.get(fighter.fighter_id, {}) %}
+<div class="card mb-lg">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+            <a href="{{ url_for('fighter_profile', fighter_id=fighter.fighter_id) }}"
+               style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);text-decoration:none;">
+                {{ fighter.name }}
+            </a>
+            <span class="text-muted text-sm" style="margin-left:8px;">{{ fighter.record_str }} · {{ fighter.weight_class }} · {{ fighter.overall_rating }} OVR</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:var(--spacing-md);">
+            <div style="width:120px;">
+                <div style="font-size:.62rem;color:var(--text-muted);margin-bottom:2px;">Condition {{ 100 - fighter.fatigue }}%</div>
+                <div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
+                    <div style="width:{{ 100 - fighter.fatigue }}%;height:100%;border-radius:3px;
+                                background:{% if fighter.fatigue < 40 %}var(--neon-green){% elif fighter.fatigue < 70 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <form action="{{ url_for('set_training') }}" method="POST">
+        <input type="hidden" name="fighter_id" value="{{ fighter.fighter_id }}">
+        <div style="padding:var(--spacing-md);display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
+
+            {# Focus #}
+            <div>
+                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Training Focus</div>
+                {% set icons = {
+                    'boxing':'🥊','kicks':'🦵','clinch_striking':'🤛',
+                    'striking_defense':'🛡️','muay_thai':'🇹🇭',
+                    'wrestling':'🤼','top_control':'📌','bjj':'🥋',
+                    'takedown_defense':'↩️','cardio':'❤️',
+                    'strength':'⚡','fight_iq':'🧠','sparring':'🎯'
+                } %}
+                {% set groups = [
+                    ('STRIKING', ['boxing','kicks','clinch_striking','striking_defense','muay_thai']),
+                    ('GRAPPLING', ['wrestling','top_control','bjj','takedown_defense']),
+                    ('PHYSICAL', ['cardio','strength','fight_iq','sparring']),
+                ] %}
+                {% for group_name, group_keys in groups %}
+                <div style="margin-bottom:6px;">
+                    <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;
+                                letter-spacing:.1em;margin-bottom:3px;">{{ group_name }}</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:3px;">
+                    {% for value, name, desc in focus_options if value in group_keys %}
+                    <label title="{{ desc }}"
+                           style="cursor:pointer;border-radius:5px;flex:1;min-width:52px;
+                                  border:2px solid {% if plan.get('focus')==value %}var(--info){% else %}var(--border-color){% endif %};
+                                  padding:5px 3px;text-align:center;background:var(--bg-dark);
+                                  transition:border-color .15s;"
+                           onclick="this.querySelector('input').checked=true;
+                                    this.closest('form').querySelectorAll('label[data-focus]').forEach(l=>l.style.borderColor='var(--border-color)');
+                                    this.style.borderColor='var(--info)'"
+                           data-focus="{{ value }}">
+                        <input type="radio" name="focus" value="{{ value }}"
+                               {% if plan.get('focus')==value %}checked{% endif %} style="display:none;">
+                        <div style="font-size:.9rem;">{{ icons.get(value,'🎯') }}</div>
+                        <div style="font-size:.58rem;color:var(--text-muted);margin-top:1px;line-height:1.2;">{{ name }}</div>
+                    </label>
+                    {% endfor %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {# Intensity #}
+            <div>
+                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Intensity</div>
+                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">
+                    {% set iicons = {'rest':'😴','light':'🚶','moderate':'🏃','intense':'🔥','extreme':'⚡'} %}
+                    {% set icolors = {'rest':'var(--neon-green)','light':'var(--info)','moderate':'var(--warning)','intense':'#ff6b35','extreme':'var(--blood-red)'} %}
+                    {% for value, name, desc in intensity_options %}
+                    <label style="cursor:pointer;border-radius:5px;border:2px solid {% if plan.get('intensity','moderate')|lower==value %}{{ icolors.get(value,'var(--border-color)') }}{% else %}var(--border-color){% endif %};
+                                  padding:6px 4px;text-align:center;background:var(--bg-dark);transition:border-color .15s;"
+                           onclick="this.querySelector('input').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.borderColor='var(--border-color)');this.style.borderColor='{{ icolors.get(value,'var(--info)') }}'">
+                        <input type="radio" name="intensity" value="{{ value }}" {% if plan.get('intensity','moderate')|lower==value %}checked{% endif %} style="display:none;">
+                        <div style="font-size:1rem;">{{ iicons.get(value,'🏃') }}</div>
+                        <div style="font-size:.58rem;color:var(--text-muted);margin-top:2px;">{{ name }}</div>
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div style="padding:0 var(--spacing-md) var(--spacing-md);text-align:right;">
+            <button type="submit" class="btn btn-primary">Set Training</button>
+        </div>
+    </form>
+</div>
+{% endfor %}
+
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Compare Fighters{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">⚖️ Compare Fighters</h1>
+</div>
+
+<div class="card mb-lg">
+    <div style="padding:var(--spacing-md);">
+        <form method="GET" style="display:grid;grid-template-columns:1fr 1fr auto;gap:var(--spacing-md);align-items:end;">
+            {% macro fighter_select(name, current_id) %}
+            <div>
+                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:4px;">
+                    {{ "Fighter 1" if name == "f1" else "Fighter 2" }}
+                </div>
+                <select name="{{ name }}" style="width:100%;padding:8px;background:var(--bg-dark);
+                                                  border:1px solid var(--border-color);border-radius:4px;color:var(--text-bright);">
+                    <option value="">Select fighter...</option>
+                    {% for wc in ['Strawweight','Flyweight','Bantamweight','Featherweight','Lightweight','Welterweight','Middleweight','Light Heavyweight','Heavyweight'] %}
+                    {% set div_fighters = fighters | selectattr('weight_class','equalto',wc) | list %}
+                    {% if div_fighters %}
+                    <optgroup label="{{ wc }}">
+                        {% for f in div_fighters | sort(attribute='overall_rating', reverse=True) %}
+                        <option value="{{ f.fighter_id }}" {% if f.fighter_id == current_id %}selected{% endif %}>
+                            {{ f.name }} ({{ f.overall_rating }} OVR · {{ f.record_str }})
+                        </option>
+                        {% endfor %}
+                    </optgroup>
+                    {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+            {% endmacro %}
+            {{ fighter_select("f1", f1.fighter_id if f1 else '') }}
+            {{ fighter_select("f2", f2.fighter_id if f2 else '') }}
+            <button type="submit" class="btn btn-primary">Compare</button>
+        </form>
+    </div>
+</div>
+
+{% if f1 and f2 %}
+{% set stats = [
+    ('Overall','overall_rating',None),
+    ('Boxing','boxing',None),('Kicks','kicks',None),('Clinch','clinch_striking',None),
+    ('Striking Def','striking_defense',None),('Wrestling','takedowns',None),
+    ('TD Defense','takedown_defense',None),('Submissions','submissions',None),
+    ('Guard','guard_work',None),('Chin','chin',None),('Cardio','cardio',None),
+    ('Strength','strength',None),('Fight IQ','fight_iq',None),
+] %}
+<div class="card">
+    {# Header #}
+    <div style="display:grid;grid-template-columns:1fr 100px 1fr;gap:var(--spacing-lg);
+                padding:var(--spacing-lg);border-bottom:2px solid var(--border-color);text-align:center;">
+        <div>
+            <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--text-bright);">{{ f1.name }}</div>
+            <div style="font-size:.8rem;color:var(--text-muted);">{{ f1.record_str }} · {{ f1.weight_class }}</div>
+            <div style="font-size:.75rem;color:var(--info);margin-top:2px;">{{ f1.fighting_style }}</div>
+            {% if f1.is_champion %}<span class="badge badge-champion" style="margin-top:4px;display:inline-block;">🏆 CHAMP</span>
+            {% elif f1.ranking %}<span class="badge badge-ranked" style="margin-top:4px;display:inline-block;">#{{ f1.ranking }}</span>{% endif %}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;">
+            <span style="font-family:var(--font-display);font-size:1.6rem;color:var(--blood-red);">VS</span>
+        </div>
+        <div>
+            <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--text-bright);">{{ f2.name }}</div>
+            <div style="font-size:.8rem;color:var(--text-muted);">{{ f2.record_str }} · {{ f2.weight_class }}</div>
+            <div style="font-size:.75rem;color:var(--info);margin-top:2px;">{{ f2.fighting_style }}</div>
+            {% if f2.is_champion %}<span class="badge badge-champion" style="margin-top:4px;display:inline-block;">🏆 CHAMP</span>
+            {% elif f2.ranking %}<span class="badge badge-ranked" style="margin-top:4px;display:inline-block;">#{{ f2.ranking }}</span>{% endif %}
+        </div>
+    </div>
+    {# Stat bars #}
+    {% for label, attr, _ in stats %}
+    {% set v1 = f1 | attr(attr) if f1 | attr(attr) is defined else 0 %}
+    {% set v2 = f2 | attr(attr) if f2 | attr(attr) is defined else 0 %}
+    {% set v1 = v1 or 0 %}{% set v2 = v2 or 0 %}
+    <div style="display:grid;grid-template-columns:1fr 80px 1fr;gap:8px;align-items:center;
+                padding:6px var(--spacing-lg);border-bottom:1px solid var(--border-color);">
+        <div style="display:flex;justify-content:flex-end;align-items:center;gap:6px;">
+            <span style="font-family:var(--font-display);font-size:.9rem;
+                         color:{% if v1 > v2 %}var(--neon-green){% elif v1 < v2 %}var(--text-muted){% else %}var(--text-secondary){% endif %};">
+                {{ v1 }}
+            </span>
+            <div style="width:80px;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+                <div style="width:{{ (v1/100*100)|int }}%;height:100%;border-radius:3px;
+                            background:{% if v1 >= v2 %}var(--neon-green){% else %}rgba(255,255,255,.15){% endif %};
+                            float:right;"></div>
+            </div>
+        </div>
+        <div style="text-align:center;font-size:.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">
+            {{ label }}
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:80px;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
+                <div style="width:{{ (v2/100*100)|int }}%;height:100%;border-radius:3px;
+                            background:{% if v2 >= v1 %}var(--blood-red-light){% else %}rgba(255,255,255,.15){% endif %};"></div>
+            </div>
+            <span style="font-family:var(--font-display);font-size:.9rem;
+                         color:{% if v2 > v1 %}var(--blood-red-light){% elif v2 < v1 %}var(--text-muted){% else %}var(--text-secondary){% endif %};">
+                {{ v2 }}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
