@@ -50,7 +50,12 @@
                     <div style="font-family:var(--font-display);font-size:1rem;color:var(--gold);
                                 width:28px;text-align:center;">C</div>
                     <div style="flex:1;">
-                        <div style="font-family:var(--font-display);color:var(--gold);">{{ champion.name }}</div>
+                        <div style="font-family:var(--font-display);color:var(--gold);">
+                            {{ champion.name }}
+                            {% if champion.is_injured %}
+                            <span style="font-size:.7rem;color:var(--blood-red);font-weight:600;margin-left:8px;">🤕 INJURED — {{ champion.injury_weeks_out }}w out</span>
+                            {% endif %}
+                        </div>
                         <div style="font-size:.72rem;color:var(--text-muted);">
                             {{ champion.record_str }} · {{ champion.fighting_style }}
                             {% if champion.win_streak >= 3 %} · 🔥{{ champion.win_streak }}W{% endif %}

@@ -7,6 +7,9 @@
 - New design principle added: OVR is player-facing only, never engine input. See "Design principles" section below.
 - is_title crash fix in `_maybe_generate_inbound_offers` (use-before-assign at line 1800; assignment moved up).
 - OVR-out-of-rankings Phase 1 (verified): 7-diff refactor — rank_score formula no longer reads OVR, drops streak term, bumps recency + ranked_wins weights; min-fights threshold raised to 5/3; `best_rank` field on FighterRecord with returning-contender NEW_ENTRY_CAP exemption; re-rank-on-load via `bypass_clamp=True`. Verified on slot3 LHW ladder — high-OVR thin records correctly unranked, low-OVR veterans correctly ranked. Phase 2 (pre-gen world history) is the priority next session.
+- Bug I — championship phrases firing on non-title fights: `commentary.py:LATE_ROUND_CONTEXT` content-cleaned (selector was already gating correctly; pool itself contained title-themed phrases). Two phrases swapped for neutral alternatives.
+- Bug K — standing-finish commentary on grounded fighters: `commentary.py:FINISH_SEQUENCE["hurt_followup"]` content-cleaned. Two standing-only phrases ("WOBBLES! POUNCES!", "THE LEGS ARE GONE!") swapped for neutral alternatives. Structural fix (position-aware selector signature) deferred — see `memory/tech_note_finish_sequence_position_aware.md`.
+- Bug L1 — champion injury indicator on rankings: `templates/rankings.html` shows "🤕 INJURED — Xw out" next to champion name when `champion.is_injured`. WebFighter already carries injury fields; pure template-side change. Visibility prelude to Bug L (interim title system) — interim infrastructure NOT built.
 
 ## Shipped 2026-04-26
 - Dashboard digest: bare except replaced with logged version

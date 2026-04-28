@@ -1124,8 +1124,8 @@ FINISH_SEQUENCE = {
     # When a fighter is hurt and being finished
     "hurt_followup": [
         "{target} IS HURT! {actor} SMELLS BLOOD!",
-        "{target} WOBBLES! {actor} POUNCES!",
-        "THE LEGS ARE GONE! {actor} going for the KILL!",
+        "{actor} POURS IT ON! {target} can't recover!",
+        "THIS IS IT! {actor} going for the KILL!",
         "{target} IS IN TROUBLE! Here comes the finish!",
     ],
     
@@ -2094,11 +2094,11 @@ TITLE_FIGHT_CONTEXT = [
 ]
 
 LATE_ROUND_CONTEXT = [
-    "We're in the championship rounds now!",
+    "We're deep into this fight now!",
     "This is where conditioning pays off!",
     "The later rounds separate the contenders from the pretenders!",
     "Deep waters - who wants it more?",
-    "Championship heart being tested here!"
+    "Heart and grit being tested here!"
 ]
 
 FINISH_TEMPLATES = {
