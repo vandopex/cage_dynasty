@@ -7480,7 +7480,7 @@ class GameBridge:
         """Build a scheduled fight dict for the card pipeline."""
         weeks_out = target_week - (self._game_state.week_number if self._game_state else 0)
         return {
-            "fight_id":       f"fight_{target_week}_{f1.fighter_id[:8]}_{f2.fighter_id[:8]}",
+            "fight_id":       f"fight_{target_week}_{f1.fighter_id}_{f2.fighter_id}",
             "fighter1_id":    f1.fighter_id,
             "fighter1_name":  f1.name,
             "fighter2_id":    f2.fighter_id,
