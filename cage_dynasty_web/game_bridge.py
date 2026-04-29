@@ -1228,6 +1228,19 @@ class GameBridge:
         try:
             import random
 
+            # Decrement remaining fights' weeks_until + advance the game
+            # week BEFORE simulating this week's fights. This way, player
+            # fights fire during the advance INTO their target week (matching
+            # the AI card sim convention) and tag with the same week as
+            # their DFC card. Fixes Bug E + Bug G timing root cause.
+
+            # Decrement weeks_until for remaining fights
+            for fight in self._scheduled_fights:
+                fight["weeks_until"] = max(0, fight.get("weeks_until", 1) - 1)
+
+            # Advance the game week
+            report = self._game_state.advance_week()
+
             # Check for fights this week
             fights_this_week = [f for f in self._scheduled_fights if f.get("weeks_until", 0) <= 0]
             fight_results = []
@@ -1279,16 +1292,9 @@ class GameBridge:
                     reactions = self._generate_media_reactions(result)
                     if reactions:
                         self._media_reactions[fid] = reactions
-            
+
             # Remove completed fights
             self._scheduled_fights = [f for f in self._scheduled_fights if f.get("weeks_until", 0) > 0]
-            
-            # Decrement weeks_until for remaining fights
-            for fight in self._scheduled_fights:
-                fight["weeks_until"] = max(0, fight.get("weeks_until", 1) - 1)
-            
-            # Advance the game week
-            report = self._game_state.advance_week()
             
             # ── Reset weekly decline tracking ─────────────────────────
             current_week = self._game_state.week_number
