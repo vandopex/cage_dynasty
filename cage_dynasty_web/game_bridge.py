@@ -6220,13 +6220,16 @@ class GameBridge:
             else:
                 continue
 
+            # Title status from champion presence (no pre-built card carries it here)
+            is_title = getattr(f1, 'is_champion', False) or getattr(f2, 'is_champion', False)
+
             # ── AI fight outcome ────────────────────────────────────
             if FIGHT_ENGINE_AVAILABLE:
                 try:
                     # Use real engine — no commentary stored for AI fights
                     fa1 = self._make_fighter_attrs(f1, f1.name, f1.fighter_id)
                     fa2 = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
-                    _rnds = 5 if fight.get("is_title_fight") else 3
+                    _rnds = 5 if is_title else 3
                     _eng = _simulate_narrated_fight_fn(fa1, fa2, rounds=_rnds)
                     winner = f1 if _eng.winner_id in (f1.fighter_id, "fighter_1") else f2
                     loser  = f2 if winner is f1 else f1
@@ -6282,7 +6285,11 @@ class GameBridge:
                 winner.ko_wins  += 1
             elif method == "SUB":
                 winner.sub_wins += 1
-            self._apply_post_fight_camp_record(winner, loser, fight, method)
+            self._apply_post_fight_camp_record(
+                winner, loser,
+                {"event_name": event_name, "is_title_fight": is_title},
+                method,
+            )
 
             # Fight history
             for ftr, res, opp in [(winner, "W", loser), (loser, "L", winner)]:
