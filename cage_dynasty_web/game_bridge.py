@@ -2211,6 +2211,7 @@ class GameBridge:
             "time":           time_str,
             "weight_class":   fight["weight_class"],
             "event_name":     fight["event_name"],
+            "card_slot":      fight.get("card_slot", "prelim"),
             "is_title_fight": is_title_fight,
             "is_player_fight":fight.get("is_player_fight", False),
             "purse":          fight.get("purse", 0),
