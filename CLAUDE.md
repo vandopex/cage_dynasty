@@ -1,3 +1,11 @@
+## Shipped 2026-04-28
+- Phase 0: NameError fix in `_simulate_ai_fights_week`. Two latent `fight` references at lines 6229 and 6285 were causing silent engine fallback (line 6229 inside try/except — every AI fight via this path was silently using score-based fallback) and a crash that derailed yesterday's Bug E/G attempt (line 6285). Replaced with local `is_title` derivation and inline dict literal. Side effect: AI fights via this path now use the real engine. Commit `2e169e7`.
+- Bug E + G (verified): timing alignment via Option P. Player-fight simulation block moved to AFTER the week increment so both player and AI fights tag with the same post-advance week. Merge logic at lines 1326-1344 now actually matches; player fight appears in DFC card lineup AND on its event's recap. Single structural move, no source_week ceremony, no FOTN tag change. Commit `2123ac7`. Verified on fresh game: Carlos Gonzalez fight at DFC 3 appears on Week 3 recap + DFC 3 card lineup; FOTN headlines tagged Week 3; rank deltas working; AI fights firing normally.
+- Filed: Bug O (prelim round count) — Carlos Gonzalez prelim fight ran R4 (should max R3 for prelims). Filed for next session diagnosis. See `memory/bug_O_prelim_round_count_2026-04-28.md`.
+- Bug Q (verified): AI fight watch links collision fixed. `_make_scheduled_fight:7481` used `f1.fighter_id[:8]` which truncated to the `'fighter_'` prefix (exactly 8 chars) — every AI fight on a given week resolved to identical URL `/watch-fight/fight_N_fighter__fighter_`. Fix: removed `[:8]` slices, use full fighter_ids matching player-fight ID convention. Commit `8c48417`. Caveat: past archived events retain broken IDs (no migration).
+- Bug R (verified): player fight rendering on event detail page fixed. `_simulate_fight` built result dict without `card_slot`, so player fights merged into `ai_event.fights` via Option P had no slot attribute and fell through to the unslotted fallback render (flat string "TKO X def. Y"). Fix: add `card_slot` to `_simulate_fight`'s result dict, default `'prelim'` matching `_simulate_card_fights:6057`. Commit `e2360fc`. Pre-existing latent bug unmasked by Option P — same pattern as Phase 0's NameError.
+- Filed: Bug T (amateur tournament system audit, NOT a fix task), Bug S (cooldown — HIGH priority), Bug Y (talent rarity rebalance — camp-start only, not pre-gen). See respective memory files.
+
 ## Shipped 2026-04-27
 - Bug C (partial): champion-self-fight contender loop guarded — but a second code path still fires it (re-confirmed in play-test, see memory).
 - Bug D (verified): media.py randrange crash fixed (`min(3, wins)` clamp).
@@ -18,11 +26,19 @@
 - Slot inflation Bug A: rank-floor now gated on matchup_credible
 
 ## Next session priority
-Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_initial_history` in
-`game_state.py` is currently a trivial stub. Either build engine-driven pre-gen there
+**HIGH — Bug S** (cooldown not applied to player-fight opponents). Matchmaking integrity
+issue: AI fighters who lose to the player are immediately re-selectable (no cooldown)
+while AI-vs-AI losers get proper cooldowns. Possible Option P regression OR latent
+pre-existing bug exposed by playtest. Fix before any deeper rivalry/matchmaking work.
+See `memory/bug_S_player_opponent_cooldown_missing_2026-04-28.md` for diagnostic framing.
+
+Then: Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_initial_history`
+in `game_state.py` is currently a trivial stub. Either build engine-driven pre-gen there
 or wire up the dormant `world_init.HistorySimulator`. Decision needed at session start.
-Also: Bug E (week recap mixes weeks), Bug G (fighter missing from own card lineup),
-Bug H (AI offer skips gameplan), Bug C second path.
+
+Also queued: Bug O (prelim round count R4), Bug R (player fight rendering on event detail —
+filed earlier, confirm in queue), Bug H (AI offer skips gameplan), Bug C second path,
+SUB-rate undershoot tuning (separate observation, see `memory/sub_rate_undershoots_2026-04-28.md`).
 See `CLAUDE_NOTES/2026-04-26-slot-fix-followup.md`.
 
 # CAGE DYNASTY — Claude Code instructions
