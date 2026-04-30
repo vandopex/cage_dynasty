@@ -7919,7 +7919,7 @@ class GameBridge:
         fa2 = self._make_fighter_attrs(fighter2, f2_name, f2_id)
 
         is_title = fight.get("is_title_fight", False)
-        is_main  = fight.get("card_slot") in ("main_event", "co_main") or fight.get("is_player_fight", False)
+        is_main  = fight.get("card_slot") in ("main_event", "co_main")
         total_rounds = 5 if (is_title or fight.get("card_slot") == "main_event" or fight.get("card_slot") == "co_main") else 3
 
         # Style matchup modifier (-0.05 to +0.05)
