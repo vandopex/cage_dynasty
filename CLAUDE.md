@@ -1,3 +1,7 @@
+## Shipped 2026-04-29
+- Bug O (verified): prelim player fights running 5 rounds. `_run_real_engine` at `game_bridge.py:7922` was setting `is_main=True` for any player fight regardless of `card_slot` — conflated "player participation" with "main event status." This forced 5-round FightConfig for all player fights (the asymmetric upgrade-only round override at `fight_integration.py:1228-1229` then locked it in). Fix: remove the `or fight.get("is_player_fight", False)` clause from line 7922. Player fights now respect their slot semantics. Commit `7c3f8e1`. Verified: Raj Panyawong (player, prelim) won SPLIT DEC after R3; AI prelims max R3; title fights still 5 rounds (Oscar Gane DEC R5). No regressions. Same two-path-merger pattern as Bug R, Bug Q, Phase 0 — fields/flags diverging between player and AI paths. AI path was already correct.
+- Filed: Sub-bug O.1 (`fight_integration.py:1228-1229` asymmetric upgrade-only round override — currently harmless post-Bug-O, defense-in-depth cleanup deferred). Tech-debt note: `game_bridge.py:7923` redundant slot check after `is_main` is already computed at 7922 — cosmetic cleanup. See `memory/sub_bug_O1_engine_round_override_asymmetric.md` and `memory/tech_debt_game_bridge_7923_redundant_slot_check.md`.
+
 ## Shipped 2026-04-28
 - Phase 0: NameError fix in `_simulate_ai_fights_week`. Two latent `fight` references at lines 6229 and 6285 were causing silent engine fallback (line 6229 inside try/except — every AI fight via this path was silently using score-based fallback) and a crash that derailed yesterday's Bug E/G attempt (line 6285). Replaced with local `is_title` derivation and inline dict literal. Side effect: AI fights via this path now use the real engine. Commit `2e169e7`.
 - Bug E + G (verified): timing alignment via Option P. Player-fight simulation block moved to AFTER the week increment so both player and AI fights tag with the same post-advance week. Merge logic at lines 1326-1344 now actually matches; player fight appears in DFC card lineup AND on its event's recap. Single structural move, no source_week ceremony, no FOTN tag change. Commit `2123ac7`. Verified on fresh game: Carlos Gonzalez fight at DFC 3 appears on Week 3 recap + DFC 3 card lineup; FOTN headlines tagged Week 3; rank deltas working; AI fights firing normally.
@@ -36,9 +40,12 @@ Then: Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_init
 in `game_state.py` is currently a trivial stub. Either build engine-driven pre-gen there
 or wire up the dormant `world_init.HistorySimulator`. Decision needed at session start.
 
-Also queued: Bug O (prelim round count R4), Bug R (player fight rendering on event detail —
-filed earlier, confirm in queue), Bug H (AI offer skips gameplan), Bug C second path,
-SUB-rate undershoot tuning (separate observation, see `memory/sub_rate_undershoots_2026-04-28.md`).
+Also queued: Bug H (AI offer skips gameplan), Bug C second path, Bug T (amateur tournament
+audit — not a fix, system verification), Bug Y (talent rarity rebalance — camp start only,
+design questions first), SUB-rate undershoot tuning (see `memory/sub_rate_undershoots_2026-04-28.md`).
+Deferred low-priority cleanup from Bug O ship: Sub-bug O.1 (asymmetric round override) and
+line 7923 redundant slot check — bundle whenever `fight_integration.py` or `_run_real_engine`
+is touched for another reason.
 See `CLAUDE_NOTES/2026-04-26-slot-fix-followup.md`.
 
 # CAGE DYNASTY — Claude Code instructions
