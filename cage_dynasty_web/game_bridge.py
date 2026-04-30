@@ -7999,6 +7999,21 @@ class GameBridge:
                         self._game_state.active_contracts.pop(_ftr_c2.fighter_id, None)
                         self._ai_bid_for_free_agent(_ftr_c2.fighter_id, _ftr_c2)
 
+        # Fight history — write BEFORE return so cooldown loop in advance_week
+        # can read lose_streak correctly (Bug S).
+        for ftr, res, opp in [(winner, "W", loser), (loser, "L", winner)]:
+            if not hasattr(ftr, "fight_history"):
+                ftr.fight_history = []
+            ftr.fight_history.append({
+                "opponent_name":  opp.name,
+                "opponent_id":    opp.fighter_id,
+                "result":         res,
+                "method":         method,
+                "round_finished": round_finished,
+                "event_name":     fight.get("event_name", ""),
+                "week":           self._game_state.week_number if self._game_state else 1,
+            })
+
         # Scorecard from engine if decision
         scorecard_data = None
         if method in ("DEC","UNY DEC","SPLIT DEC","MAJ DEC") and JUDGES_AVAILABLE:
