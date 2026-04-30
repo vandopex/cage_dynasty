@@ -1,6 +1,10 @@
 ## Shipped 2026-04-29
 - Bug O (verified): prelim player fights running 5 rounds. `_run_real_engine` at `game_bridge.py:7922` was setting `is_main=True` for any player fight regardless of `card_slot` — conflated "player participation" with "main event status." This forced 5-round FightConfig for all player fights (the asymmetric upgrade-only round override at `fight_integration.py:1228-1229` then locked it in). Fix: remove the `or fight.get("is_player_fight", False)` clause from line 7922. Player fights now respect their slot semantics. Commit `7c3f8e1`. Verified: Raj Panyawong (player, prelim) won SPLIT DEC after R3; AI prelims max R3; title fights still 5 rounds (Oscar Gane DEC R5). No regressions. Same two-path-merger pattern as Bug R, Bug Q, Phase 0 — fields/flags diverging between player and AI paths. AI path was already correct.
 - Filed: Sub-bug O.1 (`fight_integration.py:1228-1229` asymmetric upgrade-only round override — currently harmless post-Bug-O, defense-in-depth cleanup deferred). Tech-debt note: `game_bridge.py:7923` redundant slot check after `is_main` is already computed at 7922 — cosmetic cleanup. See `memory/sub_bug_O1_engine_round_override_asymmetric.md` and `memory/tech_debt_game_bridge_7923_redundant_slot_check.md`.
+- Bug S (verified): cooldown not applied to player-fight opponents. `_run_real_engine` returned without writing `fight_history` for either fighter; cooldown loop in `advance_week` (lines 1367-1375) calls `_apply_cooldown` → `_cooldown_weeks` → `_get_fighter_lose_streak`, which reads `fight_history`. With no L recorded, `lose_streak == 0` → fell into the WINNER branch → unranked losers got 1w cooldown instead of 4w. Player could spam-rematch any AI fighter they just beat. Fix: 15-line `fight_history.append()` block inside `_run_real_engine` (between contract decrement and scorecard), mirroring AI path at `_simulate_card_fights:6073-6081` byte-for-byte. Commit `c203b51`. Verified: Wk 23 DFC 23 — Raj beat Ulugbek; Ulugbek now shows "Available Week 27 (4w)" on LHW ladder. Pre-existing latent bug (not Option P regression). Same two-path-merger family as Bug O / Bug R / Bug Q / Phase 0.
+- Filed: Sub-bug S.1 (missing `_update_rankings_after_fight` in `_run_real_engine`), Sub-bug S.2 (missing `_fighter_data` fight_history mirror), Sub-bug S.3 (possibly missing news-headline insert — verify in dashboard before classifying). All low priority; bundle when `_run_real_engine` is touched again.
+- Bug Z filed (NEW, HIGH, NOT FIXED): auto-booking after player gets ranked. Raj (#11 LHW) auto-scheduled into DFC 17 vs Robert Lopez (#8) without negotiation. Player agency lost. See `memory/bug_Z_auto_booking_ranked_player_2026-04-29.md`.
+- Bug AA filed (NEW, HIGH-ish, NOT FIXED): offer queue doesn't reconcile with scheduled fights. Inbound offer arrived for a fighter already booked; offer stayed accept-able. Sequence Z first, AA second — fix shapes may share. See `memory/bug_AA_offer_queue_doesnt_reconcile_2026-04-29.md`.
 
 ## Shipped 2026-04-28
 - Phase 0: NameError fix in `_simulate_ai_fights_week`. Two latent `fight` references at lines 6229 and 6285 were causing silent engine fallback (line 6229 inside try/except — every AI fight via this path was silently using score-based fallback) and a crash that derailed yesterday's Bug E/G attempt (line 6285). Replaced with local `is_title` derivation and inline dict literal. Side effect: AI fights via this path now use the real engine. Commit `2e169e7`.
@@ -30,22 +34,30 @@
 - Slot inflation Bug A: rank-floor now gated on matchup_credible
 
 ## Next session priority
-**HIGH — Bug S** (cooldown not applied to player-fight opponents). Matchmaking integrity
-issue: AI fighters who lose to the player are immediately re-selectable (no cooldown)
-while AI-vs-AI losers get proper cooldowns. Possible Option P regression OR latent
-pre-existing bug exposed by playtest. Fix before any deeper rivalry/matchmaking work.
-See `memory/bug_S_player_opponent_cooldown_missing_2026-04-28.md` for diagnostic framing.
+**HIGH — Bug Z** (auto-booking after player gets ranked). Raj #11 LHW auto-scheduled
+into DFC 17 vs Robert Lopez (#8) with no negotiation. Player agency lost the moment the
+player succeeds. Re-confirmed at end of 2026-04-29 session. Fix before deeper rivalry
+work — Bug Z and Bug AA share the offer/booking pipeline; sequence Z first.
+See `memory/bug_Z_auto_booking_ranked_player_2026-04-29.md`.
+
+**Then Bug AA** (offer queue doesn't reconcile with scheduled fights). Inbound offer
+arrived for a fighter already booked; offer stayed accept-able. Risk of double-booking.
+Fix shape may collapse into Bug Z if both stem from the same offer-emission gate.
+See `memory/bug_AA_offer_queue_doesnt_reconcile_2026-04-29.md`.
 
 Then: Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_initial_history`
 in `game_state.py` is currently a trivial stub. Either build engine-driven pre-gen there
 or wire up the dormant `world_init.HistorySimulator`. Decision needed at session start.
 
-Also queued: Bug H (AI offer skips gameplan), Bug C second path, Bug T (amateur tournament
-audit — not a fix, system verification), Bug Y (talent rarity rebalance — camp start only,
-design questions first), SUB-rate undershoot tuning (see `memory/sub_rate_undershoots_2026-04-28.md`).
-Deferred low-priority cleanup from Bug O ship: Sub-bug O.1 (asymmetric round override) and
-line 7923 redundant slot check — bundle whenever `fight_integration.py` or `_run_real_engine`
-is touched for another reason.
+Also queued: Bug H (AI offer skips gameplan — adjacent to Z/AA, may bundle), Bug C second
+path, Bug T (amateur tournament audit — not a fix, system verification), Bug Y (talent
+rarity rebalance — camp start only, design questions first), SUB-rate undershoot tuning
+(see `memory/sub_rate_undershoots_2026-04-28.md`).
+
+Deferred low-priority cleanup: Sub-bug O.1 (asymmetric round override at fight_integration.py),
+line 7923 redundant slot check, Sub-bug S.1 (rankings update missing in `_run_real_engine`),
+Sub-bug S.2 (`_fighter_data` mirror), Sub-bug S.3 (news headline — verify symptom first).
+Bundle whenever `fight_integration.py` or `_run_real_engine` is touched for another reason.
 See `CLAUDE_NOTES/2026-04-26-slot-fix-followup.md`.
 
 # CAGE DYNASTY — Claude Code instructions
