@@ -56,7 +56,7 @@
             <span style="font-size:.62rem;color:var(--info);">→ #{{ fight.winner_new_rank }}</span>
             {% endif %}
             <span style="font-size:.72rem;color:var(--text-muted);">def. {% if fight.get('loser_id') %}<a href="{{ url_for('fighter_profile', fighter_id=fight.get('loser_id')) }}" style="color:inherit;text-decoration:none;">{{ fight.get('loser_name','') }}</a>{% else %}{{ fight.get('loser_name','') }}{% endif %}</span>
-            {% if fight.get('is_fotn') %}<span style="font-size:.72rem;color:var(--gold);">🔥</span>{% endif %}
+            {% if event.fotn and event.fotn.fight_id == fight.fight_id %}<span style="font-size:.72rem;color:var(--gold);">🔥</span>{% endif %}
         </div>
         {% endfor %}
     </div>

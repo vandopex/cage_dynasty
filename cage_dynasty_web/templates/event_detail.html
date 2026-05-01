@@ -77,7 +77,7 @@
 
         {% for fight in slot_fights %}
         {% set is_player = fight.winner_id in player_ids or fight.loser_id in player_ids %}
-        {% set is_fotn = fight.is_fotn if fight.is_fotn is defined else false %}
+        {% set is_fotn = (event.fotn is defined and event.fotn and event.fotn.fight_id == fight.fight_id) %}
         {% set method  = fight.method or 'DEC' %}
         {% set mcolor  = method_color.get(method, 'var(--text-muted)') %}
 
