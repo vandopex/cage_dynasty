@@ -7292,6 +7292,7 @@ class GameBridge:
                 f for f in self._game_state.fighters.values()
                 if f.weight_class == wc
                 and f.is_active
+                and (not player_camp_id or f.camp_id != player_camp_id)
                 and f.fighter_id not in all_booked
                 and f.fighter_id not in booked_here
                 and self._is_available(f.fighter_id, target_week)
