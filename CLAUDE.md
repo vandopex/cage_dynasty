@@ -38,13 +38,19 @@
 - Slot inflation Bug A: rank-floor now gated on matchup_credible
 
 ## Next session priority
-**HIGH — Bug AA** (offer queue doesn't reconcile with scheduled fights). Inbound offer
-arrived for a fighter already booked; offer stayed accept-able. Risk of double-booking.
-Confirmed parallel to Bug Z, NOT shared root cause: auto-booker writes
-`_upcoming_cards[wk]["fights"]`, offer queue writes `_scheduled_fights`. Auto-booker
-reads BOTH (post-Z fix); offer queue still reads only its own. Likely fix: filter
-`_maybe_generate_inbound_offers` against fighters already on `_upcoming_cards`.
+**Bug AA — DOWNGRADED 2026-04-30.** Architectural gap confirmed at `game_bridge.py:1743-1758`
+(reads `_scheduled_fights` only), but Bug Z's fix neutralized the live reproduction path —
+no code path today writes player fighters into `_upcoming_cards`, so the gap is dead under
+current code. Revisit only if a concrete failure surfaces or if a future feature reintroduces
+a player-fight write to `_upcoming_cards`. Not shipping defensive code for a hypothetical.
 See `memory/bug_AA_offer_queue_doesnt_reconcile_2026-04-29.md`.
+
+**Filed: challenge_fighter same-family gap, harmless under current code.** `game_bridge.py:5166-5173`
+reads `_scheduled_fights` only when validating challenge target. UI gates the Challenge button via
+`scheduled_map` (routes.py:875-886) which reads both sinks, so unreachable in normal play. Defensive
+note for future UI work — any new challenge entry point that doesn't reuse `scheduled_map` would
+expose the gap. Same UI/backend predicate-source-divergence family as Bug AA. See
+`memory/challenge_fighter_harmless_gap_2026-04-30.md`.
 
 Then: Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_initial_history`
 in `game_state.py` is currently a trivial stub. Either build engine-driven pre-gen there
