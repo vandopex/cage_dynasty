@@ -1533,6 +1533,19 @@ class GameBridge:
                             fr["is_fotn"] = False  # Explicitly clear
                 f1n = fotn_result.get("fighter1_name", "")
                 f2n = fotn_result.get("fighter2_name", "")
+                # Populate event.fotn on the containing event for archive surface
+                fotn_dict = {
+                    "fight_id":      fotn_fid,
+                    "fighter1_name": f1n,
+                    "fighter2_name": f2n,
+                    "bonus":         FOTN_BONUS,
+                }
+                current_wk = self._game_state.week_number if self._game_state else 0
+                for ev in self._completed_events:
+                    if ev.get("week") == current_wk and any(
+                            f.get("fight_id") == fotn_fid for f in ev.get("fights", [])):
+                        ev["fotn"] = fotn_dict
+                        break
                 self._news_items.insert(0, {
                     "headline": f"🔥 FIGHT OF THE NIGHT: {f1n} vs {f2n} — ${FOTN_BONUS:,} bonus each!",
                     "category": "fotn",
