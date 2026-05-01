@@ -1,3 +1,7 @@
+## Shipped 2026-04-30
+- Bug Z (verified): auto-booking after player gets ranked. `_build_card_for_week` ranked-vs-ranked pairing at `game_bridge.py:7326-7368` iterated `division.rankings[:14]` with no player-ownership guard — once a player fighter entered top 14 of any division, the auto-builder picked them into upcoming events without negotiation. Fix: one-line filter `(not player_camp_id or f.camp_id != player_camp_id)` added to availability list at line 7295. `player_camp_id` was already grabbed at line 7275 and previously unused. Belt-and-suspenders form so the filter no-ops cleanly if camp isn't yet established (Optional[str] = None at game_state.py:336). Commit `59193c5`. Verified: Wei Martin (player, #3 FLY) won SPLIT DEC at DFC 28; post-fight `/ladder/Flyweight` showed cooldown only, no auto-booking. Other 11 ranked FLY fighters auto-paired into DFC 29-34 as expected — filter is correctly selective. Same two-path-merger family as Bug O / Bug R / Bug Q / Bug S — system that should treat player and AI fighters differently but didn't.
+- Filed: judge-tendency observation (grappling rounds possibly undercredited) — n=1 split decision where player controlled all 3 rounds via takedowns/back mounts/RNCs and 2 judges still scored against. Park, don't act. See `memory/judge_grappling_tendency_2026-04-30.md`.
+
 ## Shipped 2026-04-29
 - Bug O (verified): prelim player fights running 5 rounds. `_run_real_engine` at `game_bridge.py:7922` was setting `is_main=True` for any player fight regardless of `card_slot` — conflated "player participation" with "main event status." This forced 5-round FightConfig for all player fights (the asymmetric upgrade-only round override at `fight_integration.py:1228-1229` then locked it in). Fix: remove the `or fight.get("is_player_fight", False)` clause from line 7922. Player fights now respect their slot semantics. Commit `7c3f8e1`. Verified: Raj Panyawong (player, prelim) won SPLIT DEC after R3; AI prelims max R3; title fights still 5 rounds (Oscar Gane DEC R5). No regressions. Same two-path-merger pattern as Bug R, Bug Q, Phase 0 — fields/flags diverging between player and AI paths. AI path was already correct.
 - Filed: Sub-bug O.1 (`fight_integration.py:1228-1229` asymmetric upgrade-only round override — currently harmless post-Bug-O, defense-in-depth cleanup deferred). Tech-debt note: `game_bridge.py:7923` redundant slot check after `is_main` is already computed at 7922 — cosmetic cleanup. See `memory/sub_bug_O1_engine_round_override_asymmetric.md` and `memory/tech_debt_game_bridge_7923_redundant_slot_check.md`.
@@ -34,15 +38,12 @@
 - Slot inflation Bug A: rank-floor now gated on matchup_credible
 
 ## Next session priority
-**HIGH — Bug Z** (auto-booking after player gets ranked). Raj #11 LHW auto-scheduled
-into DFC 17 vs Robert Lopez (#8) with no negotiation. Player agency lost the moment the
-player succeeds. Re-confirmed at end of 2026-04-29 session. Fix before deeper rivalry
-work — Bug Z and Bug AA share the offer/booking pipeline; sequence Z first.
-See `memory/bug_Z_auto_booking_ranked_player_2026-04-29.md`.
-
-**Then Bug AA** (offer queue doesn't reconcile with scheduled fights). Inbound offer
+**HIGH — Bug AA** (offer queue doesn't reconcile with scheduled fights). Inbound offer
 arrived for a fighter already booked; offer stayed accept-able. Risk of double-booking.
-Fix shape may collapse into Bug Z if both stem from the same offer-emission gate.
+Confirmed parallel to Bug Z, NOT shared root cause: auto-booker writes
+`_upcoming_cards[wk]["fights"]`, offer queue writes `_scheduled_fights`. Auto-booker
+reads BOTH (post-Z fix); offer queue still reads only its own. Likely fix: filter
+`_maybe_generate_inbound_offers` against fighters already on `_upcoming_cards`.
 See `memory/bug_AA_offer_queue_doesnt_reconcile_2026-04-29.md`.
 
 Then: Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_initial_history`
