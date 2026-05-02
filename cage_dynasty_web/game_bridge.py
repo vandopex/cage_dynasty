@@ -1483,6 +1483,77 @@ class GameBridge:
                             history[-1]["lost_to_name"] = "Vacated"
                             history[-1]["lost_method"]  = "Injury"
 
+                        # ── Slice 2: book vacant-title fight ──────────
+                        # Top-2 non-player contenders fight for the
+                        # vacant belt at the next card with an open
+                        # main_event slot. Player excluded — Slice 2 is
+                        # AI-only; player vacant-title path is Slice 2.5.
+                        _all_booked = set()
+                        for _sf in self._scheduled_fights:
+                            _all_booked.add(_sf.get("fighter1_id", ""))
+                            _all_booked.add(_sf.get("fighter2_id", ""))
+                        for _wk_b, _card_b in self._upcoming_cards.items():
+                            for _f_b in _card_b.get("fights", []):
+                                _all_booked.add(_f_b.get("fighter1_id", ""))
+                                _all_booked.add(_f_b.get("fighter2_id", ""))
+
+                        _player_camp_id = self._game_state.player_camp_id
+                        _contenders = []
+                        for _fid in div.rankings[:8]:
+                            _ftr = self._game_state.get_fighter(_fid)
+                            if not _ftr or not _ftr.is_active:
+                                continue
+                            if champ and _ftr.fighter_id == champ.fighter_id:
+                                continue
+                            if _player_camp_id and _ftr.camp_id == _player_camp_id:
+                                continue
+                            if _ftr.fighter_id in _all_booked:
+                                continue
+                            if INJURY_AVAILABLE and self._injury_system \
+                                    and not self._injury_system.is_cleared_to_fight(_ftr.fighter_id):
+                                continue
+                            _contenders.append(_ftr)
+                            if len(_contenders) >= 2:
+                                break
+
+                        if len(_contenders) >= 2:
+                            _top1, _top2 = _contenders[0], _contenders[1]
+                            _target_card = None
+                            for _wk_s in sorted(self._upcoming_cards.keys()):
+                                if _wk_s <= current_week:
+                                    continue
+                                _card_s = self._upcoming_cards[_wk_s]
+                                _has_main = any(
+                                    _f_s.get("card_slot") == "main_event"
+                                    for _f_s in _card_s.get("fights", [])
+                                )
+                                if not _has_main:
+                                    _target_card = _card_s
+                                    break
+                            if _target_card:
+                                _tw    = _target_card["week"]
+                                _ev    = _target_card["event_name"]
+                                _fdict = self._make_scheduled_fight(
+                                    _top1, _top2, wc, _ev, _tw,
+                                    "main_event", is_title=True)
+                                _target_card["fights"].append(_fdict)
+                                print(f"  🏆 [VACANT TITLE BOOKED] {wc} — "
+                                      f"{_top1.name} vs {_top2.name} at "
+                                      f"{_ev} (Wk {_tw})")
+                                self._news_items.insert(0, {
+                                    "headline": (f"🏆 VACANT TITLE FIGHT: "
+                                                 f"{_top1.name} vs {_top2.name} "
+                                                 f"for the {wc} belt at {_ev}."),
+                                    "category": "title",
+                                    "week": current_week,
+                                })
+                            else:
+                                print(f"  ⚠️ [VACANT TITLE] {wc} — no card "
+                                      f"with open main_event slot in pipeline; deferred")
+                        else:
+                            print(f"  ⚠️ [VACANT TITLE] {wc} — fewer than 2 "
+                                  f"available non-player contenders; deferred")
+
             # ── Autosave every 5 weeks ─────────────────────────────────
             self.autosave_if_due(self._game_state.week_number)
 
