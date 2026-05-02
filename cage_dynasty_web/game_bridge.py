@@ -1260,8 +1260,20 @@ class GameBridge:
                 if INJURY_AVAILABLE and self._injury_system:
                     f1id = fight.get("fighter1_id", "")
                     f2id = fight.get("fighter2_id", "")
-                    if not self._injury_system.is_cleared_to_fight(f1id) \
-                            or not self._injury_system.is_cleared_to_fight(f2id):
+                    _f1_clr = self._injury_system.is_cleared_to_fight(f1id)
+                    _f2_clr = self._injury_system.is_cleared_to_fight(f2id)
+                    if not _f1_clr or not _f2_clr:
+                        _uncleared_names = []
+                        if not _f1_clr: _uncleared_names.append(fight.get("fighter1_name", ""))
+                        if not _f2_clr: _uncleared_names.append(fight.get("fighter2_name", ""))
+                        self._news_items.insert(0, {
+                            "headline": (f"🚫 {fight.get('fighter1_name','')} vs "
+                                         f"{fight.get('fighter2_name','')} at "
+                                         f"{fight.get('event_name','event')} cancelled — "
+                                         f"{' and '.join(_uncleared_names)} not cleared to fight."),
+                            "category": "injury",
+                            "week": self._game_state.week_number if self._game_state else 1,
+                        })
                         continue
                 result = self._simulate_fight(fight)
                 fight_results.append(result)
@@ -3450,12 +3462,20 @@ class GameBridge:
                 _fname = getattr(_rftr, 'name', fighter_id) if _rftr else fighter_id
                 print(f"  🤕 [INJURY] {_fname} — {injury.description} ({injury.severity_name}) "
                       f"· {injury.recovery_weeks}w recovery")
-                # News item for player fighter injuries
+                # News item for player fighter injuries OR champion injuries
                 _pids = {f.fighter_id for f in self.get_player_fighters()}
-                if fighter_id in _pids and self._game_state:
+                _is_champ = bool(_rftr and getattr(_rftr, 'is_champion', False))
+                if (fighter_id in _pids or _is_champ) and self._game_state:
+                    if _is_champ:
+                        _wc = getattr(_rftr, 'weight_class', '')
+                        _hl = (f"🏆 {_fname} ({_wc} Champion) suffers "
+                               f"{injury.description} — out {injury.recovery_weeks} weeks. "
+                               f"Title defense delayed.")
+                    else:
+                        _hl = (f"🤕 {_fname} suffers training injury: {injury.description} "
+                               f"— {injury.recovery_weeks} week recovery")
                     self._news_items.insert(0, {
-                        "headline": f"🤕 {_fname} suffers training injury: {injury.description} "
-                                    f"— {injury.recovery_weeks} week recovery",
+                        "headline": _hl,
                         "category": "injury",
                         "week": self._game_state.week_number,
                     })
@@ -5981,8 +6001,19 @@ class GameBridge:
                 continue
             # Skip if either fighter isn't cleared to fight (injury)
             if INJURY_AVAILABLE and self._injury_system:
-                if not self._injury_system.is_cleared_to_fight(f1.fighter_id) \
-                        or not self._injury_system.is_cleared_to_fight(f2.fighter_id):
+                _f1_clr = self._injury_system.is_cleared_to_fight(f1.fighter_id)
+                _f2_clr = self._injury_system.is_cleared_to_fight(f2.fighter_id)
+                if not _f1_clr or not _f2_clr:
+                    _uncleared_names = []
+                    if not _f1_clr: _uncleared_names.append(f1.name)
+                    if not _f2_clr: _uncleared_names.append(f2.name)
+                    self._news_items.insert(0, {
+                        "headline": (f"🚫 {f1.name} vs {f2.name} at "
+                                     f"{event_name} cancelled — "
+                                     f"{' and '.join(_uncleared_names)} not cleared to fight."),
+                        "category": "injury",
+                        "week": week,
+                    })
                     continue
 
             # Use real engine or fallback
@@ -6089,9 +6120,15 @@ class GameBridge:
                         self._injury_system.add_injury(_inj)
                         print(f"  🤕 [FIGHT INJURY] {_ftr.name} — {_inj.description} "
                               f"({_inj.severity_name}) · {_inj.recovery_weeks}w")
+                        if getattr(_ftr, 'is_champion', False):
+                            _hl = (f"🏆 {_ftr.name} ({_ftr.weight_class} Champion) suffers "
+                                   f"{_inj.description} — out {_inj.recovery_weeks} weeks. "
+                                   f"Title defense delayed.")
+                        else:
+                            _hl = (f"🤕 {_ftr.name} injured at {event_name}: "
+                                   f"{_inj.description} — {_inj.recovery_weeks}w recovery")
                         self._news_items.append({
-                            "headline": f"🤕 {_ftr.name} injured at {event_name}: "
-                                        f"{_inj.description} — {_inj.recovery_weeks}w recovery",
+                            "headline": _hl,
                             "category": "injury", "week": week,
                         })
 
@@ -8120,9 +8157,16 @@ class GameBridge:
                     _inj_name = getattr(_ftr_inj, 'name', _fid_inj) if _ftr_inj else _fid_inj
                     print(f"  🤕 [FIGHT INJURY] {_inj_name} — {_inj.description} "
                           f"({_inj.severity_name}) · {_inj.recovery_weeks}w")
+                    if _ftr_inj and getattr(_ftr_inj, 'is_champion', False):
+                        _wc_c = getattr(_ftr_inj, 'weight_class', '')
+                        _hl = (f"🏆 {_inj_name} ({_wc_c} Champion) suffers "
+                               f"{_inj.description} — out {_inj.recovery_weeks} weeks. "
+                               f"Title defense delayed.")
+                    else:
+                        _hl = (f"🤕 {_inj_name} injured: {_inj.description} "
+                               f"— {_inj.recovery_weeks} week recovery")
                     self._news_items.insert(0, {
-                        "headline": f"🤕 {_inj_name} injured: {_inj.description} "
-                                    f"— {_inj.recovery_weeks} week recovery",
+                        "headline": _hl,
                         "category": "injury",
                         "week": self._game_state.week_number,
                     })
