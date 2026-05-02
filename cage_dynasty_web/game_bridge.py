@@ -1444,8 +1444,8 @@ class GameBridge:
                     # Champion is injured — increment counter
                     self._champ_weeks_since_defense[wc] =                         self._champ_weeks_since_defense.get(wc, 0) + 1
                     weeks_injured = self._champ_weeks_since_defense[wc]
-                    # Strip belt after 8 weeks of injury
-                    if weeks_injured >= 8:
+                    # Strip belt after 25 weeks of injury (Career-level threshold per design spec)
+                    if weeks_injured >= 25:
                         champ = self._game_state.get_fighter(div.champion_id)
                         champ_name = getattr(champ, 'name', 'The Champion') if champ else 'The Champion'
                         print(f"  👑 [VACATED] {champ_name} stripped of {wc} title — "
