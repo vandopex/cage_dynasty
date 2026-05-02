@@ -1256,6 +1256,13 @@ class GameBridge:
                         pre_ranks[fid] = self._get_fighter_rank(rec) if rec else None
 
             for fight in fights_this_week:
+                # Skip if either fighter isn't cleared to fight (injury)
+                if INJURY_AVAILABLE and self._injury_system:
+                    f1id = fight.get("fighter1_id", "")
+                    f2id = fight.get("fighter2_id", "")
+                    if not self._injury_system.is_cleared_to_fight(f1id) \
+                            or not self._injury_system.is_cleared_to_fight(f2id):
+                        continue
                 result = self._simulate_fight(fight)
                 fight_results.append(result)
 
@@ -5972,6 +5979,11 @@ class GameBridge:
             f2 = self._game_state.get_fighter(fight["fighter2_id"])
             if not f1 or not f2:
                 continue
+            # Skip if either fighter isn't cleared to fight (injury)
+            if INJURY_AVAILABLE and self._injury_system:
+                if not self._injury_system.is_cleared_to_fight(f1.fighter_id) \
+                        or not self._injury_system.is_cleared_to_fight(f2.fighter_id):
+                    continue
 
             # Use real engine or fallback
             if FIGHT_ENGINE_AVAILABLE:
@@ -6216,6 +6228,8 @@ class GameBridge:
                 and f.is_active
                 and f.camp_id != player_camp_id
                 and f.fighter_id not in booked_ids
+                and not (INJURY_AVAILABLE and self._injury_system
+                         and not self._injury_system.is_cleared_to_fight(f.fighter_id))
             ]
             if len(pool) < 2:
                 continue
