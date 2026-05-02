@@ -2011,12 +2011,14 @@ def register_routes(app):
         """Full play-by-play commentary for a fight."""
         bridge = get_bridge()
 
-        # Find the fight result in completed events
+        # Find the fight result + containing event in completed events
         fight_result = None
+        fight_event  = None
         for ev in bridge.get_completed_events():
             for f in ev.get('fights', []):
                 if f.get('fight_id') == fight_id:
                     fight_result = f
+                    fight_event  = ev
                     break
             if fight_result:
                 break
@@ -2060,6 +2062,7 @@ def register_routes(app):
 
         return render_template('watch_fight.html',
             fight=fight_result,
+            event=fight_event,
             rounds=rounds,
             commentary=commentary,
             scorecard=scorecard,

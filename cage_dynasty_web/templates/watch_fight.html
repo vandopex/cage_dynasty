@@ -40,7 +40,7 @@
 
 
 {# ── FOTN Banner ── #}
-{% if fight.is_fotn %}
+{% if event and event.fotn and event.fotn.fight_id == fight.fight_id %}
 <div style="margin-bottom:var(--spacing-lg);padding:var(--spacing-md) var(--spacing-xl);
             background:linear-gradient(135deg,rgba(255,107,0,.12),rgba(255,215,0,.12));
             border:1px solid rgba(255,215,0,.5);border-radius:8px;
