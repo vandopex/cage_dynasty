@@ -9338,9 +9338,14 @@ class GameBridge:
         camp_scores.sort(key=lambda x: x[0], reverse=True)
         winning_camp = camp_scores[0][1]
 
-        # Sign them
-        fighter.camp_id = winning_camp.camp_id
-        self._game_state.free_agents.discard(fighter_id)
+        # Sign them via the canonical helper (creates contract, increments
+        # fighter_count, updates _camp_data["fighters"], populates
+        # active_contracts + _contract_data, discards from free_agents)
+        contract_id = self._game_state._sign_fighter_to_camp(
+            fighter_id, winning_camp.camp_id
+        )
+        if not contract_id:
+            return  # Sign failed; don't fire news
         arch = self._get_camp_archetype(winning_camp.camp_id)
         arch_emoji = CAMP_ARCHETYPES.get(arch, {}).get("emoji", "🏟️")
         _top_score = camp_scores[0][0] if camp_scores else 0
