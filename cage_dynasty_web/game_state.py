@@ -247,6 +247,119 @@ class DivisionState:
 
 
 # ============================================================================
+# NICKNAMES — earned, not assigned. Pool is applied via the threshold gate in
+# game_bridge._apply_post_fight_camp_record (post-fight earning) and the
+# one-shot backfill in web_load (legacy saves). New fighters start with
+# nickname=None and earn one upon reaching ≥2 wins AND ≥3 total fights —
+# "you earn it by performing." The threshold IS the no-nickname gate, so
+# the pool itself is pure positives (no None entries). Generic nicknames
+# only — no culturally-bound entries so AI country diversity doesn't feel
+# weird (no "El Toro" on a Russian, no "Shogun" on a Brazilian).
+# ============================================================================
+
+NICKNAMES_POOL = [
+    # ── Originals (dramatic + understated mix) ─────────────────────────────
+    "The Reaper",     "Diesel",          "The Hammer",
+    "The Pitbull",    "The Phoenix",     "The Beast",
+    "Thunder",        "Lightning",       "The Bull",
+    "Bones",          "Ice",             "Showtime",
+    "Steel",          "Quicksilver",     "The Natural",
+    "The Surgeon",    "The Technician",  "The Sniper",
+    "The Predator",   "The Anvil",
+
+    # ── Warrior / Weapon (25) ──────────────────────────────────────────────
+    "The Gladiator",  "The Spartan",     "The Viking",
+    "The Samurai",    "The Centurion",   "The Arsenal",
+    "The Artillery",  "Howitzer",        "The Missile",
+    "The Cannon",     "The Sword",       "The Axe",
+    "The Mace",       "The Dagger",      "The Spear",
+    "The Wrecking Ball", "The Sledgehammer", "The Jackhammer",
+    "The Chainsaw",   "The Hatchet",     "The Bazooka",
+    "The Grenade",    "The Caliber",     "The Roundhouse",
+    "The Haymaker",
+
+    # ── Animal Kingdom (35) ────────────────────────────────────────────────
+    "The Wolf",       "The Coyote",      "The Fox",
+    "The Hyena",      "The Jackal",      "The Panther",
+    "The Leopard",    "The Cheetah",     "The Lynx",
+    "The Cougar",     "The Rhino",       "The Hippo",
+    "The Buffalo",    "The Bison",       "The Ox",
+    "The Eagle",      "The Hawk",        "The Falcon",
+    "The Vulture",    "The Owl",         "The Shark",
+    "The Barracuda",  "The Pike",        "The Stingray",
+    "The Octopus",    "The Spider",      "The Scorpion",
+    "The Centipede",  "The Wasp",        "The Hornet",
+    "The Wolverine",  "The Badger",      "The Weasel",
+    "The Ferret",     "The Mongoose",
+
+    # ── Natural Phenomena (25) ─────────────────────────────────────────────
+    "The Hurricane",  "The Typhoon",     "The Cyclone",
+    "The Tornado",    "The Twister",     "The Tsunami",
+    "The Tide",       "The Current",     "The Whirlpool",
+    "The Riptide",    "The Avalanche",   "The Landslide",
+    "The Quake",      "The Tremor",      "The Volcano",
+    "The Blizzard",   "The Hailstorm",   "The Thunderstorm",
+    "The Monsoon",    "The Dust Storm",  "The Eclipse",
+    "The Comet",      "The Meteor",      "The Gravity",
+    "The Void",
+
+    # ── Personality / Traits (29) ──────────────────────────────────────────
+    "The Menace",     "The Scourge",     "The Plague",
+    "The Pestilence", "The Ruin",        "The Enforcer",
+    "The Executioner","The Judge",       "The Jury",
+    "The Verdict",    "The Ghost",       "The Shadow",
+    "The Spectre",    "The Phantom",     "The Wraith",
+    "The Prodigy",    "The Phenom",      "The Sensation",
+    "The Marvel",     "The Wonder",      "The Savage",
+    "The Barbarian",  "The Brute",       "The Monster",
+    "The Silent One", "The Quiet Storm", "The Calm",
+    "The Serpent",    "The Viper",
+
+    # ── Physical Attribute (23) ────────────────────────────────────────────
+    # ("Pitbull" dropped — stylistic dup with original "The Pitbull")
+    "Tower",          "The Giant",       "The Colossus",
+    "The Mountain",   "The Boulder",     "The Rock",
+    "The Stone",      "The Granite",     "The Marble",
+    "The Concrete",   "Stretch",         "The Lanky",
+    "The Spider Monkey", "The Rubber Band", "Bulldog",
+    "Rottweiler",     "Doberman",        "Mastiff",
+    "The Hulk",       "The Tank",        "The Bulldozer",
+    "The Freight Train", "The Locomotive",
+
+    # ── Technical / Skill-Based (24) ───────────────────────────────────────
+    "The Matador",    "The Dancer",      "The Artist",
+    "The Sculptor",   "The Architect",   "The Mechanic",
+    "The Engineer",   "The Professor",   "The Doctor",
+    "The Chess Master", "The Strategist", "The General",
+    "The Admiral",    "The Commander",   "The Clinch",
+    "The Grappler",   "The Mat Shark",   "The Ground King",
+    "The Ceiling",    "The Stick",       "The Move",
+    "The Flow",       "The Rhythm",      "The Tempo",
+
+    # ── Mysterious / Intimidating (24) ─────────────────────────────────────
+    "The Omen",       "The Harbinger",   "The Prophet",
+    "The Seer",       "The Oracle",      "The Revenant",
+    "The Abomination","The Aberration",  "The Anomaly",
+    "The Paradox",    "The Abyss",       "The Depths",
+    "The Below",      "The Hollow",      "The Crypt",
+    "The Tomb",       "The Grave",       "The Cemetery",
+    "The Epitaph",    "Chains",          "Shackles",
+    "The Cage",       "The Cell",        "The Prisoner",
+
+    # ── Short / Flavor (25) ────────────────────────────────────────────────
+    "Razor",          "Blade",           "Edge",
+    "Cut",            "Slice",           "Smash",
+    "Crush",          "Slam",            "Bash",
+    "Clash",          "Swift",           "Quick",
+    "Flash",          "Blink",           "Flicker",
+    "Grim",           "Grit",            "Grind",
+    "Gravel",         "Gristle",         "Clutch",
+    "Clamp",          "Crimp",           "Crank",
+    "Crack",
+]
+
+
+# ============================================================================
 # GAME SETTINGS
 # ============================================================================
 

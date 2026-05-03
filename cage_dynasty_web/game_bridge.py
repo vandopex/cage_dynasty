@@ -1149,6 +1149,28 @@ class GameBridge:
         # Restore completed events
         self._completed_events = data.get("completed_events", [])
 
+        # ── Nickname backfill — one-shot for legacy saves ──────────────
+        # Fighters who already meet the earned-nickname threshold (≥2 wins
+        # AND ≥3 total fights) but lack a nickname get one assigned on load.
+        # Raw prospects (<3 fights or <2 wins) stay nameless until they
+        # earn it through performance. Idempotent.
+        try:
+            from game_state import NICKNAMES_POOL as _NK_POOL
+            import random as _nk_rand
+            if self._game_state and hasattr(self._game_state, 'fighters'):
+                _backfilled = 0
+                for _f in self._game_state.fighters.values():
+                    if not getattr(_f, 'nickname', None):
+                        _wins  = getattr(_f, 'wins', 0) or 0
+                        _total = _wins + (getattr(_f, 'losses', 0) or 0) + (getattr(_f, 'draws', 0) or 0)
+                        if _wins >= 2 and _total >= 3:
+                            _f.nickname = _nk_rand.choice(_NK_POOL)
+                            _backfilled += 1
+                if _backfilled:
+                    print(f"  ✨ [NICKNAME BACKFILL] {_backfilled} fighters earned nicknames retroactively")
+        except Exception as _nk_exc:
+            print(f"⚠️ Nickname backfill skipped: {_nk_exc}")
+
         # Restore upcoming cards — convert str keys back to int
         raw_cards = data.get("upcoming_cards", {})
         self._upcoming_cards = {int(k): v for k, v in raw_cards.items()}
@@ -2066,6 +2088,20 @@ class GameBridge:
             ftr = self._game_state.get_fighter(fid)
             if not ftr:
                 continue
+            # Earn nickname on win when threshold crossed (≥2 wins, ≥3 total fights)
+            if is_win and not getattr(ftr, 'nickname', None):
+                _total_fights = (ftr.wins or 0) + (ftr.losses or 0) + (ftr.draws or 0)
+                if ftr.wins >= 2 and _total_fights >= 3:
+                    from game_state import NICKNAMES_POOL as _NK_POOL
+                    import random as _nk_random
+                    ftr.nickname = _nk_random.choice(_NK_POOL)
+                    self._news_items.insert(0, {
+                        "headline": f"📢 {ftr.name} adopts the nickname \"{ftr.nickname}\".",
+                        "category": "fighter",
+                        "week": self._game_state.week_number if self._game_state else 1,
+                    })
+                    print(f"  📢 [NICKNAME] {ftr.name} → \"{ftr.nickname}\" "
+                          f"({ftr.wins}-{ftr.losses}{f'-{ftr.draws}' if ftr.draws else ''})")
             # Update via camp record if available
             if ftr.camp_id:
                 camp_rec = self._game_state.camps.get(ftr.camp_id)
