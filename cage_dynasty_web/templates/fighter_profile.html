@@ -34,6 +34,39 @@
 } %}
 {% set style_icon = style_icons.get(fighter.fighting_style, "🥊") %}
 
+{# ── Style class data — family + tagline ── #}
+{% set style_class_data = {
+    "Striker":          {"family":"striker",  "tagline":"Stand-and-bang artist"},
+    "Counter Striker":  {"family":"striker",  "tagline":"Punishes every mistake"},
+    "Pressure Fighter": {"family":"striker",  "tagline":"Walks you down"},
+    "Muay Thai":        {"family":"striker",  "tagline":"Eight limbs, no fear"},
+    "Orthodox Boxer":   {"family":"striker",  "tagline":"Sweet science, hard hands"},
+    "Kickboxer":        {"family":"striker",  "tagline":"Range game, leg game"},
+    "Brawler":          {"family":"striker",  "tagline":"Heart over technique"},
+    "Point Fighter":    {"family":"striker",  "tagline":"Touches and circles out"},
+    "Wrestler":         {"family":"grappler", "tagline":"Takes you down. Keeps you there."},
+    "BJJ Specialist":   {"family":"grappler", "tagline":"Submissions from anywhere"},
+    "Judo":             {"family":"grappler", "tagline":"Throws turn into chokes"},
+    "Sambo":            {"family":"grappler", "tagline":"Russian ground arts"},
+    "Ground & Pound":   {"family":"hybrid",   "tagline":"Rains down from top"},
+    "Sprawl & Brawl":   {"family":"hybrid",   "tagline":"Strikes from the sprawl"},
+    "Clinch Fighter":   {"family":"hybrid",   "tagline":"Wins the dirty boxing"},
+    "Hybrid":           {"family":"hybrid",   "tagline":"Threats in every phase"},
+    "Balanced":         {"family":"hybrid",   "tagline":"No round goes the same way"},
+} %}
+
+{% set style_family_color = {
+    "striker":  "var(--blood-red)",
+    "grappler": "var(--info)",
+    "hybrid":   "var(--violet)",
+} %}
+
+{% set _style_entry  = style_class_data.get(fighter.fighting_style,
+                        {"family":"hybrid", "tagline":""}) %}
+{% set style_family  = _style_entry.family %}
+{% set style_tagline = _style_entry.tagline %}
+{% set style_accent  = style_family_color.get(style_family, "var(--text-muted)") %}
+
 {# ── Career phase ── #}
 {% if fighter.age < 24 %}{% set phase = "Prospect" %}{% set phase_color = "var(--neon-green)" %}
 {% elif fighter.age < 27 %}{% set phase = "Rising" %}{% set phase_color = "var(--info)" %}
@@ -77,38 +110,60 @@
                 {% endif %}
             </div>
 
+            {# Style-class banner — RPG class header #}
+            <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                        margin:0 calc(-1 * var(--spacing-xl)) var(--spacing-md);
+                        padding:6px var(--spacing-xl);
+                        background:linear-gradient(90deg,
+                            {{ style_accent }}22,
+                            {{ style_accent }}08 60%,
+                            transparent);
+                        border-left:3px solid {{ style_accent }};">
+                <span style="font-size:1.3rem;line-height:1;">{{ style_icon }}</span>
+                <span style="font-family:var(--font-display);font-size:.9rem;
+                             text-transform:uppercase;letter-spacing:.12em;
+                             color:{{ style_accent }};">
+                    {{ fighter.fighting_style }}
+                </span>
+                {% if style_tagline %}
+                <span style="font-size:.72rem;color:var(--text-muted);
+                             font-style:italic;margin-left:auto;">
+                    {{ style_tagline }}
+                </span>
+                {% endif %}
+            </div>
+
             {# Name #}
             <h1 style="font-family:var(--font-display);font-size:2.4rem;
                        color:var(--text-bright);margin:0 0 4px;line-height:1.1;">
                 {{ fighter.name }}
             </h1>
 
-            {# Nickname #}
+            {# Nickname — featured line, broadcast-graphic style #}
             {% if fighter.nickname %}
-            <div style="font-family:var(--font-display);font-size:1.1rem;
-                        color:var(--text-muted);font-style:italic;margin-bottom:var(--spacing-sm);">
-                "{{ fighter.nickname }}"
+            <div style="font-family:var(--font-display);font-size:1.5rem;
+                        color:{{ style_accent }};margin:2px 0 var(--spacing-md);
+                        line-height:1.1;letter-spacing:.01em;">
+                <span style="color:var(--gold);font-size:1.1rem;
+                             vertical-align:6px;margin-right:4px;">"</span>{{ fighter.nickname }}<span style="color:var(--gold);font-size:1.1rem;
+                             vertical-align:6px;margin-left:4px;">"</span>
             </div>
             {% endif %}
 
-            {# Record — Leather style: W(KO+TKO+SUB)-L-D #}
-            <div style="font-family:var(--font-display);font-size:2rem;
-                        color:var(--text-bright);margin-bottom:var(--spacing-sm);letter-spacing:-.01em;">
-                <span style="color:var(--neon-green);">{{ wins }}</span>
-                <span style="font-size:1rem;color:var(--neon-green);">({{ ko_w }}KO · {{ sub_w }}SUB)</span>
-                <span style="color:var(--text-muted);font-size:1.4rem;"> – </span>
-                <span style="color:var(--blood-red);">{{ losses }}</span>
+            {# Record — W(KO)-L(KO)-D, broadcast format #}
+            {% set ko_l = fighter.fight_history|default([])|selectattr('result','equalto','L')|selectattr('method','in',['KO','TKO'])|list|length %}
+            {% set draws = fighter.draws if fighter.draws is defined else 0 %}
+            <div style="font-family:var(--font-display);font-size:2.2rem;
+                        color:var(--text-bright);margin-bottom:2px;letter-spacing:-.02em;
+                        line-height:1;">
+                <span style="color:var(--neon-green);">{{ wins }}</span><span style="font-size:1.3rem;color:var(--neon-green);">({{ ko_w }})</span><span style="color:var(--text-muted);font-size:1.6rem;margin:0 6px;">–</span><span style="color:var(--blood-red);">{{ losses }}</span><span style="font-size:1.3rem;color:var(--blood-red-light);">({{ ko_l }})</span><span style="color:var(--text-muted);font-size:1.6rem;margin:0 6px;">–</span><span style="color:var(--text-muted);">{{ draws }}</span>
             </div>
-
-            {# Style as character class #}
-            <div style="display:inline-flex;align-items:center;gap:8px;
-                        padding:6px 14px;border-radius:20px;margin-bottom:var(--spacing-md);
-                        background:rgba(255,255,255,.06);border:1px solid var(--border-color);">
-                <span style="font-size:1.1rem;">{{ style_icon }}</span>
-                <span style="font-family:var(--font-display);font-size:.85rem;color:var(--text-bright);">
-                    {{ fighter.fighting_style }}
-                </span>
+            {% if wins > 0 %}
+            <div style="font-size:.7rem;color:var(--text-muted);
+                        margin-bottom:var(--spacing-md);letter-spacing:.05em;">
+                By KO {{ ko_w }} · By SUB {{ sub_w }} · By DEC {{ dec_w }}
             </div>
+            {% endif %}
 
             {# Bio row #}
             <div style="display:flex;gap:var(--spacing-lg);flex-wrap:wrap;
@@ -356,12 +411,13 @@
 
     {# ── Left: Striking + Physical ── #}
     <div>
-        {% macro stat_block(title, icon, pairs) %}
-        <div class="card mb-md">
+        {% macro stat_block(title, icon, pairs, accent="var(--text-muted)") %}
+        <div class="card mb-md" style="border-left:3px solid {{ accent }};">
             <div style="padding:var(--spacing-sm) var(--spacing-md);
                         border-bottom:1px solid var(--border-color);
-                        font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
-                        color:var(--text-muted);">{{ icon }} {{ title }}</div>
+                        font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+                        font-family:var(--font-display);
+                        color:{{ accent }};">{{ icon }} {{ title }}</div>
             <div style="padding:var(--spacing-sm) var(--spacing-md);">
                 {% for name, value in pairs %}
                 {% if value is not none %}
@@ -382,14 +438,14 @@
         </div>
         {% endmacro %}
 
-        {{ stat_block("Striking", "👊", attributes.striking) }}
-        {{ stat_block("Physical", "💪", attributes.physical) }}
+        {{ stat_block("Striking",  "👊", attributes.striking,  "var(--blood-red)") }}
+        {{ stat_block("Physical",  "💪", attributes.physical,  "var(--warning)") }}
     </div>
 
     {# ── Right: Grappling + Mental ── #}
     <div>
-        {{ stat_block("Grappling", "🥋", attributes.grappling) }}
-        {{ stat_block("Mental", "🧠", attributes.mental) }}
+        {{ stat_block("Grappling", "🥋", attributes.grappling, "var(--info)") }}
+        {{ stat_block("Mental",    "🧠", attributes.mental,    "var(--teal)") }}
     </div>
 </div>
 

@@ -24,6 +24,10 @@
     --gold: #ffd700;
     --gold-dark: #c7a600;
     --gold-light: #ffea00;
+    --violet: #ab47bc;
+    --violet-dark: #790e8b;
+    --teal: #26c6da;
+    --teal-dark: #006978;
     
     /* Semantic Colors */
     --success: var(--neon-green);
