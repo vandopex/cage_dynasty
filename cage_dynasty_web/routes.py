@@ -1240,6 +1240,70 @@ def register_routes(app):
             week=bridge.week_number,
         )
 
+    @app.route('/champion-injury/<fighter_id>', methods=['GET'])
+    def champion_injury_decision(fighter_id):
+        """Slice 3 — player decides vacate or hold for an injured champion."""
+        bridge = get_bridge()
+
+        pending = bridge._pending_injury_decisions
+        decision = next((d for d in pending if d.get("fighter_id") == fighter_id), None)
+        if not decision:
+            flash("No pending decision for that fighter.", "info")
+            return redirect(url_for('dashboard'))
+
+        fighter = bridge.get_fighter(fighter_id)
+        if not fighter:
+            flash("Fighter not found.", "error")
+            return redirect(url_for('dashboard'))
+
+        vacate_preview = bridge._preview_vacant_title_contenders(
+            decision["weight_class"],
+            exclude_fighter_ids={fighter_id},
+        )
+
+        pending_count = len(pending)
+        pending_index = next(
+            (i + 1 for i, d in enumerate(pending) if d.get("fighter_id") == fighter_id),
+            1,
+        )
+
+        return render_template('champion_injury_decision.html',
+            fighter=fighter,
+            decision=decision,
+            vacate_preview=vacate_preview,
+            pending_count=pending_count,
+            pending_index=pending_index,
+            week=bridge.week_number,
+        )
+
+    @app.route('/champion-injury/<fighter_id>/vacate', methods=['POST'])
+    def champion_injury_vacate(fighter_id):
+        """Slice 3 vacate handler."""
+        bridge = get_bridge()
+        result = bridge.resolve_champion_injury_decision(fighter_id, "vacate")
+        if result.get("success"):
+            flash(f"{result.get('fighter_name', 'Champion')} vacated the title.", "info")
+        else:
+            flash(result.get("error", "Could not process decision"), "error")
+        if bridge._pending_injury_decisions:
+            return redirect(url_for('champion_injury_decision',
+                                    fighter_id=bridge._pending_injury_decisions[0]["fighter_id"]))
+        return redirect(url_for('dashboard'))
+
+    @app.route('/champion-injury/<fighter_id>/hold', methods=['POST'])
+    def champion_injury_hold(fighter_id):
+        """Slice 3 hold handler."""
+        bridge = get_bridge()
+        result = bridge.resolve_champion_injury_decision(fighter_id, "hold")
+        if result.get("success"):
+            flash(f"{result.get('fighter_name', 'Champion')} holds the belt during recovery.", "success")
+        else:
+            flash(result.get("error", "Could not process decision"), "error")
+        if bridge._pending_injury_decisions:
+            return redirect(url_for('champion_injury_decision',
+                                    fighter_id=bridge._pending_injury_decisions[0]["fighter_id"]))
+        return redirect(url_for('dashboard'))
+
     @app.route('/negotiate/<neg_id>/respond', methods=['POST'])
     def negotiation_respond(neg_id):
         """Player responds to negotiation: ACCEPT / COUNTER / WALK."""
@@ -1724,6 +1788,11 @@ def register_routes(app):
 
         if not result.get('success'):
             err = result.get('error', 'Unknown error')
+            blocking = result.get('blocking_decisions', [])
+            if blocking:
+                flash(err, "warning")
+                return redirect(url_for('champion_injury_decision',
+                                        fighter_id=blocking[0]["fighter_id"]))
             flash(f"Error advancing week: {err}", "error")
             return redirect(url_for('dashboard'))
 

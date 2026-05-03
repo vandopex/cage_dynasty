@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Decision: {{ fighter.name }}{% endblock %}
+{% block content %}
+
+{# ─── Header ─── #}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;
+            margin-bottom:var(--spacing-lg);">
+    <div>
+        <div style="font-size:.7rem;letter-spacing:.2em;color:var(--text-muted);
+                    text-transform:uppercase;margin-bottom:4px;">
+            CHAMPIONSHIP DECISION
+        </div>
+        <h1 style="font-family:var(--font-display);font-size:2rem;
+                   color:var(--text-bright);margin:0;line-height:1.1;">
+            {{ fighter.name }}{% if fighter.nickname %} <span style="color:var(--gold);font-style:italic;">"{{ fighter.nickname }}"</span>{% endif %}
+        </h1>
+        <div style="font-size:.85rem;color:var(--text-muted);margin-top:4px;">
+            {{ fighter.weight_class }} Champion · {{ fighter.wins }}-{{ fighter.losses }}{% if fighter.draws %}-{{ fighter.draws }}{% endif %} · OVR {{ fighter.overall_rating }}
+        </div>
+    </div>
+    {% if pending_count > 1 %}
+    <div style="text-align:right;font-size:.72rem;color:var(--text-muted);">
+        Pending decision {{ pending_index }} of {{ pending_count }}
+    </div>
+    {% endif %}
+</div>
+
+{# ─── Injury banner ─── #}
+<div style="margin-bottom:var(--spacing-lg);padding:var(--spacing-md) var(--spacing-lg);
+            background:rgba(220,50,50,.08);border:1px solid rgba(220,50,50,.3);
+            border-radius:8px;display:flex;align-items:center;gap:var(--spacing-md);">
+    <span style="font-size:1.8rem;">🤕</span>
+    <div>
+        <div style="font-family:var(--font-display);font-size:1rem;color:var(--blood-red);">
+            {{ decision.injury_desc }}
+        </div>
+        <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">
+            Out {{ decision.recovery_weeks }} weeks · Projected return Week {{ decision.return_week }}
+        </div>
+    </div>
+</div>
+
+{# ─── Two-column decision panel ─── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
+            margin-bottom:var(--spacing-lg);">
+
+    {# ── VACATE column ── #}
+    <div class="card" style="border-left:3px solid var(--blood-red);overflow:hidden;">
+        <div style="padding:var(--spacing-md) var(--spacing-lg);background:var(--bg-dark);
+                    border-bottom:1px solid var(--border-color);">
+            <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--blood-red);
+                        text-transform:uppercase;letter-spacing:.1em;">
+                👑 VACATE THE BELT
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+                Step aside. Top contenders fight for the vacant title.
+            </div>
+        </div>
+        <div style="padding:var(--spacing-lg);">
+            {% if vacate_preview %}
+            <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+                VACANT TITLE FIGHT
+            </div>
+            <div style="font-family:var(--font-display);font-size:1.2rem;
+                        color:var(--text-bright);margin-bottom:var(--spacing-sm);">
+                {{ vacate_preview.top1.name }} vs {{ vacate_preview.top2.name }}
+            </div>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
+                {{ vacate_preview.target_event_name }} · Week {{ vacate_preview.target_week }} ({{ vacate_preview.weeks_away }}w out)
+            </div>
+            <div style="font-size:.72rem;color:var(--text-secondary);
+                        padding:var(--spacing-sm);background:var(--bg-dark);
+                        border-radius:4px;margin-bottom:var(--spacing-md);">
+                <strong>{{ vacate_preview.top1.name }}</strong>: OVR {{ vacate_preview.top1.overall_rating }} · {{ vacate_preview.top1.wins }}-{{ vacate_preview.top1.losses }}<br>
+                <strong>{{ vacate_preview.top2.name }}</strong>: OVR {{ vacate_preview.top2.overall_rating }} · {{ vacate_preview.top2.wins }}-{{ vacate_preview.top2.losses }}
+            </div>
+            {% else %}
+            <div style="font-size:.78rem;color:var(--warning);padding:var(--spacing-sm);
+                        background:rgba(255,152,0,.08);border-radius:4px;
+                        margin-bottom:var(--spacing-md);">
+                ⚠ No bookable contender pair available right now. Vacate would still strip the belt; fight may book later.
+            </div>
+            {% endif %}
+            <div style="font-size:.75rem;color:var(--text-secondary);margin-bottom:var(--spacing-md);
+                        line-height:1.5;">
+                On healing, you return as <strong style="color:var(--info);">#1 contender</strong>.
+                Tune-up fight offered first; win it for a guaranteed title shot at the new champion.
+            </div>
+            <form action="{{ url_for('champion_injury_vacate', fighter_id=fighter.fighter_id) }}" method="POST">
+                <button type="submit" class="btn"
+                        style="width:100%;padding:var(--spacing-md);
+                               background:var(--blood-red);color:var(--text-bright);
+                               border:none;border-radius:6px;
+                               font-family:var(--font-display);font-size:1rem;
+                               text-transform:uppercase;letter-spacing:.08em;
+                               cursor:pointer;">
+                    👑 Vacate the Title
+                </button>
+            </form>
+        </div>
+    </div>
+
+    {# ── HOLD column ── #}
+    <div class="card" style="border-left:3px solid var(--gold);overflow:hidden;">
+        <div style="padding:var(--spacing-md) var(--spacing-lg);background:var(--bg-dark);
+                    border-bottom:1px solid var(--border-color);">
+            <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--gold);
+                        text-transform:uppercase;letter-spacing:.1em;">
+                🏆 HOLD THE BELT
+            </div>
+            <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+                Keep the strap. Defend on return.
+            </div>
+        </div>
+        <div style="padding:var(--spacing-lg);">
+            <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+                RETURN PLAN
+            </div>
+            <div style="font-family:var(--font-display);font-size:1.2rem;
+                        color:var(--text-bright);margin-bottom:var(--spacing-sm);">
+                Return Week {{ decision.return_week }}
+            </div>
+            <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
+                {{ decision.recovery_weeks }} weeks of recovery · belt holds throughout
+            </div>
+            <div style="font-size:.72rem;color:var(--text-secondary);
+                        padding:var(--spacing-sm);background:var(--bg-dark);
+                        border-radius:4px;margin-bottom:var(--spacing-md);
+                        line-height:1.5;">
+                ⚠ <strong style="color:var(--warning);">Cardio may decline</strong> during recovery.<br>
+                ⚠ <strong style="color:var(--warning);">Mandatory title defense</strong> on return — no tune-up fight first.<br>
+                ⚠ Top contender will be matched automatically.
+            </div>
+            <div style="font-size:.75rem;color:var(--text-secondary);margin-bottom:var(--spacing-md);
+                        line-height:1.5;">
+                You retain the belt and your legacy. The risk: returning rusty against a sharpened challenger.
+            </div>
+            <form action="{{ url_for('champion_injury_hold', fighter_id=fighter.fighter_id) }}" method="POST">
+                <button type="submit" class="btn"
+                        style="width:100%;padding:var(--spacing-md);
+                               background:var(--gold);color:var(--bg-darkest);
+                               border:none;border-radius:6px;
+                               font-family:var(--font-display);font-size:1rem;
+                               text-transform:uppercase;letter-spacing:.08em;
+                               cursor:pointer;font-weight:700;">
+                    🏆 Hold the Belt
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div style="text-align:center;font-size:.7rem;color:var(--text-muted);
+            padding:var(--spacing-md);">
+    Advance Week is blocked until this decision is made.
+</div>
+
+{% endblock %}

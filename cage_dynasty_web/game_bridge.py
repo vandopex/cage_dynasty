@@ -8,7 +8,7 @@ a specific data format) and the real game engine classes.
 
 import sys
 import os
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass
 
 # Add the cage_dynasty directory to path so we can import game modules
@@ -725,6 +725,10 @@ class GameBridge:
         # Belt vacating tracker — {weight_class: weeks_since_last_defense}
         self._champ_weeks_since_defense: Dict[str, int] = {}
 
+        # Slice 3 — champion injury decision pipeline
+        self._pending_injury_decisions: List[Dict[str, Any]] = []
+        self._champion_holds:           Dict[str, Dict[str, Any]] = {}
+
         # Cumulative camp stat gains — {fighter_id: {stat: float}}
         # Accumulates fractional weekly gains so UI shows real progress
         self._camp_stat_totals: Dict[str, Dict[str, float]] = {}
@@ -1064,6 +1068,8 @@ class GameBridge:
             "camp_archetypes":          self._camp_archetypes,
             "injury_system":            self._injury_system.to_dict() if self._injury_system else {},
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
+            "pending_injury_decisions": self._pending_injury_decisions,
+            "champion_holds":           self._champion_holds,
             "fight_offers":             self._fight_offers,
             "completed_events":         [
                 {**{k: v for k, v in ev.items() if k != 'fights'},
@@ -1136,6 +1142,8 @@ class GameBridge:
         self._contracts               = data.get("contracts", {})
         self._camp_archetypes         = data.get("camp_archetypes", {})
         self._champ_weeks_since_defense = data.get("champ_weeks_since_defense", {})
+        self._pending_injury_decisions  = data.get("pending_injury_decisions", [])
+        self._champion_holds            = data.get("champion_holds", {})
         if INJURY_AVAILABLE and InjurySystem and "injury_system" in data:
             try:
                 self._injury_system = InjurySystem.from_dict(data["injury_system"])
@@ -1246,7 +1254,17 @@ class GameBridge:
         
         if not self._game_state:
             return {"success": False}
-        
+
+        # Slice 3 — block advance if any champion injury decisions are pending
+        if self._pending_injury_decisions:
+            return {
+                "success": False,
+                "error": (f"Decision required: {len(self._pending_injury_decisions)} "
+                          f"champion injury choice(s) pending. Visit /champion-injury "
+                          f"to decide."),
+                "blocking_decisions": self._pending_injury_decisions,
+            }
+
         try:
             import random
 
@@ -1485,8 +1503,8 @@ class GameBridge:
                         print(f"  👑 [VACATED] {champ_name} stripped of {wc} title — "
                               f"{weeks_injured} weeks injured")
                         self._news_items.insert(0, {
-                            "headline": f"👑 TITLE VACATED: {champ_name} relinquishes {wc} belt "
-                                        f"due to injury — interim title fight to be announced",
+                            "headline": f"👑 TITLE VACATED: {champ_name} relinquishes the {wc} "
+                                        f"belt during recovery.",
                             "category": "title",
                             "week": current_week,
                         })
@@ -1604,61 +1622,20 @@ class GameBridge:
                         if _slice_2_5_handled:
                             continue
 
-                        _contenders = []
-                        for _fid in div.rankings[:8]:
-                            _ftr = self._game_state.get_fighter(_fid)
-                            if not _ftr or not _ftr.is_active:
-                                continue
-                            if champ and _ftr.fighter_id == champ.fighter_id:
-                                continue
-                            if _player_camp_id and _ftr.camp_id == _player_camp_id:
-                                continue
-                            if _ftr.fighter_id in _all_booked:
-                                continue
-                            if INJURY_AVAILABLE and self._injury_system \
-                                    and not self._injury_system.is_cleared_to_fight(_ftr.fighter_id):
-                                continue
-                            _contenders.append(_ftr)
-                            if len(_contenders) >= 2:
-                                break
+                        # Slice 2 — book vacant-title fight via shared helper
+                        self._book_vacant_title_fight(
+                            wc,
+                            exclude_fighter_ids={champ.fighter_id} if champ else None,
+                        )
 
-                        if len(_contenders) >= 2:
-                            _top1, _top2 = _contenders[0], _contenders[1]
-                            _target_card = None
-                            for _wk_s in sorted(self._upcoming_cards.keys()):
-                                if _wk_s <= current_week:
-                                    continue
-                                _card_s = self._upcoming_cards[_wk_s]
-                                _has_main = any(
-                                    _f_s.get("card_slot") == "main_event"
-                                    for _f_s in _card_s.get("fights", [])
-                                )
-                                if not _has_main:
-                                    _target_card = _card_s
-                                    break
-                            if _target_card:
-                                _tw    = _target_card["week"]
-                                _ev    = _target_card["event_name"]
-                                _fdict = self._make_scheduled_fight(
-                                    _top1, _top2, wc, _ev, _tw,
-                                    "main_event", is_title=True)
-                                _target_card["fights"].append(_fdict)
-                                print(f"  🏆 [VACANT TITLE BOOKED] {wc} — "
-                                      f"{_top1.name} vs {_top2.name} at "
-                                      f"{_ev} (Wk {_tw})")
-                                self._news_items.insert(0, {
-                                    "headline": (f"🏆 VACANT TITLE FIGHT: "
-                                                 f"{_top1.name} vs {_top2.name} "
-                                                 f"for the {wc} belt at {_ev}."),
-                                    "category": "title",
-                                    "week": current_week,
-                                })
-                            else:
-                                print(f"  ⚠️ [VACANT TITLE] {wc} — no card "
-                                      f"with open main_event slot in pipeline; deferred")
-                        else:
-                            print(f"  ⚠️ [VACANT TITLE] {wc} — fewer than 2 "
-                                  f"available non-player contenders; deferred")
+            # ── Slice 3: pop expired hold entries on heal ──────────────
+            # Champion's recovery ended → pop their hold. Slice 4 will
+            # hook here to fire the mandatory return defense + news.
+            _heal_now = [fid for fid, entry in self._champion_holds.items()
+                         if entry.get("return_week", 0) <= self._game_state.week_number]
+            for _fid in _heal_now:
+                del self._champion_holds[_fid]
+                # Slice 4 will fire mandatory return defense booking here
 
             # ── Autosave every 5 weeks ─────────────────────────────────
             self.autosave_if_due(self._game_state.week_number)
@@ -3088,11 +3065,24 @@ class GameBridge:
 
     def _book_vacant_title_ai_fallback(self, wc: str) -> None:
         """Book AI #1 vs #2 vacant-title fight when player declines a Slice 2.5 offer."""
+        self._book_vacant_title_fight(wc, decline_context="player declined the shot")
+
+    def _preview_vacant_title_contenders(
+        self,
+        wc: str,
+        exclude_fighter_ids: Optional[Set[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Slice 3 — read-only preview of who'd fight for a vacant title in {wc}.
+        Returns dict with top1, top2, target_event_name, target_week, weeks_away,
+        or None if booking would not be possible. Idempotent — safe from a route
+        render handler. Used by Slice 3's decision page; also used internally by
+        _book_vacant_title_fight as the contender filter + card scan."""
         if not self._game_state:
-            return
+            return None
         div = self._game_state.divisions.get(wc)
-        if not div or div.champion_id:
-            return  # Belt already filled? Don't double-book.
+        if not div:
+            return None
+        exclude = set(exclude_fighter_ids or [])
 
         current_week = self._game_state.week_number
         _player_camp_id = self._game_state.player_camp_id
@@ -3111,6 +3101,8 @@ class GameBridge:
             _ftr = self._game_state.get_fighter(_fid)
             if not _ftr or not _ftr.is_active:
                 continue
+            if _ftr.fighter_id in exclude:
+                continue
             if _player_camp_id and _ftr.camp_id == _player_camp_id:
                 continue
             if _ftr.fighter_id in _all_booked:
@@ -3123,8 +3115,7 @@ class GameBridge:
                 break
 
         if len(_contenders) < 2:
-            print(f"  ⚠️ [VACANT TITLE FALLBACK] {wc} — fewer than 2 AI contenders; deferred")
-            return
+            return None
 
         _target_card = None
         for _wk_s in sorted(self._upcoming_cards.keys()):
@@ -3140,24 +3131,149 @@ class GameBridge:
                 break
 
         if not _target_card:
-            print(f"  ⚠️ [VACANT TITLE FALLBACK] {wc} — no card with open main_event; deferred")
-            return
+            return None
 
-        _top1, _top2 = _contenders[0], _contenders[1]
-        _tw    = _target_card["week"]
-        _ev    = _target_card["event_name"]
-        _fdict = self._make_scheduled_fight(
-            _top1, _top2, wc, _ev, _tw, "main_event", is_title=True)
-        _target_card["fights"].append(_fdict)
-        print(f"  🏆 [VACANT TITLE FALLBACK BOOKED] {wc} — "
-              f"{_top1.name} vs {_top2.name} at {_ev} (Wk {_tw}) — player declined")
+        return {
+            "top1":              _contenders[0],
+            "top2":              _contenders[1],
+            "target_event_name": _target_card["event_name"],
+            "target_week":       _target_card["week"],
+            "weeks_away":        _target_card["week"] - current_week,
+        }
+
+    def _book_vacant_title_fight(
+        self,
+        wc: str,
+        exclude_fighter_ids: Optional[Set[str]] = None,
+        decline_context: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Slice 2/2.5/3 shared helper — book AI #1 vs #2 for vacant title.
+        Used by Slice 2 (auto-vacate), Slice 2.5 fallback (decline), and
+        Slice 3 (player vacate handler). Returns booked fight info dict or
+        None if booking not possible."""
+        preview = self._preview_vacant_title_contenders(wc, exclude_fighter_ids)
+        if not preview:
+            print(f"  ⚠️ [VACANT TITLE] {wc} — no bookable contender pair; deferred")
+            return None
+
+        target_card = self._upcoming_cards.get(preview["target_week"])
+        if not target_card:
+            return None
+
+        top1, top2 = preview["top1"], preview["top2"]
+        fdict = self._make_scheduled_fight(
+            top1, top2, wc, preview["target_event_name"],
+            preview["target_week"], "main_event", is_title=True,
+        )
+        target_card["fights"].append(fdict)
+
+        _suffix = f" ({decline_context})" if decline_context else ""
+        print(f"  🏆 [VACANT TITLE BOOKED] {wc} — {top1.name} vs {top2.name} "
+              f"at {preview['target_event_name']} (Wk {preview['target_week']}){_suffix}")
+        _headline_suffix = f" ({decline_context})." if decline_context else "."
         self._news_items.insert(0, {
-            "headline": (f"🏆 VACANT TITLE FIGHT: {_top1.name} vs {_top2.name} "
-                         f"for the {wc} belt at {_ev} (player declined the shot)."),
+            "headline": (f"🏆 VACANT TITLE FIGHT: {top1.name} vs {top2.name} "
+                         f"for the {wc} belt at {preview['target_event_name']}{_headline_suffix}"),
             "category": "title",
-            "week":     current_week,
+            "week":     self._game_state.week_number,
         })
-    
+        return {
+            "top1_name":    top1.name,
+            "top2_name":    top2.name,
+            "target_event": preview["target_event_name"],
+            "target_week":  preview["target_week"],
+            "fight_id":     fdict.get("fight_id"),
+        }
+
+    def _maybe_queue_champion_injury_decision(self, ftr, injury) -> None:
+        """Slice 3 — queue a vacate-or-hold decision when a player champion
+        takes a Severe (9-24w) injury. Career-level (>=25w) skips this and
+        falls through to Slice 0.75's auto-vacate. Idempotent — won't
+        double-queue the same fighter."""
+        if not (self._game_state and ftr and getattr(ftr, 'is_champion', False)):
+            return
+        if ftr.camp_id != self._game_state.player_camp_id:
+            return
+        _weeks = getattr(injury, 'recovery_weeks', 0) or 0
+        if not (9 <= _weeks <= 24):
+            return
+        if any(d.get("fighter_id") == ftr.fighter_id
+               for d in self._pending_injury_decisions):
+            return
+        _wk = self._game_state.week_number
+        self._pending_injury_decisions.append({
+            "fighter_id":     ftr.fighter_id,
+            "weight_class":   getattr(ftr, 'weight_class', ''),
+            "injury_desc":    getattr(injury, 'description', 'injury'),
+            "recovery_weeks": _weeks,
+            "queued_at_week": _wk,
+            "return_week":    _wk + _weeks,
+        })
+        print(f"  ⚠️ [INJURY DECISION QUEUED] {ftr.name} ({ftr.weight_class}) — "
+              f"{_weeks}w injury. advance_week blocked until decision.")
+
+    def resolve_champion_injury_decision(
+        self, fighter_id: str, choice: str,
+    ) -> Dict[str, Any]:
+        """Slice 3 — player picks vacate or hold for an injured champion.
+        choice: 'vacate' or 'hold'. Removes the pending decision and fires
+        the appropriate machinery."""
+        if choice not in ("vacate", "hold"):
+            return {"success": False, "error": "Invalid choice"}
+
+        decision = next((d for d in self._pending_injury_decisions
+                         if d.get("fighter_id") == fighter_id), None)
+        if not decision:
+            return {"success": False, "error": "No pending decision for this fighter"}
+
+        ftr = self._game_state.get_fighter(fighter_id) if self._game_state else None
+        if not ftr:
+            return {"success": False, "error": "Fighter not found"}
+        wc = decision["weight_class"]
+
+        if choice == "vacate":
+            div = self._game_state.divisions.get(wc)
+            if div and div.champion_id == fighter_id:
+                ftr.is_champion = False
+                div.champion_id = None
+                div.champion_name = None
+                history = self._title_history.get(wc, [])
+                if history and history[-1].get("is_active"):
+                    history[-1]["is_active"]   = False
+                    history[-1]["lost_week"]   = self._game_state.week_number
+                    history[-1]["lost_event"]  = "Vacated (player choice)"
+                    history[-1]["lost_to_name"] = "Vacated"
+                    history[-1]["lost_method"] = "Injury (vacated)"
+                self._news_items.insert(0, {
+                    "headline": (f"👑 TITLE VACATED: {ftr.name} relinquishes "
+                                 f"the {wc} belt during recovery."),
+                    "category": "title",
+                    "week":     self._game_state.week_number,
+                })
+            self._book_vacant_title_fight(
+                wc, exclude_fighter_ids={fighter_id},
+            )
+        elif choice == "hold":
+            self._champion_holds[fighter_id] = {
+                "fighter_id":   fighter_id,
+                "weight_class": wc,
+                "start_week":   self._game_state.week_number,
+                "return_week":  decision["return_week"],
+                "injury_desc":  decision["injury_desc"],
+            }
+            self._news_items.insert(0, {
+                "headline": (f"🏆 {ftr.name} holds the {wc} belt during recovery — "
+                             f"return Week {decision['return_week']}."),
+                "category": "title",
+                "week":     self._game_state.week_number,
+            })
+
+        self._pending_injury_decisions = [
+            d for d in self._pending_injury_decisions
+            if d.get("fighter_id") != fighter_id
+        ]
+        return {"success": True, "choice": choice, "fighter_name": ftr.name}
+
     def get_scheduled_fights(self) -> List[Dict[str, Any]]:
         """Get all scheduled fights for player's fighters"""
         if self._mock_mode:
@@ -3752,6 +3868,7 @@ class GameBridge:
                         "category": "injury",
                         "week": self._game_state.week_number,
                     })
+                    self._maybe_queue_champion_injury_decision(_rftr, injury)
         else:
             # Fallback if injury system not available
             _INJURY_BASE = {"REST":0.0,"LIGHT":0.0,"MODERATE":0.01,
@@ -6404,6 +6521,7 @@ class GameBridge:
                             "headline": _hl,
                             "category": "injury", "week": week,
                         })
+                        self._maybe_queue_champion_injury_decision(_ftr, _inj)
 
             for ftr, res, opp in [(winner,"W",loser),(loser,"L",winner)]:
                 if not hasattr(ftr,"fight_history"): ftr.fight_history = []
@@ -8443,6 +8561,7 @@ class GameBridge:
                         "category": "injury",
                         "week": self._game_state.week_number,
                     })
+                    self._maybe_queue_champion_injury_decision(_ftr_inj, _inj)
                     # Store fight damage for training camp injury risk
                     if _ftr_inj:
                         _dmg = {"KO":80,"TKO":55,"SUB":30,"DEC":10}.get(method, 10)
