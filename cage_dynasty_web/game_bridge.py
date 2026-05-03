@@ -2079,6 +2079,24 @@ class GameBridge:
                     })
                     print(f"  📢 [NICKNAME] {ftr.name} → \"{ftr.nickname}\" "
                           f"({ftr.wins}-{ftr.losses}{f'-{ftr.draws}' if ftr.draws else ''})")
+
+            # Pro debut alert — signed amateur's first pro fight (Slice A.1)
+            if len(getattr(ftr, 'fight_history', []) or []) == 1:
+                _sys = self._get_amateur_system()
+                if _sys and _sys.amateurs.get(fid):
+                    _ev = fight.get('event_name', 'DFC')
+                    _opp_name = loser.name if is_win else winner.name
+                    if is_win:
+                        _hl = f"🆕 {ftr.name} wins pro debut over {_opp_name} at {_ev} — {method}"
+                    else:
+                        _hl = f"🆕 {ftr.name} drops pro debut to {_opp_name} at {_ev} — {method}"
+                    self._news_items.insert(0, {
+                        "headline": _hl,
+                        "category": "fight",
+                        "week": self._game_state.week_number if self._game_state else 1,
+                    })
+                    print(f"  🆕 [PRO DEBUT] {ftr.name} "
+                          f"{'wins' if is_win else 'loses'} via {method}")
             # Update via camp record if available
             if ftr.camp_id:
                 camp_rec = self._game_state.camps.get(ftr.camp_id)
@@ -9431,11 +9449,17 @@ class GameBridge:
         arch = self._get_camp_archetype(winning_camp.camp_id)
         arch_emoji = CAMP_ARCHETYPES.get(arch, {}).get("emoji", "🏟️")
         _top_score = camp_scores[0][0] if camp_scores else 0
-        self._news_items.insert(0, {
-            "headline": f"{arch_emoji} {fighter.name} signs with {winning_camp.name} — {arch}",
-            "category": "signing",
-            "week": self._game_state.week_number,
-        })
+        # Filter: only post news for established signings (≥70 OVR or has fight history).
+        # Suppresses spam from world-init churn now that fighter_count is correctly tracked.
+        _has_fights = bool(getattr(fighter, 'fight_history', []) or [])
+        _ovr = getattr(fighter, 'overall_rating', 0) or 0
+        if _ovr >= 70 or _has_fights:
+            _style = getattr(fighter, 'fighting_style', 'Balanced')
+            self._news_items.insert(0, {
+                "headline": f"{arch_emoji} {fighter.name} signs with {winning_camp.name} — {_style}, OVR {_ovr}",
+                "category": "signing",
+                "week": self._game_state.week_number,
+            })
         print(f"  {arch_emoji} [AI SIGNING] {fighter.name} → {winning_camp.name} "
               f"({arch}) [score: {_top_score:.0f}]")
 
