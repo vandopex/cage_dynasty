@@ -1498,6 +1498,90 @@ class GameBridge:
                                 _all_booked.add(_f_b.get("fighter2_id", ""))
 
                         _player_camp_id = self._game_state.player_camp_id
+
+                        # ── Slice 2.5: player-owned #1 contender? offer flow ──
+                        # If player owns rank-#1 (and not also rank-#2), fire a
+                        # vacant-title offer instead of auto-booking. Decline
+                        # path: decline_fight_offer triggers AI #2 vs #3 fallback.
+                        # Multi-fighter at #1 AND #2: skip, fall through to AI.
+                        _slice_2_5_handled = False
+                        if _player_camp_id and len(div.rankings) >= 2:
+                            _r1_ftr = self._game_state.get_fighter(div.rankings[0])
+                            _r2_ftr = self._game_state.get_fighter(div.rankings[1])
+                            _player_at_1 = bool(_r1_ftr and _r1_ftr.is_active
+                                                 and _r1_ftr.camp_id == _player_camp_id)
+                            _player_at_2 = bool(_r2_ftr and _r2_ftr.is_active
+                                                 and _r2_ftr.camp_id == _player_camp_id)
+                            if _player_at_1 and not _player_at_2:
+                                _ai_opp = None
+                                for _aid in div.rankings[1:8]:
+                                    _aftr = self._game_state.get_fighter(_aid)
+                                    if not _aftr or not _aftr.is_active:
+                                        continue
+                                    if _aftr.camp_id == _player_camp_id:
+                                        continue
+                                    if _aftr.fighter_id in _all_booked:
+                                        continue
+                                    if INJURY_AVAILABLE and self._injury_system \
+                                            and not self._injury_system.is_cleared_to_fight(_aftr.fighter_id):
+                                        continue
+                                    _ai_opp = _aftr
+                                    break
+                                if _ai_opp:
+                                    _t25_target = None
+                                    for _wk25 in sorted(self._upcoming_cards.keys()):
+                                        if _wk25 <= current_week:
+                                            continue
+                                        _card25 = self._upcoming_cards[_wk25]
+                                        _has_main_25 = any(
+                                            _f25.get("card_slot") == "main_event"
+                                            for _f25 in _card25.get("fights", [])
+                                        )
+                                        if not _has_main_25:
+                                            _t25_target = _card25
+                                            break
+                                    if _t25_target:
+                                        _t25_week  = _t25_target["week"]
+                                        _t25_event = _t25_target["event_name"]
+                                        _offer = {
+                                            "offer_id":         f"vacant_title_{wc}_{_r1_ftr.fighter_id}_{current_week}",
+                                            "fighter_id":       _r1_ftr.fighter_id,
+                                            "fighter_name":     _r1_ftr.name,
+                                            "opponent_id":      _ai_opp.fighter_id,
+                                            "opponent_name":    _ai_opp.name,
+                                            "opponent_record":  f"{_ai_opp.wins}-{_ai_opp.losses}",
+                                            "opponent_rating":  _ai_opp.overall_rating,
+                                            "opponent_rank":    self._get_fighter_rank(_ai_opp),
+                                            "opponent_momentum": self._get_momentum_tag(_ai_opp),
+                                            "weight_class":     wc,
+                                            "event_name":       _t25_event,
+                                            "week":             _t25_week,
+                                            "weeks_away":       max(1, _t25_week - current_week),
+                                            "purse":            100000,
+                                            "win_bonus":        50000,
+                                            "is_title_fight":   True,
+                                            "risk_level":       3,
+                                            "reward_level":     5,
+                                            "matchup_quality":  "Excellent",
+                                            "source":           "vacant_title",
+                                            "vacant_division":  wc,
+                                        }
+                                        self._fight_offers.append(_offer)
+                                        self._news_items.insert(0, {
+                                            "headline": (f"🏆 VACANT TITLE OFFER: "
+                                                         f"{_r1_ftr.name} vs {_ai_opp.name} "
+                                                         f"for the {wc} belt at {_t25_event}."),
+                                            "category": "title",
+                                            "week":     current_week,
+                                        })
+                                        print(f"  🏆 [VACANT TITLE OFFER] {wc} — "
+                                              f"{_r1_ftr.name} (player) vs {_ai_opp.name} "
+                                              f"at {_t25_event} (Wk {_t25_week})")
+                                        _slice_2_5_handled = True
+
+                        if _slice_2_5_handled:
+                            continue
+
                         _contenders = []
                         for _fid in div.rankings[:8]:
                             _ftr = self._game_state.get_fighter(_fid)
@@ -2922,10 +3006,10 @@ class GameBridge:
             "event_name": offer["event_name"],
             "purse": offer["purse"],
             "win_bonus": offer["win_bonus"],
-            "is_title_fight": False,
+            "is_title_fight": offer.get("is_title_fight", False),
             "is_player_fight": True,
         }
-        
+
         self._scheduled_fights.append(fight)
         
         # Remove the accepted offer and any other offers for this fighter
@@ -2950,11 +3034,93 @@ class GameBridge:
             if hasattr(self, '_mock_generator'):
                 return self._mock_generator.decline_offer(offer_id)
             return {"success": False, "error": "No game loaded"}
-        
+
+        # Find the offer before removing — need source for vacant-title fallback
+        _declined = next((o for o in self._fight_offers
+                          if o["offer_id"] == offer_id), None)
+
         # Remove the offer
         self._fight_offers = [o for o in self._fight_offers if o["offer_id"] != offer_id]
-        
+
+        # Vacant-title decline → AI #1 vs #2 fallback (Slice 2.5)
+        if _declined and _declined.get("source") == "vacant_title":
+            _wc = _declined.get("vacant_division")
+            if _wc:
+                self._book_vacant_title_ai_fallback(_wc)
+
         return {"success": True, "message": "Offer declined"}
+
+    def _book_vacant_title_ai_fallback(self, wc: str) -> None:
+        """Book AI #1 vs #2 vacant-title fight when player declines a Slice 2.5 offer."""
+        if not self._game_state:
+            return
+        div = self._game_state.divisions.get(wc)
+        if not div or div.champion_id:
+            return  # Belt already filled? Don't double-book.
+
+        current_week = self._game_state.week_number
+        _player_camp_id = self._game_state.player_camp_id
+
+        _all_booked = set()
+        for sf in self._scheduled_fights:
+            _all_booked.add(sf.get("fighter1_id", ""))
+            _all_booked.add(sf.get("fighter2_id", ""))
+        for _wk_b, _card_b in self._upcoming_cards.items():
+            for _f_b in _card_b.get("fights", []):
+                _all_booked.add(_f_b.get("fighter1_id", ""))
+                _all_booked.add(_f_b.get("fighter2_id", ""))
+
+        _contenders = []
+        for _fid in div.rankings[:8]:
+            _ftr = self._game_state.get_fighter(_fid)
+            if not _ftr or not _ftr.is_active:
+                continue
+            if _player_camp_id and _ftr.camp_id == _player_camp_id:
+                continue
+            if _ftr.fighter_id in _all_booked:
+                continue
+            if INJURY_AVAILABLE and self._injury_system \
+                    and not self._injury_system.is_cleared_to_fight(_ftr.fighter_id):
+                continue
+            _contenders.append(_ftr)
+            if len(_contenders) >= 2:
+                break
+
+        if len(_contenders) < 2:
+            print(f"  ⚠️ [VACANT TITLE FALLBACK] {wc} — fewer than 2 AI contenders; deferred")
+            return
+
+        _target_card = None
+        for _wk_s in sorted(self._upcoming_cards.keys()):
+            if _wk_s <= current_week:
+                continue
+            _card_s = self._upcoming_cards[_wk_s]
+            _has_main = any(
+                _f_s.get("card_slot") == "main_event"
+                for _f_s in _card_s.get("fights", [])
+            )
+            if not _has_main:
+                _target_card = _card_s
+                break
+
+        if not _target_card:
+            print(f"  ⚠️ [VACANT TITLE FALLBACK] {wc} — no card with open main_event; deferred")
+            return
+
+        _top1, _top2 = _contenders[0], _contenders[1]
+        _tw    = _target_card["week"]
+        _ev    = _target_card["event_name"]
+        _fdict = self._make_scheduled_fight(
+            _top1, _top2, wc, _ev, _tw, "main_event", is_title=True)
+        _target_card["fights"].append(_fdict)
+        print(f"  🏆 [VACANT TITLE FALLBACK BOOKED] {wc} — "
+              f"{_top1.name} vs {_top2.name} at {_ev} (Wk {_tw}) — player declined")
+        self._news_items.insert(0, {
+            "headline": (f"🏆 VACANT TITLE FIGHT: {_top1.name} vs {_top2.name} "
+                         f"for the {wc} belt at {_ev} (player declined the shot)."),
+            "category": "title",
+            "week":     current_week,
+        })
     
     def get_scheduled_fights(self) -> List[Dict[str, Any]]:
         """Get all scheduled fights for player's fighters"""
