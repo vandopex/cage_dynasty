@@ -2744,10 +2744,12 @@ class GameBridge:
         return [self._convert_real_fighter(f) for f in fighter_records]
     
     def get_fighter(self, fighter_id: str) -> Optional[WebFighter]:
-        """Get a fighter by ID"""
+        """Get a fighter by ID. Falls through to amateur registry for
+        unsigned amateurs (signed amateurs are in _game_state.fighters
+        already, so the pro lookup catches them)."""
         if fighter_id in self._fighter_cache:
             return self._fighter_cache[fighter_id]
-        
+
         if self._mock_mode:
             if hasattr(self, '_mock_generator'):
                 f = self._mock_generator.get_fighter(fighter_id)
@@ -2756,18 +2758,28 @@ class GameBridge:
                     self._fighter_cache[fighter_id] = web_f
                     return web_f
             return None
-        
+
         if not self._game_state:
             return None
-        
-        # Get from real game state
+
+        # Pro registry lookup (signed amateurs land here too — unified IDs)
         fighter = self._game_state.get_fighter(fighter_id)
-        if not fighter:
-            return None
-        
-        web_f = self._convert_real_fighter(fighter)
-        self._fighter_cache[fighter_id] = web_f
-        return web_f
+        if fighter:
+            web_f = self._convert_real_fighter(fighter)
+            self._fighter_cache[fighter_id] = web_f
+            return web_f
+
+        # Fallback: amateur registry — unsigned amateurs aren't in the pro
+        # fighters dict but should still resolve for profile rendering
+        sys = self._get_amateur_system()
+        if sys:
+            amateur = sys.amateurs.get(fighter_id)
+            if amateur:
+                web_f = self._convert_amateur_fighter(amateur)
+                self._fighter_cache[fighter_id] = web_f
+                return web_f
+
+        return None
     
     def get_camp(self, camp_id: str) -> Optional[WebCamp]:
         """Get a camp by ID"""
@@ -3451,6 +3463,76 @@ class GameBridge:
             head_coach_rating=50
         )
     
+    def _convert_amateur_fighter(self, amateur) -> WebFighter:
+        """
+        Convert an AmateurFighter (amateur_system.amateurs registry) to a
+        WebFighter for profile rendering. Amateurs are stub-rendered:
+        full identity + attributes + style, but no camp, no pro ranking,
+        no fight history. The existing fighter_profile template handles
+        the empty fields via its defensive `if X` guards.
+        """
+        wc_str = amateur.weight_class if isinstance(amateur.weight_class, str) else str(amateur.weight_class)
+        attrs = getattr(amateur, 'attributes', {}) or {}
+
+        def _a(key: str, default: int = 50) -> int:
+            return int(attrs.get(key, default))
+
+        # Pro record 0-0 for unsigned amateurs (consistent with sign-time
+        # behavior in sign_amateur — amateur W/L lives on the credential
+        # line on profile, never on the big pro record).
+        wins   = 0
+        losses = 0
+
+        return WebFighter(
+            fighter_id=amateur.fighter_id,
+            name=amateur.name,
+            nickname=None,
+            age=getattr(amateur, 'age', 22),
+            country=getattr(amateur, 'nationality', ''),
+            weight_class=wc_str,
+            division_abbrev=DIVISION_ABBREV.get(wc_str, "??"),
+            fighting_style=getattr(amateur, 'fighting_style', 'Balanced'),
+            wins=wins,
+            losses=losses,
+            draws=0,
+            ko_wins=0,
+            sub_wins=0,
+            record_str=f"{wins}-{losses}",
+            overall_rating=int(getattr(amateur, 'overall_rating', 60)),
+            potential=int(getattr(amateur, 'potential_ceiling', 75)),
+            popularity=5,
+            ranking=None,
+            is_champion=False,
+            is_active=getattr(amateur, 'is_active', True),
+            height=getattr(amateur, 'height', '') or '',
+            reach=getattr(amateur, 'reach', '') or '',
+            strength=_a('strength'),
+            speed=_a('speed'),
+            cardio=_a('cardio'),
+            chin=_a('chin'),
+            recovery=_a('recovery'),
+            boxing=_a('boxing'),
+            kicks=_a('kicks'),
+            clinch_striking=_a('clinch_striking'),
+            striking_defense=_a('striking_defense'),
+            takedowns=_a('takedowns'),
+            takedown_defense=_a('takedown_defense'),
+            top_control=_a('top_control'),
+            submissions=_a('submissions'),
+            guard=_a('guard'),
+            heart=_a('heart'),
+            fight_iq=_a('fight_iq'),
+            composure=_a('composure'),
+            fatigue=0,
+            morale=75,
+            condition_status="Fresh",
+            condition_color="var(--neon-green)",
+            win_streak=0,
+            lose_streak=0,
+            traits=list(getattr(amateur, 'traits', []) or []),
+            fight_history=[],
+        )
+
     def _convert_real_fighter(self, fighter) -> WebFighter:
         """
         Convert a FighterRecord (game_state registry) to WebFighter.
@@ -9565,8 +9647,8 @@ class GameBridge:
 
         # Pro-eligible fighters per weight class
         eligible: Dict[str, List[Dict]] = {}
-        for wc in ["Lightweight", "Welterweight", "Bantamweight",
-                   "Featherweight", "Middleweight", "Heavyweight"]:
+        from amateur import WEIGHT_CLASSES as _AMATEUR_WCS
+        for wc in _AMATEUR_WCS:
             try:
                 fighters = sys.get_eligible_amateurs(wc)
                 # Filter: ceiling must exceed OVR (real growth upside)
@@ -9625,6 +9707,7 @@ class GameBridge:
                             top.append({
                                 "rank":    i + 1,
                                 "name":    f.name,
+                                "fighter_id": fid,    # for profile linking
                                 "record":  f"{f.wins}-{f.losses}",
                                 "wc":      wc,
                                 "overall": getattr(f, 'overall_rating', 60),
@@ -9697,15 +9780,15 @@ class GameBridge:
             # Create FighterRecord in main game
             if self._game_state:
                 import uuid
-                fid = f"amateur_{amateur_id[:12]}"
+                fid = amateur_id  # Unified ID — amateur identity travels into pro registry
                 from core.game_state import FighterRecord
                 rec = FighterRecord(
                     fighter_id=fid,
                     name=amateur.name,
                     weight_class=getattr(amateur, 'weight_class', 'Lightweight'),
                     overall_rating=int(getattr(amateur, 'overall_rating', 60)),
-                    wins=getattr(amateur, 'wins', 0),
-                    losses=getattr(amateur, 'losses', 0),
+                    wins=0,    # Pro record starts fresh per Sherdog model
+                    losses=0,  # Amateur W/L stays in amateur_system.amateurs as credential
                     camp_id=self._game_state.player_camp_id,
                     is_active=True,
                     popularity=5,

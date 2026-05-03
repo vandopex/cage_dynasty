@@ -594,6 +594,22 @@ def register_routes(app):
         # Get rival data
         rivalries = bridge.get_fighter_rivalries(fighter_id)
 
+        # Amateur credential — Sherdog-style, only if fighter has amateur history
+        amateur_record = None
+        try:
+            sys = bridge._get_amateur_system()
+            if sys:
+                amateur = sys.amateurs.get(fighter_id)
+                if amateur:
+                    amateur_record = {
+                        "wins":            amateur.wins,
+                        "losses":          amateur.losses,
+                        "draws":           getattr(amateur, 'draws', 0),
+                        "tournament_wins": getattr(amateur, 'tournament_wins', 0),
+                    }
+        except Exception:
+            pass
+
         # Scouting report
         scouting = bridge.get_scouting_report(fighter_id)
 
@@ -619,6 +635,7 @@ def register_routes(app):
             watch_entry=watch_entry,
             watch_categories=watch_categories,
             contract_status=contract_status,
+            amateur_record=amateur_record,
             contract_options=contract_options,
             week=bridge.week_number,
         )

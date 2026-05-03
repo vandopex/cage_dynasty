@@ -165,6 +165,19 @@
             </div>
             {% endif %}
 
+            {# ── Amateur credential (Sherdog-style) ── #}
+            {% if amateur_record %}
+            <div style="font-size:.7rem;color:var(--text-muted);
+                        margin-bottom:var(--spacing-md);letter-spacing:.03em;">
+                <span style="color:var(--gold);font-family:var(--font-display);
+                             text-transform:uppercase;letter-spacing:.1em;">Amateur:</span>
+                {{ amateur_record.wins }}-{{ amateur_record.losses }}{% if amateur_record.draws %}-{{ amateur_record.draws }}{% endif %}
+                {% if amateur_record.tournament_wins %}
+                · 🏆 {{ amateur_record.tournament_wins }} tournament {{ 'win' if amateur_record.tournament_wins == 1 else 'wins' }}
+                {% endif %}
+            </div>
+            {% endif %}
+
             {# Bio row #}
             <div style="display:flex;gap:var(--spacing-lg);flex-wrap:wrap;
                         font-size:.78rem;color:var(--text-muted);">

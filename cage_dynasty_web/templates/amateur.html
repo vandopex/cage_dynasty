@@ -76,9 +76,11 @@
                     border-bottom:1px solid var(--border-color);">
             <div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                    <span style="font-family:var(--font-display);color:var(--text-bright);font-size:.9rem;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=f.id) }}"
+                       style="font-family:var(--font-display);color:var(--text-bright);font-size:.9rem;
+                              text-decoration:none;">
                         {{ f.name }}
-                    </span>
+                    </a>
                     {% set dg = f.display_grade or f.potential_grade or 'B' %}
                     <span style="font-size:.7rem;font-family:var(--font-display);
                                  color:{% if 'A+' in dg or dg == 'A' %}var(--gold)
@@ -94,6 +96,7 @@
                     {{ f.style or f.fighting_style or 'Balanced' }}
                     · Age {{ f.age }}
                     · {{ f.nationality or f.region or '' }}
+                    {% if f.tournament_wins %} · 🏆 {{ f.tournament_wins }} {{ 'win' if f.tournament_wins == 1 else 'wins' }}{% endif %}
                 </div>
                 <div style="font-size:.68rem;margin-top:2px;">
                     <span style="color:var(--info);">{{ f.overall or f.overall_rating or '—' }} OVR</span>
@@ -142,7 +145,10 @@
                 </div>
             </div>
             <div style="text-align:right;">
-                <div style="font-size:.75rem;color:var(--gold);">🏆 {{ t.champion }}</div>
+                <div style="font-size:.75rem;color:var(--gold);">
+                    🏆 {% if t.champion_id %}<a href="{{ url_for('fighter_profile', fighter_id=t.champion_id) }}"
+                          style="color:inherit;text-decoration:none;">{{ t.champion }}</a>{% else %}{{ t.champion }}{% endif %}
+                </div>
             </div>
         </div>
         {% endfor %}
@@ -166,7 +172,9 @@
             <div style="display:flex;align-items:center;gap:6px;
                         padding:2px 0;font-size:.75rem;">
                 <span style="color:var(--text-muted);min-width:16px;">{{ loop.index }}</span>
-                <span style="color:var(--text-bright);">{{ f.name }}</span>
+                <span style="color:var(--text-bright);">
+                    {% if f.fighter_id %}<a href="{{ url_for('fighter_profile', fighter_id=f.fighter_id) }}" style="color:inherit;text-decoration:none;">{{ f.name }}</a>{% else %}{{ f.name }}{% endif %}
+                </span>
                 <span style="color:var(--text-muted);margin-left:auto;">{{ f.weight_class }}</span>
             </div>
             {% endfor %}
