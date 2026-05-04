@@ -9824,6 +9824,8 @@ class GameBridge:
                         "style":          getattr(f, 'fighting_style', 'Balanced'),
                         "nationality":    getattr(f, 'nationality', 'USA'),
                         "tournament_wins":getattr(f, 'tournament_wins', 0),
+                        "tournament_finals":getattr(f, 'tournament_finals', 0),
+                        "tournament_semis":getattr(f, 'tournament_semis', 0),
                     }
                     for f in prospects[:8]
                 ]

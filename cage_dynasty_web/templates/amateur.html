@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from '_macros/style_data.html' import style_icons, style_class_data, style_family_color with context %}
 {% block title %}Amateur Circuit{% endblock %}
 {% block content %}
 
@@ -71,8 +72,13 @@
             {{ wc }}
         </div>
         {% for f in fighters %}
+        {% set _f_style = f.style or f.fighting_style or 'Balanced' %}
+        {% set _f_entry = style_class_data.get(_f_style, {"family":"hybrid","tagline":""}) %}
+        {% set _f_accent = style_family_color.get(_f_entry.family, "var(--text-muted)") %}
+        {% set _f_icon = style_icons.get(_f_style, "🥊") %}
         <div style="display:flex;align-items:center;gap:var(--spacing-md);
                     padding:var(--spacing-md);
+                    border-left:3px solid {{ _f_accent }};
                     border-bottom:1px solid var(--border-color);">
             <div style="flex:1;min-width:0;">
                 <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
@@ -93,20 +99,21 @@
                     </span>
                 </div>
                 <div style="font-size:.68rem;color:var(--text-muted);">
-                    {{ f.style or f.fighting_style or 'Balanced' }}
+                    <span style="color:{{ _f_accent }};">{{ _f_icon }} {{ _f_style }}</span>
+                    {% if _f_entry.tagline %}<span style="font-style:italic;opacity:.8;"> · {{ _f_entry.tagline }}</span>{% endif %}
                     · Age {{ f.age }}
                     · {{ f.nationality or f.region or '' }}
                     {% if f.tournament_wins %} · 🏆 {{ f.tournament_wins }} {{ 'win' if f.tournament_wins == 1 else 'wins' }}{% endif %}
+                    {% if f.tournament_finals %} · ⚔️ {{ f.tournament_finals }} {{ 'final' if f.tournament_finals == 1 else 'finals' }}{% endif %}
+                    {% if f.tournament_semis %} · 🥉 {{ f.tournament_semis }} {{ 'semi' if f.tournament_semis == 1 else 'semis' }}{% endif %}
                 </div>
                 <div style="font-size:.68rem;margin-top:2px;">
-                    <span style="color:var(--info);">{{ f.overall or f.overall_rating or '—' }} OVR</span>
-                    <span style="color:var(--text-muted);margin-left:4px;">·</span>
-                    {% set dg2 = f.display_grade or f.potential_grade or 'B' %}
-                    <span style="color:{% if 'A+' in dg2 or dg2 == 'A' %}var(--gold)
-                                       {% elif 'A' in dg2 or 'B+' in dg2 %}var(--neon-green)
-                                       {% else %}var(--info){% endif %};">
-                        Grade {{ dg2 }}
-                    </span>
+                    {% set _ovr_v = (f.overall or f.overall_rating or 0) | int %}
+                    {% set _ovr_c = 'var(--gold)' if _ovr_v >= 85
+                                    else 'var(--neon-green)' if _ovr_v >= 70
+                                    else 'var(--info)' if _ovr_v >= 55
+                                    else 'var(--text-muted)' %}
+                    <span style="color:{{ _ovr_c }};font-family:var(--font-display);">{{ _ovr_v or '—' }} OVR</span>
                 </div>
             </div>
             <div style="flex-shrink:0;">
@@ -154,6 +161,13 @@
         {% endfor %}
     </div>
 </div>
+{% else %}
+<div class="card mb-lg">
+    <div class="card-header"><h3>🏆 Recent Tournaments</h3></div>
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);font-size:.85rem;">
+        No tournaments yet — they fire periodically. Advance a few weeks.
+    </div>
+</div>
 {% endif %}
 
 {# ── Regional rankings ── #}
@@ -181,6 +195,13 @@
         </div>
         {% endif %}
         {% endfor %}
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="card-header"><h3>📊 Regional Rankings</h3></div>
+    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);font-size:.85rem;">
+        Rankings populating as fighters compete...
     </div>
 </div>
 {% endif %}

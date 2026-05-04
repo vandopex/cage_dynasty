@@ -1,0 +1,41 @@
+{# ── Shared style/family/icon maps ─────────────────────────────
+   Single source of truth for fighting-style → family → tagline → icon.
+   Consumers import via:
+     {% from '_macros/style_data.html' import style_icons,
+        style_class_data, style_family_color %}
+   fighter_profile.html still has inline duplicates pending refactor —
+   see memory/tech_debt_fighter_profile_style_maps_extract_2026-05-03.md
+─────────────────────────────────────────────────────────────── #}
+
+{% set style_icons = {
+    "Orthodox Boxer":"🥊","Muay Thai":"🦵","Wrestler":"🤼","BJJ Specialist":"🥋",
+    "Kickboxer":"🦶","Brawler":"💥","Counter Striker":"↩️","Point Fighter":"🎯",
+    "Pressure Fighter":"⬆️","Ground & Pound":"👊","Clinch Fighter":"💪",
+    "Sprawl & Brawl":"🛡️","Sambo":"⚔️","Judo":"🔄","Hybrid":"⚡",
+} %}
+
+{% set style_class_data = {
+    "Striker":          {"family":"striker",  "tagline":"Stand-and-bang artist"},
+    "Counter Striker":  {"family":"striker",  "tagline":"Punishes every mistake"},
+    "Pressure Fighter": {"family":"striker",  "tagline":"Walks you down"},
+    "Muay Thai":        {"family":"striker",  "tagline":"Eight limbs, no fear"},
+    "Orthodox Boxer":   {"family":"striker",  "tagline":"Sweet science, hard hands"},
+    "Kickboxer":        {"family":"striker",  "tagline":"Range game, leg game"},
+    "Brawler":          {"family":"striker",  "tagline":"Heart over technique"},
+    "Point Fighter":    {"family":"striker",  "tagline":"Touches and circles out"},
+    "Wrestler":         {"family":"grappler", "tagline":"Takes you down. Keeps you there."},
+    "BJJ Specialist":   {"family":"grappler", "tagline":"Submissions from anywhere"},
+    "Judo":             {"family":"grappler", "tagline":"Throws turn into chokes"},
+    "Sambo":            {"family":"grappler", "tagline":"Russian ground arts"},
+    "Ground & Pound":   {"family":"hybrid",   "tagline":"Rains down from top"},
+    "Sprawl & Brawl":   {"family":"hybrid",   "tagline":"Strikes from the sprawl"},
+    "Clinch Fighter":   {"family":"hybrid",   "tagline":"Wins the dirty boxing"},
+    "Hybrid":           {"family":"hybrid",   "tagline":"Threats in every phase"},
+    "Balanced":         {"family":"hybrid",   "tagline":"No round goes the same way"},
+} %}
+
+{% set style_family_color = {
+    "striker":  "var(--blood-red)",
+    "grappler": "var(--info)",
+    "hybrid":   "var(--violet)",
+} %}
