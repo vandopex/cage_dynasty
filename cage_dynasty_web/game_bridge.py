@@ -1368,6 +1368,44 @@ class GameBridge:
             # ── Aging — annual stat decay and retirements ─────────────
             self._advance_aging_week(current_week)
 
+            # ── Slice 4: champion-hold cardio decay + milestone news ──
+            # Tapered decay: weeks 1-4 = -0.25/wk, 5-12 = -0.5/wk, 13+ = -0.75/wk
+            # Float accumulator avoids rounding-loss; cardio decremented when ≥1.0
+            for _fid, _entry in self._champion_holds.items():
+                _ftr = self._game_state.get_fighter(_fid)
+                if not _ftr:
+                    continue
+                _weeks_in_hold = current_week - _entry.get("start_week", current_week)
+                if _weeks_in_hold <= 4:
+                    _rate = 0.25
+                elif _weeks_in_hold <= 12:
+                    _rate = 0.5
+                else:
+                    _rate = 0.75
+                _accum = _entry.get("cardio_decay_accum", 0.0) + _rate
+                while _accum >= 1.0 and _ftr.cardio > 1:
+                    _ftr.cardio -= 1
+                    _accum -= 1.0
+                _entry["cardio_decay_accum"] = _accum
+
+                # Milestone hype news — 4w/2w/1w until return
+                _weeks_until = _entry.get("return_week", current_week) - current_week
+                _wc_h = _entry.get("weight_class", "")
+                if _weeks_until == 4:
+                    _hl_h = f"🏆 {_ftr.name} 4 weeks from return — {_wc_h} title defense pending"
+                elif _weeks_until == 2:
+                    _hl_h = f"🏆 {_ftr.name} 2 weeks from return"
+                elif _weeks_until == 1:
+                    _hl_h = f"🏆 {_ftr.name} cleared next week — {_wc_h} title defense imminent"
+                else:
+                    _hl_h = None
+                if _hl_h:
+                    self._news_items.insert(0, {
+                        "headline": _hl_h,
+                        "category": "title",
+                        "week":     current_week,
+                    })
+
             # ── Maintenance training — coach boosts + idle decay ──────
             self._advance_maintenance_week(current_week)
 
@@ -1451,7 +1489,47 @@ class GameBridge:
             # ── Injury healing — process one week for all fighters ────
             if INJURY_AVAILABLE and self._injury_system:
                 healed = self._injury_system.process_weekly_healing()
+
+                # ── Slice 4: champion hold heal-sweep ─────────────────
+                # Must run BEFORE generic recovery news loop so _slice4_handled
+                # can gate the generic line for champions whose replacement
+                # headline already fired. Three branches:
+                #   (a) already-booked → pop, generic recovery still fires
+                #   (b) booking succeeds → pop + suppress generic (helper fired headline)
+                #   (c) booking fails → keep entry alive, retry next week, generic fires
+                _slice4_handled = set()
+                for _fid_s4 in list(self._champion_holds.keys()):
+                    _entry_s4 = self._champion_holds[_fid_s4]
+                    if _entry_s4.get("return_week", 0) > current_week:
+                        continue
+                    _wc_s4 = _entry_s4.get("weight_class", "")
+                    _ftr_s4 = self._game_state.get_fighter(_fid_s4)
+                    if not _ftr_s4:
+                        del self._champion_holds[_fid_s4]  # defensive; fighter gone
+                        continue
+                    # Branch (a): champion already booked → existing fight is the return
+                    _booked_s4 = set()
+                    for _sf_s4 in self._scheduled_fights:
+                        _booked_s4.add(_sf_s4.get("fighter1_id", ""))
+                        _booked_s4.add(_sf_s4.get("fighter2_id", ""))
+                    for _wk_b_s4, _card_b_s4 in self._upcoming_cards.items():
+                        for _f_b_s4 in _card_b_s4.get("fights", []):
+                            _booked_s4.add(_f_b_s4.get("fighter1_id", ""))
+                            _booked_s4.add(_f_b_s4.get("fighter2_id", ""))
+                    if _fid_s4 in _booked_s4:
+                        print(f"  🏆 [SLICE 4] {_ftr_s4.name} healed; existing fight is the return")
+                        del self._champion_holds[_fid_s4]
+                        continue
+                    # Branch (b)/(c): attempt booking
+                    _booking_s4 = self._book_mandatory_return_defense(_fid_s4, _wc_s4)
+                    if _booking_s4:
+                        _slice4_handled.add(_fid_s4)
+                        del self._champion_holds[_fid_s4]
+                    # else: keep entry alive, retry next advance_week (indefinite)
+
                 for fid_h, descriptions in healed.items():
+                    if fid_h in _slice4_handled:
+                        continue  # Slice 4 fired replacement headline; suppress generic
                     ftr_h = self._game_state.get_fighter(fid_h) if self._game_state else None
                     fname_h = getattr(ftr_h, 'name', fid_h) if ftr_h else fid_h
                     for desc in descriptions:
@@ -1627,15 +1705,6 @@ class GameBridge:
                             wc,
                             exclude_fighter_ids={champ.fighter_id} if champ else None,
                         )
-
-            # ── Slice 3: pop expired hold entries on heal ──────────────
-            # Champion's recovery ended → pop their hold. Slice 4 will
-            # hook here to fire the mandatory return defense + news.
-            _heal_now = [fid for fid, entry in self._champion_holds.items()
-                         if entry.get("return_week", 0) <= self._game_state.week_number]
-            for _fid in _heal_now:
-                del self._champion_holds[_fid]
-                # Slice 4 will fire mandatory return defense booking here
 
             # ── Autosave every 5 weeks ─────────────────────────────────
             self.autosave_if_due(self._game_state.week_number)
@@ -3213,6 +3282,59 @@ class GameBridge:
             "target_event": preview["target_event_name"],
             "target_week":  preview["target_week"],
             "fight_id":     fdict.get("fight_id"),
+        }
+
+    def _book_mandatory_return_defense(
+        self,
+        champion_id: str,
+        wc: str,
+        exclude_ids: Optional[Set[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Slice 4 — book champion's mandatory return title defense.
+        Champion is fixed; opponent is the top eligible non-champion contender.
+        Returns booked fight info dict or None if booking deferred (no card / no
+        contender). Caller handles deferral by leaving _champion_holds entry alive."""
+        if not self._game_state:
+            return None
+        champion = self._game_state.get_fighter(champion_id)
+        if not champion:
+            return None
+
+        _exclude = set(exclude_ids or [])
+        _exclude.add(champion_id)
+
+        preview = self._preview_vacant_title_contenders(wc, _exclude)
+        if not preview:
+            print(f"  ⚠️ [MANDATORY DEFENSE] {wc} — no bookable contender for "
+                  f"{champion.name}; deferred")
+            return None
+
+        target_card = self._upcoming_cards.get(preview["target_week"])
+        if not target_card:
+            return None
+
+        opponent = preview["top1"]
+        fdict = self._make_scheduled_fight(
+            champion, opponent, wc, preview["target_event_name"],
+            preview["target_week"], "main_event", is_title=True,
+        )
+        target_card["fights"].append(fdict)
+
+        print(f"  🏆 [MANDATORY DEFENSE BOOKED] {wc} — {champion.name} vs "
+              f"{opponent.name} at {preview['target_event_name']} "
+              f"(Wk {preview['target_week']})")
+        self._news_items.insert(0, {
+            "headline": (f"🏆 {champion.name} returns to action — {wc} title defense "
+                         f"booked vs {opponent.name} at {preview['target_event_name']}"),
+            "category": "title",
+            "week":     self._game_state.week_number,
+        })
+        return {
+            "champion_name":  champion.name,
+            "opponent_name":  opponent.name,
+            "target_event":   preview["target_event_name"],
+            "target_week":    preview["target_week"],
+            "fight_id":       fdict.get("fight_id"),
         }
 
     def _maybe_queue_champion_injury_decision(self, ftr, injury) -> None:
