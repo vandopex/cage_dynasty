@@ -622,6 +622,14 @@ class WebNewsItem:
 
 
 # ============================================================================
+# CARD CAPACITY CONSTANT (sub-ship A)
+# Shared between _build_card_for_week's target count, Phase 2 capacity gate
+# in _top_up_pipeline, and load-time auto-truncate in from_dict.
+# ============================================================================
+CARD_TARGET_FIGHTS = 9
+
+
+# ============================================================================
 # GAME BRIDGE CLASS
 # ============================================================================
 
@@ -675,6 +683,11 @@ class GameBridge:
         
         # Internal tracking for real mode (simple implementation)
         self._scheduled_fights: List[Dict[str, Any]] = []
+        # Sub-ship A: AI fights with target_week beyond pipeline window.
+        # Drained into _upcoming_cards by _top_up_pipeline's hand-off pass
+        # when target_week enters current+1..current+6. Strict invariant:
+        # an AI fight is in EITHER this list OR _upcoming_cards, never both.
+        self._ai_deferred_bookings: List[Dict[str, Any]] = []
         self._fight_offers: List[Dict[str, Any]] = []
         self._completed_events: List[Dict[str, Any]] = []
         self._news_items: List[Dict[str, Any]] = []
@@ -1053,6 +1066,7 @@ class GameBridge:
             "total_purses_earned":      self._total_purses_earned,
             "coach":                    self._coach,
             "scheduled_fights":         [clean_fight(f) for f in self._scheduled_fights],
+            "ai_deferred_bookings":     [clean_fight(f) for f in self._ai_deferred_bookings],
             "upcoming_cards":           upcoming_clean,
             "fighter_cooldowns":        self._fighter_cooldowns,
             "fighter_training_plans":   self._fighter_training_plans,
@@ -1127,6 +1141,35 @@ class GameBridge:
         self._total_purses_earned     = data.get("total_purses_earned", 0)
         self._coach                   = data.get("coach", {})
         self._scheduled_fights        = data.get("scheduled_fights", [])
+        self._ai_deferred_bookings    = data.get("ai_deferred_bookings", [])
+
+        # Sub-ship A: auto-truncate over-capacity cards on load. Cleanup for
+        # any save state that accumulated bloat before Phase 2's capacity
+        # gate landed. Sort by (player_first, slot_priority, -score) and
+        # keep top N. Player fights are protected from truncation — the
+        # player accepted them, they shouldn't disappear silently regardless
+        # of slot/score. _completed_events deliberately untouched — history
+        # preserved.
+        _SLOT_PRIORITY = {"main_event": 0, "co_main": 1, "main_card": 2,
+                          "prelim": 3, "early_prelim": 4}
+        _truncated_total = 0
+        for _wk, _card in self._upcoming_cards.items():
+            _fights = _card.get("fights", [])
+            if len(_fights) > CARD_TARGET_FIGHTS:
+                _sorted = sorted(_fights, key=lambda f: (
+                    0 if f.get("is_player_fight") else 1,  # player fights first (protected)
+                    _SLOT_PRIORITY.get(f.get("card_slot", "prelim"), 99),
+                    -float(f.get("matchup_score", 0) or 0),
+                ))
+                _kept = _sorted[:CARD_TARGET_FIGHTS]
+                _dropped = len(_fights) - len(_kept)
+                _card["fights"] = _kept
+                _truncated_total += _dropped
+                print(f"  🔧 [CARD TRUNCATE] DFC {_wk} had {len(_fights)} fights, "
+                      f"kept top {CARD_TARGET_FIGHTS} (player fights protected), dropped {_dropped}")
+        if _truncated_total > 0:
+            print(f"🔧 [SUB-SHIP A LOAD CLEANUP] Truncated {_truncated_total} fights total "
+                  f"from over-capacity cards (player fights protected).")
         self._fighter_training_plans  = data.get("fighter_training_plans", {})
         self._fight_camps             = data.get("fight_camps", {})
         self._week_declines           = {k: int(v) for k, v in
@@ -7882,6 +7925,19 @@ class GameBridge:
         )
         return slot.value
 
+    def _create_empty_card_dict(self, target_week: int) -> Dict[str, Any]:
+        """Sub-ship A — empty card dict for a target week. Used by both
+        _build_card_for_week (when no drained items exist) and
+        _top_up_pipeline's hand-off pass (when target week's card needs
+        creating to receive a drained queue item)."""
+        return {
+            "event_id":    f"event_{target_week}",
+            "event_name":  f"DFC {target_week}",
+            "week":        target_week,
+            "fights":      [],
+            "is_ai_event": True,
+        }
+
     def _build_card_for_week(self, target_week: int) -> Dict[str, Any]:
         """
         Build a full DFC card for target_week.
@@ -7895,13 +7951,13 @@ class GameBridge:
         event_name = f"DFC {target_week}"
         event_id   = f"event_{target_week}"
 
-        card: Dict[str, Any] = {
-            "event_id":    event_id,
-            "event_name":  event_name,
-            "week":        target_week,
-            "fights":      [],      # pre-scheduled fight dicts
-            "is_ai_event": True,
-        }
+        # Sub-ship A: reuse existing card if hand-off pass already drained
+        # queued fights into it. Otherwise create fresh via shared helper.
+        # Drained fights count toward target_count and are reflected in
+        # all_booked downstream (the target_week skip is also dropped below).
+        card = self._upcoming_cards.get(target_week)
+        if card is None:
+            card = self._create_empty_card_dict(target_week)
 
         if not self._game_state:
             return card
@@ -7917,6 +7973,16 @@ class GameBridge:
                 self._game_state.week_number + sf.get("weeks_until", 0) == target_week):
                 booked_here.add(sf.get("fighter1_id",""))
                 booked_here.add(sf.get("fighter2_id",""))
+                # Sub-ship A fix: skip if fight already on the card.
+                # Phase 3 always-call rebuilds reuse cards via Site 4;
+                # without this dedup, every rebuild re-appends the player fight.
+                # Tech debt: scheduled-fight injection arguably belongs in
+                # _top_up_pipeline Phase 2 alongside AI queue hand-off — see
+                # tech_debt_player_fight_injection_location_2026-05-04.md
+                _existing_ids = {f.get("fight_id") for f in card["fights"]
+                                 if f.get("fight_id")}
+                if sf.get("fight_id") in _existing_ids:
+                    continue
                 # Insert player fight into card
                 score = self._matchup_score(
                     self._game_state.get_fighter(sf.get("fighter1_id","")),
@@ -7937,20 +8003,24 @@ class GameBridge:
                 card["fights"].append(sf)
 
         # Fighters already on any other pipeline card are unavailable
-        # Each fighter should appear on at most one upcoming card
+        # Each fighter should appear on at most one upcoming card.
+        # Sub-ship A: target_week's card may already hold drained queue
+        # items, so include those fighters in all_booked too.
         all_booked = set()
         for sf in self._scheduled_fights:
             all_booked.add(sf.get("fighter1_id",""))
             all_booked.add(sf.get("fighter2_id",""))
         for wk, existing_card in self._upcoming_cards.items():
-            if wk == target_week:
-                continue
             for f in existing_card.get("fights", []):
                 all_booked.add(f.get("fighter1_id",""))
                 all_booked.add(f.get("fighter2_id",""))
+        # Sub-ship A: include fighters in deferred queue
+        for q_fight in self._ai_deferred_bookings:
+            all_booked.add(q_fight.get("fighter1_id",""))
+            all_booked.add(q_fight.get("fighter2_id",""))
 
         player_camp_id = self._game_state.player_camp_id
-        target_count   = 9
+        target_count   = CARD_TARGET_FIGHTS
 
         # ── Collect ALL candidate matchups across every division ──────────
         # Then sort by matchup score so best fights get top slots.
@@ -7995,7 +8065,11 @@ class GameBridge:
                         break
                 if top:
                     score = self._matchup_score(champ, top, is_title=True)
-                    candidates.append((score, champ, top, wc, True))
+                    # Sub-ship A: rank-aware lead time. Champion is rank 0.
+                    _top_rank = self._get_fighter_rank(top)
+                    _wks_out = self._weeks_out_for_fight(0, _top_rank)
+                    _ttw = self._game_state.week_number + _wks_out
+                    candidates.append((score, champ, top, wc, True, _ttw))
                     continue
                 else:
                     all_booked.add(champ_id)
@@ -8043,7 +8117,12 @@ class GameBridge:
                             best_pair_score = s
                             best_pair = (f_a, f_b)
                 if best_pair:
-                    candidates.append((best_pair_score, best_pair[0], best_pair[1], wc, False))
+                    # Sub-ship A: rank-aware lead time
+                    _r_a_p2 = self._get_fighter_rank(best_pair[0])
+                    _r_b_p2 = self._get_fighter_rank(best_pair[1])
+                    _wks_out = self._weeks_out_for_fight(_r_a_p2, _r_b_p2)
+                    _ttw = self._game_state.week_number + _wks_out
+                    candidates.append((best_pair_score, best_pair[0], best_pair[1], wc, False, _ttw))
 
             elif len(ranked_avail) == 1 and len(available) >= 2:
                 ranked_f = ranked_avail[0]
@@ -8053,7 +8132,10 @@ class GameBridge:
                     if unranked_pool:
                         opp = random.choice(unranked_pool)
                         score = self._matchup_score(ranked_f, opp)
-                        candidates.append((score, ranked_f, opp, wc, False))
+                        # Sub-ship A: rank-aware lead time (one ranked, one unranked)
+                        _wks_out = self._weeks_out_for_fight(r, None)
+                        _ttw = self._game_state.week_number + _wks_out
+                        candidates.append((score, ranked_f, opp, wc, False, _ttw))
 
             elif not ranked_avail and len(available) >= 2:
                 # Unranked matchup — pair by record similarity, not pure random
@@ -8071,7 +8153,10 @@ class GameBridge:
                     # Win streak bonus for unranked too
                     score_u += ((getattr(f1_u,'win_streak',0) or 0) +
                                 (getattr(f2_u,'win_streak',0) or 0)) * 1.5
-                    candidates.append((score_u, f1_u, f2_u, wc, False))
+                    # Sub-ship A: rank-aware lead time (both unranked)
+                    _wks_out = self._weeks_out_for_fight(None, None)
+                    _ttw = self._game_state.week_number + _wks_out
+                    candidates.append((score_u, f1_u, f2_u, wc, False, _ttw))
                     break  # One unranked fight per division
 
         # ── Sort candidates by score descending ───────────────────────────
@@ -8082,7 +8167,7 @@ class GameBridge:
         title_divisions_used = set()
         capped = []
         for c in candidates:
-            score_c, f1_c, f2_c, wc_c, is_title_c = c
+            score_c, f1_c, f2_c, wc_c, is_title_c, _ = c  # 6th = computed_target_week, unused in cap
             if is_title_c:
                 if title_count < 2 and wc_c not in title_divisions_used:
                     capped.append(c)
@@ -8095,11 +8180,12 @@ class GameBridge:
         candidates = capped
 
         # ── Fill card slots top-to-bottom ─────────────────────────────────
+        # Sub-ship A: route by computed_target_week. Candidates whose lead
+        # time matches this card → place here. Others → defer to queue
+        # for hand-off when target_week enters the pipeline window.
         used_in_candidates = set()
         co_main_used = 0   # Track co-main slot usage for floor management
-        for score, f1, f2, wc, is_title in candidates:
-            if len(card["fights"]) >= target_count:
-                break
+        for score, f1, f2, wc, is_title, computed_target_week in candidates:
             # Skip if either fighter was already matched in a higher-score fight
             if f1.fighter_id in used_in_candidates or f2.fighter_id in used_in_candidates:
                 continue
@@ -8124,12 +8210,27 @@ class GameBridge:
                 f1_rank=override_f1, f2_rank=override_f2,
                 f1=f1, f2=f2,
             )
-            if slot in ("co_main", "main_event"):
-                co_main_used += 1
 
-            fight_dict = self._make_scheduled_fight(
-                f1, f2, wc, event_name, target_week, slot, is_title=is_title)
-            card["fights"].append(fight_dict)
+            if computed_target_week == target_week:
+                # This card matches lead time — place here
+                if len(card["fights"]) >= target_count:
+                    print(f"  ⏭️  [LEAD-TIME DISPLACED] {f1.name} vs {f2.name} "
+                          f"dropped (DFC {target_week} full)")
+                    continue  # card full, drop (next top-up regenerates)
+                if slot in ("co_main", "main_event"):
+                    co_main_used += 1
+                fight_dict = self._make_scheduled_fight(
+                    f1, f2, wc, event_name, target_week, slot, is_title=is_title)
+                card["fights"].append(fight_dict)
+            else:
+                # Different lead-time target — defer to queue for hand-off
+                _q_event_name = f"DFC {computed_target_week}"
+                fight_dict = self._make_scheduled_fight(
+                    f1, f2, wc, _q_event_name, computed_target_week, slot, is_title=is_title)
+                self._ai_deferred_bookings.append(fight_dict)
+                print(f"  📅 [LEAD-TIME QUEUE] {f1.name} vs {f2.name} → "
+                      f"DFC {computed_target_week} ({computed_target_week - target_week:+d}w)")
+
             used_in_candidates.add(f1.fighter_id)
             used_in_candidates.add(f2.fighter_id)
             all_booked.add(f1.fighter_id)
@@ -8423,16 +8524,71 @@ class GameBridge:
 
     def _top_up_pipeline(self) -> None:
         """
-        Fill all missing weeks up to current+6. Called each advance_week.
-        Pre-init only builds 3 cards — this fills weeks 4-6 organically
-        on the first advance, then maintains a 6-week lookahead forever.
+        Maintain rolling 6-week pipeline. Sub-ship A — three phases:
+          1. Cancellation re-eval — drop deferred-queue items with broken pairs
+             (one fighter retired / now-injured / contract-expired). Next
+             top-up regenerates fresh candidates via normal _build_card flow.
+          2. Hand-off — drain queue items whose target_week has entered
+             window (current+1 to current+6) into _upcoming_cards.
+          3. Build/extend — call _build_card_for_week for each pipeline week
+             (creates fresh cards for empty weeks, tops up drain-only cards).
         """
         if not self._game_state:
             return
         current = self._game_state.week_number
+
+        # Phase 1: cancellation re-eval — drop queue items with broken pairs
+        _kept_q = []
+        for q_fight in self._ai_deferred_bookings:
+            f1id = q_fight.get("fighter1_id", "")
+            f2id = q_fight.get("fighter2_id", "")
+            f1 = self._game_state.get_fighter(f1id)
+            f2 = self._game_state.get_fighter(f2id)
+            _valid = (
+                f1 and f2 and f1.is_active and f2.is_active
+                and (not (INJURY_AVAILABLE and self._injury_system)
+                     or (self._injury_system.is_cleared_to_fight(f1id)
+                         and self._injury_system.is_cleared_to_fight(f2id)))
+            )
+            if _valid:
+                _kept_q.append(q_fight)
+            else:
+                print(f"  🚫 [LEAD-TIME CANCEL] {q_fight.get('fighter1_name','?')} vs "
+                      f"{q_fight.get('fighter2_name','?')} dropped (broken pair)")
+        self._ai_deferred_bookings = _kept_q
+
+        # Phase 2: hand-off — drain queue items whose target_week is in window
+        _to_drain = [q for q in self._ai_deferred_bookings
+                     if current + 1 <= q.get("week", 0) <= current + 6]
+        _drained_ids = set()
+        for q_fight in _to_drain:
+            target = q_fight.get("week", 0)
+            if target not in self._upcoming_cards:
+                self._upcoming_cards[target] = self._create_empty_card_dict(target)
+            # Sub-ship A regression fix: respect card capacity on hand-off.
+            # Without this gate, queue items accumulated across multiple
+            # advance-weeks all drain onto the same card when target_week
+            # enters window (DFC 45 reached 29 fights pre-fix). Dropped
+            # queue items become eligible in next advance's candidate
+            # generation since they're no longer in any sink.
+            if len(self._upcoming_cards[target]["fights"]) >= CARD_TARGET_FIGHTS:
+                print(f"  ⚠️  [LEAD-TIME OVERFLOW] {q_fight.get('fighter1_name','?')} vs "
+                      f"{q_fight.get('fighter2_name','?')} dropped (DFC {target} at capacity)")
+                _drained_ids.add(q_fight.get("fight_id", ""))
+                continue
+            self._upcoming_cards[target]["fights"].append(q_fight)
+            _drained_ids.add(q_fight.get("fight_id", ""))
+            print(f"  📅 [LEAD-TIME HANDOFF] {q_fight.get('fighter1_name','?')} vs "
+                  f"{q_fight.get('fighter2_name','?')} → DFC {target}")
+        self._ai_deferred_bookings = [q for q in self._ai_deferred_bookings
+                                       if q.get("fight_id", "") not in _drained_ids]
+
+        # Phase 3: build/extend cards for pipeline window
+        # (always-call so drain-only cards get topped up; idempotent because
+        #  Site 4's reuse-existing logic preserves existing fights and
+        #  target_count gate prevents over-fill)
         for w in range(current + 1, current + 7):
-            if w not in self._upcoming_cards:
-                self._upcoming_cards[w] = self._build_card_for_week(w)
+            self._upcoming_cards[w] = self._build_card_for_week(w)
 
     def get_upcoming_events(self, limit: int = 8, max_weeks_out: int = 10) -> List[Dict[str, Any]]:
         """Return upcoming DFC cards for the UI — capped at limit events and max_weeks_out."""
