@@ -1629,25 +1629,6 @@ def register_routes(app):
     # PROSPECTS & AMATEUR CIRCUIT
     # =========================================================================
 
-    @app.route('/prospects')
-    def prospects():
-        """Scouting / prospect pipeline page."""
-        bridge = get_bridge()
-        if not bridge.game_started:
-            return redirect(url_for('new_game'))
-        try:
-            scouting = bridge.get_scouting_data()
-        except Exception:
-            scouting = {}
-        fighters  = bridge.get_player_fighters()
-        watchlist = bridge.get_watchlist()
-        return render_template('prospects.html',
-            week=bridge.week_number,
-            scouting=scouting,
-            fighters=fighters,
-            watchlist=watchlist,
-        )
-
     @app.route('/amateur-circuit')
     def amateur_circuit():
         """Amateur circuit overview — rankings, tournaments, eligible prospects."""
