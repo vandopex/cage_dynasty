@@ -191,7 +191,16 @@
                     <div>
                         <div style="font-family:var(--font-display);font-size:.95rem;
                                     color:var(--text-bright);">
-                            {{ fight.fighter.name if fight.fighter is defined else '?' }}
+                            {% if fight.fighter is defined %}
+                                {{ fight.fighter.name }}
+                            {% else %}
+                                {# Free-agent player booking — show name + Free Agent chip per Ship #17 idiom #}
+                                {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %}
+                                <span style="font-size:.6rem;color:var(--info);background:rgba(74,158,255,0.15);
+                                             padding:1px 6px;border-radius:3px;margin-left:6px;
+                                             text-transform:uppercase;letter-spacing:.05em;
+                                             font-family:var(--font-display);">📋 Free Agent</span>
+                            {% endif %}
                             <span style="color:var(--text-muted);font-size:.8rem;">vs</span>
                             {{ fight.fighter2_name }}
                         </div>

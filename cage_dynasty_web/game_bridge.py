@@ -2253,6 +2253,25 @@ class GameBridge:
                         "category": "player_result",
                         "week": self._game_state.week_number,
                     })
+            elif fight.get("is_player_fight") and not ftr.camp_id:
+                # Free-agent the player booked via challenge/offer flow.
+                # No camp-record bump (no camp to bump). Fire a 📋 Free Agents
+                # news item so the player knows the booking resolved and the
+                # fighter is back in the pool, addressable via /fighter/<id>
+                # (existing Challenge button on profile page).
+                _opp_name = loser.name if is_win else winner.name
+                _ev = fight.get("event_name", "DFC")
+                if is_win:
+                    _hl = (f"📋 Free agent {ftr.name} won for you over {_opp_name} "
+                           f"at {_ev} — back in the pool, available to challenge again.")
+                else:
+                    _hl = (f"📋 Free agent {ftr.name} dropped one to {_opp_name} "
+                           f"at {_ev} — back in the pool.")
+                self._news_items.insert(0, {
+                    "headline": _hl,
+                    "category": "contract",
+                    "week":     self._game_state.week_number,
+                })
         # Clear camp cache so dashboard shows updated record
         self._camp_cache.clear()
 
