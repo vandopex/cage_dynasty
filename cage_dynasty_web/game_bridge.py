@@ -1563,8 +1563,8 @@ class GameBridge:
                         print(f"  🏆 [SLICE 4] {_ftr_s4.name} healed; existing fight is the return")
                         del self._champion_holds[_fid_s4]
                         continue
-                    # Branch (b)/(c): attempt booking
-                    _booking_s4 = self._book_mandatory_return_defense(_fid_s4, _wc_s4)
+                    # Branch (b)/(c): attempt booking via shared helper (sub-ship B)
+                    _booking_s4 = self._book_title_fight(_wc_s4, fixed_fighter=_ftr_s4)
                     if _booking_s4:
                         _slice4_handled.add(_fid_s4)
                         del self._champion_holds[_fid_s4]
@@ -1743,10 +1743,10 @@ class GameBridge:
                         if _slice_2_5_handled:
                             continue
 
-                        # Slice 2 — book vacant-title fight via shared helper
-                        self._book_vacant_title_fight(
+                        # Slice 2 — book vacant-title fight via shared helper (sub-ship B)
+                        self._book_title_fight(
                             wc,
-                            exclude_fighter_ids={champ.fighter_id} if champ else None,
+                            exclude_ids={champ.fighter_id} if champ else None,
                         )
 
             # ── Autosave every 5 weeks ─────────────────────────────────
@@ -3197,28 +3197,33 @@ class GameBridge:
         # Remove the offer
         self._fight_offers = [o for o in self._fight_offers if o["offer_id"] != offer_id]
 
-        # Vacant-title decline → AI #1 vs #2 fallback (Slice 2.5)
+        # Vacant-title decline → AI #1 vs #2 fallback (Slice 2.5, sub-ship B)
         if _declined and _declined.get("source") == "vacant_title":
             _wc = _declined.get("vacant_division")
             if _wc:
-                self._book_vacant_title_ai_fallback(_wc)
+                self._book_title_fight(_wc, decline_context="player declined the shot")
 
         return {"success": True, "message": "Offer declined"}
-
-    def _book_vacant_title_ai_fallback(self, wc: str) -> None:
-        """Book AI #1 vs #2 vacant-title fight when player declines a Slice 2.5 offer."""
-        self._book_vacant_title_fight(wc, decline_context="player declined the shot")
 
     def _preview_vacant_title_contenders(
         self,
         wc: str,
         exclude_fighter_ids: Optional[Set[str]] = None,
+        min_contenders: int = 2,
+        require_open_slot: bool = True,
     ) -> Optional[Dict[str, Any]]:
         """Slice 3 — read-only preview of who'd fight for a vacant title in {wc}.
-        Returns dict with top1, top2, target_event_name, target_week, weeks_away,
-        or None if booking would not be possible. Idempotent — safe from a route
-        render handler. Used by Slice 3's decision page; also used internally by
-        _book_vacant_title_fight as the contender filter + card scan."""
+        Returns dict with top1, top2 (may be None if min_contenders=1),
+        target_event_name, target_week, weeks_away, or None if booking
+        not possible. Idempotent — safe from a route render handler.
+
+        Sub-ship B parameterization:
+        - min_contenders: 1 if caller only needs an opponent (mandatory return
+          defense) else 2 (vacant title needs top1 + top2). Default 2.
+        - require_open_slot: when False, contender selection runs but the
+          next-open-main-event scan is skipped (target_event_name/target_week
+          come back as None). Lead-time-aware callers compute target_week
+          themselves via _weeks_out_for_fight."""
         if not self._game_state:
             return None
         div = self._game_state.divisions.get(wc)
@@ -3237,6 +3242,11 @@ class GameBridge:
             for _f_b in _card_b.get("fights", []):
                 _all_booked.add(_f_b.get("fighter1_id", ""))
                 _all_booked.add(_f_b.get("fighter2_id", ""))
+        # Sub-ship B: include queue entries to prevent double-pairing across
+        # helper-origin and booker-origin bookings on the same fighters.
+        for q_fight in self._ai_deferred_bookings:
+            _all_booked.add(q_fight.get("fighter1_id", ""))
+            _all_booked.add(q_fight.get("fighter2_id", ""))
 
         _contenders = []
         for _fid in div.rankings[:8]:
@@ -3256,128 +3266,173 @@ class GameBridge:
             if len(_contenders) >= 2:
                 break
 
-        if len(_contenders) < 2:
+        if len(_contenders) < min_contenders:
             return None
 
+        # Slot scan is optional — lead-time-aware callers compute target_week
+        # themselves from _weeks_out_for_fight and don't need preview's scan.
         _target_card = None
-        for _wk_s in sorted(self._upcoming_cards.keys()):
-            if _wk_s <= current_week:
-                continue
-            _card_s = self._upcoming_cards[_wk_s]
-            _has_main = any(
-                _f_s.get("card_slot") == "main_event"
-                for _f_s in _card_s.get("fights", [])
-            )
-            if not _has_main:
-                _target_card = _card_s
-                break
-
-        if not _target_card:
-            return None
+        if require_open_slot:
+            for _wk_s in sorted(self._upcoming_cards.keys()):
+                if _wk_s <= current_week:
+                    continue
+                _card_s = self._upcoming_cards[_wk_s]
+                _has_main = any(
+                    _f_s.get("card_slot") == "main_event"
+                    for _f_s in _card_s.get("fights", [])
+                )
+                if not _has_main:
+                    _target_card = _card_s
+                    break
+            if not _target_card:
+                return None
 
         return {
             "top1":              _contenders[0],
-            "top2":              _contenders[1],
-            "target_event_name": _target_card["event_name"],
-            "target_week":       _target_card["week"],
-            "weeks_away":        _target_card["week"] - current_week,
+            "top2":              _contenders[1] if len(_contenders) > 1 else None,
+            "target_event_name": _target_card["event_name"] if _target_card else None,
+            "target_week":       _target_card["week"] if _target_card else None,
+            "weeks_away":        (_target_card["week"] - current_week) if _target_card else None,
         }
 
-    def _book_vacant_title_fight(
+    def _book_title_fight(
         self,
         wc: str,
-        exclude_fighter_ids: Optional[Set[str]] = None,
+        fixed_fighter: Optional["WebFighter"] = None,
+        exclude_ids: Optional[Set[str]] = None,
+        apply_lead_time: bool = True,
         decline_context: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Slice 2/2.5/3 shared helper — book AI #1 vs #2 for vacant title.
-        Used by Slice 2 (auto-vacate), Slice 2.5 fallback (decline), and
-        Slice 3 (player vacate handler). Returns booked fight info dict or
-        None if booking not possible."""
-        preview = self._preview_vacant_title_contenders(wc, exclude_fighter_ids)
-        if not preview:
-            print(f"  ⚠️ [VACANT TITLE] {wc} — no bookable contender pair; deferred")
-            return None
+        """Sub-ship B (Ship #21) — unified title-fight booking helper.
 
-        target_card = self._upcoming_cards.get(preview["target_week"])
-        if not target_card:
-            return None
+        Replaces _book_vacant_title_fight (vacant title via top1+top2),
+        _book_mandatory_return_defense (champion vs top1), and
+        _book_vacant_title_ai_fallback (decline-fallback wrapper). All four
+        slice helper sites (Slice 0.75/2 auto-vacate, Slice 4 mandatory return,
+        Slice 2.5 decline fallback, Slice 3 player vacate) route through here.
 
-        top1, top2 = preview["top1"], preview["top2"]
-        fdict = self._make_scheduled_fight(
-            top1, top2, wc, preview["target_event_name"],
-            preview["target_week"], "main_event", is_title=True,
-        )
-        target_card["fights"].append(fdict)
+        When apply_lead_time=True (default), routes via Ship #20's
+        _ai_deferred_bookings queue when target_week is outside the rolling
+        6-week pipeline window, or direct-writes when in window with an open
+        main_event slot. When False, falls back to next-open-slot direct-write
+        via preview's slot scan (override path; not used by current sites,
+        kept for future flexibility).
 
-        _suffix = f" ({decline_context})" if decline_context else ""
-        print(f"  🏆 [VACANT TITLE BOOKED] {wc} — {top1.name} vs {top2.name} "
-              f"at {preview['target_event_name']} (Wk {preview['target_week']}){_suffix}")
-        _headline_suffix = f" ({decline_context})." if decline_context else "."
-        self._news_items.insert(0, {
-            "headline": (f"🏆 VACANT TITLE FIGHT: {top1.name} vs {top2.name} "
-                         f"for the {wc} belt at {preview['target_event_name']}{_headline_suffix}"),
-            "category": "title",
-            "week":     self._game_state.week_number,
-        })
-        return {
-            "top1_name":    top1.name,
-            "top2_name":    top2.name,
-            "target_event": preview["target_event_name"],
-            "target_week":  preview["target_week"],
-            "fight_id":     fdict.get("fight_id"),
-        }
+        Args:
+            wc: weight class
+            fixed_fighter: champion (mandatory return mode) or None (vacant)
+            exclude_ids: extra fighters to exclude from contender pool
+            apply_lead_time: if True, route via _weeks_out_for_fight + queue;
+                             if False, use preview's next-open-slot direct-write
+            decline_context: narrative suffix for news/log (Slice 2.5 decline)
 
-    def _book_mandatory_return_defense(
-        self,
-        champion_id: str,
-        wc: str,
-        exclude_ids: Optional[Set[str]] = None,
-    ) -> Optional[Dict[str, Any]]:
-        """Slice 4 — book champion's mandatory return title defense.
-        Champion is fixed; opponent is the top eligible non-champion contender.
-        Returns booked fight info dict or None if booking deferred (no card / no
-        contender). Caller handles deferral by leaving _champion_holds entry alive."""
+        Returns: booked fight info dict on success, None on deferral.
+        """
         if not self._game_state:
-            return None
-        champion = self._game_state.get_fighter(champion_id)
-        if not champion:
             return None
 
         _exclude = set(exclude_ids or [])
-        _exclude.add(champion_id)
+        if fixed_fighter is not None:
+            _exclude.add(fixed_fighter.fighter_id)
 
-        preview = self._preview_vacant_title_contenders(wc, _exclude)
-        if not preview:
-            print(f"  ⚠️ [MANDATORY DEFENSE] {wc} — no bookable contender for "
-                  f"{champion.name}; deferred")
-            return None
+        _is_mandatory = fixed_fighter is not None
+        _min_contenders = 1 if _is_mandatory else 2
 
-        target_card = self._upcoming_cards.get(preview["target_week"])
-        if not target_card:
-            return None
-
-        opponent = preview["top1"]
-        fdict = self._make_scheduled_fight(
-            champion, opponent, wc, preview["target_event_name"],
-            preview["target_week"], "main_event", is_title=True,
+        # Lead-time path doesn't need preview's open-slot scan — we compute
+        # target_week ourselves. Override path needs the slot scan.
+        preview = self._preview_vacant_title_contenders(
+            wc, _exclude,
+            min_contenders=_min_contenders,
+            require_open_slot=not apply_lead_time,
         )
-        target_card["fights"].append(fdict)
+        if not preview:
+            _label = "MANDATORY DEFENSE" if _is_mandatory else "VACANT TITLE"
+            _who = f" for {fixed_fighter.name}" if _is_mandatory else ""
+            print(f"  ⚠️ [{_label}] {wc} — no bookable contender{_who}; deferred")
+            return None
 
-        print(f"  🏆 [MANDATORY DEFENSE BOOKED] {wc} — {champion.name} vs "
-              f"{opponent.name} at {preview['target_event_name']} "
-              f"(Wk {preview['target_week']})")
+        # Pair selection
+        if _is_mandatory:
+            f1 = fixed_fighter
+            f2 = preview["top1"]
+        else:
+            f1 = preview["top1"]
+            f2 = preview["top2"]
+
+        current = self._game_state.week_number
+
+        # target_week: lead-time computation vs preview's slot scan
+        if apply_lead_time:
+            if _is_mandatory:
+                # Champion is rank 0 sentinel; opponent uses real rank
+                _r1, _r2 = 0, self._get_fighter_rank(f2)
+            else:
+                # Vacant title: both contenders use real ranks
+                _r1 = self._get_fighter_rank(f1)
+                _r2 = self._get_fighter_rank(f2)
+            _wks_out = self._weeks_out_for_fight(_r1, _r2)
+            target_week = current + _wks_out
+            event_name = f"DFC {target_week}"
+        else:
+            target_week = preview["target_week"]
+            event_name = preview["target_event_name"]
+
+        # Build the fight dict (same shape as booker-origin queue entries)
+        fdict = self._make_scheduled_fight(
+            f1, f2, wc, event_name, target_week, "main_event", is_title=True,
+        )
+
+        # Routing: direct-write to in-window card with open main_event slot,
+        # else queue for Phase 2 hand-off (lead-time path) or fail (override).
+        in_window = current + 1 <= target_week <= current + 6
+        target_card = self._upcoming_cards.get(target_week) if in_window else None
+        has_open_main = target_card is not None and not any(
+            _f.get("card_slot") == "main_event"
+            for _f in target_card.get("fights", [])
+        )
+
+        if in_window and has_open_main:
+            target_card["fights"].append(fdict)
+            _routed = "BOOKED"
+        elif apply_lead_time:
+            # Out of window OR slot taken — queue for Phase 2 hand-off.
+            # Phase 1 cancellation re-eval (broken pair) and Phase 2 capacity
+            # gate apply equally to helper-origin entries; no special handling.
+            self._ai_deferred_bookings.append(fdict)
+            _routed = "QUEUED"
+        else:
+            # Override path with no open slot found (defensive — preview would
+            # have returned None already, but guard against future drift)
+            return None
+
+        # Terminal log + news headline
+        _label = "MANDATORY DEFENSE" if _is_mandatory else "VACANT TITLE"
+        _emoji = "🏆" if _routed == "BOOKED" else "📅"
+        _suffix = f" ({decline_context})" if decline_context else ""
+        _wks_away = target_week - current
+        print(f"  {_emoji} [{_label} {_routed}] {wc} — {f1.name} vs {f2.name} "
+              f"at {event_name} (Wk {target_week}, +{_wks_away}w){_suffix}")
+
+        if _is_mandatory:
+            _headline = (f"🏆 {f1.name} returns to action — {wc} title defense "
+                         f"booked vs {f2.name} at {event_name}")
+        else:
+            _headline_suffix = f" ({decline_context})." if decline_context else "."
+            _headline = (f"🏆 VACANT TITLE FIGHT: {f1.name} vs {f2.name} "
+                         f"for the {wc} belt at {event_name}{_headline_suffix}")
         self._news_items.insert(0, {
-            "headline": (f"🏆 {champion.name} returns to action — {wc} title defense "
-                         f"booked vs {opponent.name} at {preview['target_event_name']}"),
+            "headline": _headline,
             "category": "title",
-            "week":     self._game_state.week_number,
+            "week":     current,
         })
+
         return {
-            "champion_name":  champion.name,
-            "opponent_name":  opponent.name,
-            "target_event":   preview["target_event_name"],
-            "target_week":    preview["target_week"],
-            "fight_id":       fdict.get("fight_id"),
+            "f1_name":      f1.name,
+            "f2_name":      f2.name,
+            "target_event": event_name,
+            "target_week":  target_week,
+            "fight_id":     fdict.get("fight_id"),
+            "routed":       _routed,
         }
 
     def _maybe_queue_champion_injury_decision(self, ftr, injury) -> None:
@@ -3445,8 +3500,8 @@ class GameBridge:
                     "category": "title",
                     "week":     self._game_state.week_number,
                 })
-            self._book_vacant_title_fight(
-                wc, exclude_fighter_ids={fighter_id},
+            self._book_title_fight(
+                wc, exclude_ids={fighter_id},
             )
         elif choice == "hold":
             self._champion_holds[fighter_id] = {
