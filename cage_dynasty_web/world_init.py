@@ -112,6 +112,14 @@ try:
 except ImportError:
     pass
 
+# Aging System (for during-sim aging, decline, retirement)
+AGING_AVAILABLE = False
+try:
+    from aging import AgingSystem, calculate_retirement_probability
+    AGING_AVAILABLE = True
+except ImportError:
+    pass
+
 
 # ============================================================================
 # NAME DATABASE (Comprehensive)
@@ -272,9 +280,14 @@ class GeneratedFighter:
     # Streak tracking
     current_win_streak: int = 0
     current_loss_streak: int = 0
-    
+
     # Activity tracking (for decay)
     last_fight_week: int = 0
+
+    # Lifecycle (aging-during-sim)
+    is_active: bool = True
+    retirement_age: Optional[int] = None
+    retirement_week: Optional[int] = None
 
 
 @dataclass
@@ -466,17 +479,18 @@ class BeltHistory:
         weight_class: str,
         week: int,
         event_name: str,
+        won_method: str = "Inaugural Champion",
     ) -> BeltReign:
-        """Crown the inaugural champion of a division"""
+        """Crown the inaugural champion of a division (or a vacant-title winner via won_method override)"""
         reign = BeltReign(
             champion_id=fighter_id,
             champion_name=fighter_name,
             weight_class=weight_class,
             won_week=week,
             won_event=event_name,
-            won_from=None,  # Inaugural
+            won_from=None,  # Inaugural / vacated belt — no predecessor
             won_from_name=None,
-            won_method="Inaugural Champion",
+            won_method=won_method,
         )
         self.reigns[weight_class].append(reign)
         self.current_champions[weight_class] = fighter_id
@@ -525,6 +539,18 @@ class BeltHistory:
             current_reign = self.reigns[weight_class][-1]
             if current_reign.is_active:
                 current_reign.successful_defenses += 1
+
+    def vacate_belt(self, weight_class: str, week: int, event_name: str, reason: str = "Retired") -> None:
+        """End the current reign without crowning a new champion. Belt sits vacant until next title fight."""
+        if self.reigns[weight_class]:
+            current_reign = self.reigns[weight_class][-1]
+            if current_reign.is_active:
+                current_reign.lost_week = week
+                current_reign.lost_event = event_name
+                current_reign.lost_to = None
+                current_reign.lost_to_name = None
+                current_reign.lost_method = reason
+        self.current_champions.pop(weight_class, None)
     
     def get_current_champion(self, weight_class: str) -> Optional[str]:
         """Get current champion ID for a weight class"""
@@ -1033,31 +1059,48 @@ class HistorySimulator:
     EVENTS_PER_WEEK = 1
     FIGHTS_PER_EVENT = (10, 14)  # Min, max fights per card
     
-    def __init__(self, fighters: Dict[str, GeneratedFighter], use_full_engine: bool = True):
+    def __init__(
+        self,
+        fighters: Dict[str, GeneratedFighter],
+        use_full_engine: bool = True,
+        camps: Optional[Dict[str, "GeneratedCamp"]] = None,
+        fighter_gen: Optional["FighterGenerator"] = None,
+    ):
         """
         Initialize history simulator.
-        
+
         Args:
             fighters: Dictionary of generated fighters
             use_full_engine: If True, use full fight engine for realistic results
+            camps: Optional camps dict (enables prospect camp placement during sim)
+            fighter_gen: Optional FighterGenerator (enables prospect spawning during sim)
         """
         self.fighters = fighters
+        self.camps = camps or {}
+        self.fighter_gen = fighter_gen
         self.fight_history: List[SimulatedFight] = []
         self.events: List[SimulatedEvent] = []
         self.title_holders: Dict[str, str] = {}  # weight_class -> fighter_id
         self.use_full_engine = use_full_engine and FULL_ENGINE_AVAILABLE
-        
+
         # Belt history tracking
         self.belt_history = BeltHistory()
-        
+
         # Track event numbering
         self.next_event_number = 1
-        
+
         # Track fighter cooldowns (weeks since last fight)
         self.fighter_last_fight: Dict[str, int] = {}  # fighter_id -> week_number
-        
+
         # Rankings cache
         self.division_rankings: Dict[str, List[Tuple[str, int]]] = {}  # wc -> [(fighter_id, rank)]
+
+        # Aging-during-sim
+        self.aging_system: Optional[AgingSystem] = AgingSystem() if AGING_AVAILABLE else None
+        self.vacant_divisions: Set[str] = set()
+        self.retirement_count: int = 0
+        self.replacement_count: int = 0
+        self.champion_retirement_count: int = 0
     
     def crown_initial_champions(self) -> None:
         """
@@ -1278,7 +1321,10 @@ class HistorySimulator:
         winner.current_loss_streak = 0
         loser.current_win_streak = 0
         loser.current_loss_streak += 1
-        
+
+        # Post-fight retirement check (lose-streak ≥3 triggers a roll)
+        self._maybe_retire_post_fight(loser, current_week, event_name)
+
         # Handle title
         was_title_defense = False
         if is_title_fight:
@@ -1307,10 +1353,18 @@ class HistorySimulator:
                 was_title_defense = True
                 self.belt_history.record_title_defense(weight_class)
             else:
-                # Edge case: neither was champion but it's a title fight
-                # (shouldn't happen but handle gracefully)
+                # Vacant-title fight (no current champion): winner claims the vacated belt.
+                # Records into belt_history with a distinguishing won_method.
                 winner.is_champion = True
                 self.title_holders[weight_class] = winner.fighter_id
+                self.belt_history.crown_initial_champion(
+                    fighter_id=winner.fighter_id,
+                    fighter_name=winner.name,
+                    weight_class=weight_class,
+                    week=current_week,
+                    event_name=event_name,
+                    won_method=f"Won Vacant Title ({method})",
+                )
         
         # Update popularity
         winner_pop_change = calculate_popularity_change(
@@ -1400,20 +1454,27 @@ class HistorySimulator:
     
     def _is_fighter_available(self, fighter_id: str, current_week: int, booked_this_week: Set[str]) -> bool:
         """Check if fighter is available for booking"""
+        fighter = self.fighters.get(fighter_id)
+        if fighter is None or not fighter.is_active:
+            return False
+
         if fighter_id in booked_this_week:
             return False
-        
+
         # Cooldown check (minimum 4 weeks between fights)
         last_fight = self.fighter_last_fight.get(fighter_id, -10)
         if current_week - last_fight < 4:
             return False
-        
+
         return True
     
     def update_rankings(self):
         """Recalculate rankings based on current records."""
         for weight_class in WEIGHT_CLASSES:
-            division_fighters = [f for f in self.fighters.values() if f.weight_class == weight_class]
+            division_fighters = [
+                f for f in self.fighters.values()
+                if f.weight_class == weight_class and f.is_active
+            ]
             
             # Sort by: champion first, then win percentage, then total wins, then popularity
             def rank_key(f: GeneratedFighter):
@@ -1609,8 +1670,24 @@ class HistorySimulator:
         
         # === MAIN EVENT ===
         main_event_fight = None
-        
-        # First try: Title fight
+
+        # First priority: Vacant-title fight (champion retired or otherwise vacated)
+        for wc in list(self.vacant_divisions):
+            if main_event_fight:
+                break
+            rankings = self.division_rankings.get(wc, [])
+            top_contenders = [fid for fid, _ in rankings[:5] if is_available(fid)]
+            if len(top_contenders) >= 2:
+                f1_id, f2_id = top_contenders[0], top_contenders[1]
+                fight = make_fight(f1_id, f2_id, True, "main_event")
+                if fight:
+                    main_event_fight = fight
+                    book_fighter(f1_id)
+                    book_fighter(f2_id)
+                    # Vacant belt is now claimed; clear from set
+                    self.vacant_divisions.discard(wc)
+
+        # Second try: Title fight
         for wc in divisions:
             if main_event_fight:
                 break
@@ -1776,26 +1853,31 @@ class HistorySimulator:
         booked_this_period: Set[str] = set()
         
         for week in range(1, weeks + 1):
+            # Annual aging tick (every 52 weeks): age all active fighters,
+            # apply attribute decline, roll annual retirement, spawn replacements.
+            if week % 52 == 0:
+                self._process_annual_aging(year=week // 52, current_week=week)
+
             # Update rankings periodically (every 4 weeks)
             if week % 4 == 0:
                 self.update_rankings()
-            
+
             # Clear period cooldowns periodically
             if week % 2 == 0:
                 booked_this_period.clear()
-            
+
             # Build event card for this week
             event = self._build_event_card(week, booked_this_period)
             self.events.append(event)
-            
+
             # Progress indicator
             if week % 20 == 0:
                 title_fights = sum(1 for e in self.events if e.main_event and e.main_event.was_title_fight)
                 print(f"    Week {week}/{weeks} - DFC {event.event_number} ({event.total_fights} fights, {title_fights} title fights so far)")
-        
+
         # Final ranking update
         self.update_rankings()
-        
+
         # Summary
         title_fights = sum(1 for f in self.fight_history if f.was_title_fight)
         title_changes = sum(
@@ -1804,7 +1886,166 @@ class HistorySimulator:
         )
         print(f"  Created {len(self.events)} events (DFC 1 - DFC {self.next_event_number - 1})")
         print(f"  Total fights: {len(self.fight_history)} | Title fights: {title_fights} | Title changes: {title_changes}")
+        print(f"  Aging: {self.retirement_count} retirements ({self.champion_retirement_count} champions) | {self.replacement_count} replacement prospects")
     
+    # ========================================================================
+    # AGING-DURING-SIM
+    # ========================================================================
+
+    def _process_annual_aging(self, year: int, current_week: int) -> None:
+        """
+        Annual tick: age every active fighter by 1 year, apply attribute
+        decline, roll annual retirement probability. After retirements,
+        spawn replacement prospects 1:1 same-division (Lock 3).
+        """
+        if not self.aging_system:
+            return
+
+        retired_by_division: Dict[str, int] = {}
+
+        for fighter in list(self.fighters.values()):
+            if not fighter.is_active:
+                continue
+
+            # Age the fighter
+            fighter.age += 1
+
+            # Apply attribute decline (returns dict of negative deltas)
+            ko_losses = sum(
+                1 for fr in fighter.fight_history
+                if fr.get("result") == "L" and fr.get("method") in ("KO", "TKO")
+            )
+            try:
+                changes = self.aging_system.apply_annual_decline(
+                    fighter_id=fighter.fighter_id,
+                    age=fighter.age,
+                    current_attributes=fighter.attributes,
+                    ko_losses=ko_losses,
+                )
+            except Exception as e:
+                print(f"  [AGING] apply_annual_decline failed for {fighter.name} age {fighter.age}: {e}")
+                changes = {}
+            for attr, delta in changes.items():
+                if attr in fighter.attributes:
+                    fighter.attributes[attr] = max(1, fighter.attributes[attr] + delta)
+            # Recompute skill_rating from updated attributes
+            if fighter.attributes:
+                fighter.skill_rating = sum(fighter.attributes.values()) // len(fighter.attributes)
+
+            # Annual retirement roll
+            prob = calculate_retirement_probability(
+                age=fighter.age,
+                current_lose_streak=fighter.current_loss_streak,
+                is_champion=fighter.is_champion,
+                total_fights=fighter.wins + fighter.losses + fighter.draws,
+                morale=50,
+            )
+
+            if prob > 0 and random.random() < prob:
+                self._retire_fighter(fighter, current_week, reason="Annual age check")
+                retired_by_division[fighter.weight_class] = retired_by_division.get(fighter.weight_class, 0) + 1
+
+        # Spawn replacement prospects 1:1 same-division (Lock 3)
+        for wc, count in retired_by_division.items():
+            for _ in range(count):
+                self._spawn_replacement_prospect(wc)
+
+        # Refresh rankings after aging tick (retired fighters drop out)
+        self.update_rankings()
+
+    def _maybe_retire_post_fight(self, loser: GeneratedFighter, current_week: int, event_name: str) -> None:
+        """Post-fight retirement check: only fires when lose-streak ≥3 (Lock 1)."""
+        if not self.aging_system:
+            return
+        if loser.current_loss_streak < 3:
+            return
+        if not loser.is_active:
+            return
+
+        prob = calculate_retirement_probability(
+            age=loser.age,
+            current_lose_streak=loser.current_loss_streak,
+            is_champion=loser.is_champion,
+            total_fights=loser.wins + loser.losses + loser.draws,
+            morale=50,
+        )
+
+        if prob > 0 and random.random() < prob:
+            self._retire_fighter(loser, current_week, reason=f"Post-fight ({event_name})")
+            # Spawn 1:1 replacement immediately
+            self._spawn_replacement_prospect(loser.weight_class)
+
+    def _retire_fighter(self, fighter: GeneratedFighter, current_week: int, reason: str) -> None:
+        """Mark a fighter retired. If champion, vacate the belt and queue a vacant-title fight."""
+        fighter.is_active = False
+        fighter.retirement_age = fighter.age
+        fighter.retirement_week = current_week
+        self.retirement_count += 1
+
+        if fighter.is_champion:
+            self.champion_retirement_count += 1
+            wc = fighter.weight_class
+            fighter.is_champion = False
+            self.title_holders.pop(wc, None)
+            # Belt vacates; next event card prioritizes top-2 vacant-title fight.
+            self.belt_history.vacate_belt(
+                weight_class=wc,
+                week=current_week,
+                event_name=reason,
+                reason="Retired",
+            )
+            self.vacant_divisions.add(wc)
+
+    def _spawn_replacement_prospect(self, weight_class: str) -> None:
+        """Spawn a developing prospect into the same division and place into a camp if possible."""
+        if not self.fighter_gen:
+            return
+        try:
+            prospect = self.fighter_gen.generate_fighter(
+                weight_class=weight_class,
+                skill_tier="developing",
+                age_range=(21, 25),
+            )
+        except Exception:
+            return
+
+        self.fighters[prospect.fighter_id] = prospect
+        self._place_prospect_in_camp(prospect)
+        self.replacement_count += 1
+
+    def _place_prospect_in_camp(self, prospect: GeneratedFighter) -> None:
+        """
+        Lock 4: walk same-division camps with ≥1 fighter in the prospect's
+        weight class, filter to those under MAX_PER_DIVISION, pick the
+        lowest-count camp. Fall back to camp_id=None (free agent) if all saturated.
+        """
+        if not self.camps:
+            return  # No camp registry available; remains free agent
+
+        MAX_PER_DIVISION = 2
+        wc = prospect.weight_class
+
+        # Compute per-camp count of fighters in this division (active only)
+        camp_div_counts: Dict[str, int] = {}
+        for f in self.fighters.values():
+            if f.is_active and f.camp_id and f.weight_class == wc:
+                camp_div_counts[f.camp_id] = camp_div_counts.get(f.camp_id, 0) + 1
+
+        # Qualifying = camps that already have ≥1 in this division and are under cap
+        qualifying = [
+            (cid, count) for cid, count in camp_div_counts.items()
+            if count < MAX_PER_DIVISION and cid in self.camps
+        ]
+        if not qualifying:
+            return  # Saturated; remains free agent
+
+        qualifying.sort(key=lambda pair: pair[1])  # Lowest-count first
+        chosen_cid = qualifying[0][0]
+        prospect.camp_id = chosen_cid
+        camp = self.camps.get(chosen_cid)
+        if camp is not None:
+            camp.fighter_ids.append(prospect.fighter_id)
+
     def calculate_rankings(self) -> Dict[str, List[str]]:
         """Calculate and return final rankings"""
         self.update_rankings()
@@ -2119,7 +2360,11 @@ class WorldInitializer:
         
         print(f"Simulating {self.history_weeks} weeks of fight history...")
         
-        self._history_sim = HistorySimulator(self.fighters)
+        self._history_sim = HistorySimulator(
+            self.fighters,
+            camps=self.camps,
+            fighter_gen=self.fighter_gen,
+        )
         self._history_sim.simulate_history(self.history_weeks)
         
         # Get final rankings
@@ -2224,6 +2469,7 @@ class WorldInitializer:
                 draws=fighter.draws,
                 is_champion=fighter.is_champion,
                 overall_rating=fighter.skill_rating,
+                is_active=fighter.is_active,
             )
             # Add popularity if the record supports it
             if hasattr(record, 'popularity'):
