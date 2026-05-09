@@ -46,8 +46,17 @@ from fight_engine import (
 
 # fight_integration runs a longer commentary exchange loop than fight_engine.simulate_fight
 # so the effective damage per fight is higher — this multiplier is tuned separately
-# to produce realistic finish rates (~35-40%) for the narrated fight path
-FI_DAMAGE_MULTIPLIER = 0.32
+# to produce realistic finish rates (50-55% target) for the narrated fight path.
+# Ship A two-iteration tune (2026-05-09):
+#   0.32 (Saturday play: 11% finish rate, broken)
+#   → 0.38 (Tier 2 verified: 70% across DFC 16-18, over-corrected)
+#   → 0.36 (final, lands in 50-55% target)
+# Synthetic-vs-production gap: synthetic n=300 batches predicted finish rates
+# ~20-30 points below production reality at the same multiplier. Production
+# may have damage-amplifying factors (gameplan, condition, fighter attrs from
+# real game_state) that the random-Gaussian synthetic doesn't capture. Future
+# tuning should weight production observations over synthetic.
+FI_DAMAGE_MULTIPLIER = 0.36
 
 # Define missing position sets locally
 GROUND_TOP_POSITIONS = {
