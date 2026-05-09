@@ -120,6 +120,18 @@ try:
 except ImportError:
     pass
 
+# Rivalry System (for during-sim rivalry seeding from repeat matchups)
+RIVALRY_AVAILABLE = False
+try:
+    from rivalry import get_rivalry_system, FightContext
+    RIVALRY_AVAILABLE = True
+except ImportError:
+    try:
+        from narrative.rivalry import get_rivalry_system, FightContext
+        RIVALRY_AVAILABLE = True
+    except ImportError:
+        pass
+
 
 # ============================================================================
 # NAME DATABASE (Comprehensive)
@@ -1101,6 +1113,10 @@ class HistorySimulator:
         self.retirement_count: int = 0
         self.replacement_count: int = 0
         self.champion_retirement_count: int = 0
+
+        # Rivalry-during-sim (Ship #25)
+        self.rivalry_seeded_count: int = 0
+        self.rivalry_failed_count: int = 0
     
     def crown_initial_champions(self) -> None:
         """
@@ -1394,7 +1410,36 @@ class HistorySimulator:
         loser.last_fight_week = current_week
         self.fighter_last_fight[winner_id] = current_week
         self.fighter_last_fight[loser_id] = current_week
-        
+
+        # Sim-seed rivalry: feed every sim fight through the rivalry system
+        # so repeat matchups build heat retroactively. Persistence wired in
+        # Ship #24; sim-built rivalries survive into player runtime via the
+        # bridge save/load path. Per-fight try/except so a rivalry bookkeeping
+        # issue can't crash world-gen.
+        if RIVALRY_AVAILABLE:
+            try:
+                _is_main_event = (card_slot == "main_event")
+                _total_rounds = 5 if (is_title_fight or _is_main_event) else 3
+                ctx = FightContext(
+                    fight_id=f"sim_{event_name}_{winner_id}",
+                    fighter1_id=winner.fighter_id,
+                    fighter2_id=loser.fighter_id,
+                    fighter1_name=winner.name,
+                    fighter2_name=loser.name,
+                    winner_id=winner.fighter_id,
+                    method=method,
+                    is_title_fight=is_title_fight,
+                    is_main_event=_is_main_event,
+                    round_ended=round_ended,
+                    total_rounds=_total_rounds,
+                    was_close=(method == "SPLIT"),
+                    was_controversial=False,
+                )
+                get_rivalry_system().process_fight(ctx)
+                self.rivalry_seeded_count += 1
+            except Exception:
+                self.rivalry_failed_count += 1
+
         # Create fight record
         fight = SimulatedFight(
             winner_id=winner_id,
@@ -1887,6 +1932,8 @@ class HistorySimulator:
         print(f"  Created {len(self.events)} events (DFC 1 - DFC {self.next_event_number - 1})")
         print(f"  Total fights: {len(self.fight_history)} | Title fights: {title_fights} | Title changes: {title_changes}")
         print(f"  Aging: {self.retirement_count} retirements ({self.champion_retirement_count} champions) | {self.replacement_count} replacement prospects")
+        print(f"  Rivalries seeded: {self.rivalry_seeded_count}" +
+              (f" ({self.rivalry_failed_count} failed)" if self.rivalry_failed_count else ""))
     
     # ========================================================================
     # AGING-DURING-SIM
