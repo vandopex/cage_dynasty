@@ -808,13 +808,28 @@ class GameBridge:
             )
             
             # IMPORTANT: Populate the world with AI camps and fighters!
+            # Ship #28: route through world_init.WorldInitializer instead of
+            # the simple game_state.initialize_world stub. The rich path runs
+            # HistorySimulator (sim'd fight history, champion lineages, Ship
+            # #23 aging hooks, Ship #25 sim-seeded rivalries) so the
+            # lived-in-world payoff actually reaches production new_game.
+            # Existing slot3 etc. unaffected — they load via web_load, not
+            # new_game. Falls back to the simple stub on any failure so
+            # new_game stays robust if rich world-gen breaks.
             print("Populating world with AI camps and fighters...")
-            counts = self._game_state.initialize_world(
-                num_ai_camps=40,           # 40 AI camps
-                fighters_per_division=25,   # 25 fighters per weight class = 225 total
-                generate_history=True       # Create some fight history
-            )
-            print(f"Created {counts.get('camps', 0)} camps, {counts.get('fighters', 0)} fighters")
+            try:
+                from world_init import initialize_world as _world_init_func
+                _initializer = _world_init_func(self._game_state, history_years=2.5)
+                print(f"Created {len(_initializer.camps)} camps, "
+                      f"{len(_initializer.fighters)} fighters with simulated history")
+            except Exception as _wie:
+                print(f"⚠️  Rich world-gen failed ({_wie}) — falling back to simple init")
+                counts = self._game_state.initialize_world(
+                    num_ai_camps=40,           # 40 AI camps
+                    fighters_per_division=25,   # 25 fighters per weight class = 225 total
+                    generate_history=True       # Create some fight history
+                )
+                print(f"Created {counts.get('camps', 0)} camps, {counts.get('fighters', 0)} fighters")
 
             # ── Deduplicate fighter names across all camps ─────────────────
             # Generators run per-camp so same name can appear in different camps
