@@ -1081,6 +1081,7 @@ class GameBridge:
             "contracts":                self._contracts,
             "camp_archetypes":          self._camp_archetypes,
             "injury_system":            self._injury_system.to_dict() if self._injury_system else {},
+            "rivalry_system":           get_rivalry_system().to_dict() if RIVALRY_AVAILABLE else {},
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
             "champion_holds":           self._champion_holds,
@@ -1193,6 +1194,18 @@ class GameBridge:
             except Exception as _ie:
                 print(f"⚠️ Could not restore injury state: {_ie}")
                 self._injury_system = InjurySystem() if InjurySystem else None
+        if RIVALRY_AVAILABLE and "rivalry_system" in data:
+            try:
+                # Mutate the module-level singleton in-place so all callers
+                # of get_rivalry_system() see the restored state. Same
+                # mutation pattern as reset_rivalry_system() at rivalry.py:972.
+                from rivalry import RivalrySystem as _RivSys
+                import rivalry as _rivalry_module
+                _rivalry_module._rivalry_system = _RivSys.from_dict(data["rivalry_system"])
+                if self._game_state and hasattr(self._game_state, 'register_rivalry_system'):
+                    self._game_state.register_rivalry_system(_rivalry_module._rivalry_system)
+            except Exception as _re:
+                print(f"⚠️ Could not restore rivalry state: {_re}")
         self._fight_offers            = data.get("fight_offers", [])
         self._fighter_cooldowns       = {k: int(v) for k, v in
                                           data.get("fighter_cooldowns", {}).items()}
