@@ -559,8 +559,11 @@ def register_routes(app):
         # Get fighter's camp
         camp = bridge.get_camp(fighter.camp_id) if fighter.camp_id else None
         
-        # Belt history placeholder (TODO: implement in bridge)
-        belt_history = []
+        # Ship #29: belt history reigns for this fighter (sim'd lineage from
+        # Ship #28's WorldInitializer + any future runtime-tracked reigns).
+        # Empty list if fighter never held a belt or belt_history unavailable.
+        # Ship #30 will surface this on the fighter_profile template.
+        belt_history = bridge.get_fighter_reigns(fighter_id)
         
         # Calculate attribute categories
         attributes = {

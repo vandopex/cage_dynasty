@@ -766,6 +766,17 @@ class GameBridge:
         # Aging system — one instance tracks per-fighter processed years
         self._aging_system = AgingSystem() if AGING_AVAILABLE else None
 
+        # Belt history — populated by Ship #28's WorldInitializer handoff at
+        # new_game time, restored from save in web_load. Holds BeltReign
+        # records for sim-history champion lineages (won_from, defenses,
+        # lost_to, retire-vacate events). Runtime title-fight writes go to
+        # self._title_history, NOT here — two separate stores by design.
+        try:
+            from world_init import BeltHistory as _BH_cls
+            self._belt_history = _BH_cls()
+        except ImportError:
+            self._belt_history = None
+
         # Maintenance training system
         self._maintenance_system = (
             MaintenanceTrainingSystem() if MAINTENANCE_AVAILABLE else None
@@ -820,6 +831,14 @@ class GameBridge:
             try:
                 from world_init import initialize_world as _world_init_func
                 _initializer = _world_init_func(self._game_state, history_years=2.5)
+                # Ship #29: capture BeltHistory off the initializer before it
+                # goes out of scope. Holds the sim'd champion lineages (reigns,
+                # defenses, won_from / lost_to / vacate events) for later
+                # querying via bridge.get_fighter_reigns(). Persisted via
+                # web_save/web_load.
+                _captured_bh = _initializer.get_belt_history()
+                if _captured_bh is not None:
+                    self._belt_history = _captured_bh
                 print(f"Created {len(_initializer.camps)} camps, "
                       f"{len(_initializer.fighters)} fighters with simulated history")
             except Exception as _wie:
@@ -1097,6 +1116,7 @@ class GameBridge:
             "camp_archetypes":          self._camp_archetypes,
             "injury_system":            self._injury_system.to_dict() if self._injury_system else {},
             "rivalry_system":           get_rivalry_system().to_dict() if RIVALRY_AVAILABLE else {},
+            "belt_history":             self._belt_history.to_dict() if self._belt_history else {},
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
             "champion_holds":           self._champion_holds,
@@ -1221,6 +1241,15 @@ class GameBridge:
                     self._game_state.register_rivalry_system(_rivalry_module._rivalry_system)
             except Exception as _re:
                 print(f"⚠️ Could not restore rivalry state: {_re}")
+        if "belt_history" in data:
+            try:
+                # Ship #29: restore sim'd champion lineages so reigns survive
+                # Flask restarts. Backward compat: legacy saves without the
+                # key fall through to the empty BeltHistory set in __init__.
+                from world_init import BeltHistory as _BH_load
+                self._belt_history = _BH_load.from_dict(data["belt_history"])
+            except Exception as _bhe:
+                print(f"⚠️ Could not restore belt history: {_bhe}")
         self._fight_offers            = data.get("fight_offers", [])
         self._fighter_cooldowns       = {k: int(v) for k, v in
                                           data.get("fighter_cooldowns", {}).items()}
@@ -4700,6 +4729,41 @@ class GameBridge:
             return sorted(out, key=lambda x: x["score"], reverse=True)
         except Exception as exc:
             print(f"⚠️ get_fighter_rivalries failed: {exc}")
+            return []
+
+    def get_fighter_reigns(self, fighter_id: str) -> List[Dict[str, Any]]:
+        """
+        Return serialized championship reign data for a fighter.
+        Empty list if no belt history exists or fighter never held a belt.
+        Reigns ordered chronologically (oldest first).
+        Ship #29: data flows world-gen → bridge → save/load → routes; Ship
+        #30 will surface this on fighter_profile.html.
+        """
+        if self._belt_history is None:
+            return []
+        try:
+            reigns = self._belt_history.get_fighter_reigns(fighter_id)
+            out = []
+            for r in reigns:
+                out.append({
+                    "weight_class":        r.weight_class,
+                    "won_week":            r.won_week,
+                    "won_event":           r.won_event,
+                    "won_from":            r.won_from,
+                    "won_from_name":       r.won_from_name,
+                    "won_method":          r.won_method,
+                    "successful_defenses": r.successful_defenses,
+                    "lost_week":           r.lost_week,
+                    "lost_event":          r.lost_event,
+                    "lost_to":             r.lost_to,
+                    "lost_to_name":        r.lost_to_name,
+                    "lost_method":         r.lost_method,
+                    "is_active":           r.is_active,
+                })
+            out.sort(key=lambda x: x["won_week"])
+            return out
+        except Exception as exc:
+            print(f"⚠️ get_fighter_reigns failed: {exc}")
             return []
 
     def get_rivalry_between(self, fighter1_id: str, fighter2_id: str) -> Optional[Dict[str, Any]]:
