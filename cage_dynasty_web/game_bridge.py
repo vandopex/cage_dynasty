@@ -8050,7 +8050,14 @@ class GameBridge:
             return card
 
         if CARD_BUILDER_AVAILABLE:
-            self._card_builder.get_or_create_card_state(event_name, target_week)
+            # Re-sync state from existing card fights so repeated rebuilds
+            # don't accumulate slot counts. Sub-ship A's always-call pattern
+            # (Ship #20) calls _build_card_for_week per advance; without this
+            # re-sync, get_or_create_card_state preserved stale counts and
+            # title fights cascaded past full main_event slots into co-main
+            # or prelim. update_card_state_from_fights replaces state with
+            # truth derived from card["fights"] (card_builder.py:218-244).
+            self._card_builder.update_card_state_from_fights(event_name, target_week, card["fights"])
 
         # Collect already-booked fighter IDs for this week
         booked_here = set()
