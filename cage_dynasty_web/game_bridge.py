@@ -777,6 +777,13 @@ class GameBridge:
         except ImportError:
             self._belt_history = None
 
+        # Ship C: DFC event numbering offset. World-gen produces N events
+        # (DFC 1 - DFC N); the player career should start at DFC N+1, not
+        # DFC 1. Captured from game_state.next_event_number after world-gen
+        # in new_game; persisted across save/load. Default 0 means no
+        # offset (legacy saves + slot3 keep their existing labels).
+        self._dfc_event_offset: int = 0
+
         # Maintenance training system
         self._maintenance_system = (
             MaintenanceTrainingSystem() if MAINTENANCE_AVAILABLE else None
@@ -839,6 +846,23 @@ class GameBridge:
                 _captured_bh = _initializer.get_belt_history()
                 if _captured_bh is not None:
                     self._belt_history = _captured_bh
+                # Ship C: capture next-event-number from world-gen so player
+                # career events continue from DFC N+1 (where N = sim event
+                # count) instead of colliding at DFC 1. Read directly from
+                # the initializer object (same source world-gen's "Next
+                # Event: DFC X" print uses). The earlier transfer path
+                # via game_state.next_event_number was discovered dead in
+                # Tier 2: world_init.py:2460 has a hasattr guard that
+                # silently fails because GameState doesn't define the
+                # attribute. Reading from _initializer.get_next_event_number()
+                # bypasses the broken transfer. Subtract 1 to derive the
+                # additive offset for week→DFC label.
+                try:
+                    _next_dfc = _initializer.get_next_event_number()
+                    if _next_dfc and _next_dfc > 1:
+                        self._dfc_event_offset = _next_dfc - 1
+                except Exception:
+                    pass
                 print(f"Created {len(_initializer.camps)} camps, "
                       f"{len(_initializer.fighters)} fighters with simulated history")
             except Exception as _wie:
@@ -1047,6 +1071,12 @@ class GameBridge:
         import os
         return os.path.join(self._saves_dir(), f"bridge_{slot}.json")
 
+    def _dfc_label(self, week: int) -> str:
+        """Ship C: format DFC event name with the world-gen offset applied.
+        week=1 + offset=130 → "DFC 131". offset=0 (legacy saves) preserves
+        the original labels."""
+        return f"DFC {week + self._dfc_event_offset}"
+
     def web_save(self, slot: str = "autosave") -> Dict[str, Any]:
         """
         Save complete game state to a named slot.
@@ -1117,6 +1147,7 @@ class GameBridge:
             "injury_system":            self._injury_system.to_dict() if self._injury_system else {},
             "rivalry_system":           get_rivalry_system().to_dict() if RIVALRY_AVAILABLE else {},
             "belt_history":             self._belt_history.to_dict() if self._belt_history else {},
+            "dfc_event_offset":         self._dfc_event_offset,
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
             "champion_holds":           self._champion_holds,
@@ -1250,6 +1281,10 @@ class GameBridge:
                 self._belt_history = _BH_load.from_dict(data["belt_history"])
             except Exception as _bhe:
                 print(f"⚠️ Could not restore belt history: {_bhe}")
+        # Ship C: restore DFC event-numbering offset. Backward compat:
+        # legacy saves without the key default to 0 (no offset, original
+        # labels preserved).
+        self._dfc_event_offset = int(data.get("dfc_event_offset", 0) or 0)
         self._fight_offers            = data.get("fight_offers", [])
         self._fighter_cooldowns       = {k: int(v) for k, v in
                                           data.get("fighter_cooldowns", {}).items()}
@@ -1419,7 +1454,7 @@ class GameBridge:
                 fight_results.append(result)
 
                 # Group by event name
-                ev_name = fight.get("event_name", f"DFC {self._game_state.week_number}")
+                ev_name = fight.get("event_name", self._dfc_label(self._game_state.week_number))
                 ev_id   = f"event_{self._game_state.week_number}_{ev_name.replace(' ', '_')}"
                 if ev_name not in week_events:
                     week_events[ev_name] = {
@@ -2153,7 +2188,7 @@ class GameBridge:
                 self._get_fighter_rank(pf), opp_rank
             )
             event_week = week + weeks_away
-            event_name = f"DFC {event_week}"
+            event_name = self._dfc_label(event_week)
 
             # Purse scales with rank + situational modifiers
             base_purse = max(8000, 25000 - ((opp_rank or 10) * 800))
@@ -3448,7 +3483,7 @@ class GameBridge:
                 _r2 = self._get_fighter_rank(f2)
             _wks_out = self._weeks_out_for_fight(_r1, _r2)
             target_week = current + _wks_out
-            event_name = f"DFC {target_week}"
+            event_name = self._dfc_label(target_week)
         else:
             target_week = preview["target_week"]
             event_name = preview["target_event_name"]
@@ -6106,7 +6141,7 @@ class GameBridge:
             "exchange_count":      0,
             "status":              "AWAITING_AI",
             "history":             [],
-            "event_name":          f"DFC {self._game_state.week_number + weeks_out}",
+            "event_name":          self._dfc_label(self._game_state.week_number + weeks_out),
         }
 
         # Immediately resolve AI's first move
@@ -7047,7 +7082,7 @@ class GameBridge:
         import random
 
         week       = self._game_state.week_number
-        event_name = f"DFC {week}"
+        event_name = self._dfc_label(week)
         event_id   = f"ai_event_{week}"
         event: Dict[str, Any] = {
             "event_id":    event_id,
@@ -8098,7 +8133,7 @@ class GameBridge:
         creating to receive a drained queue item)."""
         return {
             "event_id":    f"event_{target_week}",
-            "event_name":  f"DFC {target_week}",
+            "event_name":  self._dfc_label(target_week),
             "week":        target_week,
             "fights":      [],
             "is_ai_event": True,
@@ -8114,7 +8149,7 @@ class GameBridge:
         """
         import random
 
-        event_name = f"DFC {target_week}"
+        event_name = self._dfc_label(target_week)
         event_id   = f"event_{target_week}"
 
         # Sub-ship A: reuse existing card if hand-off pass already drained
@@ -8397,12 +8432,12 @@ class GameBridge:
                 card["fights"].append(fight_dict)
             else:
                 # Different lead-time target — defer to queue for hand-off
-                _q_event_name = f"DFC {computed_target_week}"
+                _q_event_name = self._dfc_label(computed_target_week)
                 fight_dict = self._make_scheduled_fight(
                     f1, f2, wc, _q_event_name, computed_target_week, slot, is_title=is_title)
                 self._ai_deferred_bookings.append(fight_dict)
                 print(f"  📅 [LEAD-TIME QUEUE] {f1.name} vs {f2.name} → "
-                      f"DFC {computed_target_week} ({computed_target_week - target_week:+d}w)")
+                      f"{_q_event_name} ({computed_target_week - target_week:+d}w)")
 
             used_in_candidates.add(f1.fighter_id)
             used_in_candidates.add(f2.fighter_id)
@@ -8508,7 +8543,7 @@ class GameBridge:
         pipeline_booked: fighters already on other pipeline cards (shared, mutated here).
         """
         import random
-        event_name = f"DFC {target_week}"
+        event_name = self._dfc_label(target_week)
         card: Dict[str, Any] = {
             "event_id":    f"event_{target_week}",
             "event_name":  event_name,
