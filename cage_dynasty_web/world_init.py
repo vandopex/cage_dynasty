@@ -2488,7 +2488,7 @@ class WorldInitializer:
     
     def _add_fighter_to_state(self, fighter: GeneratedFighter) -> None:
         """Add a generated fighter to game state with popularity and history"""
-        
+
         if hasattr(self.game_state, 'add_fighter'):
             self.game_state.add_fighter(
                 fighter_id=fighter.fighter_id,
@@ -2525,6 +2525,22 @@ class WorldInitializer:
             if hasattr(record, 'fight_history'):
                 record.fight_history = fighter.fight_history.copy() if fighter.fight_history else []
             self.game_state.fighters[fighter.fighter_id] = record
+
+        # Ship #32: persist world-gen's actual attribute values into
+        # _fighter_data so the bridge's _convert_real_fighter._attr() reads
+        # them on demand instead of falling through to the random fallback.
+        # Save/load rides the existing dict-key-agnostic serialization at
+        # game_state.py:1239 (to_dict) and 1306 (from_dict). Fixes Finding
+        # #32 (fighter attributes mutating across Flask reload). Style is
+        # populated downstream by game_bridge.py:894-914's enrichment block;
+        # don't write it here to avoid duplicate-write churn.
+        if hasattr(self.game_state, '_fighter_data') and fighter.attributes:
+            _fdata = self.game_state._fighter_data.get(fighter.fighter_id, {})
+            for _key, _val in fighter.attributes.items():
+                _fdata[_key] = int(_val)
+            _fdata['age'] = int(fighter.age)
+            _fdata['country'] = str(fighter.country)
+            self.game_state._fighter_data[fighter.fighter_id] = _fdata
     
     def _update_division_state(self, weight_class: str) -> None:
         """Update division state with champion and rankings"""

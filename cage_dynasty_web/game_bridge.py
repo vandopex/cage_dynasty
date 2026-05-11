@@ -3974,8 +3974,18 @@ class GameBridge:
         def _attr(key: str, default_offset: int = 0) -> int:
             if key in fdata:
                 return int(fdata[key])
-            # Seeded variance: ±12 around overall, clamped 20–100
-            rng = _rnd.Random(hash(fighter.fighter_id + key) & 0xFFFFFFFF)
+            # Seeded variance: ±12 around overall, clamped 20–100.
+            # Ship #32: replaced Python's hash() (process-randomized via
+            # PYTHONHASHSEED) with hashlib.md5 for cross-process stability.
+            # Defense-in-depth — sim-history fighters have attributes in
+            # fdata after Ship #32, but player-created fighters and
+            # free-agent edge cases still hit this fallback path.
+            import hashlib as _hl
+            _seed = int.from_bytes(
+                _hl.md5((fighter.fighter_id + key).encode('utf-8')).digest()[:4],
+                'big',
+            )
+            rng = _rnd.Random(_seed)
             return max(20, min(100, ovr + default_offset + rng.randint(-12, 12)))
 
         # Fighter identity pulled from stored data or sensible defaults
