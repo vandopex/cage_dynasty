@@ -150,6 +150,20 @@
                             <span style="color:var(--blood-red-light);">📉 L{{ fighter.lose_streak }}</span>
                             {% endif %}
                         </div>
+                        {% if fighter.is_injured is defined and fighter.is_injured %}
+                        {# Injury banner — replaces condition bar when injured #}
+                        <div style="display:flex;align-items:center;gap:6px;
+                                    padding:4px 8px;border-radius:3px;
+                                    background:rgba(220,38,38,.12);
+                                    border-left:2px solid var(--blood-red);">
+                            <span style="font-size:.7rem;color:var(--blood-red);
+                                         white-space:nowrap;overflow:hidden;
+                                         text-overflow:ellipsis;">
+                                🤕 Injured — {{ fighter.injury_weeks_out }}w out
+                                {% if fighter.injury_desc %} · {{ fighter.injury_desc }}{% endif %}
+                            </span>
+                        </div>
+                        {% else %}
                         {# Condition bar #}
                         <div style="display:flex;align-items:center;gap:6px;">
                             <div style="flex:1;height:4px;background:rgba(255,255,255,.08);
@@ -162,6 +176,7 @@
                                 {{ 100 - fighter.fatigue }}% condition
                             </span>
                         </div>
+                        {% endif %}
                     </div>
 
                     {# Training intensity badge #}
