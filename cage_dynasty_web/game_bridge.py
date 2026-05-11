@@ -7274,6 +7274,9 @@ class GameBridge:
                 "loser_rank_delta":  self._rank_delta(pre_l_rank, new_l_rank),
             }
             event["fights"].append(fight_result)
+            # Provisional main_event — overwritten by _score_and_slot_fights
+            # below after the simulation loop completes. Kept here as a
+            # safety net for the case where the helper short-circuits.
             if event["main_event"] is None:
                 event["main_event"] = fight_result
 
@@ -7287,6 +7290,18 @@ class GameBridge:
                     "winner_id": winner.fighter_id,
                     "loser_id":  loser.fighter_id,
                 })
+
+        # Ship G1: apply unified slot assignment via shared helper.
+        # Saturday Findings #5/#6/#7: fallback path produced cards with
+        # empty main_event slot, UR-vs-UR co-mains, and stacked title
+        # fights because slot assignment was never wired. The primary
+        # path (_build_card_for_week) has had slot assignment since
+        # Ship #26 (commit e2d90e7) — Ship G1 extends the same logic
+        # to this permissive-matchmaking fallback via _score_and_slot_fights.
+        if event["fights"]:
+            _main = self._score_and_slot_fights(event_name, week, event["fights"])
+            if _main is not None:
+                event["main_event"] = _main
 
         return event if event["fights"] else None
 
@@ -8135,6 +8150,113 @@ class GameBridge:
             min_slot=min_slot,
         )
         return slot.value
+
+    def _score_and_slot_fights(self, event_name: str, target_week: int,
+                                  fight_dicts: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Ship G1: shared slot-assignment helper.
+
+        Walks fight_dicts (already on the card), scores each via
+        _matchup_score, applies title-fight cap (max 2 per card,
+        different divisions; excess demoted to is_title_fight=False),
+        sorts by score descending, and writes card_slot to each dict
+        via _assign_card_slot with co_main_used tracking.
+
+        Mutates fight_dicts in place. Returns the dict that received
+        the main_event slot (or None if no fights). Caller updates
+        event["main_event"] from the return value.
+
+        Expected fight_dict shape:
+          - fighter1_id, fighter2_id (required)
+          - is_title_fight (bool, optional — default False)
+          - weight_class (str, optional — used for title-cap dedup)
+          - card_slot (written in place)
+
+        This helper is currently called from _simulate_ai_fights_week
+        (the permissive-matchmaking fallback path). _build_card_for_week
+        retains its inline slot-assignment integrated with lead-time
+        routing (Ship #26's proven path) — both paths converge at the
+        underlying _assign_card_slot helper.
+        """
+        if not fight_dicts or not self._game_state:
+            return None
+
+        # Score each fight up front (cache as private key on dict)
+        for f in fight_dicts:
+            f1 = self._game_state.get_fighter(f.get("fighter1_id", ""))
+            f2 = self._game_state.get_fighter(f.get("fighter2_id", ""))
+            f["_g1_score"] = self._matchup_score(
+                f1, f2, bool(f.get("is_title_fight", False))
+            )
+
+        # Sort by score descending — best matchups first
+        fight_dicts.sort(key=lambda x: x.get("_g1_score", 0), reverse=True)
+
+        # Title-fight cap: max 2 per card, must be different divisions.
+        # Excess title fights are demoted (is_title_fight = False) so the
+        # cap also propagates through the slot pass below — they'll be
+        # treated as ranked fights for scoring/placement.
+        title_count = 0
+        title_divisions: Set[str] = set()
+        for f in fight_dicts:
+            if f.get("is_title_fight"):
+                wc = f.get("weight_class", "")
+                if title_count < 2 and wc not in title_divisions:
+                    title_count += 1
+                    title_divisions.add(wc)
+                else:
+                    f["is_title_fight"] = False  # demoted by cap
+
+        # Reset CardBuilder state for this event so the assign_slot
+        # capacity counters start clean (matches Ship #26's update-from-
+        # fights pattern at line 8184). Pass an empty list since we're
+        # about to call assign_slot for each fight in order — that
+        # increments the state correctly.
+        if CARD_BUILDER_AVAILABLE:
+            self._card_builder.update_card_state_from_fights(event_name, target_week, [])
+
+        main_event_dict: Optional[Dict[str, Any]] = None
+        co_main_used = 0
+        for f in fight_dicts:
+            f1 = self._game_state.get_fighter(f.get("fighter1_id", ""))
+            f2 = self._game_state.get_fighter(f.get("fighter2_id", ""))
+            r1 = self._get_fighter_rank(f1) if f1 else None
+            r2 = self._get_fighter_rank(f2) if f2 else None
+
+            # Co-main override: first #1-rank fight can claim co_main,
+            # subsequent ones get demoted to main_card (mirrors primary
+            # path logic at line 8418-8423).
+            override_f1, override_f2 = r1, r2
+            ranks = [r for r in [r1, r2] if r is not None]
+            top_rank = min(ranks) if ranks else None
+            if top_rank is not None and top_rank <= 1 and co_main_used >= 1:
+                override_f1 = 3 if r1 == 1 else r1
+                override_f2 = 3 if r2 == 1 else r2
+
+            combined_rating = 100
+            if f1 and f2:
+                combined_rating = (getattr(f1, 'overall_rating', 50) +
+                                   getattr(f2, 'overall_rating', 50))
+
+            slot = self._assign_card_slot(
+                event_name,
+                f.get("_g1_score", 0),
+                bool(f.get("is_title_fight", False)),
+                combined_rating=combined_rating,
+                f1_rank=override_f1, f2_rank=override_f2,
+                f1=f1, f2=f2,
+            )
+            f["card_slot"] = slot
+            if slot in ("co_main", "main_event"):
+                co_main_used += 1
+            if slot == "main_event" and main_event_dict is None:
+                main_event_dict = f
+
+        # Clean up the temporary scoring key — don't pollute the saved dict
+        for f in fight_dicts:
+            f.pop("_g1_score", None)
+
+        return main_event_dict
 
     def _create_empty_card_dict(self, target_week: int) -> Dict[str, Any]:
         """Sub-ship A — empty card dict for a target week. Used by both
