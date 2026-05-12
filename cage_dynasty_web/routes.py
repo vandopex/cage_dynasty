@@ -624,7 +624,7 @@ def register_routes(app):
         # Contract status — only for player fighters
         player_ids = {f.fighter_id for f in bridge.get_player_fighters()}
         contract_status  = bridge.get_contract_status(fighter_id) if fighter_id in player_ids else None
-        contract_options = bridge.get_contract_options_for_tier() if fighter_id in player_ids else []
+        contract_options = bridge.get_contract_options_for_tier(fighter_id) if fighter_id in player_ids else []
 
         return render_template('fighter_profile.html',
             fighter=fighter,

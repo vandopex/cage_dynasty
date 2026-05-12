@@ -346,6 +346,22 @@ TIER_CONTRACT_MAX = {
     "GARAGE": 3, "LOCAL": 6, "REGIONAL": 6, "NATIONAL": 9, "ELITE": 9
 }
 
+# ── Founding fighter ───────────────────────────────────────────────────────────
+# Player's starter fighter (created at new-game). Invisible loyalty bonus:
+# tougher to lose, accepts longer deals. Tunable; designed to be felt over a
+# long career, not noticed in one session. No badge, no UI indicator —
+# the flag lives only in the _contracts dict.
+FOUNDING_FIGHTER_MORALE_FLOOR     = 45   # Won't drop below this (normal: no floor)
+FOUNDING_FIGHTER_LOSS_PENALTY     = 7    # Per-loss morale hit (normal: 10)
+FOUNDING_FIGHTER_STREAK_PENALTY   = 2    # Per-streak compounding (normal: 3)
+FOUNDING_FIGHTER_IDLE_THRESHOLD   = 14   # Idle weeks before decay starts (normal: 10)
+FOUNDING_FIGHTER_IDLE_DECAY       = 1    # Idle decay per week (normal: 2)
+FOUNDING_FIGHTER_HOLDOUT_WINDOW   = 7    # Weeks to re-sign before walk (normal: 4 — HOLDOUT_WINDOW)
+FOUNDING_FIGHTER_MAX_CONTRACT     = 5    # Max fight length regardless of tier (normal: tier-gated)
+FOUNDING_FIGHTER_WALK_ROSTER_HIT  = 10   # Morale loss applied to remaining fighters when founder walks
+# Non-founder walk roster hit also -10, fires only when fighter is "important":
+# is_champion OR top-10 ranked OR fights_completed >= 6
+
 # ── Camp personality archetypes ───────────────────────────────────────────────
 # Each archetype has signing preferences as weight multipliers.
 # Higher = more likely to sign that type of fighter.
@@ -1001,6 +1017,26 @@ class GameBridge:
             "potential":   fighter_data.get("potential", fighter_data.get("overall", 65) + 10),
             "nickname":    fighter_data.get("nickname"),
         }
+
+        # Initialize founding-fighter contract. Closes pre-existing bug where
+        # the starter never had a contract entry — _process_contracts would
+        # silently skip them. Shape mirrors resign_fighter's contract dict
+        # plus the is_founding_fighter flag (invisible loyalty bonus).
+        self._contracts[fighter_id] = {
+            "fighter_id":          fighter_id,
+            "camp_id":             self._game_state.player_camp_id,
+            "total_fights":        3,
+            "fights_remaining":    3,
+            "fights_completed":    0,
+            "purse_per_fight":     5000 + fighter.overall_rating * 100,
+            "morale":              80,
+            "holdout_weeks":       0,
+            "is_holdout":          False,
+            "signed_week":         self._game_state.week_number,
+            "is_founding_fighter": True,
+        }
+        print(f"  📋 Founding contract: {fighter.name} — 3-fight deal")
+
         print(f"  ✅ Created fighter: {fighter.name} ({fighter.weight_class}) - OVR {fighter.overall_rating}")
     
     def _new_game_mock(self, camp_name: str, camp_location: str, camp_tier: str,
@@ -9919,6 +9955,16 @@ class GameBridge:
                 self._contracts.pop(fid, None)
                 continue
 
+            # Founding-fighter loyalty bonus: softer morale curves + floor.
+            # Flag set only at _create_player_fighter for the starter.
+            is_founder = contract.get('is_founding_fighter', False)
+            morale_floor = FOUNDING_FIGHTER_MORALE_FLOOR if is_founder else 0
+            loss_penalty = FOUNDING_FIGHTER_LOSS_PENALTY if is_founder else 10
+            streak_penalty = FOUNDING_FIGHTER_STREAK_PENALTY if is_founder else 3
+            idle_threshold = FOUNDING_FIGHTER_IDLE_THRESHOLD if is_founder else 10
+            idle_decay = FOUNDING_FIGHTER_IDLE_DECAY if is_founder else 2
+            holdout_window = FOUNDING_FIGHTER_HOLDOUT_WINDOW if is_founder else HOLDOUT_WINDOW
+
             history = getattr(ftr, 'fight_history', []) or []
 
             # Decrement if they fought this week
@@ -9927,19 +9973,19 @@ class GameBridge:
                     contract['fights_completed'] = contract.get('fights_completed', 0) + 1
                     contract['fights_remaining'] = max(0,
                         contract['total_fights'] - contract['fights_completed'])
-                    # Morale: win = +8, loss compounds with streak
+                    # Morale: win = +8, loss compounds with streak (founder eased)
                     last_result = history[-1].get('result', '')
                     ls = getattr(ftr, 'lose_streak', 0) or 0
                     if last_result == 'W':
                         contract['morale'] = min(100, contract.get('morale', 75) + 8)
                     elif last_result == 'L':
-                        contract['morale'] = max(0,
-                            contract.get('morale', 75) - (10 + ls * 3))
+                        contract['morale'] = max(morale_floor,
+                            contract.get('morale', 75) - (loss_penalty + ls * streak_penalty))
             else:
-                # Inactivity morale decay — 2 pts/week after 10 inactive weeks
+                # Inactivity morale decay — founder: 1 pt/wk after 14w; others: 2 pt/wk after 10w
                 last_fight_week = history[-1].get('week', 0) if history and isinstance(history[-1], dict) else 0
-                if current_week - last_fight_week >= 10:
-                    contract['morale'] = max(0, contract.get('morale', 75) - 2)
+                if current_week - last_fight_week >= idle_threshold:
+                    contract['morale'] = max(morale_floor, contract.get('morale', 75) - idle_decay)
 
             morale = contract.get('morale', 75)
             fights_remaining = contract.get('fights_remaining', 1)
@@ -9966,16 +10012,16 @@ class GameBridge:
                     "week": current_week,
                 })
 
-            # Contract expired → holdout
+            # Contract expired → holdout (founder gets longer window + softer headline)
             if fights_remaining <= 0:
                 if contract.get('is_holdout'):
                     hw = contract.get('holdout_weeks', 0) + 1
                     contract['holdout_weeks'] = hw
-                    if hw >= HOLDOUT_WINDOW:
+                    if hw >= holdout_window:
                         self._release_fighter_to_free_agency(fid, ftr.name, 'contract expired')
                         continue
                     else:
-                        remaining = HOLDOUT_WINDOW - hw
+                        remaining = holdout_window - hw
                         self._news_items.insert(0, {
                             "headline": f"⚠️ {ftr.name} in holdout — re-sign within {remaining}w or lose them",
                             "category": "contract",
@@ -9984,8 +10030,12 @@ class GameBridge:
                 else:
                     contract['is_holdout'] = True
                     contract['holdout_weeks'] = 0
+                    if is_founder:
+                        _headline = f"📋 {ftr.name}'s contract is up — they want to talk before walking"
+                    else:
+                        _headline = f"📋 {ftr.name}'s contract expired — {holdout_window} weeks to re-sign"
                     self._news_items.insert(0, {
-                        "headline": f"📋 {ftr.name}'s contract expired — {HOLDOUT_WINDOW} weeks to re-sign",
+                        "headline": _headline,
                         "category": "contract",
                         "week": current_week,
                     })
@@ -10012,14 +10062,54 @@ class GameBridge:
             ftr.camp_id = None
             ftr.contract_id = None
         self._game_state.free_agents.add(fighter_id)
+
+        # Capture contract context BEFORE pop so we can branch news headline
+        # and decide whether to apply roster-wide morale hit.
+        contract = self._contracts.get(fighter_id, {})
+        is_founder = contract.get('is_founding_fighter', False)
+        fights_completed = contract.get('fights_completed', 0)
+
+        # Non-founders trigger roster hit only when "important" (champ, top-10,
+        # or veteran with 6+ fights completed). Founders always trigger.
+        is_important = False
+        if ftr:
+            _rank = self._get_fighter_rank(ftr)
+            is_important = (
+                getattr(ftr, 'is_champion', False)
+                or (_rank is not None and _rank <= 10)
+                or fights_completed >= 6
+            )
+
         self._contracts.pop(fighter_id, None)
         reason_str = "contract expired" if reason == 'contract expired' else "unhappy with camp"
+
+        # Branched headline — founders get a heavier line that acknowledges
+        # the history without exposing the founding-fighter mechanic.
+        if is_founder:
+            _headline = f"💔 {name} — once the heart of your camp — walks away as a free agent"
+        else:
+            _headline = f"🚪 {name} has left your camp ({reason_str}) — now a free agent"
         self._news_items.insert(0, {
-            "headline": f"🚪 {name} has left your camp ({reason_str}) — now a free agent",
+            "headline": _headline,
             "category": "contract",
             "week": self._game_state.week_number,
         })
         print(f"  🚪 [CONTRACT] {name} left — {reason_str}")
+
+        # Roster morale hit when a meaningful departure happens
+        should_hit_roster = is_founder or is_important
+        if should_hit_roster:
+            hit = FOUNDING_FIGHTER_WALK_ROSTER_HIT
+            affected = 0
+            for other_fid, other_contract in self._contracts.items():
+                if other_fid == fighter_id:
+                    continue
+                current = other_contract.get('morale', 75)
+                other_contract['morale'] = max(0, current - hit)
+                affected += 1
+            if affected > 0:
+                reason_tag = "founding member" if is_founder else "key fighter"
+                print(f"  💔 [ROSTER MORALE] {name} leaving as {reason_tag} — roster down {hit} morale ({affected} fighters)")
 
         # AI camps may immediately bid for released fighter
         self._ai_bid_for_free_agent(fighter_id, ftr)
@@ -10126,12 +10216,14 @@ class GameBridge:
         player_camp = self._game_state.get_camp(self._game_state.player_camp_id)
         tier = str(getattr(player_camp, 'tier', 'GARAGE') if player_camp else 'GARAGE').upper()
         max_contract = TIER_CONTRACT_MAX.get(tier, 3)
+        # Founding fighter override: extended-length unlock regardless of tier
+        current = self._contracts.get(fighter_id, {})
+        if current.get('is_founding_fighter'):
+            max_contract = max(FOUNDING_FIGHTER_MAX_CONTRACT, max_contract)
         if contract_fights not in CONTRACT_OPTIONS:
             contract_fights = 3
         if contract_fights > max_contract:
             return {"success": False, "error": f"Your {tier} facility can only offer {max_contract}-fight deals"}
-
-        current = self._contracts.get(fighter_id, {})
         base = current.get('purse_per_fight', 5000 + ftr.overall_rating * 100)
         premium = CONTRACT_OPTIONS[contract_fights]["premium"]
         resign_cost = max(5000, int(base * 1.2 * premium * contract_fights * 0.1))
@@ -10141,16 +10233,19 @@ class GameBridge:
 
         self._camp_balance -= resign_cost
         self._contracts[fighter_id] = {
-            "fighter_id":       fighter_id,
-            "camp_id":          self._game_state.player_camp_id,
-            "total_fights":     contract_fights,
-            "fights_remaining": contract_fights,
-            "fights_completed": 0,
-            "purse_per_fight":  int(base * 1.1),
-            "morale":           min(100, current.get('morale', 75) + 15),
-            "holdout_weeks":    0,
-            "is_holdout":       False,
-            "signed_week":      self._game_state.week_number,
+            "fighter_id":          fighter_id,
+            "camp_id":             self._game_state.player_camp_id,
+            "total_fights":        contract_fights,
+            "fights_remaining":    contract_fights,
+            "fights_completed":    0,
+            "purse_per_fight":     int(base * 1.1),
+            "morale":              min(100, current.get('morale', 75) + 15),
+            "holdout_weeks":       0,
+            "is_holdout":          False,
+            "signed_week":         self._game_state.week_number,
+            # Preserve founding-fighter flag through re-sign so loyalty
+            # bonus carries forward across contract renewals.
+            "is_founding_fighter": current.get('is_founding_fighter', False),
         }
         self._news_items.insert(0, {
             "headline": f"✅ EXTENDED: {ftr.name} re-signs — {contract_fights}-fight deal (${resign_cost:,})",
@@ -10160,11 +10255,19 @@ class GameBridge:
         self._clear_cache()
         return {"success": True, "message": f"Re-signed {ftr.name} — {contract_fights}-fight deal"}
 
-    def get_contract_options_for_tier(self) -> List[Dict]:
-        """Available contract lengths for the player's current facility tier."""
+    def get_contract_options_for_tier(self, fighter_id: Optional[str] = None) -> List[Dict]:
+        """Available contract lengths for the player's current facility tier.
+
+        Optional fighter_id: when provided, founding-fighter contracts can
+        unlock longer deals regardless of tier (Ship B loyalty bonus).
+        """
         player_camp = self.get_player_camp()
         tier = str(getattr(player_camp, 'tier', 'GARAGE') if player_camp else 'GARAGE').upper()
         max_fights = TIER_CONTRACT_MAX.get(tier, 3)
+        if fighter_id:
+            _c = self._contracts.get(fighter_id, {})
+            if _c.get('is_founding_fighter'):
+                max_fights = max(FOUNDING_FIGHTER_MAX_CONTRACT, max_fights)
         return [
             {
                 "fights":        n,
