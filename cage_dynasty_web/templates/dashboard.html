@@ -194,6 +194,86 @@
             </div>
         </div>
 
+        {# ── Training History (last 4 weeks per fighter) ── Ship A #}
+        {% if training_history %}
+        <div class="card mb-lg">
+            <div class="card-header"><h3>📈 Training Log — Last 4 Weeks</h3></div>
+            <div style="padding:0;">
+                {% for fighter in fighters %}
+                {% set entries = training_history.get(fighter.fighter_id, []) %}
+                {% if entries %}
+                <div style="padding:var(--spacing-md);
+                            border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                    {# Fighter name + current OVR #}
+                    <div style="display:flex;justify-content:space-between;align-items:center;
+                                margin-bottom:var(--spacing-sm);">
+                        <span style="font-family:var(--font-display);font-size:.9rem;
+                                     color:var(--text-bright);">{{ fighter.name }}</span>
+                        <span style="font-size:.7rem;color:var(--text-muted);">
+                            {{ fighter.overall_rating }} OVR
+                        </span>
+                    </div>
+                    {# 4-week strip — each entry is a compact week column #}
+                    <div style="display:grid;grid-template-columns:repeat({{ entries|length }}, 1fr);
+                                gap:6px;">
+                        {% for entry in entries %}
+                        <div style="background:var(--bg-dark);border-radius:4px;padding:6px;
+                                    border-left:2px solid {% if entry.is_fight_camp %}var(--gold){% else %}var(--border-color){% endif %};">
+                            {# Week + intensity #}
+                            <div style="font-size:.55rem;color:var(--text-muted);
+                                        text-transform:uppercase;letter-spacing:.04em;
+                                        margin-bottom:2px;">
+                                Wk {{ entry.week }} · {{ entry.intensity }}
+                                {% if entry.is_fight_camp %}<span style="color:var(--gold);">⚡</span>{% endif %}
+                            </div>
+                            {# Focus + OVR delta #}
+                            <div style="display:flex;justify-content:space-between;
+                                        align-items:center;margin-bottom:4px;">
+                                <span style="font-size:.65rem;color:var(--text-bright);
+                                             text-transform:capitalize;">
+                                    {{ entry.focus | replace('_', ' ') }}
+                                </span>
+                                {% set d = entry.ovr_after - entry.ovr_before %}
+                                {% if d > 0 %}
+                                <span style="font-size:.65rem;color:var(--neon-green);">+{{ d }}</span>
+                                {% elif d < 0 %}
+                                <span style="font-size:.65rem;color:var(--warning);">{{ d }}</span>
+                                {% endif %}
+                            </div>
+                            {# Gain/boost/decay pills — compact #}
+                            <div style="display:flex;flex-wrap:wrap;gap:2px;">
+                                {% for stat, val in entry.gains.items() %}
+                                <span style="font-size:.55rem;color:var(--neon-green);
+                                             background:rgba(0,230,118,.1);
+                                             padding:1px 4px;border-radius:2px;">
+                                    {{ stat | replace('_', ' ') | truncate(8, true, '') }}+{{ '%.1f'|format(val) }}
+                                </span>
+                                {% endfor %}
+                                {% for stat, val in entry.coach_boosts.items() %}
+                                <span style="font-size:.55rem;color:var(--gold);
+                                             background:rgba(255,215,0,.1);
+                                             padding:1px 4px;border-radius:2px;">
+                                    {{ stat | replace('_', ' ') | truncate(8, true, '') }}+{{ '%.1f'|format(val) }}🧑‍🏫
+                                </span>
+                                {% endfor %}
+                                {% for stat, val in entry.decays.items() %}
+                                <span style="font-size:.55rem;color:var(--blood-red);
+                                             background:rgba(220,38,38,.1);
+                                             padding:1px 4px;border-radius:2px;">
+                                    {{ stat | replace('_', ' ') | truncate(8, true, '') }}-{{ '%.1f'|format(val) }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {# ── Scheduled Fights ── #}
         {% if scheduled_fights %}
         <div class="card mb-lg">

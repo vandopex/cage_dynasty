@@ -471,6 +471,9 @@ def register_routes(app):
             traceback.print_exc(file=sys.stderr)
             digest = {}
 
+        # Ship A: rolling 4-week training history per fighter
+        training_history = bridge.get_training_history()
+
         return render_template('dashboard.html',
             camp=camp,
             fighters=fighters,
@@ -487,6 +490,7 @@ def register_routes(app):
             runway=runway,
             scout_tips=scout_tips,
             digest=digest,
+            training_history=training_history,
         )
     
     # =========================================================================

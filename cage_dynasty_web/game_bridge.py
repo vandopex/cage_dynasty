@@ -362,6 +362,12 @@ FOUNDING_FIGHTER_WALK_ROSTER_HIT  = 10   # Morale loss applied to remaining figh
 # Non-founder walk roster hit also -10, fires only when fighter is "important":
 # is_champion OR top-10 ranked OR fights_completed >= 6
 
+# ── Training history ──────────────────────────────────────────────────────────
+# Ship A: rolling per-fighter training log surfaced on dashboard.
+# Each entry captures one week's training-plan gains, coach passive boosts,
+# and maintenance decays. FIFO eviction at this depth.
+TRAINING_HISTORY_WEEKS = 4
+
 # ── Camp personality archetypes ───────────────────────────────────────────────
 # Each archetype has signing preferences as weight multipliers.
 # Higher = more likely to sign that type of fighter.
@@ -761,6 +767,12 @@ class GameBridge:
         # Cumulative camp stat gains — {fighter_id: {stat: float}}
         # Accumulates fractional weekly gains so UI shows real progress
         self._camp_stat_totals: Dict[str, Dict[str, float]] = {}
+
+        # Ship A: rolling per-fighter training history — last N weekly
+        # entries with focus/intensity/gains/coach_boosts/decays. Capped
+        # at TRAINING_HISTORY_WEEKS via FIFO eviction. Surfaced on
+        # dashboard via get_training_history().
+        self._training_history: Dict[str, List[Dict[str, Any]]] = {}
 
         # Fighter contracts — {fighter_id: contract_dict}
         self._contracts: Dict[str, Dict[str, Any]] = {}
@@ -1178,6 +1190,7 @@ class GameBridge:
             "fight_commentary":         {k: v for k, v in self._fight_commentary.items()},
             "title_history":            self._title_history,
             "camp_stat_totals":         self._camp_stat_totals,
+            "training_history":         self._training_history,
             "contracts":                self._contracts,
             "camp_archetypes":          self._camp_archetypes,
             "injury_system":            self._injury_system.to_dict() if self._injury_system else {},
@@ -1285,6 +1298,7 @@ class GameBridge:
         self._fight_commentary        = data.get("fight_commentary", {})
         self._title_history           = data.get("title_history", {})
         self._camp_stat_totals        = data.get("camp_stat_totals", {})
+        self._training_history        = data.get("training_history", {})
         self._contracts               = data.get("contracts", {})
         self._camp_archetypes         = data.get("camp_archetypes", {})
         self._champ_weeks_since_defense = data.get("champ_weeks_since_defense", {})
@@ -4390,6 +4404,53 @@ class GameBridge:
             "intensity": "MODERATE",
         })
 
+    def _record_training_week(self,
+                              fighter_id: str,
+                              week: int,
+                              focus: str,
+                              intensity: str,
+                              is_fight_camp: bool,
+                              ovr_before: int,
+                              ovr_after: int,
+                              gains: Dict[str, float]) -> None:
+        """
+        Ship A: append this week's training entry to fighter's rolling
+        history. Capped at TRAINING_HISTORY_WEEKS entries via FIFO.
+        Maintenance decays + coach passive boosts are stitched onto the
+        same entry later in _advance_maintenance_week.
+        """
+        entry = {
+            "week":          week,
+            "focus":         focus,
+            "intensity":     intensity,
+            "is_fight_camp": is_fight_camp,
+            "ovr_before":    ovr_before,
+            "ovr_after":     ovr_after,
+            "gains":         {k: float(v) for k, v in gains.items() if v > 0.05},
+            "coach_boosts":  {},   # filled in by _advance_maintenance_week
+            "decays":        {},   # filled in by _advance_maintenance_week
+        }
+        if fighter_id not in self._training_history:
+            self._training_history[fighter_id] = []
+        self._training_history[fighter_id].append(entry)
+        # FIFO eviction — keep only the most recent N entries
+        if len(self._training_history[fighter_id]) > TRAINING_HISTORY_WEEKS:
+            self._training_history[fighter_id] = (
+                self._training_history[fighter_id][-TRAINING_HISTORY_WEEKS:]
+            )
+
+    def get_training_history(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Return rolling training history for all player fighters.
+        Each fighter's list is capped at TRAINING_HISTORY_WEEKS entries,
+        most recent last. Ship A.
+        """
+        if not self._game_state:
+            return {}
+        player_ids = {f.fighter_id for f in self.get_player_fighters()}
+        return {fid: list(entries) for fid, entries in self._training_history.items()
+                if fid in player_ids}
+
     def _apply_weekly_training(self) -> Dict[str, Any]:
         """
         Called each advance_week.
@@ -4529,6 +4590,30 @@ class GameBridge:
                 "is_fight_camp": bool(fight_plan),
                 "capped_stats":  result.get("capped_stats", []),
             }
+
+            # Ship A: append this week's entry to rolling 4-week history.
+            # Pre-split gains into plan vs coach-attributed so the UI can
+            # render them as separate pill types. Maintenance boosts/decays
+            # stitched onto the same entry later in _advance_maintenance_week.
+            _ag_all      = result.get("actual_gains", {}) or {}
+            _plan_gains  = {k: v for k, v in _ag_all.items()
+                            if not k.endswith("(coach)") and v > 0.05}
+            _coach_gains = {k.replace(" (coach)", ""): v for k, v in _ag_all.items()
+                            if k.endswith("(coach)") and v > 0.05}
+            self._record_training_week(
+                fighter_id    = fid,
+                week          = self._game_state.week_number,
+                focus         = active_plan["focus"],
+                intensity     = active_plan["intensity"],
+                is_fight_camp = bool(fight_plan),
+                ovr_before    = ovr_before,
+                ovr_after     = ovr_after,
+                gains         = _plan_gains,
+            )
+            # Pre-fill coach-attributed gains from training onto the entry
+            # just appended (maintenance loop also writes to coach_boosts).
+            if fid in self._training_history and self._training_history[fid]:
+                self._training_history[fid][-1]["coach_boosts"].update(_coach_gains)
 
         return report
 
@@ -5620,6 +5705,27 @@ class GameBridge:
                     "category": "training",
                     "week":     week,
                 })
+
+            # Ship A: stitch maintenance boosts/decays onto each fighter's
+            # current-week training history entry. _apply_weekly_training
+            # already appended the entry earlier in advance_week — we look up
+            # the most-recent entry per fighter and merge in maintenance data.
+            # Guard against missing entries (edge case: fighter wasn't trained
+            # this week for some reason).
+            for boost in boosts:
+                fid = boost.fighter_id
+                if fid in self._training_history and self._training_history[fid]:
+                    latest = self._training_history[fid][-1]
+                    if latest.get("week") == week:
+                        current = latest["coach_boosts"].get(boost.stat, 0.0)
+                        latest["coach_boosts"][boost.stat] = current + float(boost.amount)
+            for decay in decays:
+                fid = decay.fighter_id
+                if fid in self._training_history and self._training_history[fid]:
+                    latest = self._training_history[fid][-1]
+                    if latest.get("week") == week:
+                        current = latest["decays"].get(decay.stat, 0.0)
+                        latest["decays"][decay.stat] = current + float(decay.amount)
 
             # Warnings — only show severe ones so feed isn't flooded
             for warn in warnings:
