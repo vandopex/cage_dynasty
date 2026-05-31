@@ -362,6 +362,33 @@ FOUNDING_FIGHTER_WALK_ROSTER_HIT  = 10   # Morale loss applied to remaining figh
 # Non-founder walk roster hit also -10, fires only when fighter is "important":
 # is_champion OR top-10 ranked OR fights_completed >= 6
 
+# ── Coach contracts ──────────────────────────────────────────────
+# Ship C2: dumber version of fighter contracts. Financial-pressure
+# system: coaches quit if underpaid or paychecks get skipped.
+# No holdout, no severance, no W/L morale. Asymmetric from fighters.
+COACH_DEFAULT_CONTRACT_WEEKS  = 52    # 1-year default
+COACH_MORALE_START            = 80    # signing morale
+COACH_MORALE_WALKOUT          = 10    # below this: walks immediately
+COACH_UNDERPAID_DECAY         = 1     # morale loss per week if underpaid
+COACH_UNDERPAID_THRESHOLD     = 0.85  # salary < 85% of market rate = underpaid
+COACH_SKIPPED_PAYCHECK_DECAY  = 3     # morale loss per skipped paycheck
+COACH_MARKET_RATE_PER_RATING  = 12    # base $/wk per rating point (75 rating = $900/wk market)
+# Tier-gated contract length options for hiring
+COACH_TIER_CONTRACT_OPTIONS = {
+    "GARAGE":   [26],
+    "LOCAL":    [26, 52],
+    "REGIONAL": [26, 52, 78],
+    "NATIONAL": [26, 52, 78],
+    "ELITE":    [52, 78, 104],
+}
+# Placeholder when no coach hired — keeps existing read sites safe
+COACH_VACANT_PLACEHOLDER = {
+    "name":      "Vacant",
+    "specialty": "none",
+    "rating":    0,
+    "salary":    0,
+}
+
 # ── Training history ──────────────────────────────────────────────────────────
 # Ship A: rolling per-fighter training log surfaced on dashboard.
 # Each entry captures one week's training-plan gains, coach passive boosts,
@@ -739,6 +766,10 @@ class GameBridge:
             "salary":    800,
         }
 
+        # Ship C2: coach contract — parallels fighter _contracts but simpler.
+        # {} when no coach hired (vacant). Always paired with _coach dict.
+        self._coach_contract: Dict[str, Any] = {}
+
         # Per-fighter weekly training plans — {fighter_id: {focus, intensity}}
         # Set once, applied automatically every week advance
         self._fighter_training_plans: Dict[str, Dict[str, Any]] = {}
@@ -968,6 +999,22 @@ class GameBridge:
                 }
                 print(f"  ✅ Coach: {self._coach['name']} ({self._coach['specialty']}, {self._coach['rating']} rating)")
 
+                # Ship C2: create coach contract alongside the coach dict
+                self._coach_contract = {
+                    "coach_id":          coach_data.get("id", "starter_coach"),
+                    "name":              self._coach["name"],
+                    "specialty":         self._coach["specialty"],
+                    "rating":            self._coach["rating"],
+                    "salary":            self._coach["salary"],
+                    "total_weeks":       COACH_DEFAULT_CONTRACT_WEEKS,
+                    "weeks_completed":   0,
+                    "weeks_remaining":   COACH_DEFAULT_CONTRACT_WEEKS,
+                    "morale":            COACH_MORALE_START,
+                    "signed_week":       self._game_state.week_number if self._game_state else 0,
+                    "skipped_paychecks": 0,
+                }
+                print(f"  📝 Coach contract: {self._coach['name']} — {COACH_DEFAULT_CONTRACT_WEEKS}w @ ${self._coach['salary']}/wk")
+
             # Store camp location for display
             self._camp_location = camp_location or "Las Vegas, NV"
 
@@ -1177,6 +1224,7 @@ class GameBridge:
             "camp_balance":             self._camp_balance,
             "total_purses_earned":      self._total_purses_earned,
             "coach":                    self._coach,
+            "coach_contract":           self._coach_contract,
             "scheduled_fights":         [clean_fight(f) for f in self._scheduled_fights],
             "ai_deferred_bookings":     [clean_fight(f) for f in self._ai_deferred_bookings],
             "upcoming_cards":           upcoming_clean,
@@ -1256,6 +1304,7 @@ class GameBridge:
         self._camp_balance            = data.get("camp_balance", 50000)
         self._total_purses_earned     = data.get("total_purses_earned", 0)
         self._coach                   = data.get("coach", {})
+        self._coach_contract          = data.get("coach_contract", {})
         self._scheduled_fights        = data.get("scheduled_fights", [])
         self._ai_deferred_bookings    = data.get("ai_deferred_bookings", [])
 
@@ -1667,6 +1716,9 @@ class GameBridge:
 
             # ── Contract processing — decrement and handle expiry ─────
             self._process_contracts(current_week)
+
+            # Ship C2: weekly coach contract tick — morale + expiration
+            self._process_coach_contract(current_week)
 
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
@@ -4976,13 +5028,15 @@ class GameBridge:
         overhead      = self._WEEKLY_OVERHEAD.get(tier, 125)
         roster_size   = len(self.get_player_fighters())
         fighter_cost  = {"GARAGE": 0, "LOCAL": 25, "REGIONAL": 75, "NATIONAL": 200, "ELITE": 400}.get(tier, 0)
-        total_weekly  = overhead + roster_size * fighter_cost
+        coach_salary  = self._coach_contract.get("salary", 0) if self._coach_contract else 0
+        total_weekly  = overhead + roster_size * fighter_cost + coach_salary
         balance       = self._camp_balance
         return {
             "balance":              balance,
             "weekly_overhead":      total_weekly,
             "camp_overhead":        overhead,
             "fighter_costs":        roster_size * fighter_cost,
+            "coach_salary":         coach_salary,
             "roster_size":          roster_size,
             "weeks_runway":         balance // total_weekly if total_weekly > 0 else 999,
             "total_purses_earned":  self._total_purses_earned,
@@ -4995,9 +5049,34 @@ class GameBridge:
         overhead     = self._WEEKLY_OVERHEAD.get(tier, 125)
         roster       = len(self.get_player_fighters())
         fighter_cost = {"GARAGE": 0, "LOCAL": 25, "REGIONAL": 75, "NATIONAL": 200, "ELITE": 400}.get(tier, 0)
-        total        = overhead + roster * fighter_cost
-        self._camp_balance     = max(0, self._camp_balance - total)
-        self._total_overhead_paid += total
+        fighter_total = roster * fighter_cost
+
+        # Ship C2: coach salary is part of weekly overhead now
+        coach_salary = self._coach_contract.get("salary", 0) if self._coach_contract else 0
+
+        total = overhead + fighter_total + coach_salary
+
+        # Ship C2: check if balance covers everything; if not, mark coach skipped
+        if self._camp_balance >= total:
+            self._camp_balance        -= total
+            self._total_overhead_paid += total
+        else:
+            # Pay what we can on non-coach overhead first; coach paycheck gets skipped
+            non_coach = overhead + fighter_total
+            paid_non_coach = min(self._camp_balance, non_coach)
+            self._camp_balance        = max(0, self._camp_balance - non_coach)
+            self._total_overhead_paid += paid_non_coach
+            # Skip coach paycheck — increments skipped_paychecks for morale decay
+            if self._coach_contract and coach_salary > 0:
+                self._coach_contract["skipped_paychecks"] = (
+                    self._coach_contract.get("skipped_paychecks", 0) + 1
+                )
+                self._news_items.insert(0, {
+                    "headline": f"⚠️ Couldn't cover {self._coach_contract['name']}'s ${coach_salary} paycheck this week",
+                    "category": "finance",
+                    "week":     self._game_state.week_number if self._game_state else 0,
+                })
+
         self._camp_cache.clear()   # balance changed — invalidate cache
         return total
 
@@ -10039,6 +10118,87 @@ class GameBridge:
     # CONTRACT SYSTEM
     # =========================================================================
 
+    def _process_coach_contract(self, current_week: int) -> None:
+        """
+        Weekly coach contract tick — Ship C2.
+        Two morale triggers:
+          1. Underpaid (salary < 85% of market rate)
+          2. Skipped paychecks (decay applied per skip in _deduct_weekly_overhead)
+        No holdout. Coach walks immediately at morale <= COACH_MORALE_WALKOUT
+        or when contract weeks_remaining reaches 0.
+        """
+        if not self._coach_contract:
+            return  # No coach hired, nothing to process
+
+        contract = self._coach_contract
+
+        # Decrement contract clock
+        contract["weeks_completed"] = contract.get("weeks_completed", 0) + 1
+        contract["weeks_remaining"] = max(0,
+            contract["total_weeks"] - contract["weeks_completed"])
+
+        # Apply morale decay from skipped paychecks (cumulative, then reset count
+        # to avoid re-decaying past skips every tick).
+        skipped = contract.get("skipped_paychecks", 0)
+        if skipped > 0:
+            contract["morale"] = max(0,
+                contract.get("morale", COACH_MORALE_START)
+                - (skipped * COACH_SKIPPED_PAYCHECK_DECAY))
+            contract["skipped_paychecks"] = 0  # consumed
+
+        # Apply underpaid morale decay
+        market_rate = int(contract["rating"] * COACH_MARKET_RATE_PER_RATING)
+        if contract["salary"] < market_rate * COACH_UNDERPAID_THRESHOLD:
+            contract["morale"] = max(0,
+                contract.get("morale", COACH_MORALE_START) - COACH_UNDERPAID_DECAY)
+
+        # Contract expiry → immediate walk (no holdout, per Lock 3)
+        if contract["weeks_remaining"] <= 0:
+            self._release_coach('contract_expired')
+            return
+
+        # Morale walkout → immediate
+        if contract.get("morale", COACH_MORALE_START) <= COACH_MORALE_WALKOUT:
+            # Determine which trigger dominated for news headline
+            underpaid = contract["salary"] < market_rate * COACH_UNDERPAID_THRESHOLD
+            if underpaid:
+                self._release_coach('quit_underpaid')
+            else:
+                self._release_coach('quit_skipped_pay')
+
+    def _release_coach(self, reason: str) -> None:
+        """
+        Coach departs — clears contract, sets _coach to vacant placeholder.
+        Branched news per reason. Ship C2.
+        """
+        if not self._coach_contract:
+            return
+        name = self._coach_contract.get("name", "Coach")
+        current_week = self._game_state.week_number if self._game_state else 0
+
+        if reason == 'quit_underpaid':
+            headline = f"💼 {name} quit — said you weren't paying him what he's worth"
+        elif reason == 'quit_skipped_pay':
+            headline = f"💼 {name} walked out — too many missed paychecks"
+        elif reason == 'contract_expired':
+            headline = f"📋 {name}'s contract expired — they've moved on"
+        elif reason == 'fired':
+            headline = f"🚪 You released {name} from the camp"
+        else:
+            headline = f"💼 {name} left the camp"
+
+        self._news_items.insert(0, {
+            "headline": headline,
+            "category": "coach",
+            "week":     current_week,
+        })
+        print(f"  💼 [COACH] {name} departed — {reason}")
+
+        # Clear contract; set placeholder coach so read sites stay safe
+        self._coach_contract = {}
+        self._coach = dict(COACH_VACANT_PLACEHOLDER)
+        self._clear_cache()
+
     def _process_contracts(self, current_week: int) -> None:
         """
         Called each advance_week:
@@ -10276,6 +10436,95 @@ class GameBridge:
             })
         print(f"  {arch_emoji} [AI SIGNING] {fighter.name} → {winning_camp.name} "
               f"({arch}) [score: {_top_score:.0f}]")
+
+    def get_coach_contract_status(self) -> Dict[str, Any]:
+        """
+        Returns coach contract details for UI display. Includes
+        underpaid status and morale band. Ship C2.
+        """
+        if not self._coach_contract:
+            return {"has_coach": False}
+        c = self._coach_contract
+        market_rate = int(c["rating"] * COACH_MARKET_RATE_PER_RATING)
+        is_underpaid = c["salary"] < market_rate * COACH_UNDERPAID_THRESHOLD
+        morale = c.get("morale", COACH_MORALE_START)
+        if morale >= 70:
+            morale_label = "Happy"
+            morale_color = "var(--neon-green)"
+        elif morale >= 40:
+            morale_label = "OK"
+            morale_color = "var(--warning)"
+        else:
+            morale_label = "Unhappy"
+            morale_color = "var(--blood-red)"
+        return {
+            "has_coach":         True,
+            "name":              c["name"],
+            "specialty":         c["specialty"],
+            "rating":            c["rating"],
+            "salary":            c["salary"],
+            "market_rate":       market_rate,
+            "is_underpaid":      is_underpaid,
+            "total_weeks":       c["total_weeks"],
+            "weeks_remaining":   c.get("weeks_remaining", c["total_weeks"]),
+            "weeks_completed":   c.get("weeks_completed", 0),
+            "morale":            morale,
+            "morale_label":      morale_label,
+            "morale_color":      morale_color,
+        }
+
+    def fire_coach(self) -> Dict[str, Any]:
+        """
+        Player-initiated coach release. No severance. Ship C2.
+        """
+        if not self._coach_contract:
+            return {"success": False, "error": "No coach to fire"}
+        self._release_coach('fired')
+        return {"success": True, "message": "Coach released"}
+
+    def hire_coach(self, coach_data: Dict[str, Any], contract_weeks: int) -> Dict[str, Any]:
+        """
+        Mid-game coach hiring. Replaces current coach contract entirely.
+        Validates contract length against tier. Ship C2.
+        """
+        if self._coach_contract:
+            return {"success": False, "error": "Already have a coach — fire them first"}
+        tier = self._get_camp_tier()
+        allowed = COACH_TIER_CONTRACT_OPTIONS.get(tier, [26])
+        if contract_weeks not in allowed:
+            return {"success": False, "error": f"Your {tier} camp can only offer contracts of {allowed} weeks"}
+        # Build new contract + sync _coach dict
+        self._coach = {
+            "name":      coach_data.get("name", "Head Coach"),
+            "specialty": coach_data.get("specialty", "boxing").lower(),
+            "rating":    int(coach_data.get("rating", 60)),
+            "salary":    int(coach_data.get("salary", 800)),
+        }
+        self._coach_contract = {
+            "coach_id":          coach_data.get("id", "hired_coach"),
+            "name":              self._coach["name"],
+            "specialty":         self._coach["specialty"],
+            "rating":            self._coach["rating"],
+            "salary":            self._coach["salary"],
+            "total_weeks":       contract_weeks,
+            "weeks_completed":   0,
+            "weeks_remaining":   contract_weeks,
+            "morale":            COACH_MORALE_START,
+            "signed_week":       self._game_state.week_number if self._game_state else 0,
+            "skipped_paychecks": 0,
+        }
+        self._news_items.insert(0, {
+            "headline": f"✅ Signed {self._coach['name']} as head coach — {contract_weeks}w @ ${self._coach['salary']}/wk",
+            "category": "coach",
+            "week":     self._game_state.week_number if self._game_state else 0,
+        })
+        self._clear_cache()
+        return {"success": True, "message": f"Signed {self._coach['name']}"}
+
+    def get_coach_contract_options(self) -> List[int]:
+        """Available contract lengths for hiring at current tier. Ship C2."""
+        tier = self._get_camp_tier()
+        return COACH_TIER_CONTRACT_OPTIONS.get(tier, [26])
 
     def get_contract_status(self, fighter_id: str) -> Optional[Dict[str, Any]]:
         """Return contract info for a player fighter."""

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Hire Coach{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>💼 Hire a Head Coach</h1>
+    <p class="text-muted">Your {{ tier }} camp can offer contracts of {{ contract_options }} weeks.</p>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+            gap:var(--spacing-md);">
+{% for coach in coaches %}
+<div class="card">
+    <div style="padding:var(--spacing-md);">
+        <div style="font-family:var(--font-display);font-size:1rem;
+                    color:var(--text-bright);">
+            {{ coach.icon }} {{ coach.name }}
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);
+                    margin-bottom:var(--spacing-sm);">
+            {{ coach.label }} · {{ coach.rating }} RTG
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);
+                    margin-bottom:var(--spacing-md);min-height:2.5em;">
+            {{ coach.description }}
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);">Weekly salary</div>
+        <div style="font-family:var(--font-display);font-size:1.2rem;
+                    color:var(--neon-green);margin-bottom:var(--spacing-md);">
+            ${{ "{:,}".format(coach.salary) }}
+        </div>
+        <form action="{{ url_for('hire_coach_page') }}" method="POST">
+            <input type="hidden" name="coach_id" value="{{ coach.id }}">
+            <label style="font-size:.7rem;color:var(--text-muted);
+                          display:block;margin-bottom:4px;">Contract length</label>
+            <select name="contract_weeks"
+                    style="width:100%;padding:6px;margin-bottom:var(--spacing-sm);
+                           background:var(--bg-dark);color:var(--text-bright);
+                           border:1px solid var(--border-color);border-radius:3px;">
+                {% for w in contract_options %}
+                <option value="{{ w }}">{{ w }} weeks</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm" style="width:100%;">
+                Sign Coach
+            </button>
+        </form>
+    </div>
+</div>
+{% endfor %}
+</div>
+
+<div style="margin-top:var(--spacing-lg);text-align:center;">
+    <a href="{{ url_for('facility') }}" class="btn btn-secondary">← Back to Facility</a>
+</div>
+{% endblock %}

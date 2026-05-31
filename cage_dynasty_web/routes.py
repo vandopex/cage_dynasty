@@ -10,6 +10,154 @@ import sys
 import traceback
 
 
+def _generate_available_coaches(tier):
+    """Generate coaches available for hiring based on tier.
+
+    Hoisted to module level (Ship C2) so mid-game `/coach/hire` can reuse
+    the same pool generator the new-game setup flow uses.
+    """
+    # Try to use real game_start module
+    try:
+        from systems.game_start import generate_starting_coaches
+        coaches = generate_starting_coaches(num_coaches=6)
+        _SPEC_LABEL = {
+            "striking": ("Striking Coach", "🥊"),
+            "boxing": ("Striking Coach", "🥊"),
+            "kickboxing": ("Striking Coach", "🥊"),
+            "muay thai": ("Striking Coach", "🥊"),
+            "wrestling": ("Grappling Coach", "🤼"),
+            "grappling": ("Grappling Coach", "🤼"),
+            "bjj": ("Grappling Coach", "🤼"),
+            "submissions": ("Grappling Coach", "🤼"),
+            "conditioning": ("Strength & Conditioning Coach", "💪"),
+            "strength": ("Strength & Conditioning Coach", "💪"),
+            "cardio": ("Strength & Conditioning Coach", "💪"),
+            "s&c": ("Strength & Conditioning Coach", "💪"),
+            "mma": ("Head Coach", "🧠"),
+            "cornering": ("Head Coach", "🧠"),
+            "strategy": ("Head Coach", "🧠"),
+        }
+        result = []
+        for c in coaches:
+            spec = getattr(c, "specialty", "mma").lower()
+            label, icon = _SPEC_LABEL.get(spec, ("Head Coach", "🧠"))
+            result.append({
+                "id":          c.coach_id,
+                "name":        c.name,
+                "specialty":   spec,
+                "label":       label,
+                "icon":        icon,
+                "rating":      c.skill_level,
+                "salary":      c.weekly_salary,
+                "description": f"{c.personality_desc}. {c.get_bonus_description()}"
+            })
+        return result
+    except ImportError as e:
+        print(f"Could not import game_start: {e}")
+
+    # Fallback to simple generation
+    import random
+
+    tier_ratings = {
+        "GARAGE": (55, 75),
+        "LOCAL": (60, 80),
+        "REGIONAL": (65, 85),
+        "NATIONAL": (75, 90),
+        "ELITE": (85, 98),
+    }
+
+    min_r, max_r = tier_ratings.get(tier, (55, 75))
+
+    # Four archetypes — always show one of each plus 2 alternates
+    ARCHETYPES = [
+        {
+            "specialty": "Striking",
+            "label":     "Striking Coach",
+            "icon":      "🥊",
+            "desc":      "Develops boxing, kicks, clinch striking and defensive footwork.",
+            "focus":     ["Boxing", "Kicks", "Clinch", "Defense"],
+        },
+        {
+            "specialty": "Grappling",
+            "label":     "Grappling Coach",
+            "icon":      "🤼",
+            "desc":      "Builds wrestling takedowns, takedown defense, BJJ and submission game.",
+            "focus":     ["Takedowns", "TD Defense", "Submissions", "Guard"],
+        },
+        {
+            "specialty": "S&C",
+            "label":     "Strength & Conditioning Coach",
+            "icon":      "💪",
+            "desc":      "Improves strength, cardio, chin and recovery. Builds physical durability.",
+            "focus":     ["Strength", "Cardio", "Chin", "Recovery"],
+        },
+        {
+            "specialty": "MMA",
+            "label":     "Head Coach",
+            "icon":      "🧠",
+            "desc":      "Shapes overall game plan and mental game — fight IQ, composure and heart.",
+            "focus":     ["Fight IQ", "Composure", "Heart"],
+        },
+    ]
+
+    first_names = ["Mike", "John", "Carlos", "Greg", "Dave", "Tony",
+                   "Rafael", "Alex", "Firas", "Mark", "Jackson", "Duke"]
+    last_names  = ["Johnson", "Martinez", "Smith", "Williams", "Garcia",
+                   "Brown", "Davis", "Miller", "Zahabi", "DellaGrotte"]
+
+    coaches = []
+    used_archetypes = set()
+
+    # Always include one of each archetype
+    for i, arch in enumerate(ARCHETYPES):
+        rating = random.randint(min_r, max_r)
+        name   = f"{random.choice(first_names)} {random.choice(last_names)}"
+        if rating >= 80:
+            salary = 2000 + (rating - 80) * 150
+        elif rating >= 70:
+            salary = 1200 + (rating - 70) * 80
+        else:
+            salary = 600  + (rating - 50) * 30
+        coaches.append({
+            "id":          f"coach_{i}",
+            "name":        name,
+            "specialty":   arch["specialty"],
+            "label":       arch["label"],
+            "icon":        arch["icon"],
+            "rating":      rating,
+            "salary":      salary,
+            "description": arch["desc"],
+            "focus":       arch["focus"],
+        })
+        used_archetypes.add(arch["specialty"])
+
+    # Two additional alternates (random archetype, different names)
+    for i in range(2):
+        arch   = random.choice(ARCHETYPES)
+        rating = random.randint(min_r, max_r)
+        name   = f"{random.choice(first_names)} {random.choice(last_names)}"
+        if rating >= 80:
+            salary = 2000 + (rating - 80) * 150
+        elif rating >= 70:
+            salary = 1200 + (rating - 70) * 80
+        else:
+            salary = 600  + (rating - 50) * 30
+        coaches.append({
+            "id":          f"coach_alt_{i}",
+            "name":        name,
+            "specialty":   arch["specialty"],
+            "label":       arch["label"],
+            "icon":        arch["icon"],
+            "rating":      rating,
+            "salary":      salary,
+            "description": arch["desc"],
+            "focus":       arch["focus"],
+        })
+
+    coaches.sort(key=lambda c: c['rating'], reverse=True)
+    return coaches
+
+
 def register_routes(app):
     """Register all routes with the Flask application."""
     
@@ -155,149 +303,6 @@ def register_routes(app):
         
         flash(f"Welcome to the DFC! Your journey begins now.", "success")
         return redirect(url_for('dashboard'))
-    
-    def _generate_available_coaches(tier):
-        """Generate coaches available for hiring based on tier."""
-        # Try to use real game_start module
-        try:
-            from systems.game_start import generate_starting_coaches
-            coaches = generate_starting_coaches(num_coaches=6)
-            _SPEC_LABEL = {
-                "striking": ("Striking Coach", "🥊"),
-                "boxing": ("Striking Coach", "🥊"),
-                "kickboxing": ("Striking Coach", "🥊"),
-                "muay thai": ("Striking Coach", "🥊"),
-                "wrestling": ("Grappling Coach", "🤼"),
-                "grappling": ("Grappling Coach", "🤼"),
-                "bjj": ("Grappling Coach", "🤼"),
-                "submissions": ("Grappling Coach", "🤼"),
-                "conditioning": ("Strength & Conditioning Coach", "💪"),
-                "strength": ("Strength & Conditioning Coach", "💪"),
-                "cardio": ("Strength & Conditioning Coach", "💪"),
-                "s&c": ("Strength & Conditioning Coach", "💪"),
-                "mma": ("Head Coach", "🧠"),
-                "cornering": ("Head Coach", "🧠"),
-                "strategy": ("Head Coach", "🧠"),
-            }
-            result = []
-            for c in coaches:
-                spec = getattr(c, "specialty", "mma").lower()
-                label, icon = _SPEC_LABEL.get(spec, ("Head Coach", "🧠"))
-                result.append({
-                    "id":          c.coach_id,
-                    "name":        c.name,
-                    "specialty":   spec,
-                    "label":       label,
-                    "icon":        icon,
-                    "rating":      c.skill_level,
-                    "salary":      c.weekly_salary,
-                    "description": f"{c.personality_desc}. {c.get_bonus_description()}"
-                })
-            return result
-        except ImportError as e:
-            print(f"Could not import game_start: {e}")
-        
-        # Fallback to simple generation
-        import random
-        
-        tier_ratings = {
-            "GARAGE": (55, 75),
-            "LOCAL": (60, 80),
-            "REGIONAL": (65, 85),
-            "NATIONAL": (75, 90),
-            "ELITE": (85, 98),
-        }
-        
-        min_r, max_r = tier_ratings.get(tier, (55, 75))
-        
-        # Four archetypes — always show one of each plus 2 alternates
-        ARCHETYPES = [
-            {
-                "specialty": "Striking",
-                "label":     "Striking Coach",
-                "icon":      "🥊",
-                "desc":      "Develops boxing, kicks, clinch striking and defensive footwork.",
-                "focus":     ["Boxing", "Kicks", "Clinch", "Defense"],
-            },
-            {
-                "specialty": "Grappling",
-                "label":     "Grappling Coach",
-                "icon":      "🤼",
-                "desc":      "Builds wrestling takedowns, takedown defense, BJJ and submission game.",
-                "focus":     ["Takedowns", "TD Defense", "Submissions", "Guard"],
-            },
-            {
-                "specialty": "S&C",
-                "label":     "Strength & Conditioning Coach",
-                "icon":      "💪",
-                "desc":      "Improves strength, cardio, chin and recovery. Builds physical durability.",
-                "focus":     ["Strength", "Cardio", "Chin", "Recovery"],
-            },
-            {
-                "specialty": "MMA",
-                "label":     "Head Coach",
-                "icon":      "🧠",
-                "desc":      "Shapes overall game plan and mental game — fight IQ, composure and heart.",
-                "focus":     ["Fight IQ", "Composure", "Heart"],
-            },
-        ]
-
-        first_names = ["Mike", "John", "Carlos", "Greg", "Dave", "Tony",
-                       "Rafael", "Alex", "Firas", "Mark", "Jackson", "Duke"]
-        last_names  = ["Johnson", "Martinez", "Smith", "Williams", "Garcia",
-                       "Brown", "Davis", "Miller", "Zahabi", "DellaGrotte"]
-
-        coaches = []
-        used_archetypes = set()
-
-        # Always include one of each archetype
-        for i, arch in enumerate(ARCHETYPES):
-            rating = random.randint(min_r, max_r)
-            name   = f"{random.choice(first_names)} {random.choice(last_names)}"
-            if rating >= 80:
-                salary = 2000 + (rating - 80) * 150
-            elif rating >= 70:
-                salary = 1200 + (rating - 70) * 80
-            else:
-                salary = 600  + (rating - 50) * 30
-            coaches.append({
-                "id":          f"coach_{i}",
-                "name":        name,
-                "specialty":   arch["specialty"],
-                "label":       arch["label"],
-                "icon":        arch["icon"],
-                "rating":      rating,
-                "salary":      salary,
-                "description": arch["desc"],
-                "focus":       arch["focus"],
-            })
-            used_archetypes.add(arch["specialty"])
-
-        # Two additional alternates (random archetype, different names)
-        for i in range(2):
-            arch   = random.choice(ARCHETYPES)
-            rating = random.randint(min_r, max_r)
-            name   = f"{random.choice(first_names)} {random.choice(last_names)}"
-            if rating >= 80:
-                salary = 2000 + (rating - 80) * 150
-            elif rating >= 70:
-                salary = 1200 + (rating - 70) * 80
-            else:
-                salary = 600  + (rating - 50) * 30
-            coaches.append({
-                "id":          f"coach_alt_{i}",
-                "name":        name,
-                "specialty":   arch["specialty"],
-                "label":       arch["label"],
-                "icon":        arch["icon"],
-                "rating":      rating,
-                "salary":      salary,
-                "description": arch["desc"],
-                "focus":       arch["focus"],
-            })
-
-        coaches.sort(key=lambda c: c['rating'], reverse=True)
-        return coaches
     
     def _generate_available_prospects():
         """Generate prospect fighters to choose from - one per weight class."""
@@ -1745,9 +1750,65 @@ def register_routes(app):
             fdata = bridge.get_facility_data() if hasattr(bridge, 'get_facility_data') else {}
         except Exception:
             fdata = {}
+        coach_status = bridge.get_coach_contract_status()
         return render_template('facility.html',
             week=bridge.week_number,
             facility=fdata,
+            coach_status=coach_status,
+        )
+
+    @app.route('/coach/fire', methods=['POST'])
+    def fire_coach():
+        """Player releases current coach. Ship C2."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return redirect(url_for('new_game'))
+        result = bridge.fire_coach()
+        if result.get('success'):
+            flash(result.get('message', 'Coach released.'), 'success')
+        else:
+            flash(result.get('error', 'Could not release coach.'), 'error')
+        return redirect(url_for('facility'))
+
+    @app.route('/coach/hire', methods=['GET', 'POST'])
+    def hire_coach_page():
+        """Mid-game coach hiring. Ship C2."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return redirect(url_for('new_game'))
+        if bridge.get_coach_contract_status().get("has_coach"):
+            return redirect(url_for('facility'))
+
+        camp = bridge.get_player_camp()
+        tier = camp.tier.upper() if camp and getattr(camp, 'tier', None) else 'GARAGE'
+        contract_options = bridge.get_coach_contract_options()
+
+        if request.method == 'POST':
+            coach_id = request.form.get('coach_id')
+            try:
+                contract_weeks = int(request.form.get('contract_weeks', contract_options[0]))
+            except (TypeError, ValueError):
+                contract_weeks = contract_options[0]
+            coaches = session.get('hire_coaches', [])
+            selected = next((c for c in coaches if c['id'] == coach_id), None)
+            if selected:
+                result = bridge.hire_coach(selected, contract_weeks)
+                if result.get('success'):
+                    session.pop('hire_coaches', None)
+                    flash(result.get('message', 'Coach signed.'), 'success')
+                    return redirect(url_for('facility'))
+                else:
+                    flash(result.get('error', 'Could not hire coach.'), 'error')
+            return redirect(url_for('hire_coach_page'))
+
+        # Generate fresh coach pool (cached in session until hire/leave)
+        if 'hire_coaches' not in session:
+            session['hire_coaches'] = _generate_available_coaches(tier)
+
+        return render_template('hire_coach.html',
+            coaches=session['hire_coaches'],
+            contract_options=contract_options,
+            tier=tier,
         )
 
     @app.route('/saves')

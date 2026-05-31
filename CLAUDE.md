@@ -1,3 +1,33 @@
+## Shipped 2026-05-30
+
+### Ship C2 — Coach contracts (dumber version of fighter contracts)
+
+First ship after a ~2.5 week break. Closes pre-existing dead-code
+bug (coach salary stored but never deducted) and adds parallel-
+but-simpler contract system: coaches as financial-pressure system,
+not relationship system.
+
+**Two morale triggers only:** underpaid (salary < 85% market) and
+skipped paychecks (balance insufficient to cover salary). No W/L
+morale, no holdout, no severance. Asymmetric from fighters by
+design — fighters give you a window to fix things; coaches give
+you a final straw moment.
+
+**New UI surfaces:** Facility page Head Coach panel + new
+/coach/hire page with tier-gated contract length picker.
+
+**Architectural pattern instance #7** of "data exists but doesn't
+reach the surface" — dead-code-with-promise subvariant. Salary
+was stored AND surfaced to player at setup, but the runtime never
+read it. Three-way gap closed.
+
+**Tier 2 verified:** fire flow + hire flow end-to-end. Long-term
+quit triggers (underpaid, skipped paychecks) deferred to natural
+play.
+
+**Next:** Corner advice during player fights (the other stated
+pre-deploy must-have).
+
 ## Shipped 2026-05-11
 - Ship A — Training report deepening: rolling 4-week history per fighter (verified, **adds dashboard training log · UI-layer instance of "data exists but doesn't reach the surface"**): training data fired every advance_week via `_apply_weekly_training` and `_advance_maintenance_week`, but no per-week storage existed. Each week's report was emitted to news + rendered on `week_results.html`, then disappeared. Players had no way to see trajectory of a fighter's development beyond the single most recent week. **Fix:** new `_training_history` dict, FIFO-evicted at 4 entries per fighter, populated from existing data sources via new `_record_training_week` helper. Maintenance boosts/decays stitched onto the same week's entry via defensive lookup with `week == current_week` guard. **Data flow per week per fighter:** (1) `_apply_weekly_training` computes gains (training plan); (2) `_record_training_week` appends entry with plan gains; (3) coach-attributed gains pre-split from plan gains, written to `entry.coach_boosts`; (4) `_advance_maintenance_week` runs, produces boosts + decays; (5) loop matches each boost/decay to current-week entry via fighter_id + week guard, merges into `coach_boosts` / `decays` fields. **Storage shape (per fighter, list of last N=4):** `{week, focus, intensity, is_fight_camp, ovr_before, ovr_after, gains:{stat:float}, coach_boosts:{stat:float}, decays:{stat:float}}`. **UI:** new dashboard widget directly after "Your Fighters" section. Each fighter gets a 1-row grid of weekly entries (oldest left, newest right). Each entry shows week#, intensity, focus, OVR delta, and color-coded pills for gains (neon-green) / coach boosts (gold) / decays (blood-red). Fight Camp weeks marked with gold left border + ⚡ icon. **Files:** `game_bridge.py` (+106 lines: const + init + save/load + helper + accessor + capture call + maintenance stitching), `routes.py` (+4 lines: get_training_history + render kwarg), `templates/dashboard.html` (+80 lines: widget). **Design notes:** coach-gain pre-split keeps `_record_training_week`'s signature narrow (caller handles attribution); `week == current_week` guard prevents corruption of stale entries; `get_training_history` filters to player_ids only (defense in depth). **Tier 1:** ast.parse clean on both .py files, Jinja2 parser clean on dashboard.html, scope verified to 3 files. **Tier 2 (Flask runtime, slot with founding fighter):** widget renders directly after "Your Fighters" as intended. Antonio Martin (founder) shows Week 1 entry with MODERATE intensity, Fight Camp gold border + ⚡ icon, focus=chin, fight_iq +1.2 gain pill. Layout clean, Coach's Corner unaffected, no crash on training advance. Stretch tests (4-week strip, FIFO eviction, decay/coach boost pills) deferred to natural play. **Locks honored:** widget placement after "Your Fighters" (Coach's Corner untouched); per-fighter list of 4 entries with FIFO eviction; unified entries with distinct color attribution; N=4 tunable via `TRAINING_HISTORY_WEEKS` at top of module; single ship; color scheme matches existing `week_results.html` convention. **Architectural pattern instance #6** of "data exists but doesn't reach the surface" — sixth instance this project, UI-layer. Companion to Ship #29 (belt history → persistence), Ship C (event numbering → persistence read), Ship #32 (fighter attributes → persistence), Ship #35 (injury state → dashboard read), Ship B (starter contract → state writer, inverse), Ship A (training data → new persistence layer + dashboard, this one is unusual in that it creates the storage layer too).
 
