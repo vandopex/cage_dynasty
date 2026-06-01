@@ -389,6 +389,21 @@ COACH_VACANT_PLACEHOLDER = {
     "salary":    0,
 }
 
+# ── Corner advice ────────────────────────────────────────────────
+# Ship K1: between-round coach advice for player fights. Reactive
+# to RoundStats; specialty + rating tier determine content depth.
+# Path α mechanical bonus: small pre-fight attribute buff to the
+# player fighter — approximation of "having a good coach helps"
+# (per-round reactive buffs need engine surgery, deferred).
+CORNER_ADVICE_ENABLED          = True
+CORNER_RATING_TIER_LOW         = 65    # rating <= this: tier "low"
+CORNER_RATING_TIER_MID         = 80    # rating <= this and > LOW: tier "mid"
+                                       # rating > MID: tier "high"
+CORNER_BONUS_BASE              = 1.0   # base bonus magnitude when advice fires
+CORNER_BONUS_PER_RATING_POINT  = 0.04  # extra bonus per rating point above 60
+CORNER_SECONDARY_DOMAIN_MIN    = 80    # min rating to give secondary-domain reads
+CORNER_GENERALIST_DEPTH_MIN    = 75    # MMA head coach min rating for deeper reads
+
 # ── Training history ──────────────────────────────────────────────────────────
 # Ship A: rolling per-fighter training log surfaced on dashboard.
 # Each entry captures one week's training-plan gains, coach passive boosts,
@@ -9296,6 +9311,149 @@ class GameBridge:
             fighting_style      = style,
         )
 
+    # ── Ship K1: corner advice helpers ────────────────────────────
+    def _apply_corner_prefight_buff(self, fa) -> Optional[Dict[str, Any]]:
+        """
+        Path α mechanical bonus. Buff the player fighter's engine
+        attributes by a small amount before sim runs. `fa` is the
+        _FighterAttributes dataclass instance produced by
+        _make_fighter_attrs — throwaway per-fight, mutation-safe.
+        Returns the applied buff payload (for logging) or None.
+        """
+        if not CORNER_ADVICE_ENABLED:
+            return None
+        if not self._coach_contract:
+            return None
+        try:
+            from corner_advice import compute_prefight_buff
+        except ImportError:
+            return None
+        buff = compute_prefight_buff(self._coach)
+        if not buff:
+            return None
+        for attr in buff["attrs"]:
+            cur = getattr(fa, attr, None)
+            if cur is None:
+                continue
+            setattr(fa, attr, min(99, int(cur + buff["amount"])))
+        return buff
+
+    def _inject_corner_advice(
+        self,
+        commentary_lines: List[str],
+        eng_result,
+        player_fighter,
+        opponent_fighter,
+        player_is_f1: bool,
+    ) -> List[str]:
+        """
+        Walk commentary_lines, generate between-round corner advice for
+        the player fighter, and inject `=== CORNER ===` marker blocks
+        before each subsequent round header. Silent (returns input
+        unchanged) when coach is vacant, advice disabled, or no
+        round-by-round stats are available.
+        """
+        if not CORNER_ADVICE_ENABLED:
+            return commentary_lines
+        if not self._coach_contract:
+            return commentary_lines
+        try:
+            from corner_advice import generate_corner_advice
+        except ImportError:
+            return commentary_lines
+
+        p_stats_list = (
+            eng_result.fighter1_stats if player_is_f1 else eng_result.fighter2_stats
+        )
+        o_stats_list = (
+            eng_result.fighter2_stats if player_is_f1 else eng_result.fighter1_stats
+        )
+        if not p_stats_list:
+            return commentary_lines
+
+        total_rounds = getattr(eng_result, "total_rounds", len(p_stats_list)) or len(p_stats_list)
+        p_health = (
+            getattr(eng_result, "fighter1_final_health", 100.0)
+            if player_is_f1
+            else getattr(eng_result, "fighter2_final_health", 100.0)
+        )
+        o_health = (
+            getattr(eng_result, "fighter2_final_health", 100.0)
+            if player_is_f1
+            else getattr(eng_result, "fighter1_final_health", 100.0)
+        )
+
+        # Stamina isn't surfaced on NarratedFightResult — approximate from
+        # cumulative volume (high output → more fatigue). Rough proxy.
+        total_p_strikes = sum(s.get("sig_strikes_att", 0) for s in p_stats_list)
+        total_p_td_att  = sum(s.get("td_att", 0)            for s in p_stats_list)
+        approx_player_stamina = max(0, 100 - (total_p_strikes // 2) - (total_p_td_att * 3))
+
+        # Per-round score deltas accumulate into a cards-style gap.
+        from corner_advice import _round_score
+        cumulative_gap = 0.0
+
+        # Build advice per between-round boundary (after R1, after R2, ...).
+        # Skip after the last completed round (no "next round").
+        n_rounds_completed = len(p_stats_list)
+        last_for_advice = min(n_rounds_completed, total_rounds) - 1
+
+        # Per-round health proxy: linear interp on final health.
+        def _round_health(final_h: float, r_idx: int) -> float:
+            # r_idx is 0-based completed-round index; assume monotonic decline
+            n = max(1, n_rounds_completed)
+            return 100.0 - (100.0 - final_h) * ((r_idx + 1) / n)
+
+        advice_by_round: Dict[int, Dict[str, Any]] = {}
+        for r_idx in range(last_for_advice):
+            p_rs = p_stats_list[r_idx] if isinstance(p_stats_list[r_idx], dict) else {}
+            o_rs = o_stats_list[r_idx] if (r_idx < len(o_stats_list) and isinstance(o_stats_list[r_idx], dict)) else {}
+            cumulative_gap += _round_score(p_rs) - _round_score(o_rs)
+            adv = generate_corner_advice(
+                coach_dict             = self._coach,
+                fighter_name           = getattr(player_fighter, "name", "Fighter"),
+                opponent_name          = getattr(opponent_fighter, "name", "Opponent"),
+                player_health          = _round_health(p_health, r_idx),
+                player_stamina         = approx_player_stamina,
+                opponent_health        = _round_health(o_health, r_idx),
+                round_stats_player     = p_rs,
+                round_stats_opponent   = o_rs,
+                cumulative_score_gap   = cumulative_gap,
+                round_num              = r_idx + 1,   # 1-based round just completed
+                total_rounds           = total_rounds,
+            )
+            if adv:
+                advice_by_round[r_idx + 1] = adv
+
+        if not advice_by_round:
+            return commentary_lines
+
+        # Walk commentary and inject corner blocks AFTER each round-end
+        # bracketed summary. The real engine emits `[Round N: <summary>]`
+        # reliably at the end of every round; round-start lines are
+        # inconsistent (sometimes "Round N", sometimes mid-round prose,
+        # sometimes missing). End-of-round summaries are the reliable
+        # boundary, and matching the cinematic intent — the coach
+        # speaks after the round closes.
+        import re
+        ROUND_END_PATTERN = re.compile(r"^\[Round (\d+):", re.IGNORECASE)
+        new_lines: List[str] = []
+        for line in commentary_lines:
+            new_lines.append(line)
+            m = ROUND_END_PATTERN.match(line)
+            if m:
+                ended_round = int(m.group(1))
+                if ended_round in advice_by_round:
+                    adv = advice_by_round[ended_round]
+                    new_lines.append("=== CORNER ===")
+                    for advice_line in adv["lines"]:
+                        new_lines.append(f"{adv['coach_name']}: {advice_line}")
+                    # Closing marker so parser doesn't sweep next-round
+                    # intro prose ("Round 2 begins!" etc.) into the
+                    # corner block.
+                    new_lines.append("=== /CORNER ===")
+        return new_lines
+
     def _run_real_engine(self, fight: Dict, fighter1, fighter2,
                           f1_name: str, f2_name: str) -> Optional[Dict]:
         """
@@ -9312,6 +9470,15 @@ class GameBridge:
 
         fa1 = self._make_fighter_attrs(fighter1, f1_name, f1_id)
         fa2 = self._make_fighter_attrs(fighter2, f2_name, f2_id)
+
+        # Ship K1: pre-fight coach buff for player fighter (Path α)
+        _player_ids_k1 = {f.fighter_id for f in self.get_player_fighters()}
+        _player_is_f1 = f1_id in _player_ids_k1
+        _player_is_f2 = f2_id in _player_ids_k1
+        if _player_is_f1:
+            self._apply_corner_prefight_buff(fa1)
+        elif _player_is_f2:
+            self._apply_corner_prefight_buff(fa2)
 
         is_title = fight.get("is_title_fight", False)
         is_main  = fight.get("card_slot") in ("main_event", "co_main")
@@ -9564,6 +9731,18 @@ class GameBridge:
                     f"{w_name} wins by {method} in round {rnd}.",
                     f"[Result: {w_name} def. {l_name} · {method} R{rnd}]",
                 ]
+
+            # Ship K1: inject between-round corner advice for player fights.
+            # Reads eng_result.fighter{1,2}_stats for per-round triggers.
+            if _player_is_f1 or _player_is_f2:
+                _player_ftr = fighter1 if _player_is_f1 else fighter2
+                _opp_ftr    = fighter2 if _player_is_f1 else fighter1
+                try:
+                    lines = self._inject_corner_advice(
+                        lines, eng_result, _player_ftr, _opp_ftr, _player_is_f1,
+                    )
+                except Exception as _ke:
+                    print(f"⚠️ Corner advice injection failed ({fight_id_key}): {_ke}")
 
             self._fight_commentary[fight_id_key] = lines
             print(f"✅ Commentary stored: {fight_id_key} ({len(lines)} lines)")

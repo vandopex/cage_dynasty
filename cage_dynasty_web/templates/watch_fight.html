@@ -147,6 +147,28 @@
         {% endif %}
         {% endfor %}
     </div>
+
+    {# Ship K1: between-round corner advice — distinct cinematic block #}
+    {% if round.corner %}
+    <div style="margin-top:0;padding:var(--spacing-md) var(--spacing-lg);
+                background:linear-gradient(135deg,rgba(255,107,0,.08),rgba(255,215,0,.06));
+                border-top:1px solid rgba(255,107,0,.25);">
+        <div style="display:flex;align-items:center;gap:var(--spacing-sm);
+                    margin-bottom:var(--spacing-sm);">
+            <span style="font-size:.7rem;font-family:var(--font-display);
+                         color:var(--gold);text-transform:uppercase;
+                         letter-spacing:.12em;">
+                💼 In the Corner
+            </span>
+        </div>
+        {% for advice_line in round.corner %}
+        <div style="font-family:'Courier New',monospace;font-size:.82rem;
+                    color:var(--text-bright);line-height:1.6;padding:2px 0;">
+            {{ advice_line }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 {% endfor %}
 

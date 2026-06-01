@@ -2165,30 +2165,51 @@ def register_routes(app):
         # Get commentary lines
         commentary = bridge.get_fight_commentary(fight_id)
 
-        # Parse commentary into rounds
+        # Parse commentary into rounds. Ship K1: use the engine's
+        # `[Round N: <summary>]` bracketed end-of-round line as the
+        # round boundary — round-start lines from the engine are
+        # inconsistent (sometimes "Round N", sometimes mid-round prose,
+        # sometimes missing). Corner advice between `=== CORNER ===`
+        # and `=== /CORNER ===` markers attaches to the round that
+        # just closed.
+        import re
+        ROUND_END_PATTERN = re.compile(r"^\[Round (\d+):", re.IGNORECASE)
         rounds = []
-        current_round = []
-        current_round_num = 0
+        buffer_lines = []
+        in_corner = False
         for line in commentary:
             line = line.strip()
             if not line:
                 continue
-            # Detect round header
-            if line.startswith('=== ROUND') or line.lower().startswith('round '):
-                if current_round:
-                    rounds.append({'num': current_round_num, 'lines': current_round})
-                current_round = []
-                # Extract round number
-                import re
-                m = re.search(r'\d+', line)
-                current_round_num = int(m.group()) if m else current_round_num + 1
-                current_round.append(line)
-            else:
-                current_round.append(line)
-        if current_round:
-            rounds.append({'num': current_round_num, 'lines': current_round})
+            if line.startswith('=== CORNER ==='):
+                in_corner = True
+                continue  # marker not displayed
+            if line.startswith('=== /CORNER ==='):
+                in_corner = False
+                continue  # marker not displayed
+            if in_corner:
+                if rounds:
+                    rounds[-1].setdefault('corner', []).append(line)
+                continue
+            buffer_lines.append(line)
+            m = ROUND_END_PATTERN.match(line)
+            if m:
+                rounds.append({
+                    'num':   int(m.group(1)),
+                    'lines': buffer_lines,
+                })
+                buffer_lines = []
 
-        # If no round structure, treat as single block
+        # Trailing post-final-round content (result line, scorecard
+        # hint) attaches to the last round's card.
+        if buffer_lines and rounds:
+            rounds[-1]['lines'].extend(buffer_lines)
+        elif buffer_lines:
+            # No `[Round N:` markers detected — fall back to single
+            # block so the watch page still renders something.
+            rounds = [{'num': 0, 'lines': buffer_lines}]
+
+        # Final safety net for the truly-empty-commentary case
         if not rounds and commentary:
             rounds = [{'num': 0, 'lines': commentary}]
 
