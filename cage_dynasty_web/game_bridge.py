@@ -1454,6 +1454,7 @@ class GameBridge:
 
         meta = data.get("meta", {})
         print(f"✅ Game loaded from slot '{slot}' (Week {meta.get('week', '?')})")
+
         return {"success": True, "meta": meta}
 
     def get_web_saves(self) -> List[Dict[str, Any]]:
