@@ -1444,12 +1444,13 @@ class GameBridge:
         self.game_started = True
         self._clear_cache()
 
-        # Re-rank all divisions under current formula. bypass_clamp=True so we
-        # converge to the formula's true equilibrium in one pass — saves loaded
-        # under an older ranking formula will see DRAMATIC one-time shifts here
-        # (e.g., fighters who don't meet the new min-fights threshold drop out
-        # entirely). This is intentional, not a bug.
-        self._update_all_rankings(bypass_clamp=True)
+        # F33-C: Do NOT recompute rankings on load. Saved rankings are canonical —
+        # they were produced by the same algorithm at the time of the last fight
+        # night or week advancement, and are stable as long as fighter state
+        # hasn't drifted. Recomputing here mutates the saved state and (per
+        # Ship F33-B 2026-05-31 trace) introduces process-level non-determinism
+        # because the recompute itself depends on dict/set iteration order.
+        # The fix for the recompute non-determinism is filed as F33-D.
 
         meta = data.get("meta", {})
         print(f"✅ Game loaded from slot '{slot}' (Week {meta.get('week', '?')})")
