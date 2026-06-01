@@ -6970,7 +6970,11 @@ class GameBridge:
             )
             return score
 
-        fighters.sort(key=rank_score, reverse=True)
+        # Stable tiebreaker: when rank_score ties, sort by fighter_id
+        # (alphabetical, stable across save/load). Ship F33-A — fixes
+        # Finding #33 (ranking shuffle on load due to dict-iteration
+        # order varying between fresh-game and post-load processes).
+        fighters.sort(key=lambda f: (-rank_score(f), f.fighter_id))
 
         # Require wins to rank — higher bar for top slots
         # top 10: 5+ wins; spots 11-15: 3+ wins
