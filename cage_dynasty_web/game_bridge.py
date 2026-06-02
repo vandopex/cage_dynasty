@@ -2497,6 +2497,128 @@ class GameBridge:
         # Clear camp cache so dashboard shows updated record
         self._camp_cache.clear()
 
+    def _apply_post_fight_experience(
+        self,
+        fighter_id: str,
+        opponent_id: str,
+        my_stats: List[Dict[str, Any]],
+        opp_stats: List[Dict[str, Any]],
+        method: str,
+        won: bool,
+        total_rounds: int,
+    ) -> None:
+        """Post-fight stat nudges driven by what actually happened in the fight.
+
+        Reads per-round stats from the engine (NarratedFightResult) and bumps
+        attributes that the fight exercised. Small magnitudes (≤0.4 raw per
+        stat) — meant to compound over a career, not to swing a single OVR.
+
+        Routes through _diminishing_gain so the OVR2 athletic/technical
+        multiplier + per-fighter potential ceiling + camp-tier soft ceil
+        all apply. Negative nudges (cumulative damage, lost-via-KO) apply
+        directly with a floor of 1.
+
+        Caller is responsible for demuxing engine fighter1_stats vs
+        fighter2_stats into my_stats/opp_stats — NarratedFightResult
+        doesn't carry fighter1_id/fighter2_id so the bridge does it.
+        """
+        if not self._game_state:
+            return
+        fighter = self._game_state.get_fighter(fighter_id)
+        if fighter is None:
+            return
+        if not my_stats:
+            return
+
+        # Sum across all rounds
+        total_td_landed         = sum(r.get("td_landed", 0) for r in my_stats)
+        total_sub_att           = sum(r.get("sub_att", 0) for r in my_stats)
+        total_control           = sum(r.get("control_time", 0.0) for r in my_stats)
+        total_sig_landed        = sum(r.get("sig_strikes_landed", 0) for r in my_stats)
+        total_knockdowns_scored = sum(r.get("knockdowns", 0) for r in my_stats)
+        # Head strikes RECEIVED — come from opponent's "head_strikes" (= landed by them).
+        total_head_received     = sum(r.get("head_strikes", 0) for r in (opp_stats or []))
+
+        nudges: Dict[str, float] = {}
+
+        # Grappling experience
+        if total_td_landed >= 3:
+            nudges["takedowns"] = 0.4 + min(0.4, total_td_landed * 0.05)
+        if total_sub_att >= 2:
+            nudges["submissions"] = 0.3 + min(0.4, total_sub_att * 0.08)
+        if total_control >= 60:   # seconds
+            nudges["top_control"] = 0.3 + min(0.3, total_control / 300)
+
+        # Striking experience
+        if total_sig_landed >= 20:
+            nudges["boxing"] = 0.3 + min(0.3, total_sig_landed * 0.005)
+        if total_knockdowns_scored >= 1:
+            nudges["composure"] = 0.4   # finishing instinct / mental edge
+
+        # Durability (head strikes received) — toughness vs cumulative damage.
+        # Severe-damage threshold overrides the toughness nudge (negative wins).
+        if total_head_received >= 15:
+            nudges["chin"] = 0.2
+        if total_head_received >= 30:
+            nudges["chin"] = -0.3
+
+        # Method-based outcome bumps
+        method_upper = method.upper()
+        if won:
+            if "SUB" in method_upper:
+                nudges["submissions"] = nudges.get("submissions", 0) + 0.3
+                nudges["guard"] = 0.2     # finishing subs requires guard work
+            if "KO" in method_upper or "TKO" in method_upper:
+                nudges["composure"] = nudges.get("composure", 0) + 0.3
+        else:
+            if "SUB" in method_upper:
+                nudges["guard"] = nudges.get("guard", 0) + 0.4   # learned the hard way
+            if "KO" in method_upper or "TKO" in method_upper:
+                nudges["chin"] = nudges.get("chin", 0) - 0.2     # cumulative damage
+
+        # Cardio (rounds survived)
+        if total_rounds >= 3:
+            nudges["cardio"] = 0.2 * min(total_rounds, 5) / 3
+
+        # Apply nudges
+        camp_tier = self._get_camp_tier()
+        _fp = self._game_state._fighter_data.get(fighter_id, {}).get("potential")
+        _fp = int(_fp) if _fp is not None else None
+
+        for stat, raw in list(nudges.items()):
+            if raw == 0:
+                continue
+            if not hasattr(fighter, stat):
+                continue
+            current = float(getattr(fighter, stat, 50))
+            if raw > 0:
+                effective = self._diminishing_gain(
+                    current, raw, camp_tier,
+                    fighter_potential=_fp, stat_name=stat,
+                )
+                setattr(fighter, stat, min(100.0, current + effective))
+            else:
+                # Negative nudge (damage / loss) — direct, floor at 1.
+                setattr(fighter, stat, max(1.0, current + raw))
+
+        # Recalculate OVR (round, not int — same rationale as training paths)
+        _TRAINABLE = [
+            "strength","speed","cardio","chin","recovery",
+            "boxing","kicks","clinch_striking","striking_defense",
+            "takedowns","takedown_defense","top_control","submissions",
+            "guard","heart","fight_iq","composure",
+        ]
+        vals = [getattr(fighter, a, 0) for a in _TRAINABLE if hasattr(fighter, a)]
+        if vals:
+            fighter.overall_rating = round(sum(vals) / len(vals))
+
+        # Log what actually changed
+        changed = {s: r for s, r in nudges.items() if r != 0}
+        if changed:
+            print(f"  🎓 [EXPERIENCE] {fighter.name}: "
+                  + ", ".join(f"{s}{'+' if v>0 else ''}{v:.1f}"
+                              for s, v in changed.items()))
+
     def _simulate_fight(self, fight: Dict) -> Dict:
         """Simulate a fight and return enriched result dict."""
         import random
@@ -2866,6 +2988,30 @@ class GameBridge:
 
         # ── Update camp record ────────────────────────────────────────
         self._apply_post_fight_camp_record(winner, loser, fight, method)
+
+        # Post-fight experience feedback — score-based fallback path
+        # has no eng_result (no per-round stats produced), so this is
+        # a no-op gated on eng_result. Kept here for forward compat —
+        # if the score path ever wires through stats, the helper call
+        # is ready. Real-engine path fires the same logic in
+        # _run_real_engine after its own camp-record call.
+        eng_result = None
+        if eng_result is not None:
+            for fid, opp_id, did_win in [
+                (winner.fighter_id, loser.fighter_id, True),
+                (loser.fighter_id,  winner.fighter_id, False),
+            ]:
+                try:
+                    _my  = eng_result.fighter1_stats if fid == fighter1.fighter_id else eng_result.fighter2_stats
+                    _opp = eng_result.fighter2_stats if fid == fighter1.fighter_id else eng_result.fighter1_stats
+                    self._apply_post_fight_experience(
+                        fighter_id=fid, opponent_id=opp_id,
+                        my_stats=_my or [], opp_stats=_opp or [],
+                        method=method, won=did_win,
+                        total_rounds=getattr(eng_result, "total_rounds", 3),
+                    )
+                except Exception as _xe:
+                    print(f"  ⚠️  [EXPERIENCE] Failed for {fid}: {_xe}")
 
         # ── Popularity update ────────────────────────────────────────
         if POPULARITY_AVAILABLE:
@@ -9765,6 +9911,29 @@ class GameBridge:
         if method in ("KO", "TKO"): winner.ko_wins  += 1
         elif method in ("SUB",):     winner.sub_wins += 1
         self._apply_post_fight_camp_record(winner, loser, fight, method)
+
+        # Post-fight experience feedback — read per-round stats from
+        # eng_result and nudge attributes based on what the fight
+        # actually exercised. Demux f1/f2 stats here since
+        # NarratedFightResult doesn't carry fighter1_id / fighter2_id.
+        for fid, opp_id, did_win in [
+            (winner_id, loser_id, True),
+            (loser_id,  winner_id, False),
+        ]:
+            try:
+                _my_stats  = eng_result.fighter1_stats if fid == f1_id else eng_result.fighter2_stats
+                _opp_stats = eng_result.fighter2_stats if fid == f1_id else eng_result.fighter1_stats
+                self._apply_post_fight_experience(
+                    fighter_id=fid,
+                    opponent_id=opp_id,
+                    my_stats=_my_stats or [],
+                    opp_stats=_opp_stats or [],
+                    method=method,
+                    won=did_win,
+                    total_rounds=getattr(eng_result, "total_rounds", 3),
+                )
+            except Exception as _xe:
+                print(f"  ⚠️  [EXPERIENCE] Failed for {fid}: {_xe}")
 
         # AI contract decrement (fallback fight path)
         if self._game_state:
