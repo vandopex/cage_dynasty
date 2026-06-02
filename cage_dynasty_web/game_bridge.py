@@ -4271,6 +4271,30 @@ class GameBridge:
         "sparring":         ["boxing", "takedown_defense", "fight_iq"],
     }
 
+    # M1 Phase 2a — Stats kept "warm" by each training focus. Primary boost
+    # stats (from _FOCUS_ATTRS above) plus secondary domain stats that the
+    # training session realistically exercises. Used by the decay system:
+    # training a focus updates activity counters for ALL stats in its domain,
+    # not just the primary boost targets. First entries mirror _FOCUS_ATTRS.
+    _FOCUS_DOMAIN: Dict[str, List[str]] = {
+        "boxing":           ["boxing", "striking_defense", "kicks", "clinch_striking", "chin", "composure", "fight_iq"],
+        "kicks":            ["kicks", "striking_defense", "boxing", "clinch_striking", "cardio", "composure"],
+        "clinch_striking":  ["clinch_striking", "top_control", "kicks", "takedowns", "strength", "composure"],
+        "striking_defense": ["striking_defense", "composure", "boxing", "kicks", "fight_iq", "chin"],
+        "muay_thai":        ["kicks", "clinch_striking", "boxing", "striking_defense", "chin", "composure"],
+        "wrestling":        ["takedowns", "takedown_defense", "top_control", "strength", "cardio", "chin"],
+        "takedowns":        ["takedowns", "top_control", "takedown_defense", "strength", "cardio"],
+        "takedown_defense": ["takedown_defense", "takedowns", "striking_defense", "fight_iq", "composure"],
+        "top_control":      ["top_control", "takedowns", "submissions", "strength", "cardio"],
+        "bjj":              ["submissions", "guard", "top_control", "fight_iq", "composure"],
+        "submissions":      ["submissions", "guard", "top_control", "fight_iq"],
+        "guard":             ["guard", "submissions", "takedown_defense", "composure", "fight_iq"],
+        "cardio":           ["cardio", "recovery", "strength", "chin", "heart"],
+        "strength":         ["strength", "chin", "cardio", "recovery", "top_control", "takedowns"],
+        "fight_iq":         ["fight_iq", "composure", "striking_defense", "takedown_defense", "heart"],
+        "sparring":         ["boxing", "takedown_defense", "fight_iq", "kicks", "takedowns", "striking_defense", "chin", "composure", "cardio"],
+    }
+
     # Raw weekly gains per intensity (before cap)
     _INTENSITY_GAIN: Dict[str, int] = {
         "REST": 0, "LIGHT": 1, "MODERATE": 2, "INTENSE": 3, "EXTREME": 4,
@@ -4683,6 +4707,19 @@ class GameBridge:
             # just appended (maintenance loop also writes to coach_boosts).
             if fid in self._training_history and self._training_history[fid]:
                 self._training_history[fid][-1]["coach_boosts"].update(_coach_gains)
+
+            # M1 Phase 2a — record activity for every stat in the focus's
+            # domain so the decay system sees this week's training and won't
+            # flag the trained-domain stats as idle. Closes the missing wire
+            # between _apply_weekly_training and the maintenance activity
+            # tracker. Falls back to [focus] for unknown focus keys.
+            if self._maintenance_system:
+                _domain_stats = self._FOCUS_DOMAIN.get(
+                    active_plan["focus"], [active_plan["focus"]]
+                )
+                self._maintenance_system.record_training_camp_activity(
+                    fid, _domain_stats, self._game_state.week_number,
+                )
 
         return report
 

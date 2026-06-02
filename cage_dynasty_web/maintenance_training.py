@@ -60,13 +60,16 @@ try:
     )
     COACHES_INTEGRATION_AVAILABLE = True
 except ImportError:
-    # Fallback definitions
+    # Fallback definitions — values use canonical fighter-stat names from
+    # game_bridge.py:_TRAINABLE (M1 Phase 2a). Earlier versions used ghost
+    # names (clinch/accuracy/wrestling/bjj/td_defense/power) that don't
+    # exist on FighterRecord, silently breaking coach-skill→stat lookups.
     SKILL_ATTRIBUTES = {
-        "striking": ["boxing", "kicks", "clinch", "accuracy"],
-        "wrestling": ["wrestling", "td_defense", "top_control"],
-        "jiu_jitsu": ["bjj", "submissions"],
+        "striking": ["boxing", "kicks", "clinch_striking", "striking_defense"],
+        "wrestling": ["takedowns", "takedown_defense", "top_control"],
+        "jiu_jitsu": ["submissions", "guard"],
         "conditioning": ["cardio", "chin", "recovery"],
-        "strength": ["strength", "speed", "power"],
+        "strength": ["strength", "speed"],
     }
     
     def get_skill_for_attribute(attribute: str) -> Optional[str]:
@@ -183,10 +186,15 @@ PHYSICAL_DECAY_MULTIPLIER = 1.5
 MENTAL_DECAY_MULTIPLIER = 0.5
 
 # Stat categories
-PHYSICAL_STATS = {"strength", "speed", "cardio", "chin", "recovery", "power"}
-STRIKING_STATS = {"boxing", "kicks", "clinch", "accuracy"}
-GRAPPLING_STATS = {"wrestling", "bjj", "td_defense", "top_control", "submissions"}
-MENTAL_STATS = {"heart", "fight_iq", "composure", "iq"}
+# M1 Phase 2a: aligned to canonical 17-stat schema in game_bridge.py:_TRAINABLE.
+# Earlier versions used ghost names (wrestling/bjj/accuracy/iq/power/td_defense/
+# clinch) that don't exist on FighterRecord — decay rolled and printed warnings
+# but setattr() silently no-op'd. Critical real stats (takedown_defense,
+# striking_defense, guard) were entirely untracked.
+PHYSICAL_STATS = {"strength", "speed", "cardio", "chin", "recovery"}
+STRIKING_STATS = {"boxing", "kicks", "clinch_striking", "striking_defense"}
+GRAPPLING_STATS = {"takedowns", "takedown_defense", "top_control", "submissions", "guard"}
+MENTAL_STATS = {"heart", "fight_iq", "composure"}
 
 # All trainable stats
 ALL_STATS = PHYSICAL_STATS | STRIKING_STATS | GRAPPLING_STATS | MENTAL_STATS
