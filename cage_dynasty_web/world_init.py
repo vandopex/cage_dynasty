@@ -282,7 +282,13 @@ class GeneratedFighter:
     # Skill tier for simulation
     skill_rating: int = 50  # Overall rating for matchmaking
     skill_tier: str = "average"  # Track original tier
-    
+
+    # Potential ceiling — bounds how high attributes can grow over career.
+    # Bridge reads this into _fighter_data["potential"] and the training
+    # loop consults it in _diminishing_gain. Default 75 = Average grade
+    # mid-band; overwritten by generate_fighter with grade-band logic.
+    potential_ceiling: int = 75
+
     # POPULARITY SYSTEM
     popularity: int = 10  # 0-100, affects card position, sponsorships, etc.
     
@@ -956,7 +962,24 @@ class FighterGenerator:
         
         # Calculate starting popularity based on tier
         popularity = calculate_starting_popularity(skill_tier, amateur_bonus)
-        
+
+        # Potential ceiling — age-weighted grade pick (Elite/High/Average/
+        # Limited per game_start.POTENTIAL_GRADES), then random within band.
+        # Floored at skill_rating + 3 so the ceiling never lands below
+        # current OVR for already-skilled fighters (avoids "you're past
+        # your potential" incoherence for elite-tier world-init fighters).
+        if age <= 24:
+            grade_weights = [10, 20, 40, 30]   # Elite, High, Average, Limited
+        elif age <= 27:
+            grade_weights = [5, 20, 45, 30]
+        else:
+            grade_weights = [0, 10, 50, 40]    # No Elite for older
+        grade_bands = [(90, 97), (79, 87), (68, 77), (55, 66)]
+        ceil_min, ceil_max = random.choices(grade_bands, weights=grade_weights, k=1)[0]
+        potential_ceiling = max(random.randint(ceil_min, ceil_max),
+                                 skill_rating + 3)
+        potential_ceiling = min(99, potential_ceiling)
+
         return GeneratedFighter(
             fighter_id=str(uuid.uuid4())[:8],
             name=name,
@@ -971,6 +994,7 @@ class FighterGenerator:
             stance=stance,
             skill_rating=skill_rating,
             skill_tier=skill_tier,
+            potential_ceiling=potential_ceiling,
             popularity=popularity,
         )
 
@@ -2540,6 +2564,12 @@ class WorldInitializer:
                 _fdata[_key] = int(_val)
             _fdata['age'] = int(fighter.age)
             _fdata['country'] = str(fighter.country)
+            # Per-fighter potential ceiling — read by the training loop
+            # (_diminishing_gain) and the AI dev loop (_advance_ai_fighter_
+            # training). Fall back to skill_rating+8 for any fighter that
+            # somehow predates the potential_ceiling field on GeneratedFighter.
+            _fdata['potential'] = int(getattr(fighter, 'potential_ceiling',
+                                              int(fighter.skill_rating) + 8))
             self.game_state._fighter_data[fighter.fighter_id] = _fdata
     
     def _update_division_state(self, weight_class: str) -> None:

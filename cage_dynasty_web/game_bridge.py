@@ -4321,20 +4321,30 @@ class GameBridge:
     }
 
     def _diminishing_gain(self, current: float, raw_gain: float,
-                           camp_tier: str) -> float:
+                           camp_tier: str,
+                           fighter_potential: Optional[int] = None) -> float:
         """
-        Option A: diminishing returns above the tier's soft ceiling.
+        Diminishing returns above the effective ceiling. Effective ceiling
+        is min(camp_soft_ceil, fighter_potential) when potential known —
+        a high-potential fighter in a low-tier camp is still capped by
+        the camp; a low-potential fighter caps out earlier than the camp
+        tier would allow.
+
         Below ceiling → full gain.
         Above ceiling → gain tapers linearly, reaching ~5% at 30pts above.
         Never actually zero — a fighter can always grind, just very slowly.
 
         Formula:
-            overshoot = max(0, current - soft_ceil)
+            effective_ceil = min(soft_ceil, fighter_potential)  (or soft_ceil if None)
+            overshoot = max(0, current - effective_ceil)
             multiplier = max(0.05, 1 - overshoot / 30)
             effective = raw_gain * multiplier
         """
         soft_ceil = self._TIER_SOFT_CEIL.get(camp_tier.upper(), 65)
-        overshoot = max(0.0, current - soft_ceil)
+        effective_ceil = (min(soft_ceil, fighter_potential)
+                          if fighter_potential is not None
+                          else soft_ceil)
+        overshoot = max(0.0, current - effective_ceil)
         multiplier = max(0.05, 1.0 - overshoot / 30.0)
 
         # Facility efficiency bonus — better gym = faster gains below ceiling too
@@ -4367,11 +4377,15 @@ class GameBridge:
 
         if self._game_state and raw_gain > 0:
             fighter = self._game_state.get_fighter(fighter_id)
+            # Per-fighter potential ceiling — read from _fighter_data once.
+            _fp = self._game_state._fighter_data.get(fighter_id, {}).get("potential")
+            _fp = int(_fp) if _fp is not None else None
             if fighter and hasattr(fighter, 'overall_rating'):
                 for attr in focus_attrs:
                     current = float(getattr(fighter, attr,
                                             getattr(fighter, 'overall_rating', 65)))
-                    effective = self._diminishing_gain(current, raw_gain, camp_tier)
+                    effective = self._diminishing_gain(current, raw_gain, camp_tier,
+                                                       fighter_potential=_fp)
 
                     # Style affinity — fighters improve faster in their natural discipline
                     _STYLE_AFFINITY = {
@@ -4410,7 +4424,9 @@ class GameBridge:
                 stat_vals = [getattr(fighter, a, 0) for a in _TRAINABLE
                              if hasattr(fighter, a)]
                 if stat_vals:
-                    fighter.overall_rating = int(sum(stat_vals) / len(stat_vals))
+                    # round() not int() — int truncates fractional progress,
+                    # leaving OVR sticky between integer boundaries.
+                    fighter.overall_rating = round(sum(stat_vals) / len(stat_vals))
             else:
                 for attr in focus_attrs:
                     actual_gains[attr] = float(raw_gain)
@@ -4634,11 +4650,15 @@ class GameBridge:
             # Split passive gain across attrs — smaller per stat but broader
             per_attr_gain = passive_gain / len(coach_attrs)
             real_fighter = self._game_state.get_fighter(fid)
+            # Per-fighter potential ceiling for the coach passive boost too.
+            _fp = self._game_state._fighter_data.get(fid, {}).get("potential")
+            _fp = int(_fp) if _fp is not None else None
             if real_fighter and per_attr_gain > 0:
                 for attr in coach_attrs:
                     current = float(getattr(real_fighter, attr,
                                     getattr(real_fighter, 'overall_rating', 50)))
-                    effective = self._diminishing_gain(current, per_attr_gain, camp_tier)
+                    effective = self._diminishing_gain(current, per_attr_gain, camp_tier,
+                                                       fighter_potential=_fp)
                     if hasattr(real_fighter, attr) and effective > 0.01:
                         setattr(real_fighter, attr, min(100.0, current + effective))
                         if result.get("actual_gains") is not None:
@@ -4653,7 +4673,8 @@ class GameBridge:
                     stat_vals = [getattr(real_fighter, a, 0) for a in _TRAINABLE
                                  if hasattr(real_fighter, a)]
                     if stat_vals:
-                        real_fighter.overall_rating = int(sum(stat_vals) / len(stat_vals))
+                        # round() not int() — see same rationale at line ~4413.
+                        real_fighter.overall_rating = round(sum(stat_vals) / len(stat_vals))
 
             ovr_after = getattr(self._game_state.get_fighter(fid), 'overall_rating', ovr_before)
 
@@ -5904,18 +5925,21 @@ class GameBridge:
         except Exception as e:
             print(f"  ⚠️ [MAINTENANCE] Failed: {e}")
 
-        # ── AI Camp Coaching — passive gains every 4 weeks ────────────
+        # ── AI Camp Coaching — passive gains every 2 weeks ────────────
         # AI fighters develop over time via their camp's coaching specialty.
-        # Runs every 4 weeks to keep world sim light but meaningful.
-        if week % 4 == 0:
+        # Cadence + breadth lifted by the potential rework: every 2 weeks
+        # (was 4), primary + secondary stat each pass (was primary only),
+        # and the per-fighter potential ceiling now bounds growth.
+        if week % 2 == 0:
             self._advance_ai_fighter_training(week)
 
     def _advance_ai_fighter_training(self, week: int) -> None:
         """
-        Apply passive training gains to all AI fighters every 4 weeks.
-        Each camp's coach has a specialty — that stat gets a small boost.
-        Young fighters (under 27) gain more; veterans (33+) gain less.
-        Reflects the reality that AI camp fighters are also developing.
+        Apply passive training gains to all AI fighters every 2 weeks.
+        Each fighter trains TWO stats per pass: primary (full gain) +
+        secondary (50%), both keyed off their fighting style. Young
+        fighters gain more; veterans plateau. Ceiling is min(camp tier
+        cap, fighter's stored potential).
         """
         if not self._game_state:
             return
@@ -5932,6 +5956,26 @@ class GameBridge:
             "Brawler":          "strength",        "Judo":           "takedowns",
             "Point Fighter":    "fight_iq",        "Hybrid":         "fight_iq",
             "Karate":           "striking_defense","Sprawl & Brawl": "takedown_defense",
+        }
+        # Secondary stat per style — gets 50% of the primary's gain.
+        # Picks a complementary attr that the style realistically drills.
+        _STYLE_SECONDARY = {
+            "Orthodox Boxer":   "striking_defense",
+            "Muay Thai":        "clinch_striking",
+            "Kickboxer":        "striking_defense",
+            "Wrestler":         "takedown_defense",
+            "BJJ Specialist":   "guard",
+            "Ground & Pound":   "takedowns",
+            "Clinch Fighter":   "top_control",
+            "Counter Striker":  "fight_iq",
+            "Pressure Fighter": "cardio",
+            "Sambo":            "submissions",
+            "Brawler":          "chin",
+            "Judo":             "top_control",
+            "Point Fighter":    "speed",
+            "Hybrid":           "composure",
+            "Karate":           "speed",
+            "Sprawl & Brawl":   "striking_defense",
         }
 
         player_camp_id = self._game_state.player_camp_id
@@ -5953,38 +5997,47 @@ class GameBridge:
                 age = getattr(fighter, 'age', 28)
                 style = getattr(fighter, 'fighting_style', 'Orthodox Boxer')
                 focus_attr = _STYLE_FOCUS.get(style, 'fight_iq')
+                secondary_attr = _STYLE_SECONDARY.get(style, 'composure')
 
                 # Age modifier: young fighters improve faster
                 if age < 24:
-                    gain = 0.8
+                    base_gain = 0.8
                 elif age < 28:
-                    gain = 0.5
+                    base_gain = 0.5
                 elif age < 33:
-                    gain = 0.3
+                    base_gain = 0.3
                 else:
-                    gain = 0.1  # Veterans plateau
+                    base_gain = 0.1  # Veterans plateau
 
-                current = float(getattr(fighter, focus_attr, 60))
-                # Diminishing returns above tier cap
-                if current >= tier_cap:
-                    gain *= max(0.1, 1 - (current - tier_cap) * 0.1)
+                # Per-fighter potential bounds growth alongside tier cap.
+                ovr_now = getattr(fighter, 'overall_rating', 60)
+                stored_potential = self._game_state._fighter_data.get(fid, {}).get(
+                    "potential", ovr_now + 8)
+                effective_cap = min(tier_cap, int(stored_potential))
 
-                if gain > 0.05 and hasattr(fighter, focus_attr):
-                    setattr(fighter, focus_attr,
-                            min(100.0, current + gain))
+                # Train both primary (full gain) and secondary (50%).
+                for attr, mult in ((focus_attr, 1.0), (secondary_attr, 0.5)):
+                    if not hasattr(fighter, attr):
+                        continue
+                    current = float(getattr(fighter, attr, 60))
+                    gain = base_gain * mult
+                    if current >= effective_cap:
+                        gain *= max(0.1, 1 - (current - effective_cap) * 0.1)
+                    if gain > 0.05:
+                        setattr(fighter, attr, min(100.0, current + gain))
 
-                    # Recalculate OVR
-                    _TRAINABLE = [
-                        "strength","speed","cardio","chin","recovery",
-                        "boxing","kicks","clinch_striking","striking_defense",
-                        "takedowns","takedown_defense","top_control","submissions","guard",
-                        "heart","fight_iq","composure",
-                    ]
-                    vals = [getattr(fighter, a, 0) for a in _TRAINABLE if hasattr(fighter, a)]
-                    if vals:
-                        fighter.overall_rating = int(sum(vals) / len(vals))
+                # Recalculate OVR (round, not int — see player-side rationale).
+                _TRAINABLE = [
+                    "strength","speed","cardio","chin","recovery",
+                    "boxing","kicks","clinch_striking","striking_defense",
+                    "takedowns","takedown_defense","top_control","submissions","guard",
+                    "heart","fight_iq","composure",
+                ]
+                vals = [getattr(fighter, a, 0) for a in _TRAINABLE if hasattr(fighter, a)]
+                if vals:
+                    fighter.overall_rating = round(sum(vals) / len(vals))
 
-        # Sample output every 4 weeks to show AI is developing
+        # Sample output to show AI is developing
         if self._game_state:
             import random as _airand
             ai_fighters = [f for f in self._game_state.fighters.values()
