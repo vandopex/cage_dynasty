@@ -63,16 +63,19 @@
     </div>
 </div>
 
+{# Costs + stat caps mirror game_bridge.py:_TIER_SOFT_CEIL and the
+   bridge's UPGRADE_COSTS_MAP. Keep aligned with both — if either is
+   tuned, update here too. F1 ship 2026-06-02. #}
 {% set tiers = [
-    ('GARAGE',   '🔧', 'Bare bones. Stat cap 65.',      0),
-    ('LOCAL',    '🏠', 'Decent setup. Stat cap 72.',    50000),
-    ('REGIONAL', '🏢', 'Solid facility. Stat cap 80.', 150000),
-    ('NATIONAL', '🏙️', 'Top facility. Stat cap 90.',   400000),
-    ('ELITE',    '⭐', 'World class. Stat cap 100.',    1000000),
+    ('GARAGE',   '🔧', 'Bare bones. Stat cap 72.',         0),
+    ('LOCAL',    '🏠', 'Decent setup. Stat cap 78.',    25000),
+    ('REGIONAL', '🏢', 'Solid facility. Stat cap 85.', 100000),
+    ('NATIONAL', '🏙️', 'Top facility. Stat cap 92.',   500000),
+    ('ELITE',    '⭐', 'World class. Stat cap 100.',  2000000),
 ] %}
 
-{% if facility and facility.get('current_tier') %}
-{% set current = facility.current_tier %}
+{% if facility and facility.get('tier') %}
+{% set current = facility.tier %}
 {% else %}
 {% set current = 'GARAGE' %}
 {% endif %}
@@ -113,10 +116,10 @@
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
             <div>
                 <div style="font-size:.8rem;color:var(--text-muted);line-height:1.8;">
-                    <div>🔧 Garage — Stats hard-capped at <strong>65</strong></div>
-                    <div>🏠 Local — Stats hard-capped at <strong>72</strong></div>
-                    <div>🏢 Regional — Stats hard-capped at <strong>80</strong></div>
-                    <div>🏙️ National — Stats hard-capped at <strong>90</strong></div>
+                    <div>🔧 Garage — Stats hard-capped at <strong>72</strong></div>
+                    <div>🏠 Local — Stats hard-capped at <strong>78</strong></div>
+                    <div>🏢 Regional — Stats hard-capped at <strong>85</strong></div>
+                    <div>🏙️ National — Stats hard-capped at <strong>92</strong></div>
                     <div>⭐ Elite — Stats hard-capped at <strong>100</strong></div>
                 </div>
             </div>

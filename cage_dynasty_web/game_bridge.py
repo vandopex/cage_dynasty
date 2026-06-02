@@ -2988,11 +2988,14 @@ class GameBridge:
         }
         TIER_ORDER = ["GARAGE","LOCAL","REGIONAL","NATIONAL","ELITE"]
         UPGRADE_COSTS_MAP = {"LOCAL":25000,"REGIONAL":100000,"NATIONAL":500000,"ELITE":2000000}
+        # Bumped 2026-06-02 (F1): tighter win curve, top-tier still gated
+        # on title accomplishments. REGIONAL=5 (was 10), NATIONAL=15 (was
+        # 25), ELITE=30 (was 50). Title-win requirements unchanged.
         UPGRADE_REQS = {
             "LOCAL":    {"wins":3},
-            "REGIONAL": {"wins":10},
-            "NATIONAL": {"wins":25,"title_wins":1},
-            "ELITE":    {"wins":50,"title_wins":3},
+            "REGIONAL": {"wins":5},
+            "NATIONAL": {"wins":15,"title_wins":1},
+            "ELITE":    {"wins":30,"title_wins":3},
         }
         EFFICIENCY = {"GARAGE":1.0,"LOCAL":1.05,"REGIONAL":1.10,"NATIONAL":1.15,"ELITE":1.25}
         WEEKLY_COST = {"GARAGE":500,"LOCAL":1500,"REGIONAL":5000,"NATIONAL":15000,"ELITE":50000}
@@ -4311,12 +4314,14 @@ class GameBridge:
         "REST": 0, "LIGHT": 1, "MODERATE": 2, "INTENSE": 3, "EXTREME": 4,
     }
 
-    # Soft ceiling per tier — above this, gains diminish but never zero
+    # Soft ceiling per tier — above this, gains diminish but never zero.
+    # Bumped 2026-06-02 (F1): tighter gaps between tiers so each upgrade
+    # feels meaningful but no tier is a wall for solid prospects.
     _TIER_SOFT_CEIL = {
-        "GARAGE":   65,
-        "LOCAL":    72,
-        "REGIONAL": 80,
-        "NATIONAL": 90,
+        "GARAGE":   72,
+        "LOCAL":    78,
+        "REGIONAL": 85,
+        "NATIONAL": 92,
         "ELITE":    100,
     }
 

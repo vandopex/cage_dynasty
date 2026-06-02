@@ -1747,7 +1747,7 @@ def register_routes(app):
         if not bridge.game_started:
             return redirect(url_for('new_game'))
         try:
-            fdata = bridge.get_facility_data() if hasattr(bridge, 'get_facility_data') else {}
+            fdata = bridge.get_facility_info() if hasattr(bridge, 'get_facility_info') else {}
         except Exception:
             fdata = {}
         coach_status = bridge.get_coach_contract_status()
