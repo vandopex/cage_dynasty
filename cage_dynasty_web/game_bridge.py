@@ -834,6 +834,11 @@ class GameBridge:
         # Fighter cooldowns — {fighter_id: first_available_week}
         self._fighter_cooldowns: Dict[str, int] = {}
 
+        # Fighter signing delay — {fighter_id: first_week_claimable}
+        # Set after cooldown clears. Winners and losers both get a window
+        # before they can be booked. Written by _apply_signing_delay.
+        self._fighter_signing_available: Dict[str, int] = {}
+
         # CardBuilder instance (if available)
         self._card_builder = CardBuilder() if CARD_BUILDER_AVAILABLE else None
 
@@ -1244,6 +1249,7 @@ class GameBridge:
             "ai_deferred_bookings":     [clean_fight(f) for f in self._ai_deferred_bookings],
             "upcoming_cards":           upcoming_clean,
             "fighter_cooldowns":        self._fighter_cooldowns,
+            "fighter_signing_available":    self._fighter_signing_available,
             "fighter_training_plans":   self._fighter_training_plans,
             "fight_camps":              self._fight_camps,
             "week_declines":            self._week_declines,
@@ -1402,6 +1408,8 @@ class GameBridge:
         self._fight_offers            = data.get("fight_offers", [])
         self._fighter_cooldowns       = {k: int(v) for k, v in
                                           data.get("fighter_cooldowns", {}).items()}
+        self._fighter_signing_available = {k: int(v) for k, v in
+                                            data.get("fighter_signing_available", {}).items()}
 
         # Restore completed events
         self._completed_events = data.get("completed_events", [])
@@ -1721,6 +1729,7 @@ class GameBridge:
                     if ftr:
                         is_champ = getattr(ftr, 'is_champion', False)
                         self._apply_cooldown(ftr, current_week, is_champ)
+                        self._apply_signing_delay(ftr, current_week, is_champ)
             if ai_event:
                 for fight in ai_event.get("fights", []):
                     for fid in [fight.get("winner_id"), fight.get("loser_id")]:
@@ -1730,6 +1739,8 @@ class GameBridge:
                         if ftr:
                             self._apply_cooldown(ftr, current_week,
                                                   getattr(ftr, 'is_champion', False))
+                            self._apply_signing_delay(ftr, current_week,
+                                                       getattr(ftr, 'is_champion', False))
 
             # ── Contract processing — decrement and handle expiry ─────
             self._process_contracts(current_week)
@@ -8152,8 +8163,37 @@ class GameBridge:
         self._fighter_cooldowns[fighter.fighter_id] = week + cooldown
 
     def _is_available(self, fighter_id: str, week: int) -> bool:
-        """True if fighter has no cooldown blocking them this week."""
-        return self._fighter_cooldowns.get(fighter_id, 0) <= week
+        """True if fighter has no cooldown and signing delay blocking them."""
+        return (self._fighter_cooldowns.get(fighter_id, 0) <= week and
+                self._fighter_signing_available.get(fighter_id, 0) <= week)
+
+    def _signing_delay_weeks(self, fighter, is_champion: bool = False) -> int:
+        """Weeks a fighter waits after cooldown before they can be booked.
+        Applies to winners and losers alike — everyone takes time to decide.
+        Champions/top-5: 3w, top 6-15: 2w, unranked: 1w.
+        """
+        if is_champion:
+            return 3
+        rank = self._get_fighter_rank(fighter)
+        if rank is not None and rank <= 5:
+            return 3
+        elif rank is not None and rank <= 15:
+            return 2
+        else:
+            return 1
+
+    def _apply_signing_delay(self, fighter, week: int, is_champion: bool = False) -> None:
+        """Record when this fighter is next claimable for booking.
+        Called after _apply_cooldown. The signing window opens after
+        cooldown ends, so claimable_week = cooldown_end + signing_delay.
+        """
+        cooldown_end = self._fighter_cooldowns.get(fighter.fighter_id, week)
+        delay = self._signing_delay_weeks(fighter, is_champion)
+        self._fighter_signing_available[fighter.fighter_id] = cooldown_end + delay
+
+    def _is_signable(self, fighter_id: str, week: int) -> bool:
+        """True if fighter's signing window has opened this week."""
+        return self._fighter_signing_available.get(fighter_id, 0) <= week
 
     def _weeks_since_fought(self, f1, f2) -> Optional[int]:
         """
