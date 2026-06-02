@@ -7326,7 +7326,11 @@ class GameBridge:
                 "loser_rank_delta":  self._rank_delta(pre_l, new_l),
             }
             event["fights"].append(result)
-            if event["main_event"] is None or fight.get("card_slot") == "main_event":
+            # event["main_event"] is set only when the actual main_event-
+            # slotted fight resolves — never provisionally. Slot was
+            # assigned at card-build time, so this read is authoritative.
+            if (event["main_event"] is None
+                and fight.get("card_slot") == "main_event"):
                 event["main_event"] = result
 
             # Record title fight results into history
@@ -7564,11 +7568,10 @@ class GameBridge:
                 "loser_rank_delta":  self._rank_delta(pre_l_rank, new_l_rank),
             }
             event["fights"].append(fight_result)
-            # Provisional main_event — overwritten by _score_and_slot_fights
-            # below after the simulation loop completes. Kept here as a
-            # safety net for the case where the helper short-circuits.
-            if event["main_event"] is None:
-                event["main_event"] = fight_result
+            # event["main_event"] is set exclusively post-loop by
+            # _score_and_slot_fights (line ~7594). No provisional write
+            # here — the fight loop runs before slot assignment, so
+            # "first fight processed" is not a meaningful main event.
 
             # Notable finishes → news
             if method in ("KO", "TKO", "SUB"):
@@ -8423,39 +8426,32 @@ class GameBridge:
                            is_title: bool, combined_rating: int,
                            f1_rank: Optional[int] = None,
                            f2_rank: Optional[int] = None,
-                           f1=None, f2=None) -> str:
-        """Return slot string for a fight."""
+                           f1=None, f2=None,
+                           min_slot: Optional["CardSlot"] = None) -> str:
+        """Return slot string for a fight.
+        min_slot: optional caller-provided floor. When passed, overrides
+        the internally-computed rank-based floor. Used by callers that
+        need to force a slot (e.g., excess title fights → CO_MAIN floor).
+        """
         if not CARD_BUILDER_AVAILABLE:
             return "prelim"
 
-        # Contender floor: only inflate slot when BOTH fighters are
-        # credibly title-eligible. A high-ranked fighter vs an unproven
-        # opponent (e.g. rookie) must NOT inflate — falls back to whatever
-        # card_builder.assign_slot decides on score alone.
         ranks = [r for r in [f1_rank, f2_rank] if r is not None]
         top_rank = min(ranks) if ranks else None
-        min_slot = None
 
-        matchup_credible = False
-        if MATCHMAKING_AVAILABLE and f1 is not None and f2 is not None:
-            f1_eligible = is_title_eligible(
-                f1.wins, f1.losses, f1_rank,
-                getattr(f1, 'is_champion', False),
-            )
-            f2_eligible = is_title_eligible(
-                f2.wins, f2.losses, f2_rank,
-                getattr(f2, 'is_champion', False),
-            )
-            matchup_credible = f1_eligible and f2_eligible
-
-        if top_rank is not None and matchup_credible:
+        # Top-5 hard floor: any fight where either fighter is top-5 gets
+        # an elevated slot regardless of title-eligibility check. The old
+        # matchup_credible gate (require both fighters title-eligible)
+        # was too restrictive and let title-tier matchups fall to prelims.
+        # If caller provided min_slot, use it directly (override path).
+        if min_slot is None and top_rank is not None and top_rank <= 5:
             if top_rank <= 1:
                 score = max(score, SCORE_THRESHOLDS[CardSlot.MAIN_EVENT] + 1)
                 min_slot = CardSlot.CO_MAIN
             elif top_rank <= 3:
                 score = max(score, SCORE_THRESHOLDS[CardSlot.CO_MAIN] + 1)
-                min_slot = CardSlot.MAIN_CARD
-            elif top_rank <= 6:
+                min_slot = CardSlot.CO_MAIN
+            else:  # top_rank <= 5
                 score = max(score, SCORE_THRESHOLDS[CardSlot.MAIN_CARD] + 1)
                 min_slot = CardSlot.MAIN_CARD
 
@@ -8511,11 +8507,14 @@ class GameBridge:
         fight_dicts.sort(key=lambda x: x.get("_g1_score", 0), reverse=True)
 
         # Title-fight cap: max 2 per card, must be different divisions.
-        # Excess title fights are demoted (is_title_fight = False) so the
-        # cap also propagates through the slot pass below — they'll be
-        # treated as ranked fights for scoring/placement.
+        # Excess title fights KEEP is_title_fight=True (preserves semantic
+        # truth for engine + UI: rounds, headline, "title defense" copy).
+        # The cap is enforced via a CO_MAIN slot floor passed to
+        # _assign_card_slot below, so excess title fights never fall to
+        # prelims even when ME and CO_MAIN are already taken.
         title_count = 0
         title_divisions: Set[str] = set()
+        _excess_title_fids: Set[str] = set()
         for f in fight_dicts:
             if f.get("is_title_fight"):
                 wc = f.get("weight_class", "")
@@ -8523,7 +8522,7 @@ class GameBridge:
                     title_count += 1
                     title_divisions.add(wc)
                 else:
-                    f["is_title_fight"] = False  # demoted by cap
+                    _excess_title_fids.add(f.get("fight_id", ""))
 
         # Reset CardBuilder state for this event so the assign_slot
         # capacity counters start clean (matches Ship #26's update-from-
@@ -8556,6 +8555,12 @@ class GameBridge:
                 combined_rating = (getattr(f1, 'overall_rating', 50) +
                                    getattr(f2, 'overall_rating', 50))
 
+            # Excess title fights get a CO_MAIN floor — keeps title fights
+            # off the prelims even when ME + CO_MAIN are already taken by
+            # the first two title fights on the card.
+            _slot_floor = (CardSlot.CO_MAIN
+                           if f.get("fight_id", "") in _excess_title_fids
+                           else None)
             slot = self._assign_card_slot(
                 event_name,
                 f.get("_g1_score", 0),
@@ -8563,6 +8568,7 @@ class GameBridge:
                 combined_rating=combined_rating,
                 f1_rank=override_f1, f2_rank=override_f2,
                 f1=f1, f2=f2,
+                min_slot=_slot_floor,
             )
             f["card_slot"] = slot
             if slot in ("co_main", "main_event"):
