@@ -8118,11 +8118,10 @@ class GameBridge:
         Philosophy: fighters sign contracts while hot. Cooldown is just
         physical/promotional recovery — not the full gap between fights.
 
-        Real cadence this produces:
-          Unranked winner:   1w cooldown + 3-5w camp  = ~4-6w fight-to-fight
-          Ranked winner:     2w cooldown + 5-8w camp  = ~7-10w fight-to-fight
-          Top 5 winner:      2w cooldown + 8-10w camp = ~10-12w fight-to-fight
-          Champion defense:  4w cooldown + 10-12w camp = ~14-16w fight-to-fight
+        Real cadence this produces (post-Ship M2 — winner cooldown removed):
+          Winners (any tier): 0w cooldown — available to sign immediately;
+                              fight-to-fight gap comes from camp scheduling
+                              alone (3-12w via _weeks_out_for_fight).
           Loser (1 loss):    4w cooldown + 3-5w camp  = ~7-9w fight-to-fight
           Loser (streak):    up to 8w cooldown — taking L's, need time to reset
         """
@@ -8130,18 +8129,18 @@ class GameBridge:
         rank = self._get_fighter_rank(fighter)
 
         if is_champion:
-            return 4  # Champion can sign defence within a month
+            return 0  # Winner cooldown removed (was 4w champion defense)
 
         if lose_streak == 0:
-            # Winner — minimal cooldown, can sign fast
+            # Winner — cooldown removed (was 1-2w based on rank)
             if rank is not None and rank <= 5:
-                return 2   # Top contenders recover quick, high demand
+                return 0
             elif rank is not None and rank <= 10:
-                return 2   # Mid-ranked, ready in 2 weeks
+                return 0
             elif rank is not None:
-                return 1   # Lower ranked, hungry for next fight
+                return 0
             else:
-                return 1   # Unranked prospects fight frequently
+                return 0
 
         # Loser — needs more time, especially on streaks
         base = 4
