@@ -603,7 +603,17 @@ class Coach:
     
     @property
     def specialty(self) -> 'CoachSpecialty':
-        """Get specialty as enum based on primary skill"""
+        """Get specialty as enum. Honors `_specialty_override` if set
+        (used for CORNERING coaches whose primary_skill is conditioning
+        but who should display + route as Head Coach / MMA archetype).
+        Falls through to primary_skill mapping otherwise.
+        """
+        # _specialty_override is set dynamically (not a dataclass field)
+        # so legacy saves don't break. Only the starter-pool generator
+        # sets it today (for "Cornering" archetype starter coaches).
+        override = getattr(self, '_specialty_override', None)
+        if override is not None:
+            return override
         skill_to_specialty = {
             "striking": CoachSpecialty.STRIKING,
             "wrestling": CoachSpecialty.WRESTLING,
@@ -1150,22 +1160,45 @@ def generate_coach(
     )
 
 
-def generate_starting_coach_options(count: int = 3) -> List[Coach]:
+def generate_starting_coach_options(count: int = 4) -> List[Coach]:
     """
     Generate coach options for player to choose from at game start.
-    
-    Returns coaches with varied specialties and moderate overall ratings.
+
+    Returns one coach per bridge archetype: Striking, Wrestling (Grappling
+    via SPECIALTY_MAP), Conditioning (S&C), Cornering (Head Coach / MMA).
+    The "cornering" entry generates a Conditioning-strong specialist and
+    overrides specialty to CORNERING so it maps to mma_coach in the
+    bridge's SPECIALTY_MAP — gives the player a 4-archetype starter
+    selection matching the setup_coach.html banner.
     """
     coaches = []
     used_primaries: Set[str] = set()
-    
-    # Preferred primary skills for diversity
-    preferred = ["striking", "wrestling", "jiu_jitsu"]
-    
+
+    # One preferred primary per bridge archetype (Striking / Grappling /
+    # S&C / MMA-via-Cornering). "cornering" is handled specially below
+    # since no skill area maps to it — we override the specialty post-gen.
+    preferred_list = ["striking", "wrestling", "conditioning", "cornering"]
+
     for i in range(count):
-        # Try to get diverse primaries
-        target_primary = preferred[i] if i < len(preferred) else None
-        
+        target_primary = preferred_list[i] if i < len(preferred_list) else None
+
+        # Special case: "cornering" isn't a generated primary_skill, but
+        # CoachSpecialty.CORNERING exists in the enum and SPECIALTY_MAP
+        # routes "cornering" → mma_coach. Generate a conditioning-leaning
+        # coach then override the specialty for display + bridge routing.
+        if target_primary == "cornering":
+            coach = generate_coach(
+                archetype=CoachArchetype.SPECIALIST,
+                min_overall=55,
+                max_overall=70,
+                primary_skill="conditioning",
+            )
+            # Mark specialty override — read by Coach.specialty property
+            # if present, falls through to primary_skill mapping otherwise.
+            coach._specialty_override = CoachSpecialty.CORNERING
+            coaches.append(coach)
+            continue
+
         max_attempts = 20
         for _ in range(max_attempts):
             # Generate 2-3 star coach
@@ -1174,13 +1207,13 @@ def generate_starting_coach_options(count: int = 3) -> List[Coach]:
                 min_overall=55,
                 max_overall=70,
             )
-            
+
             # Check diversity
             if target_primary and coach.primary_skill != target_primary:
                 continue
             if coach.primary_skill in used_primaries:
                 continue
-            
+
             used_primaries.add(coach.primary_skill)
             coaches.append(coach)
             break
@@ -1188,7 +1221,7 @@ def generate_starting_coach_options(count: int = 3) -> List[Coach]:
             # Fallback - just add any coach
             coach = generate_coach(min_overall=55, max_overall=70)
             coaches.append(coach)
-    
+
     return coaches
 
 

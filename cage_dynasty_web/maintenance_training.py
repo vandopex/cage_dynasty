@@ -144,7 +144,7 @@ QUALITY_TO_SKILL = {
 
 # Decay thresholds (weeks since last activity on INDIVIDUAL stat)
 # Decay is gentle at first, becomes significant if truly neglected
-DECAY_THRESHOLD_START = 6       # Start checking for decay after 6 weeks idle
+DECAY_THRESHOLD_START = 8       # Start checking for decay after 8 weeks idle
 DECAY_THRESHOLD_MODERATE = 10   # Moderate decay risk
 DECAY_THRESHOLD_HIGH = 14       # Higher decay risk
 DECAY_THRESHOLD_SIGNIFICANT = 18  # Significant decay - stat truly neglected
@@ -366,12 +366,21 @@ def get_decay_tier(weeks_idle: int) -> Optional[str]:
 
 
 def get_decay_multiplier(stat: str) -> float:
-    """Get decay rate multiplier for a stat category."""
-    if stat in PHYSICAL_STATS:
-        return PHYSICAL_DECAY_MULTIPLIER
-    elif stat in MENTAL_STATS:
-        return MENTAL_DECAY_MULTIPLIER
-    return 1.0
+    """Get decay rate multiplier for a stat category.
+
+    Athletic base persists (physiology); technical skills rust fast.
+    Flipped from original: physical was 1.5x (decayed fastest), now 0.3x.
+    Mental was 0.5x — fight_iq/composure are now under TECHNICAL at 1.2x
+    because ring IQ rusts without live training, while heart stays under
+    ATHLETIC at 0.3x as a stand-in for grit/conditioning capacity.
+    """
+    if stat in {"strength", "speed", "cardio", "chin", "recovery", "heart"}:
+        return 0.3
+    elif stat in {"boxing", "kicks", "clinch_striking", "striking_defense",
+                  "takedowns", "takedown_defense", "top_control",
+                  "submissions", "guard", "fight_iq", "composure"}:
+        return 1.2
+    return 0.8  # defensive default for any unmapped stat
 
 
 def get_coach_skill_for_stat(coach: Dict[str, Any], stat: str) -> int:

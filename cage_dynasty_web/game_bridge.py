@@ -4320,9 +4320,37 @@ class GameBridge:
         "ELITE":    100,
     }
 
+    # Athletic vs technical stat split. Athletic base = body capacity
+    # (physiology) — builds slowly with conditioning, persists for weeks
+    # after training stops. Technical skills = motor patterns + ring IQ —
+    # respond fast to focused reps, rust fast without practice.
+    # Drives per-stat gain multipliers in _diminishing_gain and decay
+    # multipliers in maintenance_training.get_decay_multiplier.
+    _ATHLETIC_BASE_STATS = {
+        "strength", "speed", "cardio", "chin", "recovery", "heart"
+    }
+    _TECHNICAL_STATS = {
+        "boxing", "kicks", "clinch_striking", "striking_defense",
+        "takedowns", "takedown_defense", "top_control",
+        "submissions", "guard", "fight_iq", "composure"
+    }
+
+    # Per-archetype passive-boost multiplier. sc_coach compensates for the
+    # athletic ×0.5 multiplier inside _diminishing_gain (OVR2 split) so its
+    # gains land comparable in magnitude to technical coaches. mma_coach
+    # spreads over only 2 attrs (post-G3 heart-to-sc move), so the boost
+    # widens its effective per-week contribution.
+    _ARCHETYPE_BOOST = {
+        "striking_coach":  1.0,
+        "grappling_coach": 1.0,
+        "sc_coach":        2.0,
+        "mma_coach":       1.5,
+    }
+
     def _diminishing_gain(self, current: float, raw_gain: float,
                            camp_tier: str,
-                           fighter_potential: Optional[int] = None) -> float:
+                           fighter_potential: Optional[int] = None,
+                           stat_name: Optional[str] = None) -> float:
         """
         Diminishing returns above the effective ceiling. Effective ceiling
         is min(camp_soft_ceil, fighter_potential) when potential known —
@@ -4346,6 +4374,13 @@ class GameBridge:
                           else soft_ceil)
         overshoot = max(0.0, current - effective_ceil)
         multiplier = max(0.05, 1.0 - overshoot / 30.0)
+
+        # Athletic base builds slowly (physiology); technical skills
+        # respond faster to focused reps.
+        if stat_name in self._ATHLETIC_BASE_STATS:
+            multiplier *= 0.5
+        elif stat_name in self._TECHNICAL_STATS:
+            multiplier *= 1.2
 
         # Facility efficiency bonus — better gym = faster gains below ceiling too
         if FACILITIES_AVAILABLE:
@@ -4385,7 +4420,8 @@ class GameBridge:
                     current = float(getattr(fighter, attr,
                                             getattr(fighter, 'overall_rating', 65)))
                     effective = self._diminishing_gain(current, raw_gain, camp_tier,
-                                                       fighter_potential=_fp)
+                                                       fighter_potential=_fp,
+                                                       stat_name=attr)
 
                     # Style affinity — fighters improve faster in their natural discipline
                     _STYLE_AFFINITY = {
@@ -4603,6 +4639,9 @@ class GameBridge:
             # Grappling
             "wrestling":   "grappling_coach", "grappling": "grappling_coach",
             "bjj":         "grappling_coach", "submissions": "grappling_coach",
+            # Jiu-Jitsu — generated as "Jiu-Jitsu" by world-gen; both
+            # hyphen and underscore forms route to grappling_coach.
+            "jiu-jitsu":   "grappling_coach", "jiu_jitsu": "grappling_coach",
             # S&C (merged strength + conditioning)
             "s&c":         "sc_coach",        "strength":    "sc_coach",
             "conditioning": "sc_coach",       "cardio":      "sc_coach",
@@ -4642,13 +4681,26 @@ class GameBridge:
             # Gain split across the group (not just first attr)
             _COACH_ATTRS = {
                 "striking_coach":  ["boxing", "kicks", "clinch_striking", "striking_defense"],
-                "grappling_coach": ["takedowns", "takedown_defense", "submissions", "guard"],
-                "sc_coach":        ["strength", "cardio", "chin", "recovery"],
-                "mma_coach":       ["fight_iq", "composure", "heart"],
+                # Added top_control — was orphaned (in no archetype).
+                "grappling_coach": ["takedowns", "takedown_defense", "top_control",
+                                    "submissions", "guard"],
+                # Added speed + heart — full athletic-base coverage. Heart
+                # moves here from mma_coach since it's an athletic trait
+                # (grit/conditioning capacity, not ring IQ).
+                "sc_coach":        ["strength", "speed", "cardio", "chin",
+                                    "recovery", "heart"],
+                # Heart moved to sc_coach; mma_coach is now strictly ring IQ.
+                "mma_coach":       ["fight_iq", "composure"],
             }
             coach_attrs = _COACH_ATTRS.get(coach_focus, ["fight_iq"])
-            # Split passive gain across attrs — smaller per stat but broader
-            per_attr_gain = passive_gain / len(coach_attrs)
+            # Per-archetype boost. sc_coach gets 2.0× to compensate for the
+            # OVR2 athletic ×0.5 multiplier inside _diminishing_gain — without
+            # this, S&C boost rate would feel anemic vs technical coaches.
+            # mma_coach gets 1.5× because it spreads over only 2 attrs and
+            # both are technical (×1.2), so the post-split rate is steeper
+            # but the 2-attr coverage is narrow — the boost compensates.
+            _boost = self._ARCHETYPE_BOOST.get(coach_focus, 1.0)
+            per_attr_gain = (passive_gain / len(coach_attrs)) * _boost
             real_fighter = self._game_state.get_fighter(fid)
             # Per-fighter potential ceiling for the coach passive boost too.
             _fp = self._game_state._fighter_data.get(fid, {}).get("potential")
@@ -4658,7 +4710,8 @@ class GameBridge:
                     current = float(getattr(real_fighter, attr,
                                     getattr(real_fighter, 'overall_rating', 50)))
                     effective = self._diminishing_gain(current, per_attr_gain, camp_tier,
-                                                       fighter_potential=_fp)
+                                                       fighter_potential=_fp,
+                                                       stat_name=attr)
                     if hasattr(real_fighter, attr) and effective > 0.01:
                         setattr(real_fighter, attr, min(100.0, current + effective))
                         if result.get("actual_gains") is not None:
@@ -6021,6 +6074,12 @@ class GameBridge:
                         continue
                     current = float(getattr(fighter, attr, 60))
                     gain = base_gain * mult
+                    # Athletic vs technical per-stat multiplier — mirrors
+                    # _diminishing_gain on the player side.
+                    if attr in self._ATHLETIC_BASE_STATS:
+                        gain *= 0.5
+                    elif attr in self._TECHNICAL_STATS:
+                        gain *= 1.2
                     if current >= effective_cap:
                         gain *= max(0.1, 1 - (current - effective_cap) * 0.1)
                     if gain > 0.05:
