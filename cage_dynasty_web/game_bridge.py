@@ -1570,7 +1570,7 @@ class GameBridge:
                                          f"{fight.get('fighter2_name','')} at "
                                          f"{fight.get('event_name','event')} cancelled — "
                                          f"{' and '.join(_uncleared_names)} not cleared to fight."),
-                            "category": "injury",
+                            "category": "fight_cancelled",
                             "week": self._game_state.week_number if self._game_state else 1,
                         })
                         continue
@@ -4957,6 +4957,20 @@ class GameBridge:
                     "icon":  "⚠️",
                     "color": "var(--blood-red)",
                     "text":  f"{f.name} is running dangerously hot — strongly consider REST",
+                })
+
+        # Surface fight-cancelled alerts from this week as one-shot
+        # highlights. After the player advances past this week the
+        # cancellation drops out of highlights naturally (week filter)
+        # while persisting in the news feed for history.
+        current_week = self._game_state.week_number if self._game_state else 1
+        for _ni in self._news_items:
+            if (_ni.get("category") == "fight_cancelled"
+                and _ni.get("week") == current_week):
+                highlights.append({
+                    "icon":  "🚫",
+                    "color": "var(--blood-red)",
+                    "text":  _ni["headline"] + " Book a new opponent from the ladder.",
                 })
 
         return {
