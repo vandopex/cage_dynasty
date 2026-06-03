@@ -338,7 +338,7 @@
                             color:{{ group.color }};margin-bottom:var(--spacing-sm);">
                     {{ group.label }}
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:var(--spacing-sm);">
                     {% for fkey, fname, ficon, fdesc in group.options %}
                     {% set is_rec = (fkey == rec_focus) %}
                     {% set is_existing = (data.existing_focus == fkey) %}

@@ -719,25 +719,25 @@ def register_routes(app):
         fighters = bridge.get_player_fighters()
         camp = bridge.get_player_camp()
         
-        # Training focus options
-        focus_options = [
-            # Striking
-            ('boxing',           'Boxing',       'Hands, combinations'),
-            ('kicks',            'Kicks',         'Leg & body kicks'),
-            ('clinch_striking',  'Clinch',        'Dirty boxing, elbows'),
-            ('striking_defense', 'Strike Def',    'Head movement, blocks'),
-            ('muay_thai',        'Muay Thai',     'Kicks + clinch together'),
-            # Grappling
-            ('wrestling',        'Wrestling',     'Takedowns & defense'),
-            ('top_control',      'Top Control',   'Ground control, GnP'),
-            ('bjj',              'BJJ',           'Submissions & guard'),
-            ('takedown_defense', 'TD Defense',    'Sprawls, stuffing shots'),
-            # Physical & Mental
-            ('cardio',           'Cardio',        'Stamina & recovery'),
-            ('strength',         'Strength',      'Power & clinch'),
-            ('fight_iq',         'Fight IQ',      'Game plan & composure'),
-            # Balanced
-            ('sparring',         'Sparring',      'Balanced all-around'),
+        # Two-stage focus model: pick GROUP, then EMPHASIS within group.
+        # Hidden input submits as "GROUP:emphasis" (e.g. "STRIKING:boxing").
+        # Bridge resolves both new format and legacy flat keys via
+        # _FOCUS_LEGACY_MAP, so old saves still work.
+        training_groups = [
+            ('STRIKING',     '🥊', 'Hands, kicks, clinch, defense',
+             [('boxing','Boxing'),('kicks','Kicks'),
+              ('clinch','Clinch'),('defense','Strike Def')]),
+            ('GRAPPLING',    '🤼', 'Takedowns, control, subs, guard',
+             [('takedowns','Takedowns'),('takedown_defense','TD Defense'),
+              ('top_control','Top Control'),('submissions','Submissions'),
+              ('guard','Guard')]),
+            ('CONDITIONING', '💪', 'Cardio, strength, toughness',
+             [('cardio','Cardio'),('strength','Strength'),
+              ('toughness','Toughness')]),
+            ('MENTAL',       '🧠', 'Fight IQ, composure',
+             [('fight_iq','Fight IQ'),('composure','Composure')]),
+            ('SPARRING',     '🎯', 'Balanced all-round light work',
+             [('sparring','Sparring')]),
         ]
         
         # Intensity options
@@ -763,7 +763,7 @@ def register_routes(app):
             camp=camp,
             coach=coach,
             training_plans=training_plans,
-            focus_options=focus_options,
+            training_groups=training_groups,
             intensity_options=intensity_options,
             week=bridge.week_number,
         )
@@ -1391,8 +1391,24 @@ def register_routes(app):
 
         cs = data.get('coach_suggestion', {})
         rec_gameplan  = cs.get('gameplan',   'BALANCED')
-        rec_focus     = cs.get('focus',      'boxing')
+        _rec_focus_raw = cs.get('focus', 'boxing')
+        # Convert legacy flat key (e.g. "boxing") → "STRIKING:boxing"
+        # for template comparison against new fkey format.
+        if ":" in str(_rec_focus_raw):
+            rec_focus = _rec_focus_raw
+        else:
+            _g, _e = bridge._FOCUS_LEGACY_MAP.get(
+                str(_rec_focus_raw).lower(), ("SPARRING", "sparring"))
+            rec_focus = f"{_g}:{_e}"
         rec_intensity = cs.get('intensity',  'MODERATE')
+
+        # Also normalize any persisted existing_focus to GROUP:emphasis
+        # so the "currently selected" badge renders against legacy saves.
+        _existing_raw = data.get('existing_focus')
+        if _existing_raw and ":" not in str(_existing_raw):
+            _g, _e = bridge._FOCUS_LEGACY_MAP.get(
+                str(_existing_raw).lower(), ("SPARRING", "sparring"))
+            data['existing_focus'] = f"{_g}:{_e}"
 
         # All 8 gameplans the engine supports
         gameplan_options = [
@@ -1478,36 +1494,45 @@ def register_routes(app):
             },
         ]
 
-        # Grouped focus options (3 groups, 4 each = 12 total but scannable)
+        # Grouped focus options — fkey is now "GROUP:emphasis".
+        # Resolved by bridge via _TRAINING_GROUPS.
         focus_groups = [
             {
                 "label": "⚔️ Striking",
                 "color": "var(--blood-red)",
                 "options": [
-                    ("boxing",           "Boxing",    "🥊", "Punching technique, combos, distance"),
-                    ("kicks",            "Kicking",   "🦵", "Leg, body, and head kicks"),
-                    ("clinch_striking",  "Clinch",    "👊", "Knees, elbows, dirty boxing"),
-                    ("striking_defense", "Defense",   "🛡", "Head movement, blocking, footwork"),
+                    ("STRIKING:boxing",   "Boxing",    "🥊", "Punching technique, combos, distance"),
+                    ("STRIKING:kicks",    "Kicking",   "🦵", "Leg, body, and head kicks"),
+                    ("STRIKING:clinch",   "Clinch",    "👊", "Knees, elbows, dirty boxing"),
+                    ("STRIKING:defense",  "Defense",   "🛡", "Head movement, blocking, footwork"),
                 ],
             },
             {
                 "label": "🥋 Grappling",
                 "color": "var(--info)",
                 "options": [
-                    ("takedowns",        "Wrestling",    "🤼", "Takedowns and cage control"),
-                    ("takedown_defense", "TD Defense",   "🦅", "Sprawl and takedown prevention"),
-                    ("submissions",      "Submissions",  "🔒", "Chokes and joint locks"),
-                    ("guard",            "Guard Work",   "🛡", "Sweeps, guard retention, getups"),
+                    ("GRAPPLING:takedowns",        "Wrestling",   "🤼", "Takedowns and cage control"),
+                    ("GRAPPLING:takedown_defense", "TD Defense",  "🦅", "Sprawl and takedown prevention"),
+                    ("GRAPPLING:top_control",      "Top Control", "⬇️", "GnP position and pressure"),
+                    ("GRAPPLING:submissions",      "Submissions", "🔒", "Chokes and joint locks"),
+                    ("GRAPPLING:guard",            "Guard Work",  "🛡", "Sweeps, guard retention, getups"),
                 ],
             },
             {
-                "label": "💪 Physical",
+                "label": "💪 Conditioning",
                 "color": "var(--neon-green)",
                 "options": [
-                    ("cardio",   "Cardio",   "❤️", "Gas tank and stamina"),
-                    ("strength", "Strength", "⚡", "Power and clinch strength"),
-                    ("fight_iq", "Fight IQ", "🧠", "Adjustments and ring generalship"),
-                    ("top_control", "Top Control", "⬇️", "GnP position and pressure"),
+                    ("CONDITIONING:cardio",    "Cardio",    "❤️", "Gas tank and stamina"),
+                    ("CONDITIONING:strength",  "Strength",  "⚡", "Power and clinch strength"),
+                    ("CONDITIONING:toughness", "Toughness", "🦴", "Chin, heart, durability"),
+                ],
+            },
+            {
+                "label": "🧠 Mental",
+                "color": "var(--gold)",
+                "options": [
+                    ("MENTAL:fight_iq",  "Fight IQ",  "🧠", "Ring generalship, adjustments"),
+                    ("MENTAL:composure", "Composure", "🧘", "Stay sharp under pressure"),
                 ],
             },
         ]

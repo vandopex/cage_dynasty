@@ -4398,53 +4398,74 @@ class GameBridge:
     # FACILITY CAP — TRAINING
     # =========================================================================
 
-    # Canonical mapping from focus key → which attributes it trains
-    # Keys must match what routes.py sends as focus values
-    _FOCUS_ATTRS: Dict[str, List[str]] = {
-        # Striking
-        "boxing":           ["boxing", "striking_defense"],
-        "kicks":            ["kicks", "striking_defense"],
-        "clinch_striking":  ["clinch_striking", "top_control"],
-        "striking_defense": ["striking_defense", "composure"],
-        "muay_thai":        ["kicks", "clinch_striking"],
-        # Grappling
-        "wrestling":        ["takedowns", "takedown_defense"],
-        "takedowns":        ["takedowns", "top_control"],
-        "takedown_defense": ["takedown_defense", "takedowns"],
-        "top_control":      ["top_control", "takedowns"],
-        "bjj":              ["submissions", "guard"],
-        "submissions":      ["submissions", "guard"],
-        "guard":            ["guard", "submissions"],
-        # Physical
-        "cardio":           ["cardio", "recovery"],
-        "strength":         ["strength", "chin"],
-        "fight_iq":         ["fight_iq", "composure"],
-        # Balanced sparring — small gains across key areas
-        "sparring":         ["boxing", "takedown_defense", "fight_iq"],
+    # Two-axis training model: group (domain) + emphasis (weighted stats).
+    # Replaces the flat 16-key _FOCUS_ATTRS / _FOCUS_DOMAIN dicts.
+    # Each emphasis distributes raw_gain across multiple stats by weight
+    # (1.0=primary, 0.5=secondary, 0.25=tertiary). Domain = stats kept
+    # "warm" by any focus in this group (used by decay system).
+    _TRAINING_GROUPS = {
+        "STRIKING": {
+            "emphases": {
+                "boxing":    {"boxing":1.0,"kicks":0.5,"clinch_striking":0.25,"striking_defense":0.25},
+                "kicks":     {"kicks":1.0,"boxing":0.5,"clinch_striking":0.5,"striking_defense":0.25},
+                "clinch":    {"clinch_striking":1.0,"boxing":0.5,"kicks":0.25,"striking_defense":0.25},
+                "defense":   {"striking_defense":1.0,"boxing":0.25,"kicks":0.25,"clinch_striking":0.25},
+            },
+            "domain": ["boxing","kicks","clinch_striking","striking_defense","chin","composure","fight_iq"],
+        },
+        "GRAPPLING": {
+            "emphases": {
+                "takedowns":         {"takedowns":1.0,"top_control":0.5,"takedown_defense":0.25,"guard":0.25},
+                "takedown_defense":  {"takedown_defense":1.0,"takedowns":0.5,"guard":0.25},
+                "top_control":       {"top_control":1.0,"takedowns":0.5,"submissions":0.25,"guard":0.25},
+                "submissions":       {"submissions":1.0,"guard":0.5,"top_control":0.25},
+                "guard":             {"guard":1.0,"submissions":0.5,"takedown_defense":0.25},
+            },
+            "domain": ["takedowns","takedown_defense","top_control","submissions","guard","fight_iq"],
+        },
+        "CONDITIONING": {
+            "emphases": {
+                "cardio":    {"cardio":1.0,"recovery":0.5,"heart":0.25},
+                "strength":  {"strength":1.0,"cardio":0.5,"chin":0.25},
+                "toughness": {"chin":1.0,"heart":0.5,"recovery":0.5},
+            },
+            "domain": ["cardio","strength","chin","recovery","heart","speed"],
+        },
+        "MENTAL": {
+            "emphases": {
+                "fight_iq":  {"fight_iq":1.0,"composure":0.5,"striking_defense":0.25},
+                "composure": {"composure":1.0,"fight_iq":0.5,"heart":0.25},
+            },
+            "domain": ["fight_iq","composure","striking_defense","heart"],
+        },
+        "SPARRING": {
+            "emphases": {
+                "sparring": {"boxing":0.5,"takedown_defense":0.5,"fight_iq":0.5,"speed":0.5},
+            },
+            "domain": ["boxing","kicks","takedown_defense","fight_iq","composure","chin","speed"],
+        },
     }
 
-    # M1 Phase 2a — Stats kept "warm" by each training focus. Primary boost
-    # stats (from _FOCUS_ATTRS above) plus secondary domain stats that the
-    # training session realistically exercises. Used by the decay system:
-    # training a focus updates activity counters for ALL stats in its domain,
-    # not just the primary boost targets. First entries mirror _FOCUS_ATTRS.
-    _FOCUS_DOMAIN: Dict[str, List[str]] = {
-        "boxing":           ["boxing", "striking_defense", "kicks", "clinch_striking", "chin", "composure", "fight_iq"],
-        "kicks":            ["kicks", "striking_defense", "boxing", "clinch_striking", "cardio", "composure"],
-        "clinch_striking":  ["clinch_striking", "top_control", "kicks", "takedowns", "strength", "composure"],
-        "striking_defense": ["striking_defense", "composure", "boxing", "kicks", "fight_iq", "chin"],
-        "muay_thai":        ["kicks", "clinch_striking", "boxing", "striking_defense", "chin", "composure"],
-        "wrestling":        ["takedowns", "takedown_defense", "top_control", "strength", "cardio", "chin"],
-        "takedowns":        ["takedowns", "top_control", "takedown_defense", "strength", "cardio"],
-        "takedown_defense": ["takedown_defense", "takedowns", "striking_defense", "fight_iq", "composure"],
-        "top_control":      ["top_control", "takedowns", "submissions", "strength", "cardio"],
-        "bjj":              ["submissions", "guard", "top_control", "fight_iq", "composure"],
-        "submissions":      ["submissions", "guard", "top_control", "fight_iq"],
-        "guard":             ["guard", "submissions", "takedown_defense", "composure", "fight_iq"],
-        "cardio":           ["cardio", "recovery", "strength", "chin", "heart"],
-        "strength":         ["strength", "chin", "cardio", "recovery", "top_control", "takedowns"],
-        "fight_iq":         ["fight_iq", "composure", "striking_defense", "takedown_defense", "heart"],
-        "sparring":         ["boxing", "takedown_defense", "fight_iq", "kicks", "takedowns", "striking_defense", "chin", "composure", "cardio"],
+    # Backward-compat alias map: old flat focus key → (group, emphasis).
+    # Legacy saves and any code path still passing a flat key falls
+    # through cleanly.
+    _FOCUS_LEGACY_MAP = {
+        "boxing":           ("STRIKING",     "boxing"),
+        "kicks":            ("STRIKING",     "kicks"),
+        "clinch_striking":  ("STRIKING",     "clinch"),
+        "striking_defense": ("STRIKING",     "defense"),
+        "muay_thai":        ("STRIKING",     "kicks"),
+        "wrestling":        ("GRAPPLING",    "takedowns"),
+        "takedowns":        ("GRAPPLING",    "takedowns"),
+        "takedown_defense": ("GRAPPLING",    "takedown_defense"),
+        "top_control":      ("GRAPPLING",    "top_control"),
+        "bjj":              ("GRAPPLING",    "submissions"),
+        "submissions":      ("GRAPPLING",    "submissions"),
+        "guard":            ("GRAPPLING",    "guard"),
+        "cardio":           ("CONDITIONING", "cardio"),
+        "strength":         ("CONDITIONING", "strength"),
+        "fight_iq":         ("MENTAL",       "fight_iq"),
+        "sparring":         ("SPARRING",     "sparring"),
     }
 
     # Raw weekly gains per intensity (before cap)
@@ -4715,7 +4736,22 @@ class GameBridge:
         """
         intensity_up  = intensity.upper()
         raw_gain      = self._INTENSITY_GAIN.get(intensity_up, 2)
-        focus_attrs   = self._FOCUS_ATTRS.get(focus, ["fight_iq"])
+
+        # Resolve flat legacy key OR "GROUP:emphasis" format to
+        # (group_name, emphasis_name).
+        if ":" in str(focus):
+            _grp, _emp = focus.split(":", 1)
+            _grp = _grp.upper()
+        else:
+            _grp, _emp = self._FOCUS_LEGACY_MAP.get(
+                str(focus).lower(), ("SPARRING", "sparring")
+            )
+
+        _group_data = self._TRAINING_GROUPS.get(_grp, self._TRAINING_GROUPS["SPARRING"])
+        _emphasis_weights = _group_data["emphases"].get(
+            _emp, list(_group_data["emphases"].values())[0]
+        )
+        _domain = _group_data["domain"]
 
         fatigue_delta = {
             "REST": -15, "LIGHT": 2, "MODERATE": 5, "INTENSE": 10, "EXTREME": 18,
@@ -4729,34 +4765,43 @@ class GameBridge:
             _fp = self._game_state._fighter_data.get(fighter_id, {}).get("potential")
             _fp = int(_fp) if _fp is not None else None
             if fighter and hasattr(fighter, 'overall_rating'):
-                for attr in focus_attrs:
-                    current = float(getattr(fighter, attr,
-                                            getattr(fighter, 'overall_rating', 65)))
-                    effective = self._diminishing_gain(current, raw_gain, camp_tier,
-                                                       fighter_potential=_fp,
-                                                       stat_name=attr)
-
-                    # Style affinity — fighters improve faster in their natural discipline
+                # Apply gains using emphasis weights (1.0=primary, 0.5=secondary,
+                # 0.25=tertiary). Stats outside the emphasis dict get 0 gain.
+                # Stats in domain but not emphasis still benefit from coach passive.
+                for stat, weight in _emphasis_weights.items():
+                    if not hasattr(fighter, stat):
+                        continue
+                    current = float(getattr(fighter, stat,
+                                    getattr(fighter, 'overall_rating', 65)))
+                    weighted_gain = raw_gain * weight
+                    effective = self._diminishing_gain(
+                        current, weighted_gain, camp_tier,
+                        fighter_potential=_fp, stat_name=stat
+                    )
+                    # Style affinity multiplier
                     _STYLE_AFFINITY = {
-                        "Striker":         {"boxing":1.3,"kicks":1.2,"striking_defense":1.2,"takedowns":0.85,"submissions":0.75},
-                        "Wrestler":        {"takedowns":1.3,"top_control":1.25,"takedown_defense":1.2,"boxing":0.85,"submissions":0.85},
-                        "BJJ Specialist":  {"submissions":1.35,"guard":1.3,"takedowns":1.1,"kicks":0.8},
-                        "Muay Thai":       {"kicks":1.35,"clinch_striking":1.3,"boxing":1.1,"takedowns":0.85},
-                        "Pressure Fighter":{"cardio":1.2,"boxing":1.15,"clinch_striking":1.1},
-                        "Counter Striker": {"striking_defense":1.3,"fight_iq":1.2,"boxing":1.1},
-                        "Ground & Pound":  {"top_control":1.3,"takedowns":1.2,"boxing":1.1,"submissions":0.8},
-                        "Clinch Fighter":  {"clinch_striking":1.35,"top_control":1.2,"takedowns":1.1},
-                        "Grappler":        {"takedowns":1.3,"submissions":1.25,"top_control":1.2,"guard":1.15},
-                        "Brawler":         {"boxing":1.25,"chin":1.2,"heart":1.15,"striking_defense":0.85},
+                        "Striker":        {"boxing":1.3,"kicks":1.2,"striking_defense":1.2,
+                                           "clinch_striking":1.1,"takedowns":0.75,"submissions":0.75},
+                        "Wrestler":       {"takedowns":1.35,"top_control":1.3,"takedown_defense":1.25,
+                                           "boxing":0.9,"kicks":0.8},
+                        "BJJ Specialist": {"submissions":1.35,"guard":1.3,"top_control":1.2,
+                                           "takedowns":1.1,"boxing":0.85},
+                        "Ground & Pound": {"takedowns":1.3,"top_control":1.25,"boxing":1.2,
+                                           "submissions":0.85},
+                        "Pressure Fighter":{"boxing":1.2,"clinch_striking":1.25,"chin":1.1,
+                                            "cardio":1.15,"takedown_defense":1.1},
+                        "Counter Striker":{"striking_defense":1.3,"fight_iq":1.25,"composure":1.2,
+                                           "boxing":1.1,"takedowns":0.8},
+                        "Balanced":       {},
                     }
-                    _style = getattr(fighter, 'fighting_style', '') or ''
-                    _affinity = _STYLE_AFFINITY.get(_style, {}).get(attr, 1.0)
-                    effective = effective * _affinity
-
-                    actual_gains[attr] = round(effective, 2)
-                    if hasattr(fighter, attr):
-                        setattr(fighter, attr,
-                                min(100.0, current + effective))
+                    _style = str(getattr(fighter, 'fighting_style', 'Balanced') or 'Balanced')
+                    _affinity = _STYLE_AFFINITY.get(_style, {})
+                    _aff_mult = _affinity.get(stat, 1.0)
+                    effective *= _aff_mult
+                    if effective > 0.01:
+                        setattr(fighter, stat, min(100.0,
+                                float(getattr(fighter, stat, 65)) + effective))
+                        actual_gains[stat] = round(effective, 2)
 
                 fatigue = max(0, min(100,
                     getattr(fighter, 'fatigue', 0) + fatigue_delta))
@@ -4766,11 +4811,11 @@ class GameBridge:
                 # Style-weighted OVR — see _compute_ovr for weight vectors.
                 fighter.overall_rating = self._compute_ovr(fighter)
             else:
-                for attr in focus_attrs:
-                    actual_gains[attr] = float(raw_gain)
+                for stat in _emphasis_weights:
+                    actual_gains[stat] = float(raw_gain)
         else:
-            for attr in focus_attrs:
-                actual_gains[attr] = 0.0
+            for stat in _emphasis_weights:
+                actual_gains[stat] = 0.0
 
         self._clear_cache()
         soft_ceil = self._TIER_SOFT_CEIL.get(camp_tier.upper(), 65)
@@ -5092,9 +5137,14 @@ class GameBridge:
             # between _apply_weekly_training and the maintenance activity
             # tracker. Falls back to [focus] for unknown focus keys.
             if self._maintenance_system:
-                _domain_stats = self._FOCUS_DOMAIN.get(
-                    active_plan["focus"], [active_plan["focus"]]
-                )
+                _focus_str = active_plan["focus"]
+                if ":" in str(_focus_str):
+                    _g, _e = _focus_str.split(":", 1)
+                else:
+                    _g, _e = self._FOCUS_LEGACY_MAP.get(
+                        str(_focus_str).lower(), ("SPARRING", "sparring"))
+                _domain_stats = self._TRAINING_GROUPS.get(
+                    _g.upper(), {}).get("domain", [_focus_str])
                 self._maintenance_system.record_training_camp_activity(
                     fid, _domain_stats, self._game_state.week_number,
                 )
