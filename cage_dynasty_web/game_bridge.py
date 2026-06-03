@@ -9970,6 +9970,18 @@ class GameBridge:
         fa1 = self._make_fighter_attrs(fighter1, f1_name, f1_id)
         fa2 = self._make_fighter_attrs(fighter2, f2_name, f2_id)
 
+        # Read pre-fight fatigue and convert to starting stamina.
+        # Tired fighters start with less stamina — their taper
+        # discipline (or lack of it) now affects fight outcomes.
+        _f1_fatigue = int(getattr(fighter1, 'fatigue', 0) or 0)
+        _f2_fatigue = int(getattr(fighter2, 'fatigue', 0) or 0)
+        _f1_stamina = get_starting_stamina(_f1_fatigue) if CONDITION_AVAILABLE else 100.0
+        _f2_stamina = get_starting_stamina(_f2_fatigue) if CONDITION_AVAILABLE else 100.0
+        print(f"  💪 [STAMINA] {fighter1.name}: fatigue={_f1_fatigue} "
+              f"→ stamina={_f1_stamina:.0f} | "
+              f"{fighter2.name}: fatigue={_f2_fatigue} "
+              f"→ stamina={_f2_stamina:.0f}")
+
         # Ship K1: pre-fight coach buff for player fighter (Path α)
         _player_ids_k1 = {f.fighter_id for f in self.get_player_fighters()}
         _player_is_f1 = f1_id in _player_ids_k1
@@ -10008,6 +10020,8 @@ class GameBridge:
             rounds        = total_rounds,
             is_title_fight= is_title,
             is_main_event = is_main,
+            starting_stamina_f1=_f1_stamina,
+            starting_stamina_f2=_f2_stamina,
         )
 
         # Translate engine result → our dict format

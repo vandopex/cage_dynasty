@@ -303,17 +303,36 @@ class NarratedFightSimulator:
         config: Optional[FightConfig] = None,
         verbose: bool = True,
         corner_bonus_f1: float = 0.0,
-        corner_bonus_f2: float = 0.0
+        corner_bonus_f2: float = 0.0,
+        starting_stamina_f1: float = 100.0,
+        starting_stamina_f2: float = 100.0,
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
         self.config = config or FightConfig.standard_fight()
         self.verbose = verbose
-        
+
         # Cornering bonuses (0.0 to 0.5 scale)
         # Affects between-round recovery and composure when hurt
         self.corner_bonus_f1 = max(0.0, min(0.5, corner_bonus_f1))
         self.corner_bonus_f2 = max(0.0, min(0.5, corner_bonus_f2))
+
+        # Pre-fight stamina (set by fatigue from training camp).
+        # Fresh fighters start at 100; tired fighters start lower.
+        self.starting_stamina_f1 = starting_stamina_f1
+        self.starting_stamina_f2 = starting_stamina_f2
+
+        # Per-round stamina recovery penalty from fatigue level.
+        # Mirrors get_cardio_recovery_penalty() bucketing:
+        # FRESH=0, RESTED=0, READY=1, TIRED=2, EXHAUSTED=4
+        def _fatigue_to_penalty(s: float) -> float:
+            if s >= 95: return 0.0
+            if s >= 88: return 0.0
+            if s >= 78: return 1.0
+            if s >= 65: return 2.0
+            return 4.0
+        self._fatigue_penalty_f1 = _fatigue_to_penalty(starting_stamina_f1)
+        self._fatigue_penalty_f2 = _fatigue_to_penalty(starting_stamina_f2)
         
         # Initialize commentary system
         self.commentary = create_commentary_system(
@@ -348,14 +367,14 @@ class NarratedFightSimulator:
             fighter_id=self.fighter1.fighter_id,
             name=self.fighter1.name,
             health=100.0 + self.fighter1.chin * 0.5,
-            stamina=100.0
+            stamina=self.starting_stamina_f1
         )
-        
+
         self.fighter2_state = FighterState(
             fighter_id=self.fighter2.fighter_id,
             name=self.fighter2.name,
             health=100.0 + self.fighter2.chin * 0.5,
-            stamina=100.0
+            stamina=self.starting_stamina_f2
         )
         
         # Create fight state
@@ -402,7 +421,16 @@ class NarratedFightSimulator:
                 100 + self.fighter2.chin * 0.5,
                 self.fighter2_state.health + bonus_health
             )
-        
+
+        # Fatigue compounds through rounds — tired fighters recover
+        # stamina more slowly between rounds.
+        # get_cardio_recovery_penalty returns 0/1/2/4 by fatigue bucket.
+        if hasattr(self, '_fatigue_penalty_f1'):
+            self.fighter1_state.stamina = max(0.0,
+                self.fighter1_state.stamina - self._fatigue_penalty_f1)
+            self.fighter2_state.stamina = max(0.0,
+                self.fighter2_state.stamina - self._fatigue_penalty_f2)
+
         # Reset fight state for new round
         self.fight_state.current_round = self.current_round
         self.fight_state.exchanges_this_round = 0
@@ -1212,7 +1240,9 @@ def simulate_narrated_fight(
     fighter2: FighterAttributes,
     rounds: int = 3,
     is_title_fight: bool = False,
-    is_main_event: bool = False
+    is_main_event: bool = False,
+    starting_stamina_f1: float = 100.0,
+    starting_stamina_f2: float = 100.0,
 ) -> NarratedFightResult:
     """
     Simulate a fight with full commentary.
@@ -1237,7 +1267,11 @@ def simulate_narrated_fight(
     if rounds == 5:
         config.scheduled_rounds = 5
     
-    simulator = NarratedFightSimulator(fighter1, fighter2, config)
+    simulator = NarratedFightSimulator(
+        fighter1, fighter2, config,
+        starting_stamina_f1=starting_stamina_f1,
+        starting_stamina_f2=starting_stamina_f2,
+    )
     return simulator.simulate()
 
 
