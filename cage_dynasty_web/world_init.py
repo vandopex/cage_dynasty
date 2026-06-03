@@ -825,7 +825,7 @@ def is_main_event_worthy(
 class FighterGenerator:
     """Generates realistic fighters with varied attributes"""
     
-    STYLES = ["Striker", "Grappler", "Wrestler", "BJJ Specialist", "Balanced", "Brawler", "Counter-Striker", "Pressure Fighter"]
+    STYLES = ["Striker", "Grappler", "Wrestler", "BJJ Specialist", "Balanced", "Brawler", "Counter Striker", "Pressure Fighter"]
     STANCES = ["Orthodox", "Southpaw", "Switch"]
     
     # Country weights for distribution

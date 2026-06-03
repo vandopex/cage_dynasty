@@ -1463,6 +1463,22 @@ class GameBridge:
         meta = data.get("meta", {})
         print(f"✅ Game loaded from slot '{slot}' (Week {meta.get('week', '?')})")
 
+        # OVR4: recalculate all fighter OVRs with style weighting.
+        # Fires on every load so legacy saves get updated numbers.
+        if self._game_state and hasattr(self._game_state, 'fighters'):
+            _ovr_deltas = []
+            for _fid, _ftr in self._game_state.fighters.items():
+                _old = getattr(_ftr, 'overall_rating', 0)
+                _new = self._compute_ovr(_ftr)
+                if _old != _new:
+                    _ovr_deltas.append(_new - _old)
+                    _ftr.overall_rating = _new
+            if _ovr_deltas:
+                _avg = sum(_ovr_deltas) / len(_ovr_deltas)
+                print(f"  📊 [OVR4] Style-weighted recalc: "
+                      f"{len(_ovr_deltas)} fighters updated "
+                      f"(avg shift: {_avg:+.1f})")
+
         return {"success": True, "meta": meta}
 
     def get_web_saves(self) -> List[Dict[str, Any]]:
@@ -2601,16 +2617,8 @@ class GameBridge:
                 # Negative nudge (damage / loss) — direct, floor at 1.
                 setattr(fighter, stat, max(1.0, current + raw))
 
-        # Recalculate OVR (round, not int — same rationale as training paths)
-        _TRAINABLE = [
-            "strength","speed","cardio","chin","recovery",
-            "boxing","kicks","clinch_striking","striking_defense",
-            "takedowns","takedown_defense","top_control","submissions",
-            "guard","heart","fight_iq","composure",
-        ]
-        vals = [getattr(fighter, a, 0) for a in _TRAINABLE if hasattr(fighter, a)]
-        if vals:
-            fighter.overall_rating = round(sum(vals) / len(vals))
+        # Style-weighted OVR — see _compute_ovr for weight vectors.
+        fighter.overall_rating = self._compute_ovr(fighter)
 
         # Log what actually changed
         changed = {s: r for s, r in nudges.items() if r != 0}
@@ -4471,6 +4479,141 @@ class GameBridge:
         "ELITE":    100,
     }
 
+    # OVR4 — per-style stat weights for the OVR average. A Wrestler's
+    # OVR weights takedowns/td_defense/top_control higher than boxing.
+    # Weights >1 mean "this stat matters more for this style"; <1 means
+    # less. Average normalizes by sum of weights so result stays 0-100.
+    # Unknown styles fall through to Balanced (uniform 1.0 = flat avg,
+    # current behavior preserved). Stats not listed in a style's dict
+    # default to 1.0.
+    _STYLE_OVR_WEIGHTS = {
+        "Striker":         {"boxing":2.2,"kicks":1.8,"clinch_striking":1.4,
+                            "striking_defense":1.8,"speed":1.6,"fight_iq":1.2,
+                            "composure":1.2,"chin":1.1,"cardio":1.1,
+                            "takedowns":0.6,"takedown_defense":0.8,
+                            "top_control":0.5,"submissions":0.4,"guard":0.5,
+                            "strength":0.9,"recovery":1.0,"heart":1.0},
+        "Muay Thai":       {"boxing":1.8,"kicks":2.2,"clinch_striking":2.0,
+                            "striking_defense":1.6,"speed":1.4,"fight_iq":1.2,
+                            "composure":1.2,"chin":1.2,"cardio":1.3,
+                            "takedowns":0.7,"takedown_defense":0.9,
+                            "top_control":0.5,"submissions":0.4,"guard":0.5,
+                            "strength":1.0,"recovery":1.0,"heart":1.1},
+        "Karate":          {"boxing":1.6,"kicks":2.0,"striking_defense":2.0,
+                            "speed":2.0,"fight_iq":1.4,"composure":1.4,
+                            "clinch_striking":1.0,"chin":1.0,"cardio":1.1,
+                            "takedowns":0.5,"takedown_defense":0.8,
+                            "top_control":0.4,"submissions":0.4,"guard":0.5,
+                            "strength":0.8,"recovery":1.0,"heart":1.0},
+        "Counter Striker": {"fight_iq":2.2,"composure":2.0,"striking_defense":2.0,
+                            "speed":1.8,"boxing":1.6,"kicks":1.2,
+                            "clinch_striking":0.8,"chin":1.2,"cardio":1.1,
+                            "takedowns":0.5,"takedown_defense":0.8,
+                            "top_control":0.4,"submissions":0.4,"guard":0.5,
+                            "strength":0.8,"recovery":1.0,"heart":1.1},
+        "Point Fighter":   {"fight_iq":2.0,"composure":1.8,"speed":2.2,
+                            "striking_defense":1.8,"boxing":1.6,"kicks":1.4,
+                            "clinch_striking":0.7,"chin":0.9,"cardio":1.2,
+                            "takedowns":0.5,"takedown_defense":0.7,
+                            "top_control":0.4,"submissions":0.4,"guard":0.5,
+                            "strength":0.7,"recovery":1.0,"heart":1.0},
+        "BJJ Specialist":  {"submissions":2.4,"guard":2.2,"top_control":1.6,
+                            "takedowns":1.4,"takedown_defense":1.2,
+                            "fight_iq":1.3,"composure":1.2,"cardio":1.1,
+                            "boxing":0.7,"kicks":0.5,"clinch_striking":0.8,
+                            "striking_defense":0.8,"chin":1.0,
+                            "strength":1.0,"speed":0.9,"recovery":1.0,"heart":1.1},
+        "Wrestler":        {"takedowns":2.2,"takedown_defense":2.0,"top_control":1.8,
+                            "strength":1.6,"cardio":1.3,"heart":1.2,
+                            "submissions":0.9,"guard":0.8,"fight_iq":1.1,
+                            "boxing":0.8,"kicks":0.5,"clinch_striking":1.0,
+                            "striking_defense":0.8,"composure":1.0,
+                            "speed":1.0,"chin":1.1,"recovery":1.1},
+        "Ground & Pound":  {"takedowns":2.0,"top_control":1.8,"strength":2.0,
+                            "boxing":1.6,"chin":1.2,"heart":1.3,"cardio":1.2,
+                            "takedown_defense":1.4,"submissions":0.7,"guard":0.7,
+                            "kicks":0.6,"clinch_striking":1.0,
+                            "striking_defense":0.9,"composure":1.0,
+                            "speed":0.9,"fight_iq":1.0,"recovery":1.1},
+        "Sprawl & Brawl":  {"takedown_defense":2.2,"boxing":1.8,"chin":1.4,
+                            "heart":1.4,"strength":1.4,"striking_defense":1.6,
+                            "cardio":1.2,"takedowns":0.8,"top_control":0.8,
+                            "submissions":0.6,"guard":0.7,"kicks":1.0,
+                            "clinch_striking":1.1,"composure":1.1,
+                            "speed":1.0,"fight_iq":1.1,"recovery":1.1},
+        "Judo":            {"takedowns":2.0,"top_control":1.8,"takedown_defense":1.6,
+                            "clinch_striking":1.4,"strength":1.4,"guard":1.2,
+                            "submissions":1.2,"heart":1.1,"cardio":1.1,
+                            "boxing":0.8,"kicks":0.6,"striking_defense":0.9,
+                            "composure":1.0,"fight_iq":1.0,
+                            "speed":1.0,"chin":1.0,"recovery":1.0},
+        "Sambo":           {"takedowns":1.8,"submissions":1.8,"top_control":1.6,
+                            "strength":1.4,"takedown_defense":1.4,"guard":1.2,
+                            "boxing":1.2,"heart":1.2,"cardio":1.1,
+                            "kicks":0.8,"clinch_striking":1.0,
+                            "striking_defense":0.9,"composure":1.0,
+                            "fight_iq":1.1,"speed":0.9,"chin":1.0,"recovery":1.0},
+        "Pressure Fighter":{"chin":2.0,"heart":2.0,"cardio":1.8,"strength":1.6,
+                            "boxing":1.6,"clinch_striking":1.4,"recovery":1.3,
+                            "takedowns":0.9,"takedown_defense":1.0,
+                            "top_control":0.7,"submissions":0.6,"guard":0.7,
+                            "kicks":0.8,"striking_defense":1.0,"composure":1.2,
+                            "speed":0.9,"fight_iq":1.0},
+        "Clinch Fighter":  {"clinch_striking":2.2,"takedowns":1.6,"top_control":1.6,
+                            "strength":1.6,"chin":1.4,"heart":1.4,"cardio":1.4,
+                            "takedown_defense":1.2,"boxing":1.2,"guard":0.9,
+                            "submissions":0.9,"kicks":0.8,"striking_defense":1.0,
+                            "composure":1.1,"speed":0.9,"fight_iq":1.1,"recovery":1.1},
+        "Balanced":        {},  # empty = all stats at 1.0 (flat avg)
+    }
+
+    # Legacy-name → canonical-name redirect for the weights lookup.
+    # Catches world_init.py output (Grappler, Brawler) and any
+    # FighterRecord still carrying old strings (Orthodox Boxer, etc).
+    _STYLE_OVR_ALIASES = {
+        "Orthodox Boxer":    "Striker",
+        "Kickboxer":         "Striker",
+        "Kickboxing":        "Striker",
+        "Boxing":            "Striker",
+        "Counter-Striker":   "Counter Striker",
+        "Submission Artist": "BJJ Specialist",
+        "Submissions":       "BJJ Specialist",
+        "Grappler":          "Wrestler",
+        "Grappling":         "Wrestler",
+        "Brawler":           "Pressure Fighter",
+        "MMA Hybrid":        "Balanced",
+        "Hybrid":            "Balanced",
+    }
+
+    def _compute_ovr(self, fighter) -> int:
+        """Style-weighted OVR. Each style has a weight vector over
+        the 17 trainable stats. Weighted average normalizes by sum
+        of weights so result stays in 0-100 range.
+        Unknown/unmapped styles fall through to Balanced (flat avg).
+        """
+        _TRAINABLE = [
+            "strength","speed","cardio","chin","recovery",
+            "boxing","kicks","clinch_striking","striking_defense",
+            "takedowns","takedown_defense","top_control","submissions",
+            "guard","heart","fight_iq","composure",
+        ]
+        raw_style = str(getattr(fighter, 'fighting_style', '') or 'Balanced')
+        canonical = self._STYLE_OVR_ALIASES.get(raw_style, raw_style)
+        weights = self._STYLE_OVR_WEIGHTS.get(canonical,
+                  self._STYLE_OVR_WEIGHTS.get("Balanced", {}))
+
+        weighted_sum = 0.0
+        total_weight = 0.0
+        for stat in _TRAINABLE:
+            val = float(getattr(fighter, stat, 0))
+            w = weights.get(stat, 1.0)
+            weighted_sum += val * w
+            total_weight += w
+
+        if total_weight == 0:
+            return 65
+        return round(weighted_sum / total_weight)
+
     # Athletic vs technical stat split. Athletic base = body capacity
     # (physiology) — builds slowly with conditioning, persists for weeks
     # after training stops. Technical skills = motor patterns + ring IQ —
@@ -4601,19 +4744,8 @@ class GameBridge:
                 if hasattr(fighter, 'fatigue'):
                     fighter.fatigue = fatigue
 
-                # Recalculate overall_rating from all trainable stats
-                _TRAINABLE = [
-                    "strength","speed","cardio","chin","recovery",
-                    "boxing","kicks","clinch_striking","striking_defense",
-                    "takedowns","takedown_defense","top_control","submissions","guard",
-                    "heart","fight_iq","composure",
-                ]
-                stat_vals = [getattr(fighter, a, 0) for a in _TRAINABLE
-                             if hasattr(fighter, a)]
-                if stat_vals:
-                    # round() not int() — int truncates fractional progress,
-                    # leaving OVR sticky between integer boundaries.
-                    fighter.overall_rating = round(sum(stat_vals) / len(stat_vals))
+                # Style-weighted OVR — see _compute_ovr for weight vectors.
+                fighter.overall_rating = self._compute_ovr(fighter)
             else:
                 for attr in focus_attrs:
                     actual_gains[attr] = float(raw_gain)
@@ -4868,17 +5000,8 @@ class GameBridge:
                         if result.get("actual_gains") is not None:
                             result["actual_gains"][f"{attr} (coach)"] = round(effective, 2)
 
-                    _TRAINABLE = [
-                        "strength","speed","cardio","chin","recovery",
-                        "boxing","kicks","clinch_striking","striking_defense",
-                        "takedowns","takedown_defense","top_control","submissions","guard",
-                        "heart","fight_iq","composure",
-                    ]
-                    stat_vals = [getattr(real_fighter, a, 0) for a in _TRAINABLE
-                                 if hasattr(real_fighter, a)]
-                    if stat_vals:
-                        # round() not int() — see same rationale at line ~4413.
-                        real_fighter.overall_rating = round(sum(stat_vals) / len(stat_vals))
+                    # Style-weighted OVR — see _compute_ovr for weight vectors.
+                    real_fighter.overall_rating = self._compute_ovr(real_fighter)
 
             ovr_after = getattr(self._game_state.get_fighter(fid), 'overall_rating', ovr_before)
 
@@ -6236,16 +6359,8 @@ class GameBridge:
                     if gain > 0.05:
                         setattr(fighter, attr, min(100.0, current + gain))
 
-                # Recalculate OVR (round, not int — see player-side rationale).
-                _TRAINABLE = [
-                    "strength","speed","cardio","chin","recovery",
-                    "boxing","kicks","clinch_striking","striking_defense",
-                    "takedowns","takedown_defense","top_control","submissions","guard",
-                    "heart","fight_iq","composure",
-                ]
-                vals = [getattr(fighter, a, 0) for a in _TRAINABLE if hasattr(fighter, a)]
-                if vals:
-                    fighter.overall_rating = round(sum(vals) / len(vals))
+                # Style-weighted OVR — see _compute_ovr for weight vectors.
+                fighter.overall_rating = self._compute_ovr(fighter)
 
         # Sample output to show AI is developing
         if self._game_state:
