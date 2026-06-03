@@ -332,13 +332,32 @@
             </span>
         </div>
         <div style="padding:var(--spacing-md);">
+            {# Tier breakdown per emphasis — mirrors _TRAINING_GROUPS weights
+               in game_bridge.py. Keep aligned if weights change. #}
+            {% set emp_tiers = {
+                'STRIKING:boxing':   '🥊 Boxing ×1.0 · 🦵 Kicks ×0.5 · 👊 Clinch ×0.25 · 🛡 Defense ×0.25',
+                'STRIKING:kicks':    '🦵 Kicks ×1.0 · 🥊 Boxing ×0.5 · 👊 Clinch ×0.5 · 🛡 Defense ×0.25',
+                'STRIKING:clinch':   '👊 Clinch ×1.0 · 🥊 Boxing ×0.5 · 🦵 Kicks ×0.25 · 🛡 Defense ×0.25',
+                'STRIKING:defense':  '🛡 Defense ×1.0 · 🥊 Boxing ×0.25 · 🦵 Kicks ×0.25 · 👊 Clinch ×0.25',
+                'GRAPPLING:takedowns':        '🤼 Takedowns ×1.0 · ⬇️ Top Control ×0.5 · 🦅 TD Def ×0.25 · 🛡 Guard ×0.25',
+                'GRAPPLING:takedown_defense': '🦅 TD Defense ×1.0 · 🤼 Takedowns ×0.5 · 🛡 Guard ×0.25',
+                'GRAPPLING:top_control':      '⬇️ Top Control ×1.0 · 🤼 Takedowns ×0.5 · 🔒 Subs ×0.25 · 🛡 Guard ×0.25',
+                'GRAPPLING:submissions':      '🔒 Submissions ×1.0 · 🛡 Guard ×0.5 · ⬇️ Top Control ×0.25',
+                'GRAPPLING:guard':            '🛡 Guard ×1.0 · 🔒 Submissions ×0.5 · 🦅 TD Def ×0.25',
+                'CONDITIONING:cardio':    '❤️ Cardio ×1.0 · Recovery ×0.5 · 💪 Heart ×0.25',
+                'CONDITIONING:strength':  '⚡ Strength ×1.0 · ❤️ Cardio ×0.5 · 🦴 Chin ×0.25',
+                'CONDITIONING:toughness': '🦴 Chin ×1.0 · 💪 Heart ×0.5 · Recovery ×0.5',
+                'MENTAL:fight_iq':  '🧠 Fight IQ ×1.0 · 🧘 Composure ×0.5 · 🛡 Strike Def ×0.25',
+                'MENTAL:composure': '🧘 Composure ×1.0 · 🧠 Fight IQ ×0.5 · 💪 Heart ×0.25',
+                'SPARRING:sparring': '🥊 Boxing ×0.5 · 🦅 TD Def ×0.5 · 🧠 Fight IQ ×0.5 · ⚡ Speed ×0.5',
+            } %}
             {% for group in focus_groups %}
             <div style="margin-bottom:var(--spacing-md);">
                 <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
                             color:{{ group.color }};margin-bottom:var(--spacing-sm);">
                     {{ group.label }}
                 </div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:var(--spacing-sm);">
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:var(--spacing-sm);">
                     {% for fkey, fname, ficon, fdesc in group.options %}
                     {% set is_rec = (fkey == rec_focus) %}
                     {% set is_existing = (data.existing_focus == fkey) %}
@@ -360,6 +379,10 @@
                                style="display:none;" class="focus-group">
                         <div style="font-size:1.2rem;margin-bottom:2px;">{{ ficon }}</div>
                         <div style="font-family:var(--font-display);font-size:.78rem;color:var(--text-bright);">{{ fname }}</div>
+                        <div style="font-size:.48rem;color:var(--text-muted);
+                                    margin-top:2px;line-height:1.3;text-align:left;">
+                            {{ emp_tiers.get(fkey, '') }}
+                        </div>
                         <div style="font-size:.62rem;color:var(--text-muted);margin-top:2px;line-height:1.3;">{{ fdesc }}</div>
                     </label>
                     {% endfor %}

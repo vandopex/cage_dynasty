@@ -77,6 +77,25 @@
                     {% set saved_grp = '' %}
                     {% set saved_emp = '' %}
                 {% endif %}
+                {# Tier breakdown per emphasis — mirrors _TRAINING_GROUPS weights
+                   in game_bridge.py. Keep aligned if weights change. #}
+                {% set emp_tiers = {
+                    'STRIKING:boxing':   '🥊 Boxing ×1.0 · 🦵 Kicks ×0.5 · 👊 Clinch ×0.25 · 🛡 Defense ×0.25',
+                    'STRIKING:kicks':    '🦵 Kicks ×1.0 · 🥊 Boxing ×0.5 · 👊 Clinch ×0.5 · 🛡 Defense ×0.25',
+                    'STRIKING:clinch':   '👊 Clinch ×1.0 · 🥊 Boxing ×0.5 · 🦵 Kicks ×0.25 · 🛡 Defense ×0.25',
+                    'STRIKING:defense':  '🛡 Defense ×1.0 · 🥊 Boxing ×0.25 · 🦵 Kicks ×0.25 · 👊 Clinch ×0.25',
+                    'GRAPPLING:takedowns':        '🤼 Takedowns ×1.0 · ⬇️ Top Control ×0.5 · 🦅 TD Def ×0.25 · 🛡 Guard ×0.25',
+                    'GRAPPLING:takedown_defense': '🦅 TD Defense ×1.0 · 🤼 Takedowns ×0.5 · 🛡 Guard ×0.25',
+                    'GRAPPLING:top_control':      '⬇️ Top Control ×1.0 · 🤼 Takedowns ×0.5 · 🔒 Subs ×0.25 · 🛡 Guard ×0.25',
+                    'GRAPPLING:submissions':      '🔒 Submissions ×1.0 · 🛡 Guard ×0.5 · ⬇️ Top Control ×0.25',
+                    'GRAPPLING:guard':            '🛡 Guard ×1.0 · 🔒 Submissions ×0.5 · 🦅 TD Def ×0.25',
+                    'CONDITIONING:cardio':    '❤️ Cardio ×1.0 · Recovery ×0.5 · 💪 Heart ×0.25',
+                    'CONDITIONING:strength':  '⚡ Strength ×1.0 · ❤️ Cardio ×0.5 · 🦴 Chin ×0.25',
+                    'CONDITIONING:toughness': '🦴 Chin ×1.0 · 💪 Heart ×0.5 · Recovery ×0.5',
+                    'MENTAL:fight_iq':  '🧠 Fight IQ ×1.0 · 🧘 Composure ×0.5 · 🛡 Strike Def ×0.25',
+                    'MENTAL:composure': '🧘 Composure ×1.0 · 🧠 Fight IQ ×0.5 · 💪 Heart ×0.25',
+                    'SPARRING:sparring': '🥊 Boxing ×0.5 · 🦅 TD Def ×0.5 · 🧠 Fight IQ ×0.5 · ⚡ Speed ×0.5',
+                } %}
                 <input type="hidden" name="focus" value="{{ saved }}" data-role="focus-input">
 
                 {# Stage 1: group tiles #}
@@ -107,11 +126,15 @@
                     {% for emp_key, emp_label in emphases %}
                     <div data-role="emp-tile" data-emphasis="{{ emp_key }}"
                          onclick="pickEmphasis(this)"
-                         style="cursor:pointer;border-radius:4px;flex:1;min-width:62px;
+                         style="cursor:pointer;border-radius:4px;flex:1;min-width:120px;
                                 border:2px solid {% if saved_grp==grp and saved_emp==emp_key %}var(--info){% else %}var(--border-color){% endif %};
-                                padding:5px 4px;text-align:center;background:var(--bg-dark);
+                                padding:5px 6px;text-align:center;background:var(--bg-dark);
                                 transition:border-color .15s;">
-                        <div style="font-size:.66rem;color:var(--text-muted);">{{ emp_label }}</div>
+                        <div style="font-size:.66rem;color:var(--text-bright);">{{ emp_label }}</div>
+                        <div style="font-size:.48rem;color:var(--text-muted);
+                                    margin-top:2px;line-height:1.3;">
+                            {{ emp_tiers.get(grp + ':' + emp_key, '') }}
+                        </div>
                     </div>
                     {% endfor %}
                     </div>
