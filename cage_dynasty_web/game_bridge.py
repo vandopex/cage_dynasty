@@ -1463,22 +1463,6 @@ class GameBridge:
         meta = data.get("meta", {})
         print(f"✅ Game loaded from slot '{slot}' (Week {meta.get('week', '?')})")
 
-        # OVR4: recalculate all fighter OVRs with style weighting.
-        # Fires on every load so legacy saves get updated numbers.
-        if self._game_state and hasattr(self._game_state, 'fighters'):
-            _ovr_deltas = []
-            for _fid, _ftr in self._game_state.fighters.items():
-                _old = getattr(_ftr, 'overall_rating', 0)
-                _new = self._compute_ovr(_ftr)
-                if _old != _new:
-                    _ovr_deltas.append(_new - _old)
-                    _ftr.overall_rating = _new
-            if _ovr_deltas:
-                _avg = sum(_ovr_deltas) / len(_ovr_deltas)
-                print(f"  📊 [OVR4] Style-weighted recalc: "
-                      f"{len(_ovr_deltas)} fighters updated "
-                      f"(avg shift: {_avg:+.1f})")
-
         return {"success": True, "meta": meta}
 
     def get_web_saves(self) -> List[Dict[str, Any]]:
@@ -4585,11 +4569,38 @@ class GameBridge:
         "Hybrid":            "Balanced",
     }
 
+    def _read_stat(self, fighter, stat) -> float:
+        """Read a per-attribute stat with _fighter_data fallback.
+
+        During training, code does setattr(fighter, stat, val) and the
+        attribute exists transiently on the FighterRecord. But after
+        save/load, FighterRecord comes back from from_dict with only
+        its declared fields — per-stat attributes don't survive as
+        attrs (they live in _fighter_data per Ship #32). This helper
+        prefers the attribute when present, falls back to _fighter_data
+        when not, so _compute_ovr works in both transient-attr and
+        cold-load scenarios.
+        """
+        val = getattr(fighter, stat, None)
+        if val is not None:
+            return float(val)
+        if self._game_state:
+            fdata = self._game_state._fighter_data.get(
+                getattr(fighter, 'fighter_id', ''), {})
+            return float(fdata.get(stat, 0))
+        return 0.0
+
     def _compute_ovr(self, fighter) -> int:
-        """Style-weighted OVR. Each style has a weight vector over
-        the 17 trainable stats. Weighted average normalizes by sum
-        of weights so result stays in 0-100 range.
-        Unknown/unmapped styles fall through to Balanced (flat avg).
+        """Style-weighted OVR. Weights are normalized to sum to
+        len(_TRAINABLE) so the result stays in the same 0-100
+        range as the pre-OVR4 flat average. Higher weights shift
+        emphasis toward style-relevant stats without inflating
+        or deflating the overall number.
+
+        Legacy-save guard: if fewer than 10 of 17 stats have
+        real data, preserve the saved overall_rating. Prevents
+        legacy saves (pre-Ship-#32) from having OVRs nuked by
+        missing stat data.
         """
         _TRAINABLE = [
             "strength","speed","cardio","chin","recovery",
@@ -4597,22 +4608,30 @@ class GameBridge:
             "takedowns","takedown_defense","top_control","submissions",
             "guard","heart","fight_iq","composure",
         ]
+
+        # Legacy-save guard: count stats with real data.
+        # Pre-Ship-#32 saves have no per-stat entries — preserve
+        # the saved overall_rating rather than computing from zeros.
+        stat_vals = [self._read_stat(fighter, s) for s in _TRAINABLE]
+        stats_with_data = sum(1 for v in stat_vals if v > 0)
+        if stats_with_data < 10:
+            return int(getattr(fighter, 'overall_rating', 65) or 65)
+
         raw_style = str(getattr(fighter, 'fighting_style', '') or 'Balanced')
         canonical = self._STYLE_OVR_ALIASES.get(raw_style, raw_style)
         weights = self._STYLE_OVR_WEIGHTS.get(canonical,
                   self._STYLE_OVR_WEIGHTS.get("Balanced", {}))
 
-        weighted_sum = 0.0
-        total_weight = 0.0
-        for stat in _TRAINABLE:
-            val = float(getattr(fighter, stat, 0))
-            w = weights.get(stat, 1.0)
-            weighted_sum += val * w
-            total_weight += w
+        raw_weights = [weights.get(stat, 1.0) for stat in _TRAINABLE]
+        total_raw = sum(raw_weights)
+        n = len(_TRAINABLE)
+        scale = n / total_raw if total_raw > 0 else 1.0
+        normalized = [w * scale for w in raw_weights]
 
-        if total_weight == 0:
-            return 65
-        return round(weighted_sum / total_weight)
+        weighted_sum = sum(
+            v * w for v, w in zip(stat_vals, normalized)
+        )
+        return round(weighted_sum / n)
 
     # Athletic vs technical stat split. Athletic base = body capacity
     # (physiology) — builds slowly with conditioning, persists for weeks
