@@ -603,6 +603,19 @@
         {% if loop.index <= 10 %}
         {% set is_win = fight.result == 'W' %}
         {% set method = fight.method or 'DEC' %}
+        {# Belt context — cross-reference fight.week against belt_history.
+           Namespace pattern: {% set %} inside {% for %} doesn't escape loop scope. #}
+        {% set bns = namespace(won=false, defended=false) %}
+        {% for r in (belt_history or []) %}
+            {% if r.won_week == fight.week %}
+                {% set bns.won = true %}
+            {% elif r.won_week < fight.week
+                    and (r.is_active or (r.lost_week is not none
+                    and r.lost_week > fight.week))
+                    and fight.result == 'W' %}
+                {% set bns.defended = true %}
+            {% endif %}
+        {% endfor %}
         <div style="display:flex;align-items:center;gap:var(--spacing-md);
                     padding:var(--spacing-sm) var(--spacing-md);
                     border-bottom:1px solid var(--border-color);
@@ -614,6 +627,11 @@
                              color:{% if is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
                     {% if is_win %}WIN{% else %}LOSS{% endif %}
                 </span>
+                {% if bns.won %}
+                <span title="Won championship" style="margin-left:4px;">🏆</span>
+                {% elif bns.defended %}
+                <span title="Title defense" style="margin-left:4px;">🛡️</span>
+                {% endif %}
             </div>
 
             {# Opponent + event #}
