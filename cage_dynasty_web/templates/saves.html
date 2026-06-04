@@ -91,7 +91,12 @@
 </div>
 {% endif %}
 
-<div style="text-align:center;">
+<div style="text-align:center;display:flex;gap:var(--spacing-md);
+            justify-content:center;margin-top:var(--spacing-xl);">
     <a href="{{ url_for('dashboard') }}" class="btn btn-outline">← Dashboard</a>
+    <form action="{{ url_for('new_game_session') }}" method="POST" style="margin:0;"
+          onsubmit="return confirm('Start a new game? Your active session will be cleared. Save files are NOT affected.');">
+        <button type="submit" class="btn btn-outline">🆕 New Game</button>
+    </form>
 </div>
 {% endblock %}

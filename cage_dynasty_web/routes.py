@@ -182,7 +182,15 @@ def register_routes(app):
     def new_game():
         """New game start screen."""
         return render_template('new_game.html')
-    
+
+    @app.route('/new-game-session', methods=['POST'])
+    def new_game_session():
+        """Clear active in-memory session, redirect to new game setup.
+        Save files are NOT deleted."""
+        app.game_bridge = type(app.game_bridge)()
+        session.clear()
+        return redirect(url_for('new_game'))
+
     def _ceiling_to_display_grade(ceiling: int) -> str:
         """Local alias — must match ceiling_to_display_grade in game_bridge.py."""
         if ceiling >= 94: return "A+"
