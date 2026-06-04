@@ -25,6 +25,12 @@
                color:var(--text-bright);margin:0;">Weekend Recap</h1>
 </div>
 
+{# ── Continue (top — duplicated at bottom) ── #}
+<div style="text-align:center;padding:0 0 var(--spacing-lg);">
+    <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg"
+       style="font-size:1.1rem;min-width:240px;">Continue →</a>
+</div>
+
 {# ── Training week / next fight banner ── #}
 {% if recap.upcoming_fight %}
 {% set uf = recap.upcoming_fight %}
