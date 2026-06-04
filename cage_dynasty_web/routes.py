@@ -487,6 +487,9 @@ def register_routes(app):
         # Ship A: rolling 4-week training history per fighter
         training_history = bridge.get_training_history()
 
+        # Expiring contracts — fighters with <=2 fights left on their deals
+        expiring_contracts = bridge.get_expiring_contracts()
+
         return render_template('dashboard.html',
             camp=camp,
             fighters=fighters,
@@ -504,6 +507,7 @@ def register_routes(app):
             scout_tips=scout_tips,
             digest=digest,
             training_history=training_history,
+            expiring_contracts=expiring_contracts,
         )
     
     # =========================================================================
@@ -643,6 +647,13 @@ def register_routes(app):
         contract_status  = bridge.get_contract_status(fighter_id) if fighter_id in player_ids else None
         contract_options = bridge.get_contract_options_for_tier(fighter_id) if fighter_id in player_ids else []
 
+        # Contract ask — flavored re-sign message when contract is winding down
+        contract_ask = None
+        if (contract_status
+                and contract_status.get('fights_remaining', 99) <= 2
+                and fighter_id in player_ids):
+            contract_ask = bridge.get_contract_ask(fighter_id)
+
         return render_template('fighter_profile.html',
             fighter=fighter,
             attributes=attributes,
@@ -655,6 +666,7 @@ def register_routes(app):
             watch_entry=watch_entry,
             watch_categories=watch_categories,
             contract_status=contract_status,
+            contract_ask=contract_ask,
             amateur_record=amateur_record,
             contract_options=contract_options,
             week=bridge.week_number,
@@ -1708,11 +1720,22 @@ def register_routes(app):
         bridge = get_bridge()
         contract_fights = int(request.form.get('contract_fights', 3))
         result = bridge.resign_fighter(fighter_id, contract_fights)
+        from flask import flash
         if result.get('success'):
-            from flask import flash
-            flash(result['message'], 'success')
+            # Morale-flavored outcome — read the post-resign morale
+            # (resign_fighter bumps morale +15, so 80 is reachable)
+            contract = bridge.get_contract_status(fighter_id)
+            morale = contract.get('morale', 75) if contract else 75
+            if morale >= 80:
+                outcome = "They're fired up about the new deal."
+            elif morale >= 60:
+                outcome = "They accepted — a fair deal for both sides."
+            elif morale >= 40:
+                outcome = "They signed, but they want to see results."
+            else:
+                outcome = "They stayed — but they'll need to see improvement."
+            flash(f"✅ Contract extended! {outcome}", "success")
         else:
-            from flask import flash
             flash(result.get('error', 'Could not re-sign.'), 'error')
         return redirect(url_for('fighter_profile', fighter_id=fighter_id))
 

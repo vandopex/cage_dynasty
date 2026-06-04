@@ -95,6 +95,31 @@
 </div>
 {% endif %}
 
+{# ── Contract alerts — fighters with <=2 fights left on their deal ── #}
+{% if expiring_contracts %}
+<div style="background:var(--bg-card);border:1px solid var(--warning-color, #f59e0b);
+            border-radius:8px;padding:var(--spacing-md);
+            margin-bottom:var(--spacing-md);">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--warning-color, #f59e0b);margin-bottom:var(--spacing-sm);">
+        📋 Contract Alerts
+    </div>
+    {% for c in expiring_contracts %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:4px 0;font-size:.82rem;">
+        <a href="{{ url_for('fighter_profile', fighter_id=c.fighter_id) }}"
+           style="color:var(--text-bright);text-decoration:none;">
+            {{ c.fighter_name }}
+        </a>
+        <span style="color:var(--text-muted);font-size:.72rem;">
+            {{ c.fights_left }} fight{{ 's' if c.fights_left != 1 else '' }} left
+            · {{ c.morale_label }}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── Main 2-column layout ── #}
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
             align-items:start;">

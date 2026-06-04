@@ -11477,6 +11477,92 @@ class GameBridge:
             ),
         }
 
+    def _morale_label(self, morale: int) -> str:
+        """Short label for morale value — mirrors get_contract_status tiers."""
+        if morale >= 86: return "🔥 Fired up"
+        if morale >= 71: return "😊 Happy"
+        if morale >= 51: return "🙂 Content"
+        if morale >= 31: return "😐 Disgruntled"
+        return "😠 Unhappy"
+
+    def get_expiring_contracts(self) -> List[Dict[str, Any]]:
+        """Return contracts with <=2 fights remaining for player camp fighters.
+        Used by dashboard alert."""
+        expiring = []
+        if not self._game_state:
+            return expiring
+        player_camp_id = self._game_state.player_camp_id
+        for fid, contract in self._contracts.items():
+            if contract.get('camp_id') != player_camp_id:
+                continue
+            fights_left = contract.get('fights_remaining', 0)
+            if fights_left <= 2:
+                fighter = self._game_state.get_fighter(fid)
+                if not fighter:
+                    continue
+                expiring.append({
+                    "fighter_id":   fid,
+                    "fighter_name": getattr(fighter, 'name', fid),
+                    "fights_left":  fights_left,
+                    "morale":       contract.get('morale', 75),
+                    "morale_label": self._morale_label(contract.get('morale', 75)),
+                })
+        return expiring
+
+    def get_contract_ask(self, fighter_id: str) -> Dict[str, Any]:
+        """Generate the fighter's re-sign ask message based on morale and
+        recent record. Returns flavor text and a suggested purse multiplier."""
+        contract = self._contracts.get(fighter_id, {})
+        morale = contract.get('morale', 75)
+        fighter = self._game_state.get_fighter(fighter_id) if self._game_state else None
+
+        # Recent record from fight history
+        history = getattr(fighter, 'fight_history', []) or []
+        recent = history[-3:] if len(history) >= 3 else history
+        recent_wins = sum(1 for f in recent if f.get('result') == 'W')
+        win_streak = 0
+        for f in reversed(history):
+            if f.get('result') == 'W':
+                win_streak += 1
+            else:
+                break
+
+        # Build the ask
+        if morale >= 80 and win_streak >= 3:
+            msg = (f"I've won {win_streak} straight. "
+                   f"I think I've earned a raise.")
+            multiplier = 1.3
+        elif morale >= 80 and recent_wins >= 2:
+            msg = ("Things are going well here. "
+                   "I want to stay — let's get a deal done.")
+            multiplier = 1.15
+        elif morale >= 60:
+            msg = ("I'm happy with how things are going. "
+                   "Fair terms and I'll sign.")
+            multiplier = 1.0
+        elif morale >= 40:
+            msg = ("It's been a tough run. "
+                   "I just want to keep competing.")
+            multiplier = 0.9
+        elif win_streak == 0 and len(history) >= 2:
+            msg = ("I need a change. "
+                   "If you want me to stay, show me you believe in me.")
+            multiplier = 1.1  # unhappy but wants validation
+        else:
+            msg = ("I'm not sure this is working out. "
+                   "Make me an offer.")
+            multiplier = 1.0
+
+        base_purse = contract.get('purse_per_fight', 5000)
+        suggested = int(base_purse * multiplier)
+        return {
+            "message":    msg,
+            "multiplier": multiplier,
+            "suggested":  suggested,
+            "morale":     morale,
+            "win_streak": win_streak,
+        }
+
     def resign_fighter(self, fighter_id: str,
                        contract_fights: int = 3) -> Dict[str, Any]:
         """Re-sign an existing roster fighter to a new contract."""

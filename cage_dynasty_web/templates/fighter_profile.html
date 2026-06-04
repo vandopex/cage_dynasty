@@ -369,6 +369,24 @@
         {# Re-sign section #}
         {% if contract_status.warning or contract_status.fights_remaining <= 2 %}
         <div style="border-top:1px solid var(--border-color);padding-top:var(--spacing-md);">
+
+            {# Fighter's ask — morale + streak driven flavor #}
+            {% if contract_ask %}
+            <div style="background:var(--bg-dark);border-left:3px solid var(--gold);
+                        padding:var(--spacing-sm) var(--spacing-md);
+                        border-radius:4px;margin-bottom:var(--spacing-md);
+                        font-size:.85rem;color:var(--text-secondary);
+                        font-style:italic;">
+                "{{ contract_ask.message }}"
+                {% if contract_ask.win_streak >= 3 %}
+                <div style="font-size:.72rem;color:var(--neon-green);
+                            margin-top:4px;font-style:normal;">
+                    🔥 {{ contract_ask.win_streak }}-fight win streak
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div style="font-size:.72rem;color:var(--text-muted);margin-bottom:var(--spacing-sm);">
                 Re-sign with a new contract:
             </div>
