@@ -1017,11 +1017,17 @@ class GameBridge:
 
             # Store coach data for passive training and advice
             if coach_data:
+                _ct = coach_data.get("traits", [])
+                _traits_norm = [t if isinstance(t, str) else getattr(t, 'value', str(t)) for t in _ct]
+                _arch = coach_data.get("archetype", "")
+                _arch_norm = _arch.value if hasattr(_arch, 'value') else str(_arch)
                 self._coach = {
                     "name":      coach_data.get("name",      "Head Coach"),
                     "specialty": coach_data.get("specialty", "boxing").lower(),
                     "rating":    int(coach_data.get("rating", 60)),
                     "salary":    int(coach_data.get("salary", 800)),
+                    "traits":    _traits_norm,
+                    "archetype": _arch_norm,
                 }
                 print(f"  ✅ Coach: {self._coach['name']} ({self._coach['specialty']}, {self._coach['rating']} rating)")
 
@@ -1032,6 +1038,8 @@ class GameBridge:
                     "specialty":         self._coach["specialty"],
                     "rating":            self._coach["rating"],
                     "salary":            self._coach["salary"],
+                    "traits":            _traits_norm,
+                    "archetype":         _arch_norm,
                     "total_weeks":       COACH_DEFAULT_CONTRACT_WEEKS,
                     "weeks_completed":   0,
                     "weeks_remaining":   COACH_DEFAULT_CONTRACT_WEEKS,
@@ -4940,6 +4948,9 @@ class GameBridge:
             # Fight damage adds extra risk — higher fatigue equivalent
             _effective_fatigue = min(100, _fatigue + _fight_dmg * 0.5)
             _prob = calculate_training_injury_probability(_int_val, _effective_fatigue)
+            # INJURY_RISK coach trait — pushes training injury chance up 40%, capped at 25%
+            if 'INJURY_RISK' in (self._coach.get('traits', []) if getattr(self, '_coach', None) else []):
+                _prob = min(_prob * 1.4, 0.25)
             if _int_val > 0 and _ir.random() < _prob:
                 _injured = True
                 injury = generate_training_injury(fighter_id)
@@ -5155,7 +5166,41 @@ class GameBridge:
             # both are technical (×1.2), so the post-split rate is steeper
             # but the 2-attr coverage is narrow — the boost compensates.
             _boost = self._ARCHETYPE_BOOST.get(coach_focus, 1.0)
-            per_attr_gain = (passive_gain / len(coach_attrs)) * _boost
+
+            # Coach trait multipliers — composable, floor at 50% gains
+            _traits = self._coach.get('traits', []) if self._coach else []
+            _trait_mult = 1.0
+            _fighter_age = getattr(fighter, 'age', 25) or 25
+            _contract_cur = self._contracts.get(fid, {})
+            _morale_cur = _contract_cur.get('morale', 75)
+            _recent_loss = False
+            _hist_cur = getattr(fighter, 'fight_history', []) or []
+            if _hist_cur and isinstance(_hist_cur[-1], dict) and _hist_cur[-1].get('result') == 'L':
+                _recent_loss = True
+            for _trait in _traits:
+                if _trait == 'TECHNICAL_GENIUS':
+                    _trait_mult += 0.15
+                elif _trait == 'DIAMOND_POLISHER' and _fighter_age < 28:
+                    _trait_mult += 0.25
+                elif _trait == 'VETERANS_TOUCH' and _fighter_age >= 30:
+                    _trait_mult += 0.20
+                elif _trait == 'TASKMASTER':
+                    _trait_mult += 0.15
+                elif _trait == 'MOTIVATOR' and _morale_cur < 60:
+                    _trait_mult += 0.15
+                elif _trait == 'IRON_SHARPENER':
+                    _trait_mult += 0.10
+                elif _trait == 'BURNED_OUT':
+                    _trait_mult -= 0.15
+                elif _trait == 'FAIR_WEATHER' and _recent_loss:
+                    _trait_mult -= 0.20
+                elif _trait == 'OLD_SCHOOL':
+                    _trait_mult += 0.10
+                elif _trait == 'MODERN_METHODS' and _fighter_age < 26:
+                    _trait_mult += 0.15
+            _trait_mult = max(0.5, _trait_mult)
+
+            per_attr_gain = (passive_gain / len(coach_attrs)) * _boost * _trait_mult
             real_fighter = self._game_state.get_fighter(fid)
             # Per-fighter potential ceiling for the coach passive boost too.
             _fp = self._game_state._fighter_data.get(fid, {}).get("potential")
@@ -11167,6 +11212,16 @@ class GameBridge:
                     elif last_result == 'L':
                         contract['morale'] = max(morale_floor,
                             contract.get('morale', 75) - (loss_penalty + ls * streak_penalty))
+                    # Coach trait morale effects — fire on fight week
+                    _coach_traits = (self._coach.get('traits', [])
+                                     if getattr(self, '_coach', None) else [])
+                    if 'TASKMASTER' in _coach_traits:
+                        contract['morale'] = max(morale_floor,
+                            contract.get('morale', 75) - 3)
+                    if 'MOTIVATOR' in _coach_traits and contract.get('morale', 75) < 60:
+                        contract['morale'] = min(100, contract.get('morale', 75) + 5)
+                    if 'PLAYERS_COACH' in _coach_traits:
+                        contract['morale'] = min(100, contract.get('morale', 75) + 3)
             else:
                 # Inactivity morale decay — founder: 1 pt/wk after 14w; others: 2 pt/wk after 10w
                 last_fight_week = history[-1].get('week', 0) if history and isinstance(history[-1], dict) else 0
@@ -11391,6 +11446,8 @@ class GameBridge:
             "morale":            morale,
             "morale_label":      morale_label,
             "morale_color":      morale_color,
+            "traits":            c.get("traits", []),
+            "archetype":         c.get("archetype", ""),
         }
 
     def fire_coach(self) -> Dict[str, Any]:
@@ -11414,11 +11471,17 @@ class GameBridge:
         if contract_weeks not in allowed:
             return {"success": False, "error": f"Your {tier} camp can only offer contracts of {allowed} weeks"}
         # Build new contract + sync _coach dict
+        _ct = coach_data.get("traits", [])
+        _traits_norm = [t if isinstance(t, str) else getattr(t, 'value', str(t)) for t in _ct]
+        _arch = coach_data.get("archetype", "")
+        _arch_norm = _arch.value if hasattr(_arch, 'value') else str(_arch)
         self._coach = {
             "name":      coach_data.get("name", "Head Coach"),
             "specialty": coach_data.get("specialty", "boxing").lower(),
             "rating":    int(coach_data.get("rating", 60)),
             "salary":    int(coach_data.get("salary", 800)),
+            "traits":    _traits_norm,
+            "archetype": _arch_norm,
         }
         self._coach_contract = {
             "coach_id":          coach_data.get("id", "hired_coach"),
@@ -11426,6 +11489,8 @@ class GameBridge:
             "specialty":         self._coach["specialty"],
             "rating":            self._coach["rating"],
             "salary":            self._coach["salary"],
+            "traits":            _traits_norm,
+            "archetype":         _arch_norm,
             "total_weeks":       contract_weeks,
             "weeks_completed":   0,
             "weeks_remaining":   contract_weeks,

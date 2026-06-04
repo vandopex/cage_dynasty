@@ -10,6 +10,35 @@ import sys
 import traceback
 
 
+# Trait display labels — maps internal enum strings to (label, category)
+# pairs. Category drives pill color in templates (positive/negative/
+# personality/special). Kept route-side so the bridge stays template-agnostic.
+_TRAIT_DISPLAY = {
+    'TECHNICAL_GENIUS':  ('Technical Genius',  'positive'),
+    'DIAMOND_POLISHER':  ('Fighter Developer', 'positive'),
+    'VETERANS_TOUCH':    ('Veteran Whisperer', 'positive'),
+    'IRON_SHARPENER':    ('Iron Conditioning', 'positive'),
+    'MOTIVATOR':         ('Hype Man',          'positive'),
+    'CALM_CORNER':       ('Smart Taper',       'positive'),
+    'EYE_FOR_TALENT':    ('Talent Spotter',    'positive'),
+    'TASKMASTER':        ('Taskmaster',        'personality'),
+    'PLAYERS_COACH':     ("Player's Coach",    'personality'),
+    'OLD_SCHOOL':        ('Old School',        'personality'),
+    'MODERN_METHODS':    ('Modern Methods',    'personality'),
+    'DISCIPLINARIAN':    ('Disciplinarian',    'personality'),
+    'ANALYTICAL':        ('Analytical',        'personality'),
+    'INTENSE':           ('Intense',           'personality'),
+    'BURNED_OUT':        ('Burned Out',        'negative'),
+    'INJURY_RISK':       ('Overtrainer',       'negative'),
+    'FAIR_WEATHER':      ('Fair Weather',      'negative'),
+    'PRIMA_DONNA':       ('Prima Donna',       'negative'),
+    'CLASHING_EGO':      ('Clashing Ego',      'negative'),
+    'OUTDATED':          ('Outdated Methods',  'negative'),
+    'LOYAL':             ('Loyal',             'special'),
+    'AMBITIOUS':         ('Ambitious',         'special'),
+}
+
+
 def _generate_available_coaches(tier):
     """Generate coaches available for hiring based on tier.
 
@@ -41,15 +70,27 @@ def _generate_available_coaches(tier):
         for c in coaches:
             spec = getattr(c, "specialty", "mma").lower()
             label, icon = _SPEC_LABEL.get(spec, ("Head Coach", "🧠"))
+            # Normalize traits: accept enum values, enum objects, or strings.
+            _raw_traits = getattr(c, 'traits', []) or []
+            _traits = []
+            for _t in _raw_traits:
+                _key = _t if isinstance(_t, str) else getattr(_t, 'name', None) or getattr(_t, 'value', None) or str(_t)
+                # Try uppercase enum-name lookup first (e.g. TECHNICAL_GENIUS),
+                # then the display-name as-is (e.g. "Technical Genius").
+                _key_upper = _key.upper().replace(' ', '_').replace("'", '')
+                _traits.append(_key_upper)
             result.append({
-                "id":          c.coach_id,
-                "name":        c.name,
-                "specialty":   spec,
-                "label":       label,
-                "icon":        icon,
-                "rating":      c.skill_level,
-                "salary":      c.weekly_salary,
-                "description": f"{c.personality_desc}. {c.get_bonus_description()}"
+                "id":            c.coach_id,
+                "name":          c.name,
+                "specialty":     spec,
+                "label":         label,
+                "icon":          icon,
+                "rating":        c.skill_level,
+                "salary":        c.weekly_salary,
+                "description":   f"{c.personality_desc}. {c.get_bonus_description()}",
+                "traits":        _traits,
+                "trait_display": [_TRAIT_DISPLAY.get(t, (t.replace('_',' ').title(), 'personality'))
+                                  for t in _traits],
             })
         return result
     except ImportError as e:
@@ -1807,6 +1848,11 @@ def register_routes(app):
         except Exception:
             fdata = {}
         coach_status = bridge.get_coach_contract_status()
+        if coach_status.get('has_coach'):
+            coach_status['trait_display'] = [
+                _TRAIT_DISPLAY.get(t, (t.replace('_', ' ').title(), 'personality'))
+                for t in coach_status.get('traits', [])
+            ]
         return render_template('facility.html',
             week=bridge.week_number,
             facility=fdata,
