@@ -3555,7 +3555,20 @@ class GameBridge:
         offer = next((o for o in self._fight_offers if o["offer_id"] == offer_id), None)
         if not offer:
             return {"success": False, "error": "Offer not found"}
-        
+
+        # Block if either fighter is injured
+        if INJURY_AVAILABLE and self._injury_system:
+            _pfid = offer.get("fighter_id", "")
+            _ofid = offer.get("opponent_id", "")
+            if _pfid and not self._injury_system.is_cleared_to_fight(_pfid):
+                return {"success": False,
+                        "error": f"{offer.get('fighter_name','Your fighter')} "
+                                 f"is injured and cannot fight."}
+            if _ofid and not self._injury_system.is_cleared_to_fight(_ofid):
+                return {"success": False,
+                        "error": f"{offer.get('opponent_name','Opponent')} "
+                                 f"is injured and unavailable."}
+
         # Schedule the fight
         fight = {
             "fight_id": f"fight_{offer['fighter_id']}_{offer['opponent_id']}",
@@ -6850,6 +6863,17 @@ class GameBridge:
             if target_fighter_id in ids:
                 name = getattr(ai_fighter, 'name', target_fighter_id)
                 return {"success": False, "error": f"{name} is already booked for another fight"}
+
+        # Block if player fighter is injured
+        if INJURY_AVAILABLE and self._injury_system:
+            if not self._injury_system.is_cleared_to_fight(player_fighter_id):
+                _pname = getattr(player_fighter, 'name', player_fighter_id)
+                return {"success": False,
+                        "error": f"{_pname} is injured and cannot fight."}
+            if not self._injury_system.is_cleared_to_fight(target_fighter_id):
+                _tname = getattr(ai_fighter, 'name', target_fighter_id)
+                return {"success": False,
+                        "error": f"{_tname} is injured and unavailable."}
 
         # Block if target has a truly active (unresolved) negotiation
         _resolved = ("COMPLETED", "BROKEN_DOWN", "AI_DECLINED")
