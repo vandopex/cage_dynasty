@@ -214,15 +214,15 @@
             ] %}
             <div style="text-align:center;padding:var(--spacing-sm);border-radius:6px;
                         background:var(--bg-dark);
-                        border:1px solid {% if adv == 'fighter1' or adv == 'You' %}var(--neon-green){% elif adv == 'fighter2' or adv == 'Opponent' %}var(--blood-red){% else %}var(--border-color){% endif %};">
+                        border:1px solid {% if adv == -1 %}var(--neon-green){% elif adv == 1 %}var(--blood-red){% else %}var(--border-color){% endif %};">
                 <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;
                             color:var(--text-muted);margin-bottom:3px;">{{ label }}</div>
                 <div style="font-family:var(--font-display);font-size:.82rem;
-                            color:{% if adv == 'fighter1' or adv == 'You' %}var(--neon-green)
-                                  {% elif adv == 'fighter2' or adv == 'Opponent' %}var(--blood-red)
+                            color:{% if adv == -1 %}var(--neon-green)
+                                  {% elif adv == 1 %}var(--blood-red)
                                   {% else %}var(--text-muted){% endif %};">
-                    {% if adv == 'fighter1' or adv == 'You' %}You ✓
-                    {% elif adv == 'fighter2' or adv == 'Opponent' %}Opponent
+                    {% if adv == -1 %}You ✓
+                    {% elif adv == 1 %}Opponent
                     {% else %}Even{% endif %}
                 </div>
             </div>
