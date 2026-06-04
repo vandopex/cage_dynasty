@@ -625,6 +625,12 @@ class WebFighter:
     injury_weeks_out: int  = 0
     camp_id:          Optional[str] = None
     camp_name:        str  = ""
+    # Loss method breakdown (default 0 so legacy saves load cleanly;
+    # populated from FighterRecord.ko_losses / sub_losses if present).
+    ko_losses:        int  = 0
+    sub_losses:       int  = 0
+    # Career FOTN awards — incremented when fighter is part of FOTN selection.
+    career_fotn_awards: int = 0
 
 
 @dataclass
@@ -2040,6 +2046,14 @@ class GameBridge:
                             self._week_purses_earned  += FOTN_BONUS
                     else:
                         fr["is_fotn"] = False  # Explicitly clear
+                # Career FOTN awards — both fighters in the selected fight get +1
+                for _fid in [fotn_result.get('fighter1_id', ''),
+                             fotn_result.get('fighter2_id', '')]:
+                    if _fid and self._game_state:
+                        _ff = self._game_state.get_fighter(_fid)
+                        if _ff:
+                            _ff.career_fotn_awards = getattr(
+                                _ff, 'career_fotn_awards', 0) + 1
                 if ai_event:
                     for fr in ai_event.get("fights", []):
                         if fr.get("fight_id") == fotn_fid:
@@ -2896,8 +2910,10 @@ class GameBridge:
         loser.losses += 1
         if method in ("KO", "TKO"):
             winner.ko_wins += 1
+            loser.ko_losses = getattr(loser, 'ko_losses', 0) + 1
         elif method == "SUB":
             winner.sub_wins += 1
+            loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
 
         # ── Judges scorecards (decisions only) ──────────────────
         scorecard_data = None
@@ -4032,6 +4048,9 @@ class GameBridge:
             draws=getattr(f, 'draws', 0),
             ko_wins=f.ko_wins,
             sub_wins=f.sub_wins,
+            ko_losses=getattr(f, 'ko_losses', 0) or 0,
+            sub_losses=getattr(f, 'sub_losses', 0) or 0,
+            career_fotn_awards=getattr(f, 'career_fotn_awards', 0) or 0,
             record_str=f.record_str,
             overall_rating=f.overall_rating,
             potential=f.potential,
@@ -4427,6 +4446,9 @@ class GameBridge:
             draws=fighter.draws,
             ko_wins=fighter.ko_wins,
             sub_wins=fighter.sub_wins,
+            ko_losses=getattr(fighter, 'ko_losses', 0) or 0,
+            sub_losses=getattr(fighter, 'sub_losses', 0) or 0,
+            career_fotn_awards=getattr(fighter, 'career_fotn_awards', 0) or 0,
             record_str=fighter.record,
             overall_rating=ovr,
             potential=int(fdata.get("potential", ovr + 8)),
@@ -7779,8 +7801,12 @@ class GameBridge:
             pre_l = pre_rank_snapshot.get(loser.fighter_id)
 
             winner.wins += 1; loser.losses += 1
-            if method in ("KO","TKO"): winner.ko_wins += 1
-            elif method == "SUB":       winner.sub_wins += 1
+            if method in ("KO","TKO"):
+                winner.ko_wins += 1
+                loser.ko_losses = getattr(loser, 'ko_losses', 0) + 1
+            elif method == "SUB":
+                winner.sub_wins += 1
+                loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
             self._apply_post_fight_camp_record(winner, loser, fight, method)
 
             # Track fight damage for next camp injury risk
@@ -8073,8 +8099,10 @@ class GameBridge:
             loser.losses  += 1
             if method in ("KO", "TKO"):
                 winner.ko_wins  += 1
+                loser.ko_losses = getattr(loser, 'ko_losses', 0) + 1
             elif method == "SUB":
                 winner.sub_wins += 1
+                loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
             self._apply_post_fight_camp_record(
                 winner, loser,
                 {"event_name": event_name, "is_title_fight": is_title},
@@ -10229,8 +10257,12 @@ class GameBridge:
 
         # Update records
         winner.wins  += 1; loser.losses += 1
-        if method in ("KO", "TKO"): winner.ko_wins  += 1
-        elif method in ("SUB",):     winner.sub_wins += 1
+        if method in ("KO", "TKO"):
+            winner.ko_wins  += 1
+            loser.ko_losses = getattr(loser, 'ko_losses', 0) + 1
+        elif method in ("SUB",):
+            winner.sub_wins += 1
+            loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
         self._apply_post_fight_camp_record(winner, loser, fight, method)
 
         # Post-fight experience feedback — read per-round stats from

@@ -150,8 +150,11 @@
             </div>
             {% endif %}
 
-            {# Record — W(KO)-L(KO)-D, broadcast format #}
-            {% set ko_l = fighter.fight_history|default([])|selectattr('result','equalto','L')|selectattr('method','in',['KO','TKO'])|list|length %}
+            {# Record — W(KO)-L(KO)-D, broadcast format.
+               ko_l/sub_l now read persistent fields populated on every fight,
+               not the truncated last-10 fight_history slice. #}
+            {% set ko_l = fighter.ko_losses if fighter.ko_losses is defined else 0 %}
+            {% set sub_l = fighter.sub_losses if fighter.sub_losses is defined else 0 %}
             {% set draws = fighter.draws if fighter.draws is defined else 0 %}
             <div style="font-family:var(--font-display);font-size:2.2rem;
                         color:var(--text-bright);margin-bottom:2px;letter-spacing:-.02em;
@@ -200,6 +203,19 @@
             <div style="margin-top:var(--spacing-md);">
                 <span style="font-family:var(--font-display);font-size:.9rem;color:var(--blood-red);">
                     📉 {{ fighter.lose_streak }}-Fight Losing Streak
+                </span>
+            </div>
+            {% endif %}
+
+            {# FOTN career awards badge #}
+            {% if fighter.career_fotn_awards is defined and fighter.career_fotn_awards > 0 %}
+            <div style="margin-top:var(--spacing-sm);">
+                <span style="background:rgba(255,100,0,.15);
+                             border:1px solid var(--accent-orange, #ff6400);
+                             color:var(--accent-orange, #ff6400);
+                             border-radius:4px;padding:3px 8px;
+                             font-size:.72rem;font-weight:600;">
+                    🔥 {{ fighter.career_fotn_awards }}× FOTN
                 </span>
             </div>
             {% endif %}
@@ -384,6 +400,42 @@
         </div>
         {% endif %}
     </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════
+   CHAMPIONSHIP REIGNS — Ship #30 surface for belt_history
+══════════════════════════════════════════════════════════════ #}
+{% if belt_history %}
+<div style="background:var(--bg-card);border:1px solid var(--border-color);
+            border-radius:8px;padding:var(--spacing-md);
+            margin-bottom:var(--spacing-md);">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--gold);margin-bottom:var(--spacing-sm);">
+        🏆 Championship Reigns
+    </div>
+    {% for reign in belt_history %}
+    <div style="display:flex;align-items:center;gap:8px;
+                padding:6px 0;
+                border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};
+                font-size:.82rem;">
+        <span style="color:var(--gold);">🥇</span>
+        <span style="color:var(--text-bright);font-weight:600;">
+            {{ reign.weight_class }}
+        </span>
+        <span style="color:var(--text-muted);font-size:.72rem;">
+            Won from {{ reign.won_from_name or 'Inaugural' }}
+            · {{ reign.successful_defenses or 0 }} defense{{ 's' if (reign.successful_defenses or 0) != 1 else '' }}
+            {% if reign.is_active %}
+            · <span style="color:var(--gold);">Current champion</span>
+            {% elif reign.lost_to_name %}
+            · Lost to {{ reign.lost_to_name }}
+            {% else %}
+            · Vacated
+            {% endif %}
+        </span>
+    </div>
+    {% endfor %}
 </div>
 {% endif %}
 
