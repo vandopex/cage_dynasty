@@ -1440,6 +1440,12 @@ class GameBridge:
         raw_cards = data.get("upcoming_cards", {})
         self._upcoming_cards = {int(k): v for k, v in raw_cards.items()}
 
+        # Lock any card already at capacity so Phase 3 skips rebuilding it.
+        # Legacy saves predate the locked flag — derive truth from count.
+        for _wk_lock, _card_lock in self._upcoming_cards.items():
+            if len(_card_lock.get("fights", [])) >= CARD_TARGET_FIGHTS:
+                _card_lock["locked"] = True
+
         # Restore aging state
         if self._aging_system and "aging_processed" in data:
             self._aging_system._last_processed_year = {
@@ -2011,10 +2017,11 @@ class GameBridge:
                 all_card_fights.extend(ai_event.get("fights", []))
 
             fotn_result = None
+            fotn_score  = 0.0
             if len(all_card_fights) >= 2:
                 try:
                     if FOTN_AVAILABLE:
-                        fotn_result, _ = select_fotn(all_card_fights)
+                        fotn_result, fotn_score = select_fotn(all_card_fights)
                     else:
                         fotn_result = self._select_fotn_builtin(all_card_fights)
                 except Exception:
@@ -2041,12 +2048,31 @@ class GameBridge:
                 f1n = fotn_result.get("fighter1_name", "")
                 f2n = fotn_result.get("fighter2_name", "")
                 # Populate event.fotn on the containing event for archive surface
-                fotn_dict = {
-                    "fight_id":      fotn_fid,
-                    "fighter1_name": f1n,
-                    "fighter2_name": f2n,
-                    "bonus":         FOTN_BONUS,
-                }
+                # Use systems/fotn factory so score, excitement tier, method,
+                # and was_title_fight reach the templates. Override bonus key
+                # name (factory produces bonus_amount; templates read bonus).
+                # Fighter IDs are set explicitly — factory falls back to
+                # winner_id/loser_id which can differ from f1/f2 ordering.
+                if FOTN_AVAILABLE and hasattr(_fm, 'create_fotn_result'):
+                    _fotn_obj = _fm.create_fotn_result(fotn_result, fotn_score, f1n, f2n)
+                    fotn_dict = _fotn_obj.to_dict()
+                    fotn_dict['fight_id']        = fotn_fid
+                    fotn_dict['fighter1_id']     = fotn_result.get('fighter1_id', '')
+                    fotn_dict['fighter2_id']     = fotn_result.get('fighter2_id', '')
+                    fotn_dict['excitement_tier'] = get_excitement_tier(fotn_score)
+                    fotn_dict['score']           = round(fotn_score, 1)
+                    fotn_dict['bonus']           = FOTN_BONUS
+                else:
+                    fotn_dict = {
+                        "fight_id":        fotn_fid,
+                        "fighter1_name":   f1n,
+                        "fighter2_name":   f2n,
+                        "fighter1_id":     fotn_result.get('fighter1_id', ''),
+                        "fighter2_id":     fotn_result.get('fighter2_id', ''),
+                        "bonus":           FOTN_BONUS,
+                        "excitement_tier": "",
+                        "score":           0,
+                    }
                 current_wk = self._game_state.week_number if self._game_state else 0
                 for ev in self._completed_events:
                     if ev.get("week") == current_wk and any(
@@ -9054,6 +9080,7 @@ class GameBridge:
             "week":        target_week,
             "fights":      [],
             "is_ai_event": True,
+            "locked":      False,
         }
 
     def _build_card_for_week(self, target_week: int) -> Dict[str, Any]:
@@ -9341,12 +9368,15 @@ class GameBridge:
                 if len(card["fights"]) >= target_count:
                     print(f"  ⏭️  [LEAD-TIME DISPLACED] {f1.name} vs {f2.name} "
                           f"dropped (DFC {target_week} full)")
+                    card["locked"] = True
                     continue  # card full, drop (next top-up regenerates)
                 if slot in ("co_main", "main_event"):
                     co_main_used += 1
                 fight_dict = self._make_scheduled_fight(
                     f1, f2, wc, event_name, target_week, slot, is_title=is_title)
                 card["fights"].append(fight_dict)
+                if len(card["fights"]) >= target_count:
+                    card["locked"] = True
             else:
                 # Different lead-time target — defer to queue for hand-off
                 _q_event_name = self._dfc_label(computed_target_week)
@@ -9682,6 +9712,15 @@ class GameBridge:
                       f"{q_fight.get('fighter2_name','?')} dropped (broken pair)")
         self._ai_deferred_bookings = _kept_q
 
+        # Phase 1b: defensive unlock sweep — if any card's fight count fell
+        # below capacity (e.g. external code removed a fight), clear the
+        # lock so Phase 3 can top it up. Self-healing — lock converges to
+        # truth based on actual fight count.
+        for _wk_unlock, _card_unlock in self._upcoming_cards.items():
+            if (_card_unlock.get("locked", False)
+                    and len(_card_unlock.get("fights", [])) < CARD_TARGET_FIGHTS):
+                _card_unlock["locked"] = False
+
         # Phase 2: hand-off — drain queue items whose target_week is in window
         _to_drain = [q for q in self._ai_deferred_bookings
                      if current + 1 <= q.get("week", 0) <= current + 6]
@@ -9696,6 +9735,13 @@ class GameBridge:
             # enters window (DFC 45 reached 29 fights pre-fix). Dropped
             # queue items become eligible in next advance's candidate
             # generation since they're no longer in any sink.
+            if self._upcoming_cards[target].get("locked", False):
+                print(f"  ⚠️  [LEAD-TIME OVERFLOW] "
+                      f"{q_fight.get('fighter1_name','?')} vs "
+                      f"{q_fight.get('fighter2_name','?')} dropped "
+                      f"(DFC {target} locked)")
+                _drained_ids.add(q_fight.get("fight_id", ""))
+                continue
             if len(self._upcoming_cards[target]["fights"]) >= CARD_TARGET_FIGHTS:
                 print(f"  ⚠️  [LEAD-TIME OVERFLOW] {q_fight.get('fighter1_name','?')} vs "
                       f"{q_fight.get('fighter2_name','?')} dropped (DFC {target} at capacity)")
@@ -9712,7 +9758,13 @@ class GameBridge:
         # (always-call so drain-only cards get topped up; idempotent because
         #  Site 4's reuse-existing logic preserves existing fights and
         #  target_count gate prevents over-fill)
+        # Locked cards skip rebuild — saves the per-WC candidate scan when
+        # the card is already at capacity. Lock clears in Phase 1 if any
+        # fight drops the card below capacity.
         for w in range(current + 1, current + 7):
+            existing = self._upcoming_cards.get(w, {})
+            if existing.get("locked", False):
+                continue  # Card full and locked — skip rebuild
             self._upcoming_cards[w] = self._build_card_for_week(w)
 
     def get_upcoming_events(self, limit: int = 8, max_weeks_out: int = 10) -> List[Dict[str, Any]]:
