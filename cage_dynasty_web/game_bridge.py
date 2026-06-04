@@ -1954,6 +1954,7 @@ class GameBridge:
                                             "matchup_quality":  "Excellent",
                                             "source":           "vacant_title",
                                             "vacant_division":  wc,
+                                            "created_week":     current_week,
                                         }
                                         self._fight_offers.append(_offer)
                                         self._news_items.insert(0, {
@@ -2276,12 +2277,42 @@ class GameBridge:
             self._yearly_awards = []
         self._yearly_awards.append({"year": year, "week": week, "awards": awards})
 
+    def _expire_stale_offers(self, max_age_weeks: int = 3) -> None:
+        """Drop offers older than max_age_weeks. Fires once per advance.
+        Legacy offers without created_week get stamped on first sight."""
+        if not self._game_state:
+            return
+        current = self._game_state.week_number
+        kept, dropped = [], []
+        for o in self._fight_offers:
+            created = o.get("created_week")
+            if created is None:
+                o["created_week"] = current
+                kept.append(o)
+                continue
+            if current - created > max_age_weeks:
+                dropped.append(o)
+            else:
+                kept.append(o)
+        self._fight_offers = kept
+        for o in dropped:
+            self._news_items.insert(0, {
+                "headline": (f"⌛ Offer lapsed: "
+                             f"{o.get('fighter_name','?')} vs "
+                             f"{o.get('opponent_name','?')} "
+                             f"({o.get('event_name','?')})"),
+                "category": "signing",
+                "week":     current,
+            })
+
     def _maybe_generate_inbound_offers(self) -> None:
         """
         Promotion occasionally approaches player fighters with fight offers.
-        20% chance per idle fighter per week. Opponent is ±3 ranks from player.
+        Tier-aware probability per idle fighter per week. Opponent is
+        ±3 ranks from player (champion only takes top-5 contenders).
         Creates passive pressure — player isn't always the aggressor.
         """
+        self._expire_stale_offers()
         import random
         if not self._game_state:
             return
@@ -2307,8 +2338,18 @@ class GameBridge:
             if INJURY_AVAILABLE and self._injury_system:
                 if not self._injury_system.is_cleared_to_fight(fid):
                     continue
-            # 20% chance this week
-            if random.random() > 0.20:
+            # Tier-aware offer probability — higher ranked fighters
+            # attract more offers. Champion only gets top-5 challengers.
+            _pr = self._get_fighter_rank(pf)
+            if _pr == 0:                        # Champion
+                _offer_chance = 0.40
+            elif _pr is not None and _pr <= 5:  # Top 5
+                _offer_chance = 0.30
+            elif _pr is not None and _pr <= 15: # Top 15
+                _offer_chance = 0.20
+            else:                               # Unranked
+                _offer_chance = 0.10
+            if random.random() > _offer_chance:
                 continue
 
             # Find an appropriate opponent: ±3 ranks
@@ -2316,7 +2357,7 @@ class GameBridge:
             if not division:
                 continue
 
-            player_rank = self._get_fighter_rank(pf)
+            player_rank = _pr  # already computed above
             candidates  = []
 
             for ranked_id in division.rankings:
@@ -2335,6 +2376,11 @@ class GameBridge:
                 elif abs((opp_rank or 99) - player_rank) <= 3:
                     candidates.append(opp)
 
+            # Champion only fights top-5 contenders
+            if _pr == 0:
+                candidates = [c for c in candidates
+                              if self._get_fighter_rank(c) is not None
+                              and self._get_fighter_rank(c) <= 5]
             if not candidates:
                 continue
 
@@ -2390,6 +2436,7 @@ class GameBridge:
                 "matchup_quality": "Excellent" if risk_level <= 2 else "Good" if risk_level <= 3 else "Fair",
                 "accept_chance":   75,
                 "source":          "promotion",
+                "created_week":    week,
             }
             self._fight_offers.append(offer)
 
