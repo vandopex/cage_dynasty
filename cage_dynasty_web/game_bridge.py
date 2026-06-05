@@ -5310,8 +5310,22 @@ class GameBridge:
                 else:
                     _g, _e = self._FOCUS_LEGACY_MAP.get(
                         str(_focus_str).lower(), ("SPARRING", "sparring"))
-                _domain_stats = self._TRAINING_GROUPS.get(
-                    _g.upper(), {}).get("domain", [_focus_str])
+                if _g.upper() == "SPARRING":
+                    # Sparring = maintenance week — keeps all attributes
+                    # warm. Full decay shield; gains remain low/thin
+                    # (unchanged — sparring still distributes gains
+                    # across 7 stats at normal per-stat rate).
+                    _domain_stats = [
+                        "boxing", "kicks", "clinch_striking",
+                        "striking_defense", "takedowns",
+                        "takedown_defense", "top_control",
+                        "submissions", "guard", "cardio",
+                        "strength", "chin", "recovery", "heart",
+                        "fight_iq", "composure", "speed",
+                    ]
+                else:
+                    _domain_stats = self._TRAINING_GROUPS.get(
+                        _g.upper(), {}).get("domain", [str(_focus_str)])
                 self._maintenance_system.record_training_camp_activity(
                     fid, _domain_stats, self._game_state.week_number,
                 )
