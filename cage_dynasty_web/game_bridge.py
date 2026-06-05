@@ -1775,6 +1775,9 @@ class GameBridge:
             # Ship K2: proactive weight class alerts
             self._check_weight_class_alerts()
 
+            # Ship K3: AI fighters consider weight class moves
+            self._check_ai_weight_class_moves()
+
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
 
@@ -11678,6 +11681,240 @@ class GameBridge:
                     "week": current_week,
                 })
                 self._wc_alert_fired[fid] = current_week
+
+    def _check_ai_weight_class_moves(self) -> None:
+        """AI fighters consider moving weight class based on losing
+        streaks and body frame. 26-week cooldown. Champions never
+        move. Injury-blocked fighters skip."""
+        if not self._game_state:
+            return
+        current_week = self._game_state.week_number
+        if not hasattr(self, '_ai_wc_move_cooldown'):
+            self._ai_wc_move_cooldown = {}
+
+        _WC = ["Strawweight","Flyweight","Bantamweight",
+               "Featherweight","Lightweight","Welterweight",
+               "Middleweight","Light Heavyweight","Heavyweight"]
+
+        import random
+        player_ids = {pf.fighter_id for pf in self.get_player_fighters()}
+
+        for fid, fighter in self._game_state.fighters.items():
+            # Skip player fighters, champions, inactive
+            if fid in player_ids:
+                continue
+            if getattr(fighter, 'is_champion', False):
+                continue
+            if not getattr(fighter, 'is_active', True):
+                continue
+
+            # Cooldown check
+            last_move = self._ai_wc_move_cooldown.get(fid, -99)
+            if current_week - last_move < 26:
+                continue
+
+            wc = getattr(fighter, 'weight_class', '')
+            if wc not in _WC:
+                continue
+            idx = _WC.index(wc)
+
+            bf = int(self._game_state._fighter_data.get(
+                fid, {}).get('body_frame', 5) or 5)
+            lose_streak = getattr(fighter, 'lose_streak', 0) or 0
+            age = getattr(fighter, 'age', 25) or 25
+
+            moved = False
+
+            # Move up: aging large-frame fighter on losing streak
+            if (lose_streak >= 2 and bf >= 7 and age >= 30
+                    and idx < len(_WC) - 1):
+                if random.random() < 0.20:
+                    new_class = _WC[idx + 1]
+                    fighter.weight_class = new_class
+                    old_div = self._game_state.divisions.get(wc)
+                    if old_div:
+                        old_div.rankings = [r for r in old_div.rankings if r != fid]
+                    self._update_rankings_after_fight(wc)
+                    self._update_rankings_after_fight(new_class)
+                    self._ai_wc_move_cooldown[fid] = current_week
+                    self._news_items.insert(0, {
+                        "headline": (f"💪 {fighter.name} moves up to "
+                                     f"{new_class} after struggling at {wc}."),
+                        "category": "signing",
+                        "week": current_week,
+                    })
+                    moved = True
+
+            # Move down: small-frame fighter on extended losing streak
+            if (not moved and lose_streak >= 3 and bf <= 3 and idx > 0):
+                if random.random() < 0.15:
+                    new_class = _WC[idx - 1]
+                    fighter.weight_class = new_class
+                    old_div = self._game_state.divisions.get(wc)
+                    if old_div:
+                        old_div.rankings = [r for r in old_div.rankings if r != fid]
+                    self._update_rankings_after_fight(wc)
+                    self._update_rankings_after_fight(new_class)
+                    self._ai_wc_move_cooldown[fid] = current_week
+                    self._news_items.insert(0, {
+                        "headline": (f"📉 {fighter.name} drops to {new_class} "
+                                     f"— looking for a fresh start."),
+                        "category": "signing",
+                        "week": current_week,
+                    })
+
+    def move_weight_class(self, fighter_id: str,
+                          new_class: str) -> Dict[str, Any]:
+        """Move a player fighter to an adjacent weight class.
+        Vacates belt if champion. Cancels scheduled fights.
+        Removes from old division rankings. Updates weight_class.
+        12-week per-fighter cooldown tracked in _wc_move_cooldown."""
+        if not self._game_state:
+            return {"success": False, "error": "No active game."}
+
+        _WC = ["Strawweight","Flyweight","Bantamweight",
+               "Featherweight","Lightweight","Welterweight",
+               "Middleweight","Light Heavyweight","Heavyweight"]
+
+        fighter = self._game_state.get_fighter(fighter_id)
+        if not fighter:
+            return {"success": False, "error": "Fighter not found."}
+
+        old_class = fighter.weight_class
+        if new_class not in _WC:
+            return {"success": False,
+                    "error": f"{new_class} is not a valid weight class."}
+
+        # Adjacency gate — only ±1 class allowed
+        try:
+            old_idx = _WC.index(old_class)
+            new_idx = _WC.index(new_class)
+        except ValueError:
+            return {"success": False, "error": "Invalid weight class."}
+        if abs(new_idx - old_idx) != 1:
+            return {"success": False,
+                    "error": "Can only move one weight class at a time."}
+
+        # Injury gate
+        if INJURY_AVAILABLE and self._injury_system:
+            if not self._injury_system.is_cleared_to_fight(fighter_id):
+                return {"success": False,
+                        "error": f"{fighter.name} is injured and "
+                                 f"cannot change weight class right now."}
+
+        # Cooldown gate — 12 weeks between moves
+        if not hasattr(self, '_wc_move_cooldown'):
+            self._wc_move_cooldown = {}
+        current_week = self._game_state.week_number
+        last_move = self._wc_move_cooldown.get(fighter_id, -99)
+        if current_week - last_move < 12:
+            weeks_left = 12 - (current_week - last_move)
+            return {"success": False,
+                    "error": f"{fighter.name} must wait {weeks_left} "
+                             f"more week(s) before changing class again."}
+
+        direction = "up" if new_idx > old_idx else "down"
+        direction_label = "moves up to" if direction == "up" else "drops down to"
+
+        # 1. Vacate belt if champion
+        if fighter.is_champion:
+            fighter.is_champion = False
+            old_div = self._game_state.divisions.get(old_class)
+            if old_div:
+                old_div.champion_id = None
+                old_div.champion_name = None
+            self._news_items.insert(0, {
+                "headline": (f"🏆 {fighter.name} vacates the "
+                             f"{old_class} title to move "
+                             f"{direction} to {new_class}."),
+                "category": "title",
+                "week": current_week,
+            })
+
+        # 2. Cancel scheduled fights
+        cancelled = [f for f in self._scheduled_fights
+                     if f.get("fighter1_id") == fighter_id
+                     or f.get("fighter2_id") == fighter_id]
+        for f in cancelled:
+            self._scheduled_fights.remove(f)
+            opp = (f.get("fighter2_name")
+                   if f.get("fighter1_id") == fighter_id
+                   else f.get("fighter1_name"))
+            self._news_items.insert(0, {
+                "headline": (f"🚫 {fighter.name} vs {opp} cancelled "
+                             f"— {fighter.name} {direction_label} "
+                             f"{new_class}."),
+                "category": "signing",
+                "week": current_week,
+            })
+
+        # Cancel from upcoming cards — unlock if card drops below capacity
+        for wk_card in self._upcoming_cards.values():
+            wk_card["fights"] = [
+                f for f in wk_card.get("fights", [])
+                if f.get("fighter1_id") != fighter_id
+                and f.get("fighter2_id") != fighter_id
+            ]
+            if len(wk_card.get("fights", [])) < CARD_TARGET_FIGHTS:
+                wk_card["locked"] = False
+
+        # Cancel from deferred queue
+        self._ai_deferred_bookings = [
+            q for q in self._ai_deferred_bookings
+            if q.get("fighter1_id") != fighter_id
+            and q.get("fighter2_id") != fighter_id
+        ]
+
+        # Cancel fight offers involving this fighter
+        self._fight_offers = [
+            o for o in self._fight_offers
+            if o.get("fighter_id") != fighter_id
+            and o.get("opponent_id") != fighter_id
+        ]
+
+        # 3. Remove from old division rankings + decrement count
+        old_div = self._game_state.divisions.get(old_class)
+        if old_div:
+            old_div.rankings = [r for r in old_div.rankings if r != fighter_id]
+            old_div.fighter_count = max(0, old_div.fighter_count - 1)
+
+        # 4. Update weight class on the FighterRecord
+        fighter.weight_class = new_class
+        # If moving to natural class, ensure _fighter_data is in sync.
+        # setdefault avoids losing the write when fighter_id isn't in the dict.
+        nat = getattr(fighter, 'natural_weight_class', '') or ''
+        if nat == new_class:
+            _fd = self._game_state._fighter_data.setdefault(fighter_id, {})
+            _fd['natural_weight_class'] = new_class
+
+        # 5. Update new division fighter count
+        new_div = self._game_state.divisions.get(new_class)
+        if new_div:
+            new_div.fighter_count += 1
+
+        # 6. Refresh rankings for both divisions
+        self._update_rankings_after_fight(old_class)
+        self._update_rankings_after_fight(new_class)
+
+        # 7. Set cooldown
+        self._wc_move_cooldown[fighter_id] = current_week
+
+        # 8. News headline
+        icon = "💪" if direction == "up" else "📉"
+        self._news_items.insert(0, {
+            "headline": (f"{icon} {fighter.name} {direction_label} "
+                         f"{new_class}! They'll begin their campaign "
+                         f"unranked in the new division."),
+            "category": "signing",
+            "week": current_week,
+        })
+
+        self._clear_cache()
+        msg = (f"{fighter.name} has moved {direction} to {new_class}. "
+               f"They start unranked in the new division.")
+        if cancelled:
+            msg += f" {len(cancelled)} scheduled fight(s) cancelled."
+        return {"success": True, "message": msg}
 
     def _morale_label(self, morale: int) -> str:
         """Short label for morale value — mirrors get_contract_status tiers."""

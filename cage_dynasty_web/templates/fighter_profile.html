@@ -347,6 +347,48 @@
                class="btn btn-outline btn-sm btn-block" style="font-size:.7rem;text-align:center;">
                 ⚔️ Challenge
             </a>
+
+            {# Weight class move — player fighters only, ±1 class allowed #}
+            {% if player_ids and fighter.fighter_id in player_ids %}
+            {% set _wc_list = ["Strawweight","Flyweight","Bantamweight",
+                               "Featherweight","Lightweight","Welterweight",
+                               "Middleweight","Light Heavyweight","Heavyweight"] %}
+            {% if fighter.weight_class in _wc_list %}
+            {% set _cur_idx = _wc_list.index(fighter.weight_class) %}
+            <form action="{{ url_for('move_weight_class', fighter_id=fighter.fighter_id) }}"
+                  method="POST" style="margin-top:var(--spacing-sm);">
+                <div style="font-size:.7rem;color:var(--text-muted);margin-bottom:4px;">
+                    ⚖️ Change Weight Class
+                    {% if fighter.natural_weight_class
+                          and fighter.natural_weight_class != fighter.weight_class %}
+                    <span style="color:var(--warning, #f59e0b);font-size:.65rem;">
+                        · Natural: {{ fighter.natural_weight_class }}
+                    </span>
+                    {% endif %}
+                </div>
+                <div style="display:flex;gap:6px;">
+                    {% if _cur_idx > 0 %}
+                    <button type="submit" name="new_class"
+                            value="{{ _wc_list[_cur_idx - 1] }}"
+                            class="btn btn-outline btn-sm"
+                            style="font-size:.72rem;"
+                            onclick="return confirm('Move {{ fighter.name }} down to {{ _wc_list[_cur_idx - 1] }}? Any scheduled fights will be cancelled.');">
+                        ↓ {{ _wc_list[_cur_idx - 1] }}
+                    </button>
+                    {% endif %}
+                    {% if _cur_idx < 8 %}
+                    <button type="submit" name="new_class"
+                            value="{{ _wc_list[_cur_idx + 1] }}"
+                            class="btn btn-outline btn-sm"
+                            style="font-size:.72rem;"
+                            onclick="return confirm('Move {{ fighter.name }} up to {{ _wc_list[_cur_idx + 1] }}? Any scheduled fights will be cancelled.');">
+                        ↑ {{ _wc_list[_cur_idx + 1] }}
+                    </button>
+                    {% endif %}
+                </div>
+            </form>
+            {% endif %}
+            {% endif %}
         </div>
     </div>
 </div>

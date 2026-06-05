@@ -710,6 +710,7 @@ def register_routes(app):
             contract_ask=contract_ask,
             amateur_record=amateur_record,
             contract_options=contract_options,
+            player_ids=player_ids,
             week=bridge.week_number,
         )
     
@@ -1754,6 +1755,24 @@ def register_routes(app):
             from flask import flash
             flash(result.get('error', 'Could not sign fighter.'), 'error')
         return redirect(url_for('amateur_circuit'))
+
+    @app.route('/fighter/<fighter_id>/move-class', methods=['POST'])
+    def move_weight_class(fighter_id):
+        """Move a player fighter up or down one weight class."""
+        bridge = get_bridge()
+        new_class = request.form.get('new_class', '').strip()
+        if not new_class:
+            flash("No weight class selected.", "error")
+            return redirect(url_for('fighter_profile',
+                                    fighter_id=fighter_id))
+        result = bridge.move_weight_class(fighter_id, new_class)
+        if result.get('success'):
+            flash(result['message'], 'success')
+        else:
+            flash(result.get('error', 'Could not move weight class.'),
+                  'error')
+        return redirect(url_for('fighter_profile',
+                                fighter_id=fighter_id))
 
     @app.route('/fighter/<fighter_id>/resign', methods=['POST'])
     def resign_fighter(fighter_id):
