@@ -93,6 +93,10 @@ class FighterRecord:
     name: str
     nickname: Optional[str] = None
     weight_class: str = ""
+    # Body frame relative to weight class (1=very small, 10=very large).
+    # Drives cut severity in the engine and division-move alerts.
+    natural_weight_class: str = ""
+    body_frame: int = 5
     camp_id: Optional[str] = None
     contract_id: Optional[str] = None
     is_champion: bool = False
@@ -131,6 +135,8 @@ class FighterRecord:
             "name": self.name,
             "nickname": self.nickname,
             "weight_class": self.weight_class,
+            "natural_weight_class": self.natural_weight_class,
+            "body_frame": self.body_frame,
             "camp_id": self.camp_id,
             "contract_id": self.contract_id,
             "is_champion": self.is_champion,

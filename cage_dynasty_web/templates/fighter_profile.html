@@ -192,6 +192,18 @@
                 {% if fighter.reach %}<span>↔️ {{ fighter.reach }}" reach</span>{% endif %}
             </div>
 
+            {# Weight cut indicator — natural class differs from current #}
+            {% if fighter.natural_weight_class
+                  and fighter.natural_weight_class != fighter.weight_class %}
+            <div style="font-size:.72rem;color:var(--warning, #f59e0b);
+                        margin-top:4px;">
+                ✂️ Cutting from {{ fighter.natural_weight_class }}
+                {% if fighter.body_frame and fighter.body_frame >= 8 %}
+                · Natural {{ fighter.natural_weight_class }}
+                {% endif %}
+            </div>
+            {% endif %}
+
             {# Streak #}
             {% if fighter.win_streak >= 3 %}
             <div style="margin-top:var(--spacing-md);">

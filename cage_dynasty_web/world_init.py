@@ -307,6 +307,11 @@ class GeneratedFighter:
     retirement_age: Optional[int] = None
     retirement_week: Optional[int] = None
 
+    # Body frame relative to weight class. Drives cut severity and
+    # division-move alerts. Assigned in generate_fighters() after construction.
+    body_frame: int = 5
+    natural_weight_class: str = ""
+
 
 @dataclass
 class GeneratedCamp:
@@ -2199,7 +2204,26 @@ class WorldInitializer:
                     skill_tier=tier,
                     age_range=age_range,
                 )
-                
+
+                # Body frame — gaussian-distributed size relative to class
+                # (1=very small, 10=very large). Drives cut severity and
+                # division-move signals.
+                _bf = int(random.gauss(5, 1.8))
+                _bf = max(1, min(10, _bf))
+                fighter.body_frame = _bf
+
+                # Natural weight class: where the fighter belongs without
+                # cutting. Frames 1-3: could drop a class. 4-7: native.
+                # 8-10: could move up.
+                _idx = WEIGHT_CLASSES.index(fighter.weight_class) \
+                    if fighter.weight_class in WEIGHT_CLASSES else 4
+                if _bf >= 8 and _idx < len(WEIGHT_CLASSES) - 1:
+                    fighter.natural_weight_class = WEIGHT_CLASSES[_idx + 1]
+                elif _bf <= 3 and _idx > 0:
+                    fighter.natural_weight_class = WEIGHT_CLASSES[_idx - 1]
+                else:
+                    fighter.natural_weight_class = fighter.weight_class
+
                 self.fighters[fighter.fighter_id] = fighter
         
         print(f"Generated {len(self.fighters)} fighters")
@@ -2548,6 +2572,12 @@ class WorldInitializer:
             # Add fight history if the record supports it
             if hasattr(record, 'fight_history'):
                 record.fight_history = fighter.fight_history.copy() if fighter.fight_history else []
+            # Ship K2: body frame + natural weight class for cut mechanics
+            if hasattr(record, 'body_frame'):
+                record.body_frame = getattr(fighter, 'body_frame', 5)
+            if hasattr(record, 'natural_weight_class'):
+                record.natural_weight_class = getattr(
+                    fighter, 'natural_weight_class', fighter.weight_class)
             self.game_state.fighters[fighter.fighter_id] = record
 
         # Ship #32: persist world-gen's actual attribute values into
@@ -2570,6 +2600,10 @@ class WorldInitializer:
             # somehow predates the potential_ceiling field on GeneratedFighter.
             _fdata['potential'] = int(getattr(fighter, 'potential_ceiling',
                                               int(fighter.skill_rating) + 8))
+            # Ship K2: persist body_frame + natural_weight_class
+            _fdata['body_frame'] = int(getattr(fighter, 'body_frame', 5))
+            _fdata['natural_weight_class'] = str(getattr(
+                fighter, 'natural_weight_class', fighter.weight_class))
             self.game_state._fighter_data[fighter.fighter_id] = _fdata
     
     def _update_division_state(self, weight_class: str) -> None:

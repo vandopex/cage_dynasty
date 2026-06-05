@@ -631,6 +631,10 @@ class WebFighter:
     sub_losses:       int  = 0
     # Career FOTN awards — incremented when fighter is part of FOTN selection.
     career_fotn_awards: int = 0
+    # Body frame relative to weight class (1=very small, 10=very large).
+    # Drives cut severity in the engine and division-move alerts.
+    body_frame:            int = 5
+    natural_weight_class:  str = ""
 
 
 @dataclass
@@ -1767,6 +1771,9 @@ class GameBridge:
 
             # Ship C2: weekly coach contract tick — morale + expiration
             self._process_coach_contract(current_week)
+
+            # Ship K2: proactive weight class alerts
+            self._check_weight_class_alerts()
 
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
@@ -4457,6 +4464,10 @@ class GameBridge:
             ko_losses=getattr(fighter, 'ko_losses', 0) or 0,
             sub_losses=getattr(fighter, 'sub_losses', 0) or 0,
             career_fotn_awards=getattr(fighter, 'career_fotn_awards', 0) or 0,
+            body_frame=int(fdata.get('body_frame',
+                getattr(fighter, 'body_frame', 5)) or 5),
+            natural_weight_class=str(fdata.get('natural_weight_class',
+                getattr(fighter, 'natural_weight_class', '') or fighter.weight_class)),
             record_str=fighter.record,
             overall_rating=ovr,
             potential=int(fdata.get("potential", ovr + 8)),
@@ -10228,6 +10239,38 @@ class GameBridge:
               f"{fighter2.name}: fatigue={_f2_fatigue} "
               f"→ stamina={_f2_stamina:.0f}")
 
+        # Weight-cut penalty — fighters cutting below natural class
+        # take stamina hits on fight night. Scaled by age (+3%/yr after 27)
+        # and softened by cardio (high cardio offsets some of the cut tax).
+        _cut1 = self._get_cut_severity(f1_id)
+        _cut2 = self._get_cut_severity(f2_id)
+        if _cut1 > 0:
+            _f1_record = self._game_state.get_fighter(f1_id) if self._game_state else None
+            _age1 = getattr(_f1_record, 'age', 25) or 25
+            _cardio1 = (self._game_state._fighter_data.get(f1_id, {}).get('cardio', 65)
+                        if self._game_state else 65)
+            _age_mult1 = 1.0 + max(0, (_age1 - 27) * 0.03)
+            _stamina_pen1 = _cut1 * 12 * _age_mult1
+            _cardio_offset1 = (_cardio1 - 50) / 200
+            _stamina_pen1 = max(0, _stamina_pen1 - _cardio_offset1 * 10)
+            _f1_stamina = max(60, _f1_stamina - _stamina_pen1)
+            print(f"  ✂️  [CUT] {fighter1.name} cut penalty: "
+                  f"-{_stamina_pen1:.1f} stamina "
+                  f"(severity={_cut1}, age={_age1})")
+        if _cut2 > 0:
+            _f2_record = self._game_state.get_fighter(f2_id) if self._game_state else None
+            _age2 = getattr(_f2_record, 'age', 25) or 25
+            _cardio2 = (self._game_state._fighter_data.get(f2_id, {}).get('cardio', 65)
+                        if self._game_state else 65)
+            _age_mult2 = 1.0 + max(0, (_age2 - 27) * 0.03)
+            _stamina_pen2 = _cut2 * 12 * _age_mult2
+            _cardio_offset2 = (_cardio2 - 50) / 200
+            _stamina_pen2 = max(0, _stamina_pen2 - _cardio_offset2 * 10)
+            _f2_stamina = max(60, _f2_stamina - _stamina_pen2)
+            print(f"  ✂️  [CUT] {fighter2.name} cut penalty: "
+                  f"-{_stamina_pen2:.1f} stamina "
+                  f"(severity={_cut2}, age={_age2})")
+
         # Ship K1: pre-fight coach buff for player fighter (Path α)
         _player_ids_k1 = {f.fighter_id for f in self.get_player_fighters()}
         _player_is_f1 = f1_id in _player_ids_k1
@@ -11541,6 +11584,100 @@ class GameBridge:
                 "var(--neon-green)"
             ),
         }
+
+    def _get_cut_severity(self, fighter_id: str) -> int:
+        """Return cut severity for a fighter.
+        0 = no cut (fighting at or above natural class)
+        1 = one-class cut (moderate)
+        2 = two-class cut (severe, rare)
+        Uses natural_weight_class vs current weight_class."""
+        _WC = ["Strawweight","Flyweight","Bantamweight",
+               "Featherweight","Lightweight","Welterweight",
+               "Middleweight","Light Heavyweight","Heavyweight"]
+        fighter = self._game_state.get_fighter(fighter_id) if self._game_state else None
+        if not fighter:
+            return 0
+        current = getattr(fighter, 'weight_class', '') or ''
+        natural = getattr(fighter, 'natural_weight_class', '') or ''
+        # Fallback to _fighter_data if FighterRecord doesn't have it set
+        if not natural and self._game_state:
+            natural = self._game_state._fighter_data.get(
+                fighter_id, {}).get('natural_weight_class', '') or ''
+        if not current or not natural or current == natural:
+            return 0
+        try:
+            cur_idx = _WC.index(current)
+            nat_idx = _WC.index(natural)
+        except ValueError:
+            return 0
+        # Cut = natural is heavier than current (fighting below natural weight)
+        return max(0, nat_idx - cur_idx)
+
+    def _check_weight_class_alerts(self) -> None:
+        """Proactive coach suggestions when a player fighter's body frame
+        signals they should consider a class change. 12-week per-fighter
+        cooldown so the channel doesn't spam."""
+        if not self._game_state:
+            return
+        current_week = self._game_state.week_number
+        if not hasattr(self, '_wc_alert_fired'):
+            self._wc_alert_fired = {}
+
+        _WC = ["Strawweight","Flyweight","Bantamweight",
+               "Featherweight","Lightweight","Welterweight",
+               "Middleweight","Light Heavyweight","Heavyweight"]
+
+        for pf in self.get_player_fighters():
+            fid = pf.fighter_id
+            last_fired = self._wc_alert_fired.get(fid, -99)
+            if current_week - last_fired < 12:
+                continue  # 12-week cooldown — don't spam
+
+            bf = getattr(pf, 'body_frame',
+                self._game_state._fighter_data.get(fid, {}).get('body_frame', 5)) or 5
+            natural = (getattr(pf, 'natural_weight_class', None)
+                       or pf.weight_class)
+            current = pf.weight_class
+            age = getattr(pf, 'age', 25) or 25
+
+            coach_name = (self._coach.get('name', 'Your coach')
+                          if getattr(self, '_coach', None) else 'Your coach')
+
+            # Signal: naturally large for class — should consider moving up
+            if (bf >= 8 and natural != current and current in _WC
+                    and _WC.index(current) < len(_WC) - 1):
+                self._news_items.insert(0, {
+                    "headline": (f"💪 {coach_name} on {pf.name}: "
+                                 f"'{pf.name} is a natural {natural}. The cut to "
+                                 f"{current} is holding them back — consider moving up.'"),
+                    "category": "coach",
+                    "week": current_week,
+                })
+                self._wc_alert_fired[fid] = current_week
+
+            # Signal: naturally small for class + losing streak
+            elif (bf <= 3 and natural != current and current in _WC
+                    and _WC.index(current) > 0
+                    and getattr(pf, 'lose_streak', 0) >= 2):
+                self._news_items.insert(0, {
+                    "headline": (f"📉 {coach_name} on {pf.name}: "
+                                 f"'{pf.name} has the skills but is getting outmuscled. "
+                                 f"Moving down to {natural} could unlock their potential.'"),
+                    "category": "coach",
+                    "week": current_week,
+                })
+                self._wc_alert_fired[fid] = current_week
+
+            # Signal: aging fighter cutting hard
+            elif age >= 30 and bf >= 7 and natural != current:
+                self._news_items.insert(0, {
+                    "headline": (f"⏳ {coach_name} on {pf.name}: "
+                                 f"'At {age}, the cut to {current} is getting harder "
+                                 f"every camp. Moving to {natural} could extend their career.'"),
+                    "category": "coach",
+                    "week": current_week,
+                })
+                self._wc_alert_fired[fid] = current_week
 
     def _morale_label(self, morale: int) -> str:
         """Short label for morale value — mirrors get_contract_status tiers."""
