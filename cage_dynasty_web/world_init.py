@@ -57,6 +57,12 @@ from dataclasses import dataclass, field
 from enum import Enum
 import uuid
 
+# Ship K4: canonical style generator (respects generation_weight + country bias)
+try:
+    from styles import generate_style_for_fighter
+except ImportError:
+    generate_style_for_fighter = None
+
 
 # ============================================================================
 # FULL FIGHT ENGINE SUPPORT (Optional - for realistic history)
@@ -830,6 +836,12 @@ def is_main_event_worthy(
 class FighterGenerator:
     """Generates realistic fighters with varied attributes"""
     
+    # Ship K4: legacy flat list — superseded by generate_style_for_fighter
+    # which uses generation_weight + country bias from styles.py. Kept as
+    # reference only; the active generation path no longer reads this list.
+    # NOTE: "Brawler" and "Grappler" entries here are not in the canonical
+    # 11-style set (core/types.py:FightingStyle) — never re-use this list
+    # without remapping those.
     STYLES = ["Striker", "Grappler", "Wrestler", "BJJ Specialist", "Balanced", "Brawler", "Counter Striker", "Pressure Fighter"]
     STANCES = ["Orthodox", "Southpaw", "Switch"]
     
@@ -962,7 +974,31 @@ class FighterGenerator:
         # Calculate overall skill rating
         skill_rating = sum(attributes.values()) // len(attributes)
         
-        style = random.choice(self.STYLES)
+        # Use canonical style generator — respects generation weights
+        # (Wrestler 1.10 → Point Fighter 0.60) and country bias
+        # (Brazil→BJJ, Thailand→Muay Thai, Russia→Wrestler, etc.).
+        # 5% "unicorn" chance for counter-meta archetypes baked into
+        # generate_style_for_fighter itself.
+        try:
+            if generate_style_for_fighter is not None:
+                _style_result = generate_style_for_fighter(
+                    country=country or '',
+                    camp_styles=None,
+                )
+                style = (_style_result.value
+                         if hasattr(_style_result, 'value')
+                         else str(_style_result))
+            else:
+                raise ImportError("generate_style_for_fighter unavailable")
+        except Exception:
+            # Fallback — full canonical 11-style list, flat random
+            style = random.choice([
+                "Wrestler", "Striker", "Balanced",
+                "Pressure Fighter", "Ground & Pound",
+                "Muay Thai", "BJJ Specialist",
+                "Sprawl & Brawl", "Counter Striker",
+                "Clinch Fighter", "Point Fighter"
+            ])
         stance = random.choices(self.STANCES, weights=[70, 25, 5], k=1)[0]
         
         # Calculate starting popularity based on tier
