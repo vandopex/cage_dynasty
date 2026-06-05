@@ -97,6 +97,9 @@ class FighterRecord:
     # Drives cut severity in the engine and division-move alerts.
     natural_weight_class: str = ""
     body_frame: int = 5
+    # Personality — drives challenge acceptance + inbound offer frequency.
+    # One of: Warrior / Competitor / Calculated / Hungry / Political.
+    personality: str = ""
     camp_id: Optional[str] = None
     contract_id: Optional[str] = None
     is_champion: bool = False
@@ -137,6 +140,7 @@ class FighterRecord:
             "weight_class": self.weight_class,
             "natural_weight_class": self.natural_weight_class,
             "body_frame": self.body_frame,
+            "personality": self.personality,
             "camp_id": self.camp_id,
             "contract_id": self.contract_id,
             "is_champion": self.is_champion,

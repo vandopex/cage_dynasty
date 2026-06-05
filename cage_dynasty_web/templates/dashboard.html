@@ -120,6 +120,29 @@
 </div>
 {% endif %}
 
+{# ── Pending challenges — Ship K5 ── #}
+{% if pending_challenges %}
+<div style="background:var(--bg-card);border:1px solid var(--border-color);
+            border-radius:8px;padding:var(--spacing-md);
+            margin-bottom:var(--spacing-md);">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+        ⏳ Pending Challenges
+    </div>
+    {% for c in pending_challenges %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:4px 0;font-size:.82rem;">
+        <span style="color:var(--text-bright);">
+            {{ c.player_fighter_name }} vs {{ c.target_fighter_name }}
+        </span>
+        <span style="color:var(--text-muted);font-size:.72rem;">
+            Response by Week {{ c.response_week }}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── Main 2-column layout ── #}
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
             align-items:start;">

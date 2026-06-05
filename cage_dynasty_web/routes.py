@@ -531,6 +531,9 @@ def register_routes(app):
         # Expiring contracts — fighters with <=2 fights left on their deals
         expiring_contracts = bridge.get_expiring_contracts()
 
+        # Ship K5: pending challenges awaiting AI response
+        pending_challenges = bridge.get_pending_challenges()
+
         return render_template('dashboard.html',
             camp=camp,
             fighters=fighters,
@@ -549,6 +552,7 @@ def register_routes(app):
             digest=digest,
             training_history=training_history,
             expiring_contracts=expiring_contracts,
+            pending_challenges=pending_challenges,
         )
     
     # =========================================================================
@@ -1288,6 +1292,10 @@ def register_routes(app):
         result = bridge.challenge_fighter(player_fighter_id, target_id)
 
         if result.get("success"):
+            # Ship K5: async challenge — pending response, no neg yet
+            if result.get("pending"):
+                flash(result.get("message", "Challenge sent."), "info")
+                return redirect(url_for('dashboard'))
             neg_id = result.get("neg_id")
             if not neg_id:
                 flash("Something went wrong with that challenge. Try again.", "error")

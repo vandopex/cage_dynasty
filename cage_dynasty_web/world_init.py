@@ -318,6 +318,10 @@ class GeneratedFighter:
     body_frame: int = 5
     natural_weight_class: str = ""
 
+    # Personality — drives challenge acceptance and offer frequency.
+    # Assigned in generate_fighters() after construction.
+    personality: str = ""
+
 
 @dataclass
 class GeneratedCamp:
@@ -2260,6 +2264,16 @@ class WorldInitializer:
                 else:
                     fighter.natural_weight_class = fighter.weight_class
 
+                # Personality — drives challenge acceptance and offer
+                # frequency. Distribution: Competitor 35%, Calculated 20%,
+                # Hungry 20%, Warrior 15%, Political 10%.
+                _personalities = ["Competitor"] * 35 + \
+                                 ["Calculated"] * 20 + \
+                                 ["Hungry"] * 20 + \
+                                 ["Warrior"] * 15 + \
+                                 ["Political"] * 10
+                fighter.personality = random.choice(_personalities)
+
                 self.fighters[fighter.fighter_id] = fighter
         
         print(f"Generated {len(self.fighters)} fighters")
@@ -2614,6 +2628,10 @@ class WorldInitializer:
             if hasattr(record, 'natural_weight_class'):
                 record.natural_weight_class = getattr(
                     fighter, 'natural_weight_class', fighter.weight_class)
+            # Ship K5: persistent personality for challenge/offer mechanics
+            if hasattr(record, 'personality'):
+                record.personality = getattr(
+                    fighter, 'personality', 'Competitor')
             self.game_state.fighters[fighter.fighter_id] = record
 
         # Ship #32: persist world-gen's actual attribute values into
@@ -2640,6 +2658,9 @@ class WorldInitializer:
             _fdata['body_frame'] = int(getattr(fighter, 'body_frame', 5))
             _fdata['natural_weight_class'] = str(getattr(
                 fighter, 'natural_weight_class', fighter.weight_class))
+            # Ship K5: persist personality
+            _fdata['personality'] = str(getattr(
+                fighter, 'personality', 'Competitor'))
             self.game_state._fighter_data[fighter.fighter_id] = _fdata
     
     def _update_division_state(self, weight_class: str) -> None:

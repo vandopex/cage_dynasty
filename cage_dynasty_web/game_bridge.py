@@ -768,6 +768,8 @@ class GameBridge:
 
         # Negotiation + fight camp state
         self._pending_negotiations: Dict[str, Any] = {}   # neg_id -> negotiation dict
+        # Ship K5: async player challenges — AI responds in 1-2 weeks
+        self._pending_challenges: Dict[str, Any] = {}     # chal_id -> challenge dict
         self._fight_camps: Dict[str, Any] = {}            # fight_id -> camp choices dict
         self._neg_counter: int = 0
 
@@ -1286,6 +1288,7 @@ class GameBridge:
             "dfc_event_offset":         self._dfc_event_offset,
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
+            "pending_challenges":       self._pending_challenges,
             "champion_holds":           self._champion_holds,
             "fight_offers":             self._fight_offers,
             "completed_events":         [
@@ -1472,6 +1475,8 @@ class GameBridge:
 
         # Restore pending negotiations (empty on load — in-progress negs don't persist)
         self._pending_negotiations = {}
+        # Ship K5: pending challenges DO persist (multi-week resolution)
+        self._pending_challenges = data.get("pending_challenges", {})
 
         self.game_started = True
         self._clear_cache()
@@ -1777,6 +1782,9 @@ class GameBridge:
 
             # Ship K3: AI fighters consider weight class moves
             self._check_ai_weight_class_moves()
+
+            # Ship K5: resolve pending player challenges (1-2 week delay)
+            self._process_pending_challenges(current_week)
 
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
@@ -2381,6 +2389,20 @@ class GameBridge:
                 _offer_chance = 0.20
             else:                               # Unranked
                 _offer_chance = 0.10
+            # Ship K5: personality biases offer frequency
+            _personality = self._game_state._fighter_data.get(
+                fid, {}).get('personality') or getattr(
+                    pf, 'personality', '') or 'Competitor'
+            _PERS_OFFER_MULT = {
+                "Warrior":    1.3,
+                "Hungry":     1.4,
+                "Competitor": 1.0,
+                "Calculated": 0.7,
+                "Political":  0.8,
+            }
+            _offer_chance *= _PERS_OFFER_MULT.get(_personality, 1.0)
+            _offer_chance = min(_offer_chance, 0.70)
+
             if random.random() > _offer_chance:
                 continue
 
@@ -7041,84 +7063,47 @@ class GameBridge:
             return {"success": False, "error": f"{name} already declined a fight this week — try again next week"}
 
         player_rank = self._get_fighter_rank(player_fighter)
-        ai_rank     = self._get_fighter_rank(ai_fighter)
-        weeks_out   = self._weeks_out_for_fight(player_rank, ai_rank)
 
-        # Purse from rank, not rating — mirrors real MMA pay structure
-        RANK_PURSES = {
-            0:  150_000,   # Champion
-            1:   80_000,   # #1 contender
-            2:   65_000,   # #2
-            3:   55_000,
-            4:   45_000,
-            5:   38_000,   # Top 5
-            6:   30_000,
-            7:   25_000,
-            8:   22_000,
-            9:   20_000,
-            10:  18_000,   # Top 10
-            11:  16_000,
-            12:  14_000,
-            13:  13_000,
-            14:  12_000,
-            15:  11_000,   # Bottom ranked
-        }
-        p_purse = RANK_PURSES.get(player_rank, 9_000) if player_rank is not None else 9_000
-        a_purse = RANK_PURSES.get(ai_rank,     9_000) if ai_rank     is not None else 9_000
-        base_purse = (p_purse + a_purse) // 2
-
-        self._neg_counter += 1
-        neg_id = f"neg_{self._neg_counter}_{player_fighter_id[:6]}"
-
-        pf_name = getattr(player_fighter, 'name', player_fighter_id)
-        af_name = getattr(ai_fighter, 'name', target_fighter_id)
-
-        neg = {
-            "neg_id": neg_id,
+        # Ship K5: async challenge — AI responds in 1-2 weeks rather than
+        # immediately. Pending challenge tracked in self._pending_challenges
+        # and resolved by _process_pending_challenges each advance_week.
+        chal_id = f"chal_{player_fighter_id[:8]}_{target_fighter_id[:8]}_{self._game_state.week_number}"
+        current_week = self._game_state.week_number
+        target_personality = (
+            self._game_state._fighter_data.get(target_fighter_id, {})
+                .get('personality')
+            or getattr(ai_fighter, 'personality', '')
+            or 'Competitor'
+        )
+        self._pending_challenges[chal_id] = {
+            "challenge_id":        chal_id,
             "player_fighter_id":   player_fighter_id,
-            "player_fighter_name": pf_name,
-            "ai_fighter_id":       target_fighter_id,
-            "ai_fighter_name":     af_name,
-            "ai_fighter_record":   f"{ai_fighter.wins}-{ai_fighter.losses}",
-            "ai_fighter_rating":   ai_fighter.overall_rating,
-            "ai_fighter_rank":     ai_rank,
-            "ai_personality":      self._get_ai_neg_personality(ai_fighter),
-            "weight_class":        player_fighter.weight_class if isinstance(player_fighter.weight_class, str) else str(player_fighter.weight_class),
-            "base_purse":          base_purse,
-            "current_purse":       base_purse,
-            "weeks_out":           weeks_out,
-            "exchange_count":      0,
-            "status":              "AWAITING_AI",
-            "history":             [],
-            "event_name":          self._dfc_label(self._game_state.week_number + weeks_out),
+            "player_fighter_name": player_fighter.name,
+            "target_fighter_id":   target_fighter_id,
+            "target_fighter_name": ai_fighter.name,
+            "target_personality":  target_personality,
+            "created_week":        current_week,
+            "response_week":       current_week + random.randint(1, 2),
+            "weight_class":        player_fighter.weight_class
+                if isinstance(player_fighter.weight_class, str)
+                else str(player_fighter.weight_class),
+            "status":              "PENDING",
+            "player_rank":         player_rank,
+            "target_rank":         self._get_fighter_rank(ai_fighter),
         }
-
-        # Immediately resolve AI's first move
-        neg["exchange_count"] = 1
-        ai_resp = self._generate_ai_counter(neg)
-        neg["ai_last_response"] = ai_resp
-
-        if ai_resp["decision"] == "ACCEPT":
-            neg["status"] = "AI_ACCEPTED"
-        elif ai_resp["decision"] == "COUNTER":
-            neg["status"] = "AI_COUNTERED"
-            if ai_resp["counter_purse"]:
-                neg["current_purse"] = ai_resp["counter_purse"]
-        else:
-            neg["status"] = "AI_DECLINED"
-            # Record decline — this fighter can't be challenged again this week
-            if self._game_state:
-                self._week_declines[target_fighter_id] = self._game_state.week_number
-
-        neg["history"].append({
-            "by": "AI",
-            "decision": ai_resp["decision"],
-            "message":  ai_resp.get("message"),
-            "purse":    neg["current_purse"],
+        self._news_items.insert(0, {
+            "headline": (f"⏳ Challenge sent to {ai_fighter.name} — "
+                         f"waiting for their response."),
+            "category": "signing",
+            "week":     current_week,
         })
-
-        self._pending_negotiations[neg_id] = neg
-        return {"success": True, "neg_id": neg_id}
+        return {
+            "success":  True,
+            "pending":  True,
+            "message":  (f"Challenge sent to {ai_fighter.name}! "
+                         f"Expect a response within 1-2 weeks."),
+            "chal_id":  chal_id,
+        }
 
     def get_negotiation(self, neg_id: str) -> Optional[Dict]:
         """Get negotiation state by ID."""
@@ -11776,6 +11761,158 @@ class GameBridge:
                         "category": "signing",
                         "week": current_week,
                     })
+
+    def _process_pending_challenges(self, current_week: int) -> None:
+        """Resolve pending player challenges after a 1-2 week delay.
+        Uses fighter personality + rank + streak to decide accept/decline.
+        Accepted challenges promote to _pending_negotiations so the player
+        can finalize via the existing negotiation flow."""
+        if not self._pending_challenges or not self._game_state:
+            return
+        import random as _rnd
+
+        to_remove = []
+        for cid, chal in self._pending_challenges.items():
+            if chal.get("status") != "PENDING":
+                to_remove.append(cid)
+                continue
+            if current_week < chal.get("response_week", 9999):
+                continue  # Not time yet
+
+            target_id   = chal["target_fighter_id"]
+            player_id   = chal["player_fighter_id"]
+            target_name = chal["target_fighter_name"]
+            player_name = chal["player_fighter_name"]
+            personality = chal.get("target_personality", "Competitor")
+
+            target = self._game_state.get_fighter(target_id)
+            player = self._game_state.get_fighter(player_id)
+
+            # Base acceptance chance
+            chance = 0.50
+
+            # Ranking proximity
+            p_rank = chal.get("player_rank")
+            t_rank = chal.get("target_rank")
+            if p_rank and t_rank:
+                gap = abs((t_rank or 99) - (p_rank or 99))
+                if gap <= 3:
+                    chance += 0.20
+                elif gap > 6:
+                    chance -= 0.15
+
+            # Player win streak — momentum attracts opponents
+            p_streak = getattr(player, 'win_streak', 0) or 0
+            chance += min(p_streak * 0.05, 0.15)
+
+            # Target lose streak — desperate to bounce back
+            t_lose = getattr(target, 'lose_streak', 0) or 0
+            chance += min(t_lose * 0.10, 0.20)
+
+            # Target idle weeks — hasn't fought recently
+            t_history = getattr(target, 'fight_history', []) or []
+            if t_history:
+                last_week = t_history[-1].get('week', 0) if isinstance(t_history[-1], dict) else 0
+                idle_weeks = current_week - last_week
+                chance += min(idle_weeks * 0.05, 0.15)
+
+            # Title shot proximity penalty — top contenders are picky
+            if t_rank is not None and t_rank <= 2:
+                chance -= 0.15
+
+            # Personality modifier
+            _PERSONALITY_MULT = {
+                "Warrior":    1.5,
+                "Hungry":     1.4,
+                "Competitor": 1.2,
+                "Calculated": 0.8,
+                "Political":  0.9,
+            }
+            chance *= _PERSONALITY_MULT.get(personality, 1.0)
+
+            # Political: only accepts if fight helps ranking
+            if personality == "Political":
+                if t_rank and p_rank and p_rank > t_rank:
+                    chance *= 0.4   # Won't fight down
+                else:
+                    chance *= 1.3   # Happy to fight up
+
+            chance = max(0.05, min(0.95, chance))
+            accepted = _rnd.random() < chance
+
+            if accepted:
+                # Promote to a real negotiation using the existing schema
+                # so the player can finalize via /negotiate/<neg_id>.
+                neg_id = f"neg_{player_id[:8]}_{target_id[:8]}_{current_week}"
+                wc = chal.get("weight_class",
+                              getattr(player, 'weight_class', '') if player else '')
+                p_ovr = getattr(player, 'overall_rating', 70) if player else 70
+                t_ovr = getattr(target, 'overall_rating', 70) if target else 70
+                base_purse = max(5000, int((p_ovr + t_ovr) * 100))
+                weeks_out = self._weeks_out_for_fight(p_rank, t_rank)
+                event_name = self._dfc_label(current_week + weeks_out)
+                t_record = (f"{getattr(target, 'wins', 0)}-"
+                            f"{getattr(target, 'losses', 0)}"
+                            if target else "")
+                neg = {
+                    "neg_id":              neg_id,
+                    "player_fighter_id":   player_id,
+                    "player_fighter_name": player_name,
+                    "ai_fighter_id":       target_id,
+                    "ai_fighter_name":     target_name,
+                    "ai_fighter_record":   t_record,
+                    "ai_fighter_rating":   t_ovr,
+                    "ai_fighter_rank":     t_rank,
+                    "ai_personality":      personality,
+                    "weight_class":        wc,
+                    "base_purse":          base_purse,
+                    "current_purse":       base_purse,
+                    "weeks_out":           weeks_out,
+                    "exchange_count":      1,
+                    "status":              "AI_ACCEPTED",
+                    "history":             [{"by": "AI", "decision": "ACCEPT",
+                                             "purse": base_purse}],
+                    "event_name":          event_name,
+                }
+                self._pending_negotiations[neg_id] = neg
+                self._news_items.insert(0, {
+                    "headline": (f"✅ {target_name} accepted your challenge! "
+                                 f"Head to negotiations to finalize."),
+                    "category": "signing",
+                    "week":     current_week,
+                })
+            else:
+                _DECLINE_REASONS = {
+                    "Warrior":    "isn't interested in that matchup right now.",
+                    "Hungry":     "already has other opportunities lined up.",
+                    "Competitor": "doesn't think the timing is right.",
+                    "Calculated": "feels the risk doesn't suit their plans.",
+                    "Political":  "is focused on fights that move the needle.",
+                }
+                reason = _DECLINE_REASONS.get(personality, "passed on the challenge.")
+                self._news_items.insert(0, {
+                    "headline": (f"❌ {target_name} {reason} "
+                                 f"Your challenge was declined."),
+                    "category": "signing",
+                    "week":     current_week,
+                })
+                # 4-week re-challenge cooldown
+                if not hasattr(self, '_challenge_cooldown'):
+                    self._challenge_cooldown = {}
+                self._challenge_cooldown[target_id] = current_week
+
+            chal["status"] = "ACCEPTED" if accepted else "DECLINED"
+            to_remove.append(cid)
+
+        for cid in to_remove:
+            self._pending_challenges.pop(cid, None)
+
+    def get_pending_challenges(self) -> List[Dict[str, Any]]:
+        """Return pending challenges for dashboard display."""
+        return [
+            c for c in self._pending_challenges.values()
+            if c.get("status") == "PENDING"
+        ]
 
     def move_weight_class(self, fighter_id: str,
                           new_class: str) -> Dict[str, Any]:
