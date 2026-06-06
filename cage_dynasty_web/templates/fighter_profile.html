@@ -393,6 +393,31 @@
     </div>
 </div>
 
+{# ── Sponsors — Ship S1 ── #}
+{% if fighter_sponsors %}
+<div style="background:var(--bg-card);border:1px solid var(--border-color);
+            border-radius:8px;padding:var(--spacing-md);
+            margin-bottom:var(--spacing-md);">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--gold);margin-bottom:var(--spacing-sm);">
+        🎯 Sponsors
+    </div>
+    {% for s in fighter_sponsors %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:4px 0;font-size:.82rem;">
+        <span style="color:var(--text-bright);font-weight:600;">
+            {{ s.brand_name }}
+        </span>
+        <span style="color:var(--text-muted);font-size:.72rem;">
+            ${{ s.weekly_retainer|int }}/wk
+            · ${{ s.fight_bonus|int }} per fight
+            · {{ s.tier }}
+        </span>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── Contract status — player fighters only ── #}
 {% if contract_status %}
 <div class="card mb-lg" style="border-color:{% if contract_status.warning %}rgba(255,180,0,.3){% else %}var(--border-color){% endif %};">

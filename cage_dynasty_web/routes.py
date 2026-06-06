@@ -699,6 +699,14 @@ def register_routes(app):
                 and fighter_id in player_ids):
             contract_ask = bridge.get_contract_ask(fighter_id)
 
+        # Ship S1: per-fighter sponsor list (player fighters only)
+        fighter_sponsors = []
+        if fighter_id in player_ids:
+            fighter_sponsors = [
+                s for s in bridge.get_player_sponsors()
+                if s["fighter_id"] == fighter_id
+            ]
+
         return render_template('fighter_profile.html',
             fighter=fighter,
             attributes=attributes,
@@ -715,6 +723,7 @@ def register_routes(app):
             amateur_record=amateur_record,
             contract_options=contract_options,
             player_ids=player_ids,
+            fighter_sponsors=fighter_sponsors,
             week=bridge.week_number,
         )
     

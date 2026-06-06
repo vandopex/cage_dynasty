@@ -702,6 +702,93 @@ class WebNewsItem:
 # ============================================================================
 CARD_TARGET_FIGHTS = 9
 
+# ============================================================================
+# PIPELINE WINDOW CONSTANT (Ship D2)
+# Rolling card pipeline depth. Shared across:
+# - Phase 3 build loop in _top_up_pipeline
+# - Phase 2 hand-off drain filter
+# - In-window booking check in title-fight booker
+# Increase to show fights further out on the schedule.
+# ============================================================================
+PIPELINE_WINDOW_WEEKS = 8   # Rolling card pipeline depth.
+
+
+# =============================================================
+# SPONSOR SYSTEM (Ship S1)
+# Each brand has tier (local/regional/elite), personality
+# (aggressive/image/loyalty/prestige), weekly retainer paid to
+# camp, per-fight bonus, attribute boost dict applied at engine
+# call, and client cap.
+# =============================================================
+SPONSOR_BRANDS = {
+    "aggressive": [
+        {"id": "apex_combat",    "name": "Apex Combat",
+         "tier": "local",    "personality": "aggressive",
+         "weekly_retainer": 200,  "fight_bonus": 800,
+         "attr_boost": {"chin": 1, "heart": 1},
+         "boost_pct": 0.01, "max_clients": 8},
+        {"id": "iron_will",      "name": "Iron Will Energy",
+         "tier": "regional", "personality": "aggressive",
+         "weekly_retainer": 600,  "fight_bonus": 4000,
+         "attr_boost": {"chin": 2, "heart": 2},
+         "boost_pct": 0.02, "max_clients": 4},
+        {"id": "venom_sports",   "name": "Venom Sports",
+         "tier": "elite",    "personality": "aggressive",
+         "weekly_retainer": 2000, "fight_bonus": 25000,
+         "attr_boost": {"chin": 3, "heart": 3},
+         "boost_pct": 0.03, "max_clients": 2},
+    ],
+    "image": [
+        {"id": "metro_wear",     "name": "Metro Wear",
+         "tier": "local",    "personality": "image",
+         "weekly_retainer": 150,  "fight_bonus": 700,
+         "attr_boost": {"composure": 1, "fight_iq": 1},
+         "boost_pct": 0.01, "max_clients": 10},
+        {"id": "pinnacle_gear",  "name": "Pinnacle Gear",
+         "tier": "regional", "personality": "image",
+         "weekly_retainer": 500,  "fight_bonus": 3500,
+         "attr_boost": {"composure": 2, "fight_iq": 2},
+         "boost_pct": 0.02, "max_clients": 5},
+        {"id": "champion_brand", "name": "Champion Brand",
+         "tier": "elite",    "personality": "image",
+         "weekly_retainer": 1800, "fight_bonus": 20000,
+         "attr_boost": {"composure": 3, "fight_iq": 3},
+         "boost_pct": 0.03, "max_clients": 2},
+    ],
+    "loyalty": [
+        {"id": "hometown_gym",   "name": "Hometown Gym",
+         "tier": "local",    "personality": "loyalty",
+         "weekly_retainer": 100,  "fight_bonus": 500,
+         "attr_boost": {"cardio": 1, "recovery": 1},
+         "boost_pct": 0.01, "max_clients": 10},
+        {"id": "regional_pride", "name": "Regional Pride",
+         "tier": "regional", "personality": "loyalty",
+         "weekly_retainer": 400,  "fight_bonus": 3000,
+         "attr_boost": {"cardio": 2, "recovery": 2},
+         "boost_pct": 0.02, "max_clients": 5},
+        {"id": "legacy_sports",  "name": "Legacy Sports",
+         "tier": "elite",    "personality": "loyalty",
+         "weekly_retainer": 1500, "fight_bonus": 18000,
+         "attr_boost": {"cardio": 3, "recovery": 3},
+         "boost_pct": 0.03, "max_clients": 3},
+    ],
+    "prestige": [
+        {"id": "elite_wear",     "name": "Elite Wear",
+         "tier": "elite",    "personality": "prestige",
+         "weekly_retainer": 2500, "fight_bonus": 35000,
+         "attr_boost": {"boxing": 2, "speed": 2,
+                        "composure": 2, "chin": 1},
+         "boost_pct": 0.03, "max_clients": 1},
+    ],
+}
+
+# Flat lookup by brand id
+_SPONSOR_BY_ID = {
+    b["id"]: b
+    for brands in SPONSOR_BRANDS.values()
+    for b in brands
+}
+
 
 # ============================================================================
 # GAME BRIDGE CLASS
@@ -759,7 +846,7 @@ class GameBridge:
         self._scheduled_fights: List[Dict[str, Any]] = []
         # Sub-ship A: AI fights with target_week beyond pipeline window.
         # Drained into _upcoming_cards by _top_up_pipeline's hand-off pass
-        # when target_week enters current+1..current+6. Strict invariant:
+        # when target_week enters current+1..current+8. Strict invariant:
         # an AI fight is in EITHER this list OR _upcoming_cards, never both.
         self._ai_deferred_bookings: List[Dict[str, Any]] = []
         self._fight_offers: List[Dict[str, Any]] = []
@@ -1020,6 +1107,10 @@ class GameBridge:
             
             # Initialize the 8-week card pipeline
             self.initialize_card_pipeline()
+            # F37 fix: populate weeks 4-6 organically so the player
+            # doesn't open to 3 empty cards. Without this, those
+            # weeks sit at 0 fights until the first advance_week.
+            self._top_up_pipeline()
 
             # Store coach data for passive training and advice
             if coach_data:
@@ -1789,6 +1880,9 @@ class GameBridge:
             # Ship L1: AI camp roster management — cuts, demands, FA sweep
             self._process_ai_camp_roster(current_week)
             self._process_ai_free_agent_bidding(current_week)
+
+            # Ship S1: weekly sponsor processing — retainers, drops, offers
+            self._process_weekly_sponsors(current_week)
 
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
@@ -3841,7 +3935,7 @@ class GameBridge:
 
         When apply_lead_time=True (default), routes via Ship #20's
         _ai_deferred_bookings queue when target_week is outside the rolling
-        6-week pipeline window, or direct-writes when in window with an open
+        8-week pipeline window, or direct-writes when in window with an open
         main_event slot. When False, falls back to next-open-slot direct-write
         via preview's slot scan (override path; not used by current sites,
         kept for future flexibility).
@@ -3912,7 +4006,8 @@ class GameBridge:
 
         # Routing: direct-write to in-window card with open main_event slot,
         # else queue for Phase 2 hand-off (lead-time path) or fail (override).
-        in_window = current + 1 <= target_week <= current + 6
+        in_window = (current + 1 <= target_week
+                     <= current + PIPELINE_WINDOW_WEEKS)
         target_card = self._upcoming_cards.get(target_week) if in_window else None
         has_open_main = target_card is not None and not any(
             _f.get("card_slot") == "main_event"
@@ -5838,6 +5933,17 @@ class GameBridge:
         self._camp_balance        += earned
         self._total_purses_earned += earned
         self._week_purses_earned  += earned
+
+        # Ship S1: sponsor fight bonuses (using player_fid from earlier scope)
+        if player_fid and self._game_state:
+            for s in (self._game_state._fighter_data.get(
+                    player_fid, {}).get("sponsors", []) or []):
+                brand = _SPONSOR_BY_ID.get(s.get("sponsor_id", ""))
+                if brand:
+                    self._camp_balance        += brand["fight_bonus"]
+                    self._total_purses_earned += brand["fight_bonus"]
+                    self._week_purses_earned  += brand["fight_bonus"]
+
         self._camp_cache.clear()   # balance changed — invalidate cache
         return earned
 
@@ -8772,6 +8878,17 @@ class GameBridge:
                 break
         return streak
 
+    def _get_sponsor_client_count(self, sponsor_id: str) -> int:
+        """Count how many fighters currently hold this sponsor."""
+        if not self._game_state:
+            return 0
+        count = 0
+        for fid, fdata in self._game_state._fighter_data.items():
+            for s in fdata.get("sponsors", []) or []:
+                if s.get("sponsor_id") == sponsor_id:
+                    count += 1
+        return count
+
     def _get_fighter_win_streak(self, fighter) -> int:
         """Compute current win streak from fight_history.
         Canonical source — mirrors _get_fighter_lose_streak."""
@@ -9853,12 +9970,12 @@ class GameBridge:
 
     def _top_up_pipeline(self) -> None:
         """
-        Maintain rolling 6-week pipeline. Sub-ship A — three phases:
+        Maintain rolling 8-week pipeline. Sub-ship A — three phases:
           1. Cancellation re-eval — drop deferred-queue items with broken pairs
              (one fighter retired / now-injured / contract-expired). Next
              top-up regenerates fresh candidates via normal _build_card flow.
           2. Hand-off — drain queue items whose target_week has entered
-             window (current+1 to current+6) into _upcoming_cards.
+             window (current+1 to current+8) into _upcoming_cards.
           3. Build/extend — call _build_card_for_week for each pipeline week
              (creates fresh cards for empty weeks, tops up drain-only cards).
         """
@@ -9897,7 +10014,8 @@ class GameBridge:
 
         # Phase 2: hand-off — drain queue items whose target_week is in window
         _to_drain = [q for q in self._ai_deferred_bookings
-                     if current + 1 <= q.get("week", 0) <= current + 6]
+                     if current + 1 <= q.get("week", 0)
+                        <= current + PIPELINE_WINDOW_WEEKS]
         _drained_ids = set()
         for q_fight in _to_drain:
             target = q_fight.get("week", 0)
@@ -9935,7 +10053,8 @@ class GameBridge:
         # Locked cards skip rebuild — saves the per-WC candidate scan when
         # the card is already at capacity. Lock clears in Phase 1 if any
         # fight drops the card below capacity.
-        for w in range(current + 1, current + 7):
+        for w in range(current + 1,
+                       current + PIPELINE_WINDOW_WEEKS + 1):
             existing = self._upcoming_cards.get(w, {})
             if existing.get("locked", False):
                 continue  # Card full and locked — skip rebuild
@@ -10112,6 +10231,26 @@ class GameBridge:
                 continue
             setattr(fa, attr, min(99, int(cur + buff["amount"])))
         return buff
+
+    def _apply_sponsor_boost(self, fa, fighter) -> None:
+        """Apply active sponsor attribute boosts to FighterAttributes
+        before engine call. Mirrors the corner-advice buff pattern.
+        Fires for both player and AI fighters (sponsors are universal)."""
+        if not self._game_state:
+            return
+        fid = getattr(fighter, 'fighter_id', None)
+        if not fid:
+            return
+        sponsors = self._game_state._fighter_data.get(
+            fid, {}).get("sponsors", []) or []
+        for s in sponsors:
+            brand = _SPONSOR_BY_ID.get(s.get("sponsor_id", ""))
+            if not brand:
+                continue
+            for attr, amount in brand["attr_boost"].items():
+                cur = getattr(fa, attr, None)
+                if cur is not None:
+                    setattr(fa, attr, min(99, int(cur + amount)))
 
     def _inject_corner_advice(
         self,
@@ -10298,6 +10437,10 @@ class GameBridge:
             self._apply_corner_prefight_buff(fa1)
         elif _player_is_f2:
             self._apply_corner_prefight_buff(fa2)
+
+        # Ship S1: sponsor fight-night attribute boost (both fighters)
+        self._apply_sponsor_boost(fa1, fighter1)
+        self._apply_sponsor_boost(fa2, fighter2)
 
         is_title = fight.get("is_title_fight", False)
         is_main  = fight.get("card_slot") in ("main_event", "co_main")
@@ -11914,6 +12057,158 @@ class GameBridge:
                             "week": current_week,
                         })
 
+    def _process_weekly_sponsors(self, current_week: int) -> None:
+        """Weekly sponsor processing:
+        1. Pay weekly retainers to player camp.
+        2. Check drop conditions per personality:
+             aggressive — drops after 2 consecutive decisions
+             image     — drops after loss
+             prestige  — drops if fighter falls out of top 5
+             loyalty   — never drops
+        3. Generate inbound sponsor offers for player fighters
+           based on rank tier (10% per week per eligible brand).
+        4. Assign sponsors to a small AI sample per week."""
+        if not self._game_state:
+            return
+        import random as _rnd
+
+        player_fighter_ids = {pf.fighter_id for pf in self.get_player_fighters()}
+
+        # --- 1. Pay retainers + check drop conditions ---
+        for fid in list(player_fighter_ids):
+            fdata = self._game_state._fighter_data.get(fid, {})
+            sponsors = fdata.get("sponsors", []) or []
+            kept = []
+            for s in sponsors:
+                brand = _SPONSOR_BY_ID.get(s.get("sponsor_id", ""))
+                if not brand:
+                    continue
+                fighter = self._game_state.get_fighter(fid)
+                dropped = False
+                personality = brand["personality"]
+
+                # Pay retainer
+                self._camp_balance += brand["weekly_retainer"]
+
+                if personality == "aggressive":
+                    history = getattr(fighter, 'fight_history', []) or []
+                    recent = [f for f in history[-3:] if isinstance(f, dict)]
+                    dec_streak = 0
+                    for f in reversed(recent):
+                        if f.get('result') == 'W' and f.get('method') == 'DEC':
+                            dec_streak += 1
+                        else:
+                            break
+                    if dec_streak >= 2:
+                        dropped = True
+                elif personality == "image":
+                    history = getattr(fighter, 'fight_history', []) or []
+                    if history and isinstance(history[-1], dict):
+                        last = history[-1]
+                        if last.get('result') == 'L':
+                            p_rank = self._get_fighter_rank(fighter)
+                            lose_streak = self._get_fighter_lose_streak(fighter)
+                            if lose_streak >= 1 and (p_rank is None or p_rank > 10):
+                                dropped = True
+                elif personality == "prestige":
+                    rank = self._get_fighter_rank(fighter)
+                    if rank is None or rank > 5:
+                        dropped = True
+                # loyalty never drops
+
+                if dropped:
+                    self._news_items.insert(0, {
+                        "headline": (f"💔 {brand['name']} drops "
+                                     f"{getattr(fighter,'name',fid)} "
+                                     f"from their roster."),
+                        "category": "signing",
+                        "week": current_week,
+                    })
+                else:
+                    kept.append(s)
+            fdata["sponsors"] = kept
+
+        # --- 2. Inbound sponsor offers for player fighters ---
+        for fid in player_fighter_ids:
+            fighter = self._game_state.get_fighter(fid)
+            if not fighter:
+                continue
+            fdata = self._game_state._fighter_data.setdefault(fid, {})
+            current_sponsors = {s["sponsor_id"]
+                                for s in fdata.get("sponsors", []) or []}
+            rank = self._get_fighter_rank(fighter)
+
+            eligible_tiers = ["local"]
+            if rank is not None and rank <= 15:
+                eligible_tiers.append("regional")
+            if rank is not None and rank <= 5:
+                eligible_tiers.append("elite")
+
+            for personality, brands in SPONSOR_BRANDS.items():
+                for brand in brands:
+                    if brand["tier"] not in eligible_tiers:
+                        continue
+                    if brand["id"] in current_sponsors:
+                        continue
+                    if self._get_sponsor_client_count(brand["id"]) >= brand["max_clients"]:
+                        continue
+                    if (brand["personality"] == "prestige"
+                            and (rank is None or rank > 5)):
+                        continue
+                    if _rnd.random() > 0.10:
+                        continue
+                    fdata.setdefault("sponsors", []).append({
+                        "sponsor_id":  brand["id"],
+                        "signed_week": current_week,
+                    })
+                    self._news_items.insert(0, {
+                        "headline": (f"🎯 {brand['name']} signs "
+                                     f"{getattr(fighter,'name',fid)}! "
+                                     f"+${brand['weekly_retainer']:,}/wk "
+                                     f"retainer + "
+                                     f"${brand['fight_bonus']:,} per fight."),
+                        "category": "signing",
+                        "week": current_week,
+                    })
+                    current_sponsors.add(brand["id"])
+
+        # --- 3. AI fighter sponsor assignment (sample 5/week) ---
+        all_fids = list(self._game_state._fighter_data.keys())
+        _rnd.shuffle(all_fids)
+        ai_processed = 0
+        for fid in all_fids:
+            if fid in player_fighter_ids:
+                continue
+            if ai_processed >= 5:
+                break
+            fdata = self._game_state._fighter_data[fid]
+            if fdata.get("sponsors"):
+                continue
+            fighter = self._game_state.get_fighter(fid)
+            if not fighter:
+                continue
+            rank = self._get_fighter_rank(fighter)
+            if rank is not None and rank <= 5:
+                tier = "elite"
+            elif rank is not None and rank <= 15:
+                tier = "regional"
+            else:
+                tier = "local"
+            candidates = [
+                b for brands in SPONSOR_BRANDS.values()
+                for b in brands
+                if b["tier"] == tier
+                and self._get_sponsor_client_count(b["id"]) < b["max_clients"]
+            ]
+            if not candidates:
+                continue
+            brand = _rnd.choice(candidates)
+            fdata.setdefault("sponsors", []).append({
+                "sponsor_id":  brand["id"],
+                "signed_week": current_week,
+            })
+            ai_processed += 1
+
     def _process_ai_free_agent_bidding(self, current_week: int) -> None:
         """Weekly AI free agent pickup sweep. Caps at 3 signings
         per advance to prevent thrash. Uses existing
@@ -12087,6 +12382,30 @@ class GameBridge:
             c for c in self._pending_challenges.values()
             if c.get("status") == "PENDING"
         ]
+
+    def get_player_sponsors(self) -> List[Dict[str, Any]]:
+        """Return sponsor info for player fighters, for profile display."""
+        result = []
+        if not self._game_state:
+            return result
+        for pf in self.get_player_fighters():
+            fid = pf.fighter_id
+            sponsors = self._game_state._fighter_data.get(
+                fid, {}).get("sponsors", []) or []
+            for s in sponsors:
+                brand = _SPONSOR_BY_ID.get(s.get("sponsor_id", ""))
+                if brand:
+                    result.append({
+                        "fighter_id":      fid,
+                        "fighter_name":    pf.name,
+                        "brand_name":      brand["name"],
+                        "tier":            brand["tier"],
+                        "personality":     brand["personality"],
+                        "weekly_retainer": brand["weekly_retainer"],
+                        "fight_bonus":     brand["fight_bonus"],
+                        "attr_boost":      brand["attr_boost"],
+                    })
+        return result
 
     def move_weight_class(self, fighter_id: str,
                           new_class: str) -> Dict[str, Any]:
