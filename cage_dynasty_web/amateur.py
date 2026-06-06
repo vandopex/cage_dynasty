@@ -180,7 +180,7 @@ MIN_AGE_FOR_PRO = 18
 MIN_FIGHTS_FOR_RECORD_PATH = 8
 MIN_WIN_RATE_FOR_RECORD_PATH = 0.65
 TOP_REGIONAL_RANK_FOR_ELIGIBILITY = 5
-PRODIGY_RATING_THRESHOLD = 72
+PRODIGY_RATING_THRESHOLD = 68
 
 # Signing costs by rating (early-game friendly)
 SIGNING_COSTS = {
@@ -677,9 +677,9 @@ def generate_amateur_attributes(
 
 def calculate_potential_grade(ceiling: int) -> str:
     """Convert ceiling rating to grade"""
-    if ceiling >= 88:
+    if ceiling >= 90:
         return "Elite"
-    elif ceiling >= 78:
+    elif ceiling >= 80:
         return "High"
     elif ceiling >= 65:
         return "Average"
@@ -737,11 +737,11 @@ def generate_amateur_fighter(
     # Potential (hidden)
     # Younger = wider range of potential
     if age <= 20:
-        potential_ceiling = random.randint(55, 95)
+        potential_ceiling = random.randint(48, 82)
     elif age <= 23:
-        potential_ceiling = random.randint(50, 85)
+        potential_ceiling = random.randint(45, 76)
     else:
-        potential_ceiling = random.randint(45, 75)
+        potential_ceiling = random.randint(42, 68)
     
     potential_grade = calculate_potential_grade(potential_ceiling)
     
@@ -2040,8 +2040,19 @@ class AmateurSystem:
                         for fighter_id in results.newly_eligible:
                             fighter = self.get_amateur(fighter_id)
                             if fighter and fighter.is_pro_eligible:
-                                # Random chance of turning pro
-                                if random.random() < 0.15:  # 15% chance
+                                # Ceiling-based departure — elite prospects
+                                # leave faster than mid-tier ones.
+                                _ceiling = getattr(fighter,
+                                    'potential_ceiling', 70) or 70
+                                if _ceiling >= 90:
+                                    _depart_chance = 0.25
+                                elif _ceiling >= 80:
+                                    _depart_chance = 0.20
+                                elif _ceiling >= 70:
+                                    _depart_chance = 0.12
+                                else:
+                                    _depart_chance = 0.08
+                                if random.random() < _depart_chance:
                                     pro_graduates.append({
                                         "fighter_id": fighter_id,
                                         "name": fighter.name,

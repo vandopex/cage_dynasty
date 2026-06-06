@@ -533,6 +533,8 @@ def register_routes(app):
 
         # Ship K5: pending challenges awaiting AI response
         pending_challenges = bridge.get_pending_challenges()
+        # Ship K5b: accepted challenges awaiting player to finalize negotiation
+        pending_negotiations = bridge.get_pending_negotiations()
 
         return render_template('dashboard.html',
             camp=camp,
@@ -553,6 +555,7 @@ def register_routes(app):
             training_history=training_history,
             expiring_contracts=expiring_contracts,
             pending_challenges=pending_challenges,
+            pending_negotiations=pending_negotiations,
         )
     
     # =========================================================================
@@ -1755,9 +1758,30 @@ def register_routes(app):
             data = bridge.get_amateur_data()
         except Exception:
             data = {"available": False}
+
+        # Ship A1: tabs, graduates, weight-class filter
+        active_tab = request.args.get('tab', 'scout')
+        wc_filter  = request.args.get('wc', '')
+        try:
+            graduates = bridge.get_amateur_graduates()
+        except Exception:
+            graduates = []
+        # Build prospects_by_wc from the bridge's eligible dict
+        # (keyed by weight class) so the template can group cards.
+        _eligible = data.get('eligible', {}) if isinstance(data, dict) else {}
+        prospects_by_wc = [
+            {"weight_class": wc, "fighters": fighters}
+            for wc, fighters in _eligible.items()
+            if fighters
+        ]
+
         return render_template('amateur.html',
             week=bridge.week_number,
-            amateur=data,
+            data=data,
+            graduates=graduates,
+            active_tab=active_tab,
+            wc_filter=wc_filter,
+            prospects_by_wc=prospects_by_wc,
         )
 
     @app.route('/amateur/sign/<amateur_id>', methods=['POST'])
@@ -2159,6 +2183,17 @@ def register_routes(app):
         this_week = recap.get('week', bridge.week_number)
         week_news = [n for n in all_news if n.week >= this_week - 1]
 
+        # Ship K5b: surface challenge resolution news + open negotiations
+        # prominently so the player doesn't miss accepted challenges.
+        challenge_responses = [
+            n for n in bridge.get_news_feed(limit=50)
+            if n.category == "signing"
+            and n.week >= bridge.week_number
+            and any(marker in (n.headline or '')
+                    for marker in ['✅', '❌', '⏳'])
+        ]
+        pending_negotiations = bridge.get_pending_negotiations()
+
         # Detect if player fight was FOTN
         fotn_player_fight = None
         for fight in recap.get('player_fights', []):
@@ -2220,6 +2255,8 @@ def register_routes(app):
                 'weeks_runway':  int(recap.get('balance', 0) / max(recap.get('overhead', 1), 1)),
                 'purses_earned': recap.get('purses_earned', 0),
             },
+            challenge_responses=challenge_responses,
+            pending_negotiations=pending_negotiations,
         )
     
     @app.route('/fight-night')

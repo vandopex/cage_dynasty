@@ -1,210 +1,330 @@
 {% extends "base.html" %}
-{% from '_macros/style_data.html' import style_icons, style_class_data, style_family_color with context %}
 {% block title %}Amateur Circuit{% endblock %}
 {% block content %}
 
-<div class="page-header">
-    <h1 class="page-title">🥋 Amateur Circuit</h1>
-    <div class="page-subtitle">Scout and sign prospects before they hit free agency</div>
-</div>
-
-{% if not amateur or amateur.get('available') == false %}
-<div class="card">
-    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
-        Amateur circuit data not available yet. Advance a few weeks.
+{# ── Page header ── #}
+<div style="margin-bottom:var(--spacing-lg);">
+    <h1 style="font-family:var(--font-display);font-size:1.8rem;
+               color:var(--text-bright);margin:0;">🥋 Amateur Circuit</h1>
+    <div style="color:var(--text-muted);font-size:.85rem;margin-top:4px;">
+        {{ data.total_amateurs or 0 }} active fighters
+        · {{ data.pro_eligible_count or 0 }} pro-ready
+        · {{ data.tournaments_run or 0 }} tournaments run
     </div>
 </div>
 
+{% if not data or data.get('available') == false %}
+<div style="color:var(--text-muted);padding:var(--spacing-xl);text-align:center;">
+    Amateur circuit data not available yet. Advance a few weeks.
+</div>
 {% else %}
 
-{# ── Stats bar ── #}
-<div style="display:flex;gap:var(--spacing-md);margin-bottom:var(--spacing-lg);">
-    <div class="card" style="flex:1;padding:var(--spacing-md);text-align:center;">
-        <div style="font-size:1.4rem;font-family:var(--font-display);color:var(--text-bright);">
-            {{ amateur.total_amateurs or 0 }}
-        </div>
-        <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">
-            Active Amateurs
-        </div>
-    </div>
-    <div class="card" style="flex:1;padding:var(--spacing-md);text-align:center;">
-        <div style="font-size:1.4rem;font-family:var(--font-display);color:var(--neon-green);">
-            {% set total_elig = namespace(n=0) %}
-            {% for wc, fighters in (amateur.eligible or {}).items() %}
-                {% set total_elig.n = total_elig.n + fighters|length %}
-            {% endfor %}
-            {{ total_elig.n }}
-        </div>
-        <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">
-            Pro-Eligible
-        </div>
-    </div>
-    <div class="card" style="flex:1;padding:var(--spacing-md);text-align:center;">
-        <div style="font-size:1.4rem;font-family:var(--font-display);color:var(--gold);">
-            {{ (amateur.recent_tourneys or [])|length }}
-        </div>
-        <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">
-            Tournaments Run
-        </div>
-    </div>
+{# ── Tab navigation ── #}
+<div style="display:flex;gap:0;border-bottom:2px solid var(--border-color);
+            margin-bottom:var(--spacing-lg);">
+    {% for tab_id, tab_label in [
+        ('scout',     '🔍 Scout Prospects'),
+        ('rankings',  '📊 Rankings & Results'),
+        ('graduates', '🎓 Your Graduates'),
+    ] %}
+    <a href="{{ url_for('amateur_circuit') }}?tab={{ tab_id }}"
+       style="padding:10px 20px;font-size:.85rem;font-weight:600;
+              text-decoration:none;
+              border-bottom:2px solid {% if active_tab == tab_id %}var(--neon-green){% else %}transparent{% endif %};
+              color:{% if active_tab == tab_id %}var(--neon-green){% else %}var(--text-muted){% endif %};
+              margin-bottom:-2px;">
+        {{ tab_label }}
+    </a>
+    {% endfor %}
 </div>
 
-{# ── Pro-eligible prospects by division ── #}
-{% set has_eligible = namespace(found=false) %}
-{% for wc, fighters in (amateur.eligible or {}).items() %}
-    {% if fighters %}{% set has_eligible.found = true %}{% endif %}
-{% endfor %}
+{# ════════════════════════════════════════════════════
+   TAB 1: SCOUT PROSPECTS
+════════════════════════════════════════════════════ #}
+{% if active_tab == 'scout' %}
 
-{% if has_eligible.found %}
-<div class="card mb-lg">
-    <div class="card-header">
-        <h3>🌟 Pro-Eligible Prospects</h3>
-        <span style="font-size:.72rem;color:var(--text-muted);">Sign now before AI camps grab them</span>
+{# Weight class filter #}
+<div style="margin-bottom:var(--spacing-md);display:flex;gap:8px;flex-wrap:wrap;">
+    <a href="?tab=scout"
+       style="padding:4px 12px;border-radius:4px;font-size:.75rem;
+              font-weight:600;text-decoration:none;
+              background:{% if not wc_filter %}var(--neon-green){% else %}var(--bg-card){% endif %};
+              color:{% if not wc_filter %}var(--bg-dark){% else %}var(--text-muted){% endif %};
+              border:1px solid var(--border-color);">
+        All
+    </a>
+    {% for wc in ['Strawweight','Flyweight','Bantamweight',
+                  'Featherweight','Lightweight','Welterweight',
+                  'Middleweight','Light Heavyweight','Heavyweight'] %}
+    <a href="?tab=scout&wc={{ wc }}"
+       style="padding:4px 12px;border-radius:4px;font-size:.75rem;
+              font-weight:600;text-decoration:none;
+              background:{% if wc_filter == wc %}var(--neon-green){% else %}var(--bg-card){% endif %};
+              color:{% if wc_filter == wc %}var(--bg-dark){% else %}var(--text-muted){% endif %};
+              border:1px solid var(--border-color);">
+        {{ wc }}
+    </a>
+    {% endfor %}
+</div>
+
+{% if not prospects_by_wc %}
+<div style="color:var(--text-muted);padding:var(--spacing-xl);text-align:center;">
+    No pro-ready prospects available right now.
+    Check back after the next tournament cycle.
+</div>
+{% else %}
+
+{# Prospect cards — grouped by weight class #}
+{% for wc_group in prospects_by_wc %}
+{% if not wc_filter or wc_filter == wc_group.weight_class %}
+<div style="margin-bottom:var(--spacing-xl);">
+    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+        {{ wc_group.weight_class }}
+        <span style="color:var(--text-secondary);">
+            · {{ wc_group.fighters|length }} available
+        </span>
     </div>
-    <div style="padding:0;">
-    {% for wc, fighters in (amateur.eligible or {}).items() %}
-        {% if fighters %}
-        <div style="padding:var(--spacing-sm) var(--spacing-md);
-                    background:rgba(255,255,255,.02);
-                    border-bottom:1px solid var(--border-color);
-                    font-size:.65rem;color:var(--text-muted);
-                    text-transform:uppercase;letter-spacing:.08em;">
-            {{ wc }}
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+                gap:var(--spacing-md);">
+    {% for f in wc_group.fighters %}
+    <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                border-radius:8px;padding:var(--spacing-md);position:relative;">
+
+        {# Urgency badges #}
+        {% if f.potential_ceiling and f.potential_ceiling >= 90
+              and f.weeks_in_amateur and f.weeks_in_amateur >= 8 %}
+        <div style="position:absolute;top:8px;right:8px;font-size:.62rem;font-weight:700;
+                    background:rgba(255,100,0,.15);
+                    color:var(--accent-orange, #ff6400);
+                    border:1px solid var(--accent-orange, #ff6400);
+                    border-radius:3px;padding:2px 6px;">
+            🔥 High Demand
         </div>
-        {% for f in fighters %}
-        {% set _f_style = f.style or f.fighting_style or 'Balanced' %}
-        {% set _f_entry = style_class_data.get(_f_style, {"family":"hybrid","tagline":""}) %}
-        {% set _f_accent = style_family_color.get(_f_entry.family, "var(--text-muted)") %}
-        {% set _f_icon = style_icons.get(_f_style, "🥊") %}
-        <div style="display:flex;align-items:center;gap:var(--spacing-md);
-                    padding:var(--spacing-md);
-                    border-left:3px solid {{ _f_accent }};
-                    border-bottom:1px solid var(--border-color);">
-            <div style="flex:1;min-width:0;">
-                <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;">
-                    <a href="{{ url_for('fighter_profile', fighter_id=f.id) }}"
-                       style="font-family:var(--font-display);color:var(--text-bright);font-size:.9rem;
-                              text-decoration:none;">
-                        {{ f.name }}
-                    </a>
-                    {% set dg = f.display_grade or f.potential_grade or 'B' %}
-                    <span style="font-size:.7rem;font-family:var(--font-display);
-                                 color:{% if 'A+' in dg or dg == 'A' %}var(--gold)
-                                       {% elif 'A' in dg or 'B+' in dg %}var(--neon-green)
-                                       {% else %}var(--info){% endif %};">
-                        {{ dg }}
-                    </span>
-                    <span style="font-size:.65rem;color:var(--text-muted);">
-                        {{ f.record or (f.wins|string + '-' + f.losses|string) }}
-                    </span>
-                </div>
-                <div style="font-size:.68rem;color:var(--text-muted);">
-                    <span style="color:{{ _f_accent }};">{{ _f_icon }} {{ _f_style }}</span>
-                    {% if _f_entry.tagline %}<span style="font-style:italic;opacity:.8;"> · {{ _f_entry.tagline }}</span>{% endif %}
-                    · Age {{ f.age }}
-                    · {{ f.nationality or f.region or '' }}
-                    {% if f.tournament_wins %} · 🏆 {{ f.tournament_wins }} {{ 'win' if f.tournament_wins == 1 else 'wins' }}{% endif %}
-                    {% if f.tournament_finals %} · ⚔️ {{ f.tournament_finals }} {{ 'final' if f.tournament_finals == 1 else 'finals' }}{% endif %}
-                    {% if f.tournament_semis %} · 🥉 {{ f.tournament_semis }} {{ 'semi' if f.tournament_semis == 1 else 'semis' }}{% endif %}
-                </div>
-                <div style="font-size:.68rem;margin-top:2px;">
-                    {% set _ovr_v = (f.overall or f.overall_rating or 0) | int %}
-                    {% set _ovr_c = 'var(--gold)' if _ovr_v >= 85
-                                    else 'var(--neon-green)' if _ovr_v >= 70
-                                    else 'var(--info)' if _ovr_v >= 55
-                                    else 'var(--text-muted)' %}
-                    <span style="color:{{ _ovr_c }};font-family:var(--font-display);">{{ _ovr_v or '—' }} OVR</span>
-                </div>
-            </div>
-            <div style="flex-shrink:0;">
-                <form action="{{ url_for('sign_amateur', amateur_id=f.id or f.amateur_id) }}" method="POST">
-                    <button type="submit" class="btn btn-primary btn-sm">Sign</button>
-                </form>
-            </div>
+        {% elif f.weeks_in_amateur and f.weeks_in_amateur >= 12 %}
+        <div style="position:absolute;top:8px;right:8px;font-size:.62rem;font-weight:700;
+                    background:rgba(255,180,0,.12);
+                    color:var(--warning, #f59e0b);
+                    border:1px solid var(--warning, #f59e0b);
+                    border-radius:3px;padding:2px 6px;">
+            ⚠️ May leave soon
         </div>
-        {% endfor %}
         {% endif %}
+
+        {# Name + record #}
+        <div style="font-family:var(--font-display);font-size:.95rem;
+                    color:var(--text-bright);margin-bottom:2px;">
+            {{ f.name }}
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);
+                    margin-bottom:var(--spacing-sm);">
+            {{ f.wins }}-{{ f.losses }}
+            · {{ f.style or 'Unknown' }}
+            · {{ f.nationality or '' }}
+        </div>
+
+        {# OVR + Potential + Age #}
+        <div style="display:flex;gap:var(--spacing-md);margin-bottom:var(--spacing-sm);">
+            <div>
+                <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;">OVR</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);">
+                    {{ f.overall }}
+                </div>
+            </div>
+            <div>
+                <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;">Ceiling</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;
+                            color:{% if f.potential_ceiling and f.potential_ceiling >= 85 %}var(--neon-green)
+                                  {% elif f.potential_ceiling and f.potential_ceiling >= 75 %}var(--warning, #f59e0b)
+                                  {% else %}var(--text-muted){% endif %};">
+                    {{ f.potential_ceiling or f.potential }}
+                    <span style="font-size:.7rem;">{{ f.potential_grade or '' }}</span>
+                </div>
+            </div>
+            <div>
+                <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;">Age</div>
+                <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);">
+                    {{ f.age }}
+                </div>
+            </div>
+        </div>
+
+        {# Eligibility reason #}
+        {% if f.eligibility_reason %}
+        <div style="font-size:.7rem;color:var(--text-secondary);margin-bottom:var(--spacing-sm);">
+            📋 {{ f.eligibility_reason }}
+        </div>
+        {% endif %}
+
+        {# Regional rank #}
+        {% if f.regional_rank and f.regional_rank <= 3 %}
+        <div style="font-size:.7rem;margin-bottom:var(--spacing-sm);">
+            <span style="color:{% if f.regional_rank == 1 %}var(--gold){% else %}var(--text-secondary){% endif %};
+                         font-weight:600;">
+                {% if f.regional_rank == 1 %}🏆 Regional Champion
+                {% else %}#{{ f.regional_rank }} in region{% endif %}
+            </span>
+        </div>
+        {% endif %}
+
+        {# Traits #}
+        {% if f.traits %}
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--spacing-sm);">
+            {% for trait in f.traits[:3] %}
+            <span style="font-size:.62rem;padding:2px 6px;border-radius:3px;
+                         background:rgba(255,255,255,.06);color:var(--text-muted);
+                         border:1px solid var(--border-color);">
+                {{ trait }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Tournament credentials #}
+        {% if f.tournament_wins or f.tournament_finals %}
+        <div style="font-size:.7rem;color:var(--text-secondary);margin-bottom:var(--spacing-sm);">
+            {% if f.tournament_wins %}🏅 {{ f.tournament_wins }}× tournament winner{% endif %}
+            {% if f.tournament_finals %} · {{ f.tournament_finals }}× finalist{% endif %}
+        </div>
+        {% endif %}
+
+        {# Weeks in circuit #}
+        <div style="font-size:.65rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
+            ⏳ {{ f.weeks_in_amateur or 0 }}w in circuit
+        </div>
+
+        {# Sign button #}
+        <form action="{{ url_for('sign_amateur', amateur_id=f.id) }}" method="POST">
+            <button type="submit" class="btn btn-primary btn-sm btn-block"
+                    style="font-size:.78rem;">
+                Sign to Pro — ${{ (f.signing_cost or 5000)|int }}
+            </button>
+        </form>
+    </div>
     {% endfor %}
     </div>
 </div>
-{% else %}
-<div class="card mb-lg">
-    <div style="padding:var(--spacing-xl);text-align:center;">
-        <div style="font-size:2rem;margin-bottom:var(--spacing-md);">🥋</div>
-        <p class="text-muted">No pro-eligible prospects right now. Advance a week to see new graduates.</p>
-    </div>
-</div>
+{% endif %}
+{% endfor %}
 {% endif %}
 
-{# ── Recent tournaments ── #}
-{% if amateur.recent_tourneys %}
-<div class="card mb-lg">
-    <div class="card-header"><h3>🏆 Recent Tournaments</h3></div>
-    <div style="padding:0;">
-        {% for t in amateur.recent_tourneys %}
-        <div style="display:flex;align-items:center;gap:var(--spacing-md);
-                    padding:var(--spacing-sm) var(--spacing-md);
-                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
-            <div style="flex:1;">
-                <div style="font-size:.82rem;color:var(--text-bright);">{{ t.name }}</div>
-                <div style="font-size:.68rem;color:var(--text-muted);">
-                    {{ t.region }} · {{ t.wc }} · Week {{ t.week }}
-                </div>
-            </div>
-            <div style="text-align:right;">
-                <div style="font-size:.75rem;color:var(--gold);">
-                    🏆 {% if t.champion_id %}<a href="{{ url_for('fighter_profile', fighter_id=t.champion_id) }}"
-                          style="color:inherit;text-decoration:none;">{{ t.champion }}</a>{% else %}{{ t.champion }}{% endif %}
-                </div>
-            </div>
+{% endif %}{# end tab scout #}
+
+{# ════════════════════════════════════════════════════
+   TAB 2: RANKINGS & RESULTS
+════════════════════════════════════════════════════ #}
+{% if active_tab == 'rankings' %}
+
+{# Recent tournaments — bridge returns recent_tourneys with wc + champion keys #}
+{% if data.recent_tourneys %}
+<div style="margin-bottom:var(--spacing-xl);">
+    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--text-muted);margin-bottom:var(--spacing-md);">
+        Recent Tournaments
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+                gap:var(--spacing-md);">
+    {% for t in data.recent_tourneys[:12] %}
+    <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                border-radius:8px;padding:var(--spacing-md);">
+        <div style="font-weight:600;font-size:.85rem;color:var(--text-bright);margin-bottom:4px;">
+            {{ t.name or 'Tournament' }}
         </div>
-        {% endfor %}
-    </div>
-</div>
-{% else %}
-<div class="card mb-lg">
-    <div class="card-header"><h3>🏆 Recent Tournaments</h3></div>
-    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);font-size:.85rem;">
-        No tournaments yet — they fire periodically. Advance a few weeks.
-    </div>
-</div>
-{% endif %}
-
-{# ── Regional rankings ── #}
-{% if amateur.regional_rankings %}
-<div class="card">
-    <div class="card-header"><h3>📊 Regional Rankings</h3></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;padding:0;">
-        {% for region, fighters in amateur.regional_rankings.items() %}
-        {% if fighters %}
-        <div style="padding:var(--spacing-md);
-                    border-right:{% if loop.index is odd %}1px solid var(--border-color){% else %}none{% endif %};
-                    border-bottom:1px solid var(--border-color);">
-            <div style="font-size:.65rem;color:var(--text-muted);text-transform:uppercase;
-                        letter-spacing:.08em;margin-bottom:var(--spacing-sm);">{{ region }}</div>
-            {% for f in fighters[:5] %}
-            <div style="display:flex;align-items:center;gap:6px;
-                        padding:2px 0;font-size:.75rem;">
-                <span style="color:var(--text-muted);min-width:16px;">{{ loop.index }}</span>
-                <span style="color:var(--text-bright);">
-                    {% if f.fighter_id %}<a href="{{ url_for('fighter_profile', fighter_id=f.fighter_id) }}" style="color:inherit;text-decoration:none;">{{ f.name }}</a>{% else %}{{ f.name }}{% endif %}
-                </span>
-                <span style="color:var(--text-muted);margin-left:auto;">{{ f.weight_class }}</span>
-            </div>
-            {% endfor %}
+        <div style="font-size:.72rem;color:var(--text-muted);">
+            {{ t.region }} · {{ t.wc }} · Week {{ t.week }}
+        </div>
+        {% if t.champion %}
+        <div style="font-size:.75rem;color:var(--gold);margin-top:6px;">
+            🏆 {% if t.champion_id %}<a href="{{ url_for('fighter_profile', fighter_id=t.champion_id) }}" style="color:inherit;text-decoration:none;">{{ t.champion }}</a>{% else %}{{ t.champion }}{% endif %}
         </div>
         {% endif %}
-        {% endfor %}
     </div>
-</div>
-{% else %}
-<div class="card">
-    <div class="card-header"><h3>📊 Regional Rankings</h3></div>
-    <div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);font-size:.85rem;">
-        Rankings populating as fighters compete...
+    {% endfor %}
     </div>
 </div>
 {% endif %}
 
+{# Regional rankings #}
+{% if data.regional_rankings %}
+<div>
+    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--text-muted);margin-bottom:var(--spacing-md);">
+        Regional Rankings
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+                gap:var(--spacing-md);">
+    {% for region, fighters in data.regional_rankings.items() %}
+    <div style="background:var(--bg-card);border:1px solid var(--border-color);
+                border-radius:8px;padding:var(--spacing-md);">
+        <div style="font-weight:600;font-size:.82rem;color:var(--text-bright);margin-bottom:var(--spacing-sm);">
+            {{ region }}
+        </div>
+        {% for f in fighters[:5] %}
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    padding:3px 0;font-size:.78rem;
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <span style="color:{% if loop.index == 1 %}var(--gold){% else %}var(--text-secondary){% endif %};">
+                {{ loop.index }}.
+                {% if f.fighter_id %}<a href="{{ url_for('fighter_profile', fighter_id=f.fighter_id) }}" style="color:inherit;text-decoration:none;">{{ f.name }}</a>{% else %}{{ f.name }}{% endif %}
+            </span>
+            <span style="color:var(--text-muted);font-size:.7rem;">
+                {{ f.record }} · {{ f.wc }}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endfor %}
+    </div>
+</div>
 {% endif %}
+
+{% endif %}{# end tab rankings #}
+
+{# ════════════════════════════════════════════════════
+   TAB 3: YOUR GRADUATES
+════════════════════════════════════════════════════ #}
+{% if active_tab == 'graduates' %}
+
+{% if not graduates %}
+<div style="color:var(--text-muted);padding:var(--spacing-xl);text-align:center;">
+    You haven't signed any fighters from the amateur circuit yet.
+    Scout some prospects on the first tab.
+</div>
+{% else %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+            gap:var(--spacing-md);">
+{% for g in graduates %}
+<div style="background:var(--bg-card);
+            border:1px solid {% if g.is_champion %}var(--gold){% else %}var(--border-color){% endif %};
+            border-radius:8px;padding:var(--spacing-md);">
+    <div style="font-family:var(--font-display);font-size:.95rem;
+                color:var(--text-bright);margin-bottom:2px;">
+        {% if g.is_champion %}🏆 {% endif %}
+        <a href="{{ url_for('fighter_profile', fighter_id=g.fighter_id) }}"
+           style="color:inherit;text-decoration:none;">
+            {{ g.fighter_name }}
+        </a>
+    </div>
+    <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+        {{ g.weight_class }}
+        {% if g.potential_grade %} · {{ g.potential_grade }} prospect{% endif %}
+    </div>
+    <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);">
+        {{ g.pro_wins }}-{{ g.pro_losses }}
+        {% if not g.is_active %}
+        <span style="font-size:.7rem;color:var(--text-muted);">Retired</span>
+        {% endif %}
+    </div>
+    <div style="font-size:.65rem;color:var(--text-muted);margin-top:4px;">
+        Signed from {{ g.region or 'amateur circuit' }} · Week {{ g.signed_week }}
+    </div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+{% endif %}{# end tab graduates #}
+
+{% endif %}{# end available #}
+
 {% endblock %}

@@ -857,6 +857,8 @@ class GameBridge:
         self._pending_negotiations: Dict[str, Any] = {}   # neg_id -> negotiation dict
         # Ship K5: async player challenges — AI responds in 1-2 weeks
         self._pending_challenges: Dict[str, Any] = {}     # chal_id -> challenge dict
+        # Ship A1: track fighters signed from amateur circuit (for graduates tab)
+        self._amateur_graduates: List[Dict[str, Any]] = []
         self._fight_camps: Dict[str, Any] = {}            # fight_id -> camp choices dict
         self._neg_counter: int = 0
 
@@ -1380,6 +1382,7 @@ class GameBridge:
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
             "pending_challenges":       self._pending_challenges,
+            "amateur_graduates":        self._amateur_graduates,
             "champion_holds":           self._champion_holds,
             "fight_offers":             self._fight_offers,
             "completed_events":         [
@@ -1568,6 +1571,8 @@ class GameBridge:
         self._pending_negotiations = {}
         # Ship K5: pending challenges DO persist (multi-week resolution)
         self._pending_challenges = data.get("pending_challenges", {})
+        # Ship A1: amateur graduates persist for the graduates tab
+        self._amateur_graduates = data.get("amateur_graduates", [])
 
         self.game_started = True
         self._clear_cache()
@@ -11620,11 +11625,11 @@ class GameBridge:
         arch = self._get_camp_archetype(winning_camp.camp_id)
         arch_emoji = CAMP_ARCHETYPES.get(arch, {}).get("emoji", "🏟️")
         _top_score = camp_scores[0][0] if camp_scores else 0
-        # Filter: only post news for established signings (≥70 OVR or has fight history).
+        # Filter: only post news for established signings (≥60 OVR or has fight history).
         # Suppresses spam from world-init churn now that fighter_count is correctly tracked.
         _has_fights = bool(getattr(fighter, 'fight_history', []) or [])
         _ovr = getattr(fighter, 'overall_rating', 0) or 0
-        if _ovr >= 70 or _has_fights:
+        if _ovr >= 60 or _has_fights:
             _style = getattr(fighter, 'fighting_style', 'Balanced')
             self._news_items.insert(0, {
                 "headline": f"{arch_emoji} {fighter.name} signs with {winning_camp.name} — {_style}, OVR {_ovr}",
@@ -12257,47 +12262,66 @@ class GameBridge:
             target = self._game_state.get_fighter(target_id)
             player = self._game_state.get_fighter(player_id)
 
-            # Base acceptance chance
-            chance = 0.50
+            # Base acceptance chance — 0.60 so same-tier
+            # challenges feel viable by default
+            chance = 0.60
 
-            # Ranking proximity
+            # Ranking proximity — tiered bonus/penalty.
+            # Treat unranked fighters as rank 16 so proximity
+            # bonus still fires for unranked vs unranked (gap=0)
+            # and unranked vs low-ranked (small gap).
             p_rank = chal.get("player_rank")
             t_rank = chal.get("target_rank")
-            if p_rank and t_rank:
-                gap = abs((t_rank or 99) - (p_rank or 99))
-                if gap <= 3:
-                    chance += 0.20
-                elif gap > 6:
-                    chance -= 0.15
+            _p = p_rank if p_rank else 16
+            _t = t_rank if t_rank else 16
+            gap = abs(_t - _p)
+            proximity_bonus = 0.0
+            if gap <= 3:
+                proximity_bonus = 0.25   # Same tier — strong bonus
+            elif gap <= 5:
+                proximity_bonus = 0.10   # Close tier — small bonus
+            elif gap > 6:
+                proximity_bonus = -0.15  # Big gap — penalty
+            chance += proximity_bonus
 
-            # Player win streak — momentum attracts opponents
-            p_streak = getattr(player, 'win_streak', 0) or 0
-            chance += min(p_streak * 0.05, 0.15)
+            # Player win streak — momentum makes you
+            # attractive as an opponent
+            p_streak = self._get_fighter_win_streak(player) \
+                if player else 0
+            chance += min(p_streak * 0.08, 0.24)
 
             # Target lose streak — desperate to bounce back
             t_lose = getattr(target, 'lose_streak', 0) or 0
             chance += min(t_lose * 0.10, 0.20)
 
-            # Target idle weeks — hasn't fought recently
+            # Target idle weeks — hasn't fought recently.
+            # max(0, ...) guards against negative values from
+            # sim-history week mismatches (e.g. fight_history
+            # entries with week > current_week post-load).
+            t_idle = 0
             t_history = getattr(target, 'fight_history', []) or []
             if t_history:
                 last_week = t_history[-1].get('week', 0) if isinstance(t_history[-1], dict) else 0
-                idle_weeks = current_week - last_week
-                chance += min(idle_weeks * 0.05, 0.15)
+                t_idle = max(0, current_week - last_week)
+                chance += min(t_idle * 0.05, 0.15)
 
             # Title shot proximity penalty — top contenders are picky
+            title_pen = 0.0
             if t_rank is not None and t_rank <= 2:
-                chance -= 0.15
+                title_pen = -0.15
+                chance += title_pen
 
-            # Personality modifier
+            # Tightened spread — personality flavors decisions
+            # without completely blocking fair matchups
             _PERSONALITY_MULT = {
-                "Warrior":    1.5,
-                "Hungry":     1.4,
-                "Competitor": 1.2,
-                "Calculated": 0.8,
-                "Political":  0.9,
+                "Warrior":    1.3,
+                "Hungry":     1.3,
+                "Competitor": 1.1,
+                "Calculated": 0.85,
+                "Political":  0.90,
             }
-            chance *= _PERSONALITY_MULT.get(personality, 1.0)
+            mult = _PERSONALITY_MULT.get(personality, 1.0)
+            chance *= mult
 
             # Political: only accepts if fight helps ranking
             if personality == "Political":
@@ -12307,7 +12331,8 @@ class GameBridge:
                     chance *= 1.3   # Happy to fight up
 
             chance = max(0.05, min(0.95, chance))
-            accepted = _rnd.random() < chance
+            roll = _rnd.random()
+            accepted = roll < chance
 
             if accepted:
                 # Promote to a real negotiation using the existing schema
@@ -12382,6 +12407,31 @@ class GameBridge:
             c for c in self._pending_challenges.values()
             if c.get("status") == "PENDING"
         ]
+
+    def get_pending_negotiations(self) -> List[Dict[str, Any]]:
+        """Return open negotiations awaiting player action,
+        for dashboard display. These are accepted challenges
+        the player hasn't finalized yet."""
+        if not self._game_state:
+            return []
+        result = []
+        for neg in self._pending_negotiations.values():
+            status = neg.get("status", "")
+            # Only surface negs the player needs to act on
+            if status not in ("AI_ACCEPTED", "AI_COUNTERED"):
+                continue
+            result.append({
+                "neg_id":              neg.get("neg_id", ""),
+                "player_fighter_name": neg.get("player_fighter_name", ""),
+                "ai_fighter_name":     neg.get("ai_fighter_name", ""),
+                "weight_class":        neg.get("weight_class", ""),
+                "status":              status,
+                "status_label":        ("Accepted — awaiting you"
+                                        if status == "AI_ACCEPTED"
+                                        else "Countered — needs your response"),
+                "event_name":          neg.get("event_name", ""),
+            })
+        return result
 
     def get_player_sponsors(self) -> List[Dict[str, Any]]:
         """Return sponsor info for player fighters, for profile display."""
@@ -12861,6 +12911,7 @@ class GameBridge:
                         "losses":         f.losses,
                         "overall":        getattr(f, 'overall_rating', 60),
                         "potential":      getattr(f, 'potential_ceiling', 75),
+                        "potential_ceiling": getattr(f, 'potential_ceiling', 75),
                         "potential_grade":getattr(f, 'potential_grade', 'Average'),
                         "display_grade":  ceiling_to_display_grade(getattr(f, 'potential_ceiling', 75)),
                         "grade_color":    grade_color(ceiling_to_display_grade(getattr(f, 'potential_ceiling', 75))),
@@ -12869,8 +12920,15 @@ class GameBridge:
                         "tournament_wins":getattr(f, 'tournament_wins', 0),
                         "tournament_finals":getattr(f, 'tournament_finals', 0),
                         "tournament_semis":getattr(f, 'tournament_semis', 0),
+                        # Ship A1: extra fields for the redesigned prospect cards
+                        "weight_class":   getattr(f, 'weight_class', wc),
+                        "eligibility_reason": getattr(f, 'eligibility_reason', ''),
+                        "regional_rank":  getattr(f, 'regional_rank', None),
+                        "traits":         list(getattr(f, 'traits', []) or []),
+                        "weeks_in_amateur": getattr(f, 'weeks_in_amateur', 0),
+                        "signing_cost":   self._compute_amateur_signing_cost(f),
                     }
-                    for f in prospects[:8]
+                    for f in prospects[:12]
                 ]
             except Exception:
                 eligible[wc] = []
@@ -12926,6 +12984,9 @@ class GameBridge:
             except Exception:
                 pass
 
+        # Ship A1: top-level counters surfaced for the redesigned page
+        _pro_eligible_count = sum(len(v) for v in eligible.values())
+        _tournaments_run = len(getattr(sys, 'completed_tournaments', []))
         return {
             "available":         True,
             "eligible":          eligible,
@@ -12933,7 +12994,41 @@ class GameBridge:
             "recent_tourneys":   recent_tourneys,
             "week":              week,
             "total_amateurs":    len(getattr(sys, 'amateurs', {})),
+            "pro_eligible_count": _pro_eligible_count,
+            "tournaments_run":   _tournaments_run,
         }
+
+    def _compute_amateur_signing_cost(self, amateur) -> int:
+        """Compute signing cost for an amateur fighter. Single source
+        of truth — sign_amateur calls this helper."""
+        ovr = int(getattr(amateur, 'overall_rating', 60))
+        if ovr >= 72:   signing_cost = 80_000
+        elif ovr >= 65: signing_cost = 40_000
+        elif ovr >= 58: signing_cost = 20_000
+        else:           signing_cost = 8_000
+        grade = getattr(amateur, 'potential_grade', 'Average')
+        if grade == 'Elite': signing_cost = int(signing_cost * 1.5)
+        elif grade == 'High': signing_cost = int(signing_cost * 1.2)
+        return signing_cost
+
+    def get_amateur_graduates(self) -> List[Dict[str, Any]]:
+        """Return fighters signed from the amateur circuit, with their
+        current pro record and status — for the graduates tab."""
+        if not hasattr(self, '_amateur_graduates'):
+            return []
+        result = []
+        for g in self._amateur_graduates:
+            fid = g.get("fighter_id", "")
+            fighter = (self._game_state.get_fighter(fid)
+                       if self._game_state else None)
+            result.append({
+                **g,
+                "pro_wins":    getattr(fighter, 'wins', 0) if fighter else 0,
+                "pro_losses":  getattr(fighter, 'losses', 0) if fighter else 0,
+                "is_active":   getattr(fighter, 'is_active', True) if fighter else False,
+                "is_champion": getattr(fighter, 'is_champion', False) if fighter else False,
+            })
+        return result
 
     def sign_amateur(self, amateur_id: str) -> Dict[str, Any]:
         """Sign a pro-eligible amateur to the player's camp."""
@@ -12954,16 +13049,9 @@ class GameBridge:
             if not amateur:
                 return {"success": False, "error": "Amateur not found"}
 
-            # Use the same tiered signing costs as amateur.py defines
-            ovr = int(getattr(amateur, 'overall_rating', 60))
-            if ovr >= 80:   signing_cost = 100_000
-            elif ovr >= 70: signing_cost = 50_000
-            elif ovr >= 60: signing_cost = 25_000
-            else:           signing_cost = 10_000
-            # Potential grade premium
-            grade = getattr(amateur, 'potential_grade', 'Average')
-            if grade == 'Elite': signing_cost = int(signing_cost * 1.5)
-            elif grade == 'High': signing_cost = int(signing_cost * 1.2)
+            # Single source of truth — same helper used to surface
+            # cost on the prospect cards.
+            signing_cost = self._compute_amateur_signing_cost(amateur)
             if self._camp_balance < signing_cost:
                 return {"success": False,
                         "error": f"Need ${signing_cost:,}, have ${self._camp_balance:,}"}
@@ -13001,6 +13089,20 @@ class GameBridge:
                 self._game_state._sign_fighter_to_camp(fid, self._game_state.player_camp_id)
 
             self._camp_balance -= signing_cost
+
+            # Ship A1: track graduate for the "Your Graduates" tab
+            if not hasattr(self, '_amateur_graduates'):
+                self._amateur_graduates = []
+            self._amateur_graduates.append({
+                "fighter_id":      amateur_id,
+                "fighter_name":    amateur.name,
+                "signed_week":     (self._game_state.week_number
+                                    if self._game_state else 0),
+                "weight_class":    getattr(amateur, 'weight_class', ''),
+                "region":          getattr(amateur, 'region', ''),
+                "potential_grade": getattr(amateur, 'potential_grade', ''),
+            })
+
             self._news_items.insert(0, {
                 "headline": f"📝 SIGNED: {amateur.name} goes pro with your camp (${signing_cost:,})",
                 "category": "signing",

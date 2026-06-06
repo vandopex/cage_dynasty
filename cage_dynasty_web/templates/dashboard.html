@@ -143,6 +143,37 @@
 </div>
 {% endif %}
 
+{# ── Pending negotiations — Ship K5b ── #}
+{% if pending_negotiations %}
+<div style="background:var(--bg-card);border:1px solid var(--neon-green);
+            border-radius:8px;padding:var(--spacing-md);
+            margin-bottom:var(--spacing-md);">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--neon-green);margin-bottom:var(--spacing-sm);">
+        ⚔️  Negotiations Ready
+    </div>
+    {% for n in pending_negotiations %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:4px 0;font-size:.82rem;
+                border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+        <div>
+            <span style="color:var(--text-bright);font-weight:600;">
+                {{ n.player_fighter_name }} vs {{ n.ai_fighter_name }}
+            </span>
+            <span style="color:var(--text-muted);font-size:.72rem;margin-left:6px;">
+                {{ n.status_label }}
+            </span>
+        </div>
+        <a href="{{ url_for('negotiation', neg_id=n.neg_id) }}"
+           class="btn btn-primary btn-sm"
+           style="font-size:.72rem;padding:3px 10px;">
+            Negotiate →
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── Main 2-column layout ── #}
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
             align-items:start;">

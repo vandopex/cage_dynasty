@@ -31,6 +31,37 @@
        style="font-size:1.1rem;min-width:240px;">Continue →</a>
 </div>
 
+{# ── Challenge updates (Ship K5b) — surface AI responses + open negs ── #}
+{% if pending_negotiations or challenge_responses %}
+<div style="background:var(--bg-card);border:1px solid var(--neon-green);
+            border-radius:8px;padding:var(--spacing-md);
+            margin-bottom:var(--spacing-lg);">
+    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
+                color:var(--neon-green);margin-bottom:var(--spacing-sm);">
+        📬 Challenge Updates
+    </div>
+    {% for r in challenge_responses %}
+    <div style="font-size:.85rem;color:var(--text-bright);padding:4px 0;">
+        {{ r.headline }}
+    </div>
+    {% endfor %}
+    {% for n in pending_negotiations %}
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                margin-top:var(--spacing-sm);">
+        <span style="font-size:.82rem;color:var(--text-secondary);">
+            {{ n.player_fighter_name }} vs {{ n.ai_fighter_name }} —
+            {{ n.status_label }}
+        </span>
+        <a href="{{ url_for('negotiation', neg_id=n.neg_id) }}"
+           class="btn btn-primary btn-sm"
+           style="font-size:.72rem;padding:3px 10px;">
+            Negotiate →
+        </a>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── Training week / next fight banner ── #}
 {% if recap.upcoming_fight %}
 {% set uf = recap.upcoming_fight %}
