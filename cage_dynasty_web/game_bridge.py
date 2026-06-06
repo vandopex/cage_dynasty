@@ -1786,6 +1786,10 @@ class GameBridge:
             # Ship K5: resolve pending player challenges (1-2 week delay)
             self._process_pending_challenges(current_week)
 
+            # Ship L1: AI camp roster management — cuts, demands, FA sweep
+            self._process_ai_camp_roster(current_week)
+            self._process_ai_free_agent_bidding(current_week)
+
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
 
@@ -8768,6 +8772,19 @@ class GameBridge:
                 break
         return streak
 
+    def _get_fighter_win_streak(self, fighter) -> int:
+        """Compute current win streak from fight_history.
+        Canonical source — mirrors _get_fighter_lose_streak."""
+        streak = 0
+        for h in reversed(getattr(fighter, 'fight_history', []) or []):
+            r = h.get('result') if isinstance(h, dict) \
+                else getattr(h, 'result', '')
+            if r == 'W':
+                streak += 1
+            else:
+                break
+        return streak
+
     def _cooldown_weeks(self, fighter, is_champion: bool = False) -> int:
         """
         Cooldown = pure recovery time before a fighter can SIGN another fight.
@@ -11257,6 +11274,23 @@ class GameBridge:
                     elif last_result == 'L':
                         contract['morale'] = max(morale_floor,
                             contract.get('morale', 75) - (loss_penalty + ls * streak_penalty))
+                    # Ship L1: win streak demand — fighter wants recognition.
+                    # One-shot per streak via win_demand_fired_week flag.
+                    win_streak = self._get_fighter_win_streak(ftr)
+                    fights_completed = contract.get('fights_completed', 0)
+                    if (win_streak >= 3
+                            and not contract.get('win_demand_fired_week')
+                            and fights_completed >= 1):
+                        contract['win_demand_fired_week'] = current_week
+                        self._news_items.insert(0, {
+                            "headline": (f"💰 {ftr.name} is on a {win_streak}-"
+                                         f"fight win streak and wants contract "
+                                         f"recognition. Consider re-signing early."),
+                            "category": "contract",
+                            "week": current_week,
+                        })
+                    elif win_streak == 0:
+                        contract.pop('win_demand_fired_week', None)
                     # Coach trait morale effects — fire on fight week
                     _coach_traits = (self._coach.get('traits', [])
                                      if getattr(self, '_coach', None) else [])
@@ -11761,6 +11795,146 @@ class GameBridge:
                         "category": "signing",
                         "week": current_week,
                     })
+
+    def _process_ai_camp_roster(self, current_week: int) -> None:
+        """AI camp roster management — fires weekly.
+
+        Three actions:
+        1. Cut underperformers: 3+ lose streak, unranked or outside top 10,
+           10% chance per week. 26-week per-fighter cooldown.
+        2. Demand release: Hungry/Warrior personality with 4+ lose streak
+           demands out. 20% chance.
+        3. Idle self-release: unused 20+ weeks with 2+ lose streak, 15%.
+
+        Releases bypass _release_fighter_to_free_agency (which is
+        player-centric) and inline the bare release operation."""
+        if not self._game_state:
+            return
+        import random as _rnd
+
+        if not hasattr(self, '_ai_cut_cooldown'):
+            self._ai_cut_cooldown = {}
+
+        player_camp_id = self._game_state.player_camp_id
+
+        def _release_to_fa(_fid, _ftr):
+            """Inline AI-side release — no player-centric news, no
+            immediate re-bid (the FA bidding sweep handles pickup)."""
+            old_camp_id = _ftr.camp_id
+            _ftr.camp_id = None
+            _ftr.contract_id = None
+            self._game_state.free_agents.add(_fid)
+            old_camp = self._game_state.camps.get(old_camp_id)
+            if old_camp:
+                old_camp.fighter_count = max(0, old_camp.fighter_count - 1)
+            _cd = self._game_state._camp_data.get(old_camp_id, {})
+            if isinstance(_cd.get('fighters'), list) and _fid in _cd['fighters']:
+                _cd['fighters'].remove(_fid)
+
+        for fid, fighter in list(self._game_state.fighters.items()):
+            # Skip player camp, champions, inactive, free agents
+            if fighter.camp_id == player_camp_id:
+                continue
+            if not fighter.camp_id:
+                continue
+            if not getattr(fighter, 'is_active', True):
+                continue
+            if getattr(fighter, 'is_champion', False):
+                continue
+
+            # Cooldown — don't cut same fighter twice in 26w
+            last_cut = self._ai_cut_cooldown.get(fid, -99)
+            if current_week - last_cut < 26:
+                continue
+
+            lose_streak = self._get_fighter_lose_streak(fighter)
+            rank = self._get_fighter_rank(fighter)
+            personality = (
+                self._game_state._fighter_data.get(fid, {})
+                    .get('personality')
+                or getattr(fighter, 'personality', '')
+                or 'Competitor'
+            )
+            camp_name = ""
+            camp = self._game_state.camps.get(fighter.camp_id)
+            if camp:
+                camp_name = getattr(camp, 'name', '')
+
+            released = False
+
+            # Action 1: camp cuts underperformer
+            if (lose_streak >= 3
+                    and (rank is None or rank > 10)):
+                if _rnd.random() < 0.10:
+                    _release_to_fa(fid, fighter)
+                    self._ai_cut_cooldown[fid] = current_week
+                    # News only for ranked/familiar fighters (suppress churn spam)
+                    if rank is not None and rank <= 15:
+                        self._news_items.insert(0, {
+                            "headline": (f"🚪 {fighter.name} released by "
+                                         f"{camp_name} after "
+                                         f"{lose_streak}-fight skid."),
+                            "category": "signing",
+                            "week": current_week,
+                        })
+                    released = True
+
+            # Action 2: fighter demands release (personality)
+            if (not released
+                    and lose_streak >= 4
+                    and personality in ("Hungry", "Warrior")):
+                if _rnd.random() < 0.20:
+                    _release_to_fa(fid, fighter)
+                    self._ai_cut_cooldown[fid] = current_week
+                    self._news_items.insert(0, {
+                        "headline": (f"📢 {fighter.name} demands release "
+                                     f"from {camp_name} — looking for "
+                                     f"a fresh start."),
+                        "category": "signing",
+                        "week": current_week,
+                    })
+                    released = True
+
+            # Action 3: idle fighter self-release
+            if not released and lose_streak >= 2:
+                history = getattr(fighter, 'fight_history', []) or []
+                last_fight_week = 0
+                if history and isinstance(history[-1], dict):
+                    last_fight_week = history[-1].get('week', 0)
+                idle_weeks = current_week - last_fight_week
+                if idle_weeks >= 20:
+                    if _rnd.random() < 0.15:
+                        _release_to_fa(fid, fighter)
+                        self._ai_cut_cooldown[fid] = current_week
+                        self._news_items.insert(0, {
+                            "headline": (f"📢 {fighter.name} parts ways "
+                                         f"with {camp_name} after "
+                                         f"{idle_weeks} weeks of inactivity."),
+                            "category": "signing",
+                            "week": current_week,
+                        })
+
+    def _process_ai_free_agent_bidding(self, current_week: int) -> None:
+        """Weekly AI free agent pickup sweep. Caps at 3 signings
+        per advance to prevent thrash. Uses existing
+        _ai_bid_for_free_agent helper (which discards from
+        free_agents on successful sign)."""
+        if not self._game_state:
+            return
+        free_agents = self._game_state.get_free_agents()
+        if not free_agents:
+            return
+        import random as _rnd
+        _rnd.shuffle(free_agents)
+        signed = 0
+        for fa in free_agents:
+            if signed >= 3:
+                break
+            # Helper takes (fighter_id, fighter) and discards from
+            # free_agents on successful sign — detect via post-call check.
+            self._ai_bid_for_free_agent(fa.fighter_id, fa)
+            if fa.fighter_id not in self._game_state.free_agents:
+                signed += 1
 
     def _process_pending_challenges(self, current_week: int) -> None:
         """Resolve pending player challenges after a 1-2 week delay.
