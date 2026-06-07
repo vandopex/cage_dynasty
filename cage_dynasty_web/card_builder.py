@@ -358,7 +358,10 @@ class CardBuilder:
         """
         state = self.get_or_create_card_state(event_name, weeks_until)
 
-        # Title fights ALWAYS get main event
+        # Title fights ALWAYS get headline placement — Ship CB2: explicit
+        # never-prelim guarantee. Title cascade ME → CO_MAIN → MAIN_CARD;
+        # 3rd+ title fight on a card stays at MAIN_CARD (overflowing the
+        # 3-cap if needed) but NEVER falls to prelim/early-prelim.
         if is_title_fight:
             if state.main_event_available:
                 state.add_fight(CardSlot.MAIN_EVENT)
@@ -368,6 +371,8 @@ class CardBuilder:
                 state.add_fight(CardSlot.CO_MAIN)
                 return CardSlot.CO_MAIN, True
             else:
+                # 3rd+ title fight — stays on card as MAIN_CARD,
+                # never goes to prelim or early-prelim.
                 state.add_fight(CardSlot.MAIN_CARD)
                 return CardSlot.MAIN_CARD, True
 
@@ -380,15 +385,19 @@ class CardBuilder:
         return assigned_slot, is_headline
     
     def _get_target_slot_by_score(self, score: float) -> CardSlot:
-        """Determine target slot based on matchup score"""
+        """Determine target slot based on matchup score.
+        Ship CB2: very-low-score fights (<35) target EARLY_PRELIM
+        so they don't crowd ranked PRELIM matchups."""
         if score >= SCORE_THRESHOLDS[CardSlot.MAIN_EVENT]:
             return CardSlot.MAIN_EVENT
         elif score >= SCORE_THRESHOLDS[CardSlot.CO_MAIN]:
             return CardSlot.CO_MAIN
         elif score >= SCORE_THRESHOLDS[CardSlot.MAIN_CARD]:
             return CardSlot.MAIN_CARD
-        else:
+        elif score >= SCORE_THRESHOLDS[CardSlot.PRELIM]:
             return CardSlot.PRELIM
+        else:
+            return CardSlot.EARLY_PRELIM
     
     def _find_available_slot(
         self, 
@@ -400,12 +409,14 @@ class CardBuilder:
         Find an available slot, falling back to lower slots if needed.
         min_slot: Never fall below this slot (hard floor for top contenders).
         """
-        # Define fallback order
+        # Define fallback order — Ship CB2: EARLY_PRELIM included so the
+        # cascade reaches it instead of overflowing PRELIM past its cap.
         slot_priority = [
             CardSlot.MAIN_EVENT,
             CardSlot.CO_MAIN,
             CardSlot.MAIN_CARD,
             CardSlot.PRELIM,
+            CardSlot.EARLY_PRELIM,
         ]
 
         # Hard floor index — don't fall below this

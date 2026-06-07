@@ -9375,14 +9375,14 @@ class GameBridge:
         # matchup_credible gate (require both fighters title-eligible)
         # was too restrictive and let title-tier matchups fall to prelims.
         # If caller provided min_slot, use it directly (override path).
-        if min_slot is None and top_rank is not None and top_rank <= 5:
-            if top_rank <= 1:
-                score = max(score, SCORE_THRESHOLDS[CardSlot.MAIN_EVENT] + 1)
-                min_slot = CardSlot.CO_MAIN
-            elif top_rank <= 3:
+        # Ship CB2: tightened rank-based floor. Ranks 1-2 → CO_MAIN min;
+        # ranks 3-10 → MAIN_CARD min. Unranked / rank 11+ have no floor
+        # and can fall to PRELIM / EARLY_PRELIM via score routing.
+        if min_slot is None and top_rank is not None:
+            if top_rank <= 2:
                 score = max(score, SCORE_THRESHOLDS[CardSlot.CO_MAIN] + 1)
                 min_slot = CardSlot.CO_MAIN
-            else:  # top_rank <= 5
+            elif top_rank <= 10:
                 score = max(score, SCORE_THRESHOLDS[CardSlot.MAIN_CARD] + 1)
                 min_slot = CardSlot.MAIN_CARD
 
@@ -9814,22 +9814,25 @@ class GameBridge:
         # ── Sort candidates by score descending ───────────────────────────
         candidates.sort(key=lambda x: x[0], reverse=True)
 
-        # ── Cap title fights: max 2 per card, must be different divisions ──
-        title_count = 0
-        title_divisions_used = set()
-        capped = []
-        for c in candidates:
-            score_c, f1_c, f2_c, wc_c, is_title_c, _ = c  # 6th = computed_target_week, unused in cap
-            if is_title_c:
-                if title_count < 2 and wc_c not in title_divisions_used:
-                    capped.append(c)
-                    title_count += 1
-                    title_divisions_used.add(wc_c)
-                # else: same division already has a title fight, or card is full
-                # These fighters get re-scheduled next pipeline build
-            else:
-                capped.append(c)
-        candidates = capped
+        # ── Ship CB2: split title vs non-title; title fights claim the
+        # MAIN_EVENT/CO_MAIN slots BEFORE any regular fight gets a chance.
+        # Excess title fights (3rd+ or duplicate-division) defer naturally
+        # to the next pipeline rebuild — no explicit cooldown applied.
+        _title_candidates   = [c for c in candidates if c[4]]
+        _regular_candidates = [c for c in candidates if not c[4]]
+
+        # Title cap — max 2 per card, must be different divisions
+        _title_kept: List[Any] = []
+        _title_divs: Set[str] = set()
+        for c in _title_candidates:
+            _wc = c[3]
+            if len(_title_kept) < 2 and _wc not in _title_divs:
+                _title_kept.append(c)
+                _title_divs.add(_wc)
+            # else: excess title fight deferred to next pipeline build
+
+        # Merge: title fights first, then non-title in score order
+        candidates = _title_kept + _regular_candidates
 
         # ── Fill card slots top-to-bottom ─────────────────────────────────
         # Sub-ship A: route by computed_target_week. Candidates whose lead
@@ -9856,11 +9859,25 @@ class GameBridge:
                 override_f1 = 3 if r1 == 1 else r1
                 override_f2 = 3 if r2 == 1 else r2
 
+            # Ship CB2: per-fight reality check — high-ranked fighters
+            # never prelim. Belt-and-suspenders with _assign_card_slot's
+            # wrapper floor logic; the score bump here is required because
+            # _find_available_slot returns PRELIM when start_idx > floor_idx.
+            min_slot: Optional[CardSlot] = None
+            if top_rank is not None:
+                if top_rank <= 2:
+                    min_slot = CardSlot.CO_MAIN
+                    score = max(score, SCORE_THRESHOLDS[CardSlot.CO_MAIN] + 1)
+                elif top_rank <= 5:
+                    min_slot = CardSlot.MAIN_CARD
+                    score = max(score, SCORE_THRESHOLDS[CardSlot.MAIN_CARD] + 1)
+
             slot = self._assign_card_slot(
                 event_name, score, is_title,
                 f1.overall_rating + f2.overall_rating,
                 f1_rank=override_f1, f2_rank=override_f2,
                 f1=f1, f2=f2,
+                min_slot=min_slot,
             )
 
             if computed_target_week == target_week:
