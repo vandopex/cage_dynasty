@@ -2629,10 +2629,32 @@ class GameBridge:
             ftr = self._game_state.get_fighter(fid)
             if not ftr:
                 continue
-            # Earn nickname on win when threshold crossed (≥2 wins, ≥3 total fights)
+            # Earn nickname on win when threshold crossed:
+            # 5 wins, 7 fights, AND (≥40% finish rate OR ≥3-fight streak).
+            # Backfill in web_load keeps the looser legacy gate so old saves
+            # don't strip veterans of their nicknames on load.
             if is_win and not getattr(ftr, 'nickname', None):
                 _total_fights = (ftr.wins or 0) + (ftr.losses or 0) + (ftr.draws or 0)
-                if ftr.wins >= 2 and _total_fights >= 3:
+                _finish_rate = 0.0
+                if _total_fights > 0:
+                    _finishes = sum(
+                        1 for f in (getattr(ftr, 'fight_history', []) or [])
+                        if isinstance(f, dict)
+                        and f.get('method') in ('KO', 'TKO', 'SUB')
+                        and f.get('result') == 'W'
+                    )
+                    _finish_rate = _finishes / _total_fights
+                _win_streak = 0
+                _fh = list(getattr(ftr, 'fight_history', []) or [])
+                for _fh_entry in reversed(_fh):
+                    if not isinstance(_fh_entry, dict):
+                        break
+                    if _fh_entry.get('result') == 'W':
+                        _win_streak += 1
+                    else:
+                        break
+                _perf_gate = (_finish_rate >= 0.40 or _win_streak >= 3)
+                if ftr.wins >= 5 and _total_fights >= 7 and _perf_gate:
                     from game_state import NICKNAMES_POOL as _NK_POOL
                     import random as _nk_random
                     ftr.nickname = _nk_random.choice(_NK_POOL)
@@ -7398,9 +7420,9 @@ class GameBridge:
             "player":            web_player,
             "opponent":          web_opponent,
             "weeks_until":       weeks_until,
-            "existing_gameplan": existing.get("gameplan",        "BALANCED"),
-            "existing_focus":    existing.get("training_focus",  "boxing"),
-            "existing_intensity":existing.get("intensity",       "MODERATE"),
+            "existing_gameplan": existing.get("gameplan",        None),
+            "existing_focus":    existing.get("training_focus",  ""),
+            "existing_intensity":existing.get("intensity",       None),
             "coach_suggestion":  self._generate_coach_suggestion(web_player, web_opponent, weeks_until),
             "tale_of_tape":      tot_data,
             "tendencies":        opp_tendencies,

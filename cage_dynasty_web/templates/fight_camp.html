@@ -351,6 +351,7 @@
                 'MENTAL:composure': '🧘 Composure ×1.0 · 🧠 Fight IQ ×0.5 · 💪 Heart ×0.25',
                 'SPARRING:sparring': '🥊 Boxing ×0.5 · 🦅 TD Def ×0.5 · 🧠 Fight IQ ×0.5 · ⚡ Speed ×0.5',
             } %}
+            <div class="focus-picker">
             {% for group in focus_groups %}
             <div style="margin-bottom:var(--spacing-md);">
                 <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
@@ -389,6 +390,7 @@
                 </div>
             </div>
             {% endfor %}
+            </div>
         </div>
     </div>
 
@@ -459,7 +461,8 @@
 
 <script>
 function selectCard(el, groupClass) {
-    el.closest('div').querySelectorAll('label').forEach(l => {
+    (el.closest('.focus-picker') || el.closest('div'))
+        .querySelectorAll('label').forEach(l => {
         if (!l.querySelector(`input.${groupClass}[value="${el.querySelector('input').value}"]`)) {
             // Only clear if not the coach-recommended one's permanent gold
         }
