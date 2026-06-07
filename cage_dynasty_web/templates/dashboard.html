@@ -322,17 +322,17 @@
                             {# Gain/boost/decay pills — compact #}
                             <div style="display:flex;flex-wrap:wrap;gap:2px;">
                                 {% for stat, val in entry.gains.items() %}
-                                <span style="font-size:.55rem;color:var(--neon-green);
+                                <span style="font-size:.58rem;color:var(--neon-green);
                                              background:rgba(0,230,118,.1);
                                              padding:1px 4px;border-radius:2px;">
-                                    {{ stat | replace('_', ' ') | truncate(8, true, '') }}+{{ '%.1f'|format(val) }}
+                                    {{ stat | replace('_', ' ') | truncate(8, true, '') }} +{{ '%.2f'|format(val) }}
                                 </span>
                                 {% endfor %}
                                 {% for stat, val in entry.coach_boosts.items() %}
-                                <span style="font-size:.55rem;color:var(--gold);
+                                <span style="font-size:.58rem;color:var(--gold);
                                              background:rgba(255,215,0,.1);
                                              padding:1px 4px;border-radius:2px;">
-                                    {{ stat | replace('_', ' ') | truncate(8, true, '') }}+{{ '%.1f'|format(val) }}🧑‍🏫
+                                    🧑‍🏫 {{ stat | replace('_', ' ') | truncate(8, true, '') }} +{{ '%.2f'|format(val) }}
                                 </span>
                                 {% endfor %}
                                 {% for stat, val in entry.decays.items() %}
