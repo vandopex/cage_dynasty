@@ -140,25 +140,34 @@ PROSPECT_DEMANDS = {
 COACH_SPECIALTIES = ["Striking", "Wrestling", "BJJ", "Conditioning", "Strength", "Cornering"]
 
 COACH_TRAITS = {
-    # Positive Training Traits
-    "Motivator": "Excellent at building confidence and mental game",
-    "Technical Genius": "Focuses on precise technique over raw power",
-    "Diamond Polisher": "Exceptional at developing young prospects",
-    "Veteran's Touch": "Knows how to maintain aging fighters",
-    "Iron Sharpener": "Camp sparring produces better results",
-    "Calm Corner": "Improves composure and between-round recovery",
-    "Eye for Talent": "Better at scouting and evaluating fighters",
-    "Taskmaster": "Intense training (+15%) but can hurt morale",
-    
-    # Personality Traits
-    "Disciplinarian": "Works well with disciplined fighters",
-    "Player's Coach": "Boosts morale but slightly less effective training",
-    "Intense": "High-energy training style, fast results",
-    "Analytical": "Excellent game planning, methodical approach",
-    "Old School": "Traditional methods, proven conditioning results",
-    "Modern Methods": "Cutting-edge techniques for young fighters",
-    "Patient": "Good with fighters who need fundamentals",
-    "Supportive": "Creates positive training environment",
+    # ── Training multipliers ──────────────────
+    "TECHNICAL_GENIUS":    "Technical Genius",
+    "DIAMOND_POLISHER":    "Diamond Polisher",
+    "VETERANS_TOUCH":      "Veterans Touch",
+    "IRON_SHARPENER":      "Iron Sharpener",
+    "OLD_SCHOOL":          "Old School",
+    "MODERN_METHODS":      "Modern Methods",
+    "ANALYTICAL":          "Analytical",
+    "CONDITIONING_COACH":  "Conditioning Coach",
+    "GRAPPLING_SPECIALIST":"Grappling Specialist",
+    "STRIKING_SPECIALIST": "Striking Specialist",
+    "FINISHER":            "Finisher",
+    "DEFENSIVE_MINDED":    "Defensive Minded",
+    # ── Morale / mental ───────────────────────
+    "MOTIVATOR":           "Motivator",
+    "PLAYERS_COACH":       "Players Coach",
+    "SUPPORTIVE":          "Supportive",
+    "CALM_CORNER":         "Calm Corner",
+    "PATIENT":             "Patient",
+    "CORNER_MAN":          "Corner Man",
+    # ── Mixed ─────────────────────────────────
+    "INTENSE":             "Intense",
+    "DISCIPLINARIAN":      "Disciplinarian",
+    # ── Negatives with silver lining ──────────
+    "TASKMASTER":          "Taskmaster",
+    "BURNED_OUT":          "Burned Out",
+    "FAIR_WEATHER":        "Fair Weather",
+    "INJURY_RISK":         "Injury Risk",
 }
 
 # For backwards compatibility
@@ -696,7 +705,7 @@ def generate_starting_coaches(num_coaches: int = 10) -> List[StartingCoach]:
         
         # Generate traits (1-2 traits per coach, 40% chance for 2)
         available_traits = list(COACH_TRAITS.keys())
-        num_traits = 1 if random.random() < 0.6 else 2
+        num_traits = 1 if random.random() < 0.40 else 2
         coach_traits = random.sample(available_traits, num_traits)
         
         # Experience based on skill

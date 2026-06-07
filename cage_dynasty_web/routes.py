@@ -14,28 +14,34 @@ import traceback
 # pairs. Category drives pill color in templates (positive/negative/
 # personality/special). Kept route-side so the bridge stays template-agnostic.
 _TRAIT_DISPLAY = {
-    'TECHNICAL_GENIUS':  ('Technical Genius',  'positive'),
-    'DIAMOND_POLISHER':  ('Fighter Developer', 'positive'),
-    'VETERANS_TOUCH':    ('Veteran Whisperer', 'positive'),
-    'IRON_SHARPENER':    ('Iron Conditioning', 'positive'),
-    'MOTIVATOR':         ('Hype Man',          'positive'),
-    'CALM_CORNER':       ('Smart Taper',       'positive'),
-    'EYE_FOR_TALENT':    ('Talent Spotter',    'positive'),
-    'TASKMASTER':        ('Taskmaster',        'personality'),
-    'PLAYERS_COACH':     ("Player's Coach",    'personality'),
-    'OLD_SCHOOL':        ('Old School',        'personality'),
-    'MODERN_METHODS':    ('Modern Methods',    'personality'),
-    'DISCIPLINARIAN':    ('Disciplinarian',    'personality'),
-    'ANALYTICAL':        ('Analytical',        'personality'),
-    'INTENSE':           ('Intense',           'personality'),
-    'BURNED_OUT':        ('Burned Out',        'negative'),
-    'INJURY_RISK':       ('Overtrainer',       'negative'),
-    'FAIR_WEATHER':      ('Fair Weather',      'negative'),
-    'PRIMA_DONNA':       ('Prima Donna',       'negative'),
-    'CLASHING_EGO':      ('Clashing Ego',      'negative'),
-    'OUTDATED':          ('Outdated Methods',  'negative'),
-    'LOYAL':             ('Loyal',             'special'),
-    'AMBITIOUS':         ('Ambitious',         'special'),
+    # training multipliers — blue
+    "TECHNICAL_GENIUS":    ("Technical Genius",    "training"),
+    "DIAMOND_POLISHER":    ("Diamond Polisher",    "training"),
+    "VETERANS_TOUCH":      ("Veterans Touch",      "training"),
+    "IRON_SHARPENER":      ("Iron Sharpener",      "training"),
+    "OLD_SCHOOL":          ("Old School",          "training"),
+    "MODERN_METHODS":      ("Modern Methods",      "training"),
+    "ANALYTICAL":          ("Analytical",          "training"),
+    "CONDITIONING_COACH":  ("Conditioning Coach",  "training"),
+    "GRAPPLING_SPECIALIST":("Grappling Specialist","training"),
+    "STRIKING_SPECIALIST": ("Striking Specialist", "training"),
+    "FINISHER":            ("Finisher",            "training"),
+    "DEFENSIVE_MINDED":    ("Defensive Minded",    "training"),
+    # morale / personality — green
+    "MOTIVATOR":           ("Motivator",           "personality"),
+    "PLAYERS_COACH":       ("Players Coach",       "personality"),
+    "SUPPORTIVE":          ("Supportive",          "personality"),
+    "CALM_CORNER":         ("Calm Corner",         "personality"),
+    "PATIENT":             ("Patient",             "personality"),
+    "CORNER_MAN":          ("Corner Man",          "personality"),
+    # mixed — orange
+    "INTENSE":             ("Intense",             "mixed"),
+    "DISCIPLINARIAN":      ("Disciplinarian",      "mixed"),
+    # negatives — red
+    "TASKMASTER":          ("Taskmaster",          "negative"),
+    "BURNED_OUT":          ("Burned Out",          "negative"),
+    "FAIR_WEATHER":        ("Fair Weather",        "negative"),
+    "INJURY_RISK":         ("Injury Risk",         "negative"),
 }
 
 

@@ -5110,8 +5110,9 @@ class GameBridge:
             # Fight damage adds extra risk — higher fatigue equivalent
             _effective_fatigue = min(100, _fatigue + _fight_dmg * 0.5)
             _prob = calculate_training_injury_probability(_int_val, _effective_fatigue)
-            # INJURY_RISK coach trait — pushes training injury chance up 40%, capped at 25%
-            if 'INJURY_RISK' in (self._coach.get('traits', []) if getattr(self, '_coach', None) else []):
+            # INJURY_RISK + INTENSE — both push training injury chance up 40%, capped at 25%
+            _coach_t_inj = self._coach.get('traits', []) if getattr(self, '_coach', None) else []
+            if 'INJURY_RISK' in _coach_t_inj or 'INTENSE' in _coach_t_inj:
                 _prob = min(_prob * 1.4, 0.25)
             if _int_val > 0 and _ir.random() < _prob:
                 _injured = True
@@ -5331,44 +5332,86 @@ class GameBridge:
 
             # Coach trait multipliers — composable, floor at 50% gains
             _traits = self._coach.get('traits', []) if self._coach else []
-            _trait_mult = 1.0
+            _trait_delta = 0.0
             _fighter_age = getattr(fighter, 'age', 25) or 25
             _contract_cur = self._contracts.get(fid, {})
             _morale_cur = _contract_cur.get('morale', 75)
-            _recent_loss = False
             _hist_cur = getattr(fighter, 'fight_history', []) or []
-            if _hist_cur and isinstance(_hist_cur[-1], dict) and _hist_cur[-1].get('result') == 'L':
-                _recent_loss = True
-            for _trait in _traits:
-                if _trait == 'TECHNICAL_GENIUS':
-                    _trait_mult += 0.15
-                elif _trait == 'DIAMOND_POLISHER' and _fighter_age < 28:
-                    _trait_mult += 0.25
-                elif _trait == 'VETERANS_TOUCH' and _fighter_age >= 30:
-                    _trait_mult += 0.20
-                elif _trait == 'TASKMASTER':
-                    _trait_mult += 0.15
-                elif _trait == 'MOTIVATOR' and _morale_cur < 60:
-                    _trait_mult += 0.15
-                elif _trait == 'IRON_SHARPENER':
-                    _trait_mult += 0.10
-                elif _trait == 'BURNED_OUT':
-                    _trait_mult -= 0.15
-                elif _trait == 'FAIR_WEATHER' and _recent_loss:
-                    _trait_mult -= 0.20
-                elif _trait == 'OLD_SCHOOL':
-                    _trait_mult += 0.10
-                elif _trait == 'MODERN_METHODS' and _fighter_age < 26:
-                    _trait_mult += 0.15
-            _trait_mult = max(0.5, _trait_mult)
+            _last_result = (_hist_cur[-1].get('result')
+                            if _hist_cur and isinstance(_hist_cur[-1], dict)
+                            else None)
 
-            per_attr_gain = (passive_gain / len(coach_attrs)) * _boost * _trait_mult
+            # ── Training multiplier traits (composable, flat ifs) ────────
+            if 'TECHNICAL_GENIUS' in _traits:
+                _trait_delta += 0.15
+            if 'DIAMOND_POLISHER' in _traits and _fighter_age < 28:
+                _trait_delta += 0.25
+            if 'VETERANS_TOUCH' in _traits and _fighter_age >= 30:
+                _trait_delta += 0.20
+            if 'MOTIVATOR' in _traits and _morale_cur < 60:
+                _trait_delta += 0.15
+            if 'IRON_SHARPENER' in _traits:
+                _trait_delta += 0.10
+            if 'BURNED_OUT' in _traits:
+                _trait_delta -= 0.15
+            if 'FAIR_WEATHER' in _traits:
+                if _last_result == 'L':
+                    _trait_delta -= 0.20
+                elif _last_result == 'W':
+                    _trait_delta += 0.20
+            if 'OLD_SCHOOL' in _traits:
+                _trait_delta += 0.10
+            if 'MODERN_METHODS' in _traits and _fighter_age < 26:
+                _trait_delta += 0.15
+            if 'INTENSE' in _traits:
+                _trait_delta += 0.10
+            if 'DISCIPLINARIAN' in _traits:
+                _trait_delta += 0.10
+            if 'TASKMASTER' in _traits:
+                _trait_delta += 0.15
+                # Silver lining: extra gains when morale bottomed out
+                if _morale_cur < 40:
+                    _trait_delta += 0.10
+            if 'PATIENT' in _traits:
+                _lose_streak = getattr(fighter, 'lose_streak', 0) or 0
+                if _lose_streak >= 2:
+                    _trait_delta += 0.15
+            _trait_mult = max(0.5, 1.0 + _trait_delta)
+
+            # ── Specialist traits: per-attr boost (stacks on top of mult) ─
+            _GRAPPLING_ATTRS    = {'takedowns','takedown_defense',
+                                    'top_control','submissions','guard'}
+            _STRIKING_ATTRS     = {'boxing','kicks','clinch_striking',
+                                    'striking_defense'}
+            _CONDITIONING_ATTRS = {'cardio','recovery','chin'}
+            _FINISHER_ATTRS     = {'boxing','kicks','clinch_striking',
+                                    'submissions'}
+            _DEFENSIVE_ATTRS    = {'striking_defense','takedown_defense'}
+
+            def _specialist_mult(attr_name: str) -> float:
+                _sm = 1.0
+                if 'ANALYTICAL' in _traits and attr_name in {'fight_iq', 'composure'}:
+                    _sm += 0.20
+                if 'CONDITIONING_COACH' in _traits and attr_name in _CONDITIONING_ATTRS:
+                    _sm += 0.20
+                if 'GRAPPLING_SPECIALIST' in _traits and attr_name in _GRAPPLING_ATTRS:
+                    _sm += 0.20
+                if 'STRIKING_SPECIALIST' in _traits and attr_name in _STRIKING_ATTRS:
+                    _sm += 0.20
+                if 'FINISHER' in _traits and attr_name in _FINISHER_ATTRS:
+                    _sm += 0.20
+                if 'DEFENSIVE_MINDED' in _traits and attr_name in _DEFENSIVE_ATTRS:
+                    _sm += 0.20
+                return _sm
+
+            _base_per_attr_gain = (passive_gain / len(coach_attrs)) * _boost * _trait_mult
             real_fighter = self._game_state.get_fighter(fid)
             # Per-fighter potential ceiling for the coach passive boost too.
             _fp = self._game_state._fighter_data.get(fid, {}).get("potential")
             _fp = int(_fp) if _fp is not None else None
-            if real_fighter and per_attr_gain > 0:
+            if real_fighter and _base_per_attr_gain > 0:
                 for attr in coach_attrs:
+                    per_attr_gain = _base_per_attr_gain * _specialist_mult(attr)
                     current = float(getattr(real_fighter, attr,
                                     getattr(real_fighter, 'overall_rating', 50)))
                     effective = self._diminishing_gain(current, per_attr_gain, camp_tier,
@@ -11464,13 +11507,27 @@ class GameBridge:
                     # Coach trait morale effects — fire on fight week
                     _coach_traits = (self._coach.get('traits', [])
                                      if getattr(self, '_coach', None) else [])
-                    if 'TASKMASTER' in _coach_traits:
-                        contract['morale'] = max(morale_floor,
-                            contract.get('morale', 75) - 3)
-                    if 'MOTIVATOR' in _coach_traits and contract.get('morale', 75) < 60:
-                        contract['morale'] = min(100, contract.get('morale', 75) + 5)
-                    if 'PLAYERS_COACH' in _coach_traits:
-                        contract['morale'] = min(100, contract.get('morale', 75) + 3)
+                    if _coach_traits:
+                        _m = contract.get('morale', 75)
+                        if 'TASKMASTER' in _coach_traits:
+                            _m -= 3
+                        if 'MOTIVATOR' in _coach_traits and _m < 60:
+                            _m += 5
+                        if 'PLAYERS_COACH' in _coach_traits:
+                            _m += 3
+                        if 'SUPPORTIVE' in _coach_traits:
+                            _m += 3
+                        if 'BURNED_OUT' in _coach_traits:
+                            _m += 5  # silver lining
+                        if 'CALM_CORNER' in _coach_traits:
+                            # Post-fight morale recovery if last fight was a loss
+                            _last_r = None
+                            _fh_cc = list(getattr(ftr, 'fight_history', []) or [])
+                            if _fh_cc and isinstance(_fh_cc[-1], dict):
+                                _last_r = _fh_cc[-1].get('result')
+                            if _last_r == 'L':
+                                _m += 5
+                        contract['morale'] = max(morale_floor, min(100, _m))
             else:
                 # Inactivity morale decay — founder: 1 pt/wk after 14w; others: 2 pt/wk after 10w
                 last_fight_week = history[-1].get('week', 0) if history and isinstance(history[-1], dict) else 0

@@ -1075,6 +1075,9 @@ def compute_prefight_buff(coach_dict: Dict[str, Any]) -> Optional[Dict[str, Any]
     rating = int(coach_dict.get("rating", 60) or 60)
     archetype = _archetype_from_specialty(coach_dict.get("specialty", "mma"))
     bonus = CORNER_BONUS_BASE + max(0, rating - 60) * CORNER_BONUS_PER_RATING_POINT
+    # CORNER_MAN trait boosts the pre-fight buff
+    if 'CORNER_MAN' in (coach_dict.get('traits', []) or []):
+        bonus += 0.10
     return {
         "archetype":  archetype,
         "attrs":      ARCHETYPE_BUFF_ATTRS.get(archetype, ("fight_iq",)),
