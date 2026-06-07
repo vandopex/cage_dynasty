@@ -94,7 +94,7 @@
             </div>
             <div style="font-size:.55rem;color:var(--text-muted);
                         text-transform:uppercase;letter-spacing:.06em;">
-                OVR
+                <span class="tip" data-tip="Overall Rating — a display-only summary of your fighter's stats. Never affects fight outcomes directly. A high OVR with weak specific stats can still lose.">OVR</span>
             </div>
         </div>
 
@@ -183,7 +183,7 @@
                     </div>
                     <span style="font-size:.68rem;
                                  color:var(--text-muted);">
-                        {{ cond }}%
+                        {{ cond }}%<i class="tip-icon" data-tip="Condition reflects how fresh your fighter is. High fatigue from back-to-back fights or EXTREME training reduces condition. Low condition fighters perform worse and injure more easily.">ⓘ</i>
                     </span>
                 </div>
 
@@ -226,7 +226,7 @@
                     'var(--danger)' %}
                 <div style="font-size:.68rem;
                             color:{{ morale_color }};">
-                    ● Morale {{ f.morale }}
+                    ● Morale {{ f.morale }}<i class="tip-icon" data-tip="Morale affects how receptive a fighter is to training and re-signing. Low morale from losses, a harsh coach, or a bad contract can trigger holdouts or walkouts.">ⓘ</i>
                 </div>
                 {% endif %}
 
@@ -244,7 +244,7 @@
                     📋 {{ contract.fights_remaining }}
                     fight{{ 's' if
                         contract.fights_remaining != 1 else '' }}
-                    left
+                    left<i class="tip-icon" data-tip="Fighters with 1-2 fights left on contract may demand higher pay or walk. Check the dashboard for re-sign alerts.">ⓘ</i>
                 </div>
                 {% endif %}
 

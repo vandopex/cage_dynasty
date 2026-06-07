@@ -14,6 +14,71 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
     {% block head %}{% endblock %}
+
+    <style>
+        /* ── Tooltip system — Ship TT1 ─────────────── */
+        .tip {
+            position: relative;
+            cursor: help;
+            border-bottom: 1px dotted var(--text-muted);
+            display: inline;
+        }
+        .tip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: rgba(255,255,255,.12);
+            color: var(--text-muted);
+            font-size: .6rem;
+            font-style: normal;
+            cursor: help;
+            vertical-align: middle;
+            margin-left: 3px;
+            flex-shrink: 0;
+            border-bottom: none;
+        }
+        .tip::after,
+        .tip-icon::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: calc(100% + 6px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1a1a2e;
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 7px 10px;
+            font-size: .72rem;
+            line-height: 1.45;
+            width: 220px;
+            white-space: normal;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity .15s;
+            z-index: 9999;
+            font-weight: 400;
+            font-style: normal;
+            text-decoration: none;
+            border-bottom: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,.4);
+        }
+        .tip:hover::after,
+        .tip-icon:hover::after,
+        .tip.tip-open::after,
+        .tip-icon.tip-open::after {
+            opacity: 1;
+        }
+        /* Flip tooltip below when near top of viewport */
+        .tip-below::after,
+        .tip-icon.tip-below::after {
+            bottom: auto;
+            top: calc(100% + 6px);
+        }
+    </style>
 </head>
 <body>
     <div class="page-wrapper">
@@ -154,6 +219,25 @@
         });
     </script>
     
+    <script>
+        /* Tooltip tap-to-toggle for mobile — TT1 */
+        document.addEventListener('click', function(e) {
+            var el = e.target.closest('.tip, .tip-icon');
+            if (!el) {
+                document.querySelectorAll('.tip.tip-open, .tip-icon.tip-open').forEach(function(t) {
+                    t.classList.remove('tip-open');
+                });
+                return;
+            }
+            var isOpen = el.classList.contains('tip-open');
+            document.querySelectorAll('.tip.tip-open, .tip-icon.tip-open').forEach(function(t) {
+                t.classList.remove('tip-open');
+            });
+            if (!isOpen) el.classList.add('tip-open');
+            e.stopPropagation();
+        });
+    </script>
+
     {% block scripts %}{% endblock %}
 </body>
 </html>

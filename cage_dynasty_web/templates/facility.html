@@ -17,7 +17,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;
                     margin-bottom:var(--spacing-md);">
             <h3 style="margin:0;font-family:var(--font-display);font-size:1rem;">
-                🎓 Coaching Staff
+                🎓 Coaching Staff<i class="tip-icon" data-tip="Each coach on staff passively develops all your fighters every week in their specialty domain. The head coach also provides corner advice and a pre-fight buff. Upgrade your facility for more staff slots.">ⓘ</i>
             </h3>
             <span style="font-size:.72rem;color:var(--text-muted);">
                 {{ staff|length }} / {{ max_slots }} slots
@@ -38,7 +38,7 @@
                     <span style="font-size:.6rem;font-weight:700;background:var(--gold);
                                  color:var(--bg-dark);padding:1px 5px;border-radius:3px;">
                         HEAD
-                    </span>
+                    </span><i class="tip-icon tip-below" data-tip="The head coach provides corner advice between rounds and a pre-fight attribute buff. All coaches develop fighters but only the head coach's specialty determines the pre-fight buff.">ⓘ</i>
                     {% endif %}
                     <span style="font-family:var(--font-display);font-size:.9rem;
                                  color:var(--text-bright);">
@@ -171,7 +171,7 @@
 </div>
 
 <div class="card mt-lg">
-    <div class="card-header"><h3>🏋️ Facility Benefits</h3></div>
+    <div class="card-header"><h3>🏋️ Facility Benefits<i class="tip-icon" data-tip="Stats cannot be trained above the facility's stat cap regardless of coach quality or training intensity. Upgrade to unlock your fighters' full potential.">ⓘ</i></h3></div>
     <div style="padding:var(--spacing-lg);">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
             <div>

@@ -63,7 +63,7 @@
                style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);text-decoration:none;">
                 {{ fighter.name }}
             </a>
-            <span class="text-muted text-sm" style="margin-left:8px;">{{ fighter.record_str }} · {{ fighter.weight_class }} · {{ fighter.overall_rating }} OVR</span>
+            <span class="text-muted text-sm" style="margin-left:8px;">{{ fighter.record_str }} · {{ fighter.weight_class }} · {{ fighter.overall_rating }} <span class="tip" data-tip="Overall Rating — a display-only summary of your fighter's stats. Never affects fight outcomes directly. A high OVR with weak specific stats can still lose.">OVR</span></span>
         </div>
         <div style="display:flex;align-items:center;gap:var(--spacing-md);">
             <div style="width:120px;">
@@ -83,7 +83,7 @@
                Hidden input submits "STRIKING:boxing" etc.
                Bridge resolves legacy flat saves via _FOCUS_LEGACY_MAP. #}
             <div class="focus-picker">
-                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Training Focus</div>
+                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Training Focus<i class="tip-icon" data-tip="Focus determines which stats improve this week alongside your coach's passive gains. Stacking focus and coach specialty in the same domain accelerates development in that area.">ⓘ</i></div>
                 {% set saved = plan.get('focus', '') %}
                 {% if saved and ':' in saved %}
                     {% set saved_grp = saved.split(':')[0] %}
@@ -159,7 +159,7 @@
 
             {# Intensity #}
             <div>
-                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Intensity</div>
+                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Intensity<i class="tip-icon" data-tip="Intensity controls injury risk and training volume. LIGHT is safe but slow. MODERATE is the standard. INTENSE/EXTREME push gains but risk injuries that can cost months of development.">ⓘ</i></div>
                 <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">
                     {% set iicons = {'rest':'😴','light':'🚶','moderate':'🏃','intense':'🔥','extreme':'⚡'} %}
                     {% set icolors = {'rest':'var(--neon-green)','light':'var(--info)','moderate':'var(--warning)','intense':'#ff6b35','extreme':'var(--blood-red)'} %}
