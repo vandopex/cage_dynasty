@@ -10229,18 +10229,47 @@ class GameBridge:
                 print(f"  ⚠️  [LEAD-TIME OVERFLOW] "
                       f"{q_fight.get('fighter1_name','?')} vs "
                       f"{q_fight.get('fighter2_name','?')} dropped "
-                      f"(DFC {target} locked)")
+                      f"({self._dfc_label(target)} locked)")
                 _drained_ids.add(q_fight.get("fight_id", ""))
                 continue
             if len(self._upcoming_cards[target]["fights"]) >= CARD_TARGET_FIGHTS:
                 print(f"  ⚠️  [LEAD-TIME OVERFLOW] {q_fight.get('fighter1_name','?')} vs "
-                      f"{q_fight.get('fighter2_name','?')} dropped (DFC {target} at capacity)")
+                      f"{q_fight.get('fighter2_name','?')} dropped ({self._dfc_label(target)} at capacity)")
                 _drained_ids.add(q_fight.get("fight_id", ""))
                 continue
+            # Ship LT1: re-derive slot at drain time so rank floors +
+            # per-slot caps are respected at the target card's actual
+            # state, not the enqueue-time state weeks earlier.
+            _tgt_event = (self._upcoming_cards[target].get("event_name")
+                          or self._dfc_label(target))
+            _cb = getattr(self, '_card_builder', None)
+            if _cb:
+                _cb.update_card_state_from_fights(
+                    _tgt_event, target,
+                    self._upcoming_cards[target]["fights"])
+            _qf1 = (self._game_state.get_fighter(q_fight.get("fighter1_id", ""))
+                    if self._game_state else None)
+            _qf2 = (self._game_state.get_fighter(q_fight.get("fighter2_id", ""))
+                    if self._game_state else None)
+            _qscore = self._matchup_score(
+                _qf1, _qf2, q_fight.get("is_title_fight", False))
+            _qslot = self._assign_card_slot(
+                _tgt_event,
+                _qscore,
+                q_fight.get("is_title_fight", False),
+                combined_rating=(getattr(_qf1, 'overall_rating', 50)
+                                  + getattr(_qf2, 'overall_rating', 50)
+                                  if _qf1 and _qf2 else 100),
+                f1_rank=self._get_fighter_rank(_qf1) if _qf1 else None,
+                f2_rank=self._get_fighter_rank(_qf2) if _qf2 else None,
+                f1=_qf1, f2=_qf2,
+            )
+            q_fight["card_slot"]  = _qslot
+            q_fight["event_name"] = _tgt_event
             self._upcoming_cards[target]["fights"].append(q_fight)
             _drained_ids.add(q_fight.get("fight_id", ""))
             print(f"  📅 [LEAD-TIME HANDOFF] {q_fight.get('fighter1_name','?')} vs "
-                  f"{q_fight.get('fighter2_name','?')} → DFC {target}")
+                  f"{q_fight.get('fighter2_name','?')} → {self._dfc_label(target)}")
         self._ai_deferred_bookings = [q for q in self._ai_deferred_bookings
                                        if q.get("fight_id", "") not in _drained_ids]
 
