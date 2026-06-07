@@ -10675,17 +10675,29 @@ class GameBridge:
 
         # Translate engine result → our dict format
         import random as _rnd2
-        raw_winner_f1 = (eng_result.winner_id == "fighter_1" or eng_result.winner_id == f1_id)
-        if style_mod != 0.0 and abs(style_mod) >= 0.02:
-            flip_chance = abs(style_mod) * 0.4
-            if _rnd2.random() < flip_chance:
-                raw_winner_f1 = True if style_mod > 0 else False
-        winner_id  = f1_id if raw_winner_f1 else f2_id
-        loser_id   = f2_id if winner_id == f1_id else f1_id
-        winner_num = 1 if winner_id == f1_id else 2
-
-        winner = fighter1 if winner_id == f1_id else fighter2
-        loser  = fighter2 if winner_id == f1_id else fighter1
+        # Ship DR1 partial: guard draws before winner
+        # determination corrupts records.
+        if eng_result.winner_id is None:
+            _is_draw   = True
+            winner_id  = None
+            loser_id   = None
+            winner_num = 0
+            winner     = None
+            loser      = None
+            method     = "Draw"
+        else:
+            _is_draw = False
+            raw_winner_f1 = (eng_result.winner_id == "fighter_1"
+                             or eng_result.winner_id == f1_id)
+            if style_mod != 0.0 and abs(style_mod) >= 0.02:
+                flip_chance = abs(style_mod) * 0.4
+                if _rnd2.random() < flip_chance:
+                    raw_winner_f1 = True if style_mod > 0 else False
+            winner_id  = f1_id if raw_winner_f1 else f2_id
+            loser_id   = f2_id if raw_winner_f1 else f1_id
+            winner_num = 1 if raw_winner_f1 else 2
+            winner = fighter1 if raw_winner_f1 else fighter2
+            loser  = fighter2 if raw_winner_f1 else fighter1
 
         method_raw = eng_result.method or "DEC"
         # Normalise method string
@@ -10703,15 +10715,19 @@ class GameBridge:
         time_str = getattr(eng_result,'finish_time',None) or "5:00"
         is_title_fight = fight.get("is_title_fight", False)
 
-        # Update records
-        winner.wins  += 1; loser.losses += 1
-        if method in ("KO", "TKO"):
-            winner.ko_wins  += 1
-            loser.ko_losses = getattr(loser, 'ko_losses', 0) + 1
-        elif method in ("SUB",):
-            winner.sub_wins += 1
-            loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
-        self._apply_post_fight_camp_record(winner, loser, fight, method)
+        # Update records — Ship DR1 partial: draws never touch winner/loser
+        if _is_draw:
+            fighter1.draws = getattr(fighter1, 'draws', 0) + 1
+            fighter2.draws = getattr(fighter2, 'draws', 0) + 1
+        else:
+            winner.wins  += 1; loser.losses += 1
+            if method in ("KO", "TKO"):
+                winner.ko_wins  += 1
+                loser.ko_losses = getattr(loser, 'ko_losses', 0) + 1
+            elif method in ("SUB",):
+                winner.sub_wins += 1
+                loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
+            self._apply_post_fight_camp_record(winner, loser, fight, method)
 
         # Post-fight experience feedback — read per-round stats from
         # eng_result and nudge attributes based on what the fight
@@ -10807,10 +10823,10 @@ class GameBridge:
             "fighter1_name":  f1_name,
             "fighter2_name":  f2_name,
             "winner_id":      winner_id,
-            "winner_name":    winner.name,
+            "winner_name":    winner.name if winner else "",
             "winner_num":     winner_num,
             "loser_id":       loser_id,
-            "loser_name":     loser.name,
+            "loser_name":     loser.name if loser else "",
             "method":         method,
             "round_finished": round_finished,
             "time":           time_str,
