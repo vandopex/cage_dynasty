@@ -45,6 +45,34 @@ _TRAIT_DISPLAY = {
 }
 
 
+# Ship MC1b — archetype → (label, icon) for adapting bridge market dicts
+# to the template render shape (setup_coach.html + hire_coach.html).
+_ARCHETYPE_LABEL = {
+    'striking':  ('Striking Coach', '🥊'),
+    'grappling': ('Grappling Coach', '🤼'),
+    'sc':        ('Strength & Conditioning Coach', '💪'),
+    'mma_head':  ('Head Coach', '🧠'),
+}
+
+
+def _enrich_market_entry(c):
+    """Adapt a bridge market dict to the shape templates expect.
+    Adds: id (alias to coach_id), label, icon, description, trait_display.
+    Ship MC1b — bridge owns data, routes own presentation."""
+    archetype = c.get('archetype', 'mma_head')
+    label, icon = _ARCHETYPE_LABEL.get(archetype, ('Head Coach', '🧠'))
+    traits = c.get('traits', []) or []
+    return {
+        **c,
+        'id':            c.get('coach_id'),
+        'label':         label,
+        'icon':          icon,
+        'description':   f"{c.get('rating', 60)} rating · ${c.get('salary', 800):,}/wk",
+        'trait_display': [_TRAIT_DISPLAY.get(t, (t.replace('_', ' ').title(), 'personality'))
+                          for t in traits],
+    }
+
+
 def _generate_available_coaches(tier):
     """Generate coaches available for hiring based on tier.
 
@@ -276,27 +304,22 @@ def register_routes(app):
     
     @app.route('/setup/coach', methods=['GET', 'POST'])
     def setup_coach():
-        """Step 3: Hire your head coach."""
+        """Step 3: Hire your head coach. Ship MC1b: uses bridge market."""
         if 'camp_name' not in session or 'selected_fighter' not in session:
             return redirect(url_for('setup_camp'))
-        
-        # Generate coaches (or get from session if already generated)
-        if 'available_coaches' not in session:
-            tier = session.get('camp_tier', 'GARAGE')
-            coaches = _generate_available_coaches(tier)
-            session['available_coaches'] = coaches
-        else:
-            coaches = session['available_coaches']
-        
+
+        bridge = get_bridge()
+        coaches = [_enrich_market_entry(c) for c in bridge.get_coach_market()]
+
         if request.method == 'POST':
             coach_id = request.form.get('coach_id')
-            # Find the selected coach and store full data
             selected_coach = next((c for c in coaches if c['id'] == coach_id), None)
             if selected_coach:
                 session['selected_coach'] = selected_coach
+                bridge.remove_from_coach_market(selected_coach['coach_id'])
             return redirect(url_for('start_game'))
-        
-        return render_template('setup_coach.html', 
+
+        return render_template('setup_coach.html',
             coaches=coaches,
             camp_name=session.get('camp_name'),
             camp_tier=session.get('camp_tier', 'GARAGE')
@@ -847,6 +870,16 @@ def register_routes(app):
         # Coach data
         coach = bridge._coach if hasattr(bridge, '_coach') else {}
 
+        # Ship MC1b: non-head coaches for the "Staff also developing" line
+        staff = bridge.get_coach_contract_status().get('staff_list', [])
+        staff_developing = [
+            ((c.get('specialty') or 'Coach').title(),
+             c.get('archetype', 'mma_head'),
+             c.get('name', 'Coach'))
+            for c in staff
+            if not c.get('is_head')
+        ]
+
         # Training plans per fighter
         training_plans = {}
         for f in fighters:
@@ -857,6 +890,7 @@ def register_routes(app):
             fighters=fighters,
             camp=camp,
             coach=coach,
+            staff_developing=staff_developing,
             training_plans=training_plans,
             training_groups=training_groups,
             intensity_options=intensity_options,
@@ -1930,6 +1964,10 @@ def register_routes(app):
                 _TRAIT_DISPLAY.get(t, (t.replace('_', ' ').title(), 'personality'))
                 for t in coach_status.get('traits', [])
             ]
+        # Ship MC1b: surface tier slot limit so the staff grid can show usage
+        from game_bridge import COACH_TIER_STAFF_SLOTS
+        coach_status['max_slots'] = COACH_TIER_STAFF_SLOTS.get(
+            bridge._get_camp_tier(), 1)
         return render_template('facility.html',
             week=bridge.week_number,
             facility=fdata,
@@ -1938,29 +1976,49 @@ def register_routes(app):
 
     @app.route('/coach/fire', methods=['POST'])
     def fire_coach():
-        """Player releases current coach. Ship C2."""
+        """Release a coach. Ship MC1b: accepts optional coach_id POST field
+        to target a specific staff member; falls back to head coach."""
         bridge = get_bridge()
         if not bridge.game_started:
             return redirect(url_for('new_game'))
-        result = bridge.fire_coach()
+        coach_id = request.form.get('coach_id') or None
+        result = bridge.fire_coach(coach_id=coach_id)
         if result.get('success'):
             flash(result.get('message', 'Coach released.'), 'success')
         else:
             flash(result.get('error', 'Could not release coach.'), 'error')
         return redirect(url_for('facility'))
 
-    @app.route('/coach/hire', methods=['GET', 'POST'])
-    def hire_coach_page():
-        """Mid-game coach hiring. Ship C2."""
+    @app.route('/coach/designate/<coach_id>', methods=['POST'])
+    def designate_head_coach(coach_id):
+        """Promote a staff coach to head. Ship MC1b."""
         bridge = get_bridge()
         if not bridge.game_started:
             return redirect(url_for('new_game'))
-        if bridge.get_coach_contract_status().get("has_coach"):
-            return redirect(url_for('facility'))
+        result = bridge.set_head_coach(coach_id)
+        if not result.get('success'):
+            flash(result.get('error', 'Could not designate head coach.'), 'error')
+        return redirect(url_for('facility'))
+
+    @app.route('/coach/hire', methods=['GET', 'POST'])
+    def hire_coach_page():
+        """Mid-game coach hiring. Ship MC1b: bridge-side persistent market,
+        tier slot limits, multi-coach staff."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return redirect(url_for('new_game'))
 
         camp = bridge.get_player_camp()
         tier = camp.tier.upper() if camp and getattr(camp, 'tier', None) else 'GARAGE'
         contract_options = bridge.get_coach_contract_options()
+        from game_bridge import COACH_TIER_STAFF_SLOTS
+        max_slots = COACH_TIER_STAFF_SLOTS.get(tier, 1)
+        slots_used = len(bridge._coaching_staff)
+
+        # Block if staff is already full
+        if slots_used >= max_slots:
+            flash(f"Staff already full — {tier} tier allows {max_slots} coach{'es' if max_slots != 1 else ''}.", 'error')
+            return redirect(url_for('facility'))
 
         if request.method == 'POST':
             coach_id = request.form.get('coach_id')
@@ -1968,26 +2026,26 @@ def register_routes(app):
                 contract_weeks = int(request.form.get('contract_weeks', contract_options[0]))
             except (TypeError, ValueError):
                 contract_weeks = contract_options[0]
-            coaches = session.get('hire_coaches', [])
+            coaches = [_enrich_market_entry(c) for c in bridge.get_coach_market()]
             selected = next((c for c in coaches if c['id'] == coach_id), None)
             if selected:
                 result = bridge.hire_coach(selected, contract_weeks)
                 if result.get('success'):
-                    session.pop('hire_coaches', None)
+                    bridge.remove_from_coach_market(selected['coach_id'])
                     flash(result.get('message', 'Coach signed.'), 'success')
                     return redirect(url_for('facility'))
                 else:
                     flash(result.get('error', 'Could not hire coach.'), 'error')
             return redirect(url_for('hire_coach_page'))
 
-        # Generate fresh coach pool (cached in session until hire/leave)
-        if 'hire_coaches' not in session:
-            session['hire_coaches'] = _generate_available_coaches(tier)
-
+        coaches = [_enrich_market_entry(c) for c in bridge.get_coach_market()]
+        slot_context = (f"Hiring coach {slots_used + 1} of {max_slots} — "
+                        f"{tier} tier")
         return render_template('hire_coach.html',
-            coaches=session['hire_coaches'],
+            coaches=coaches,
             contract_options=contract_options,
             tier=tier,
+            slot_context=slot_context,
         )
 
     @app.route('/saves')

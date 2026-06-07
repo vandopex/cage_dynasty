@@ -7,72 +7,117 @@
     <div class="page-subtitle">Upgrade your training facility</div>
 </div>
 
-{# ── Head Coach panel — Ship C2 #}
+{# ── Coaching Staff panel — Ship MC1b #}
 <div class="card mb-lg">
-    <div class="card-header"><h3>💼 Head Coach</h3></div>
     <div style="padding:var(--spacing-md);">
-        {% if coach_status and coach_status.has_coach %}
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;
+        {% set staff = coach_status.staff_list if coach_status.staff_list is defined else [] %}
+        {% set max_slots = coach_status.max_slots if coach_status.max_slots is defined else 1 %}
+
+        {# Staff grid header #}
+        <div style="display:flex;align-items:center;justify-content:space-between;
                     margin-bottom:var(--spacing-md);">
-            <div>
-                <div style="font-family:var(--font-display);font-size:1.1rem;
-                            color:var(--text-bright);">{{ coach_status.name }}</div>
-                <div style="font-size:.75rem;color:var(--text-muted);
-                            text-transform:capitalize;">
-                    {{ coach_status.specialty }} · {{ coach_status.rating }} RTG
-                </div>
-            </div>
-            <div style="text-align:right;">
-                <div style="color:{{ coach_status.morale_color }};font-size:.85rem;
-                            font-weight:bold;">
-                    {{ coach_status.morale_label }}
-                </div>
-                <div style="font-size:.65rem;color:var(--text-muted);">
-                    Morale {{ coach_status.morale }}
-                </div>
-            </div>
+            <h3 style="margin:0;font-family:var(--font-display);font-size:1rem;">
+                🎓 Coaching Staff
+            </h3>
+            <span style="font-size:.72rem;color:var(--text-muted);">
+                {{ staff|length }} / {{ max_slots }} slots
+            </span>
         </div>
-        {% if coach_status.trait_display %}
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--spacing-md);">
-            {% for label, category in coach_status.trait_display %}
-            <span style="font-size:.62rem;padding:2px 6px;border-radius:3px;font-weight:600;
+
+        {% if staff %}
+        <div style="display:flex;flex-direction:column;gap:var(--spacing-sm);
+                    margin-bottom:var(--spacing-md);">
+        {% for coach in staff %}
+        <div style="background:var(--bg-dark);
+                    border:1px solid {% if coach.is_head %}var(--gold){% else %}var(--border-color){% endif %};
+                    border-radius:6px;padding:var(--spacing-sm) var(--spacing-md);">
+            <div style="display:flex;align-items:center;justify-content:space-between;
+                        margin-bottom:4px;">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                    {% if coach.is_head %}
+                    <span style="font-size:.6rem;font-weight:700;background:var(--gold);
+                                 color:var(--bg-dark);padding:1px 5px;border-radius:3px;">
+                        HEAD
+                    </span>
+                    {% endif %}
+                    <span style="font-family:var(--font-display);font-size:.9rem;
+                                 color:var(--text-bright);">
+                        {{ coach.name }}
+                    </span>
+                    <span style="font-size:.72rem;color:var(--text-muted);">
+                        {{ coach.specialty | title }} · {{ coach.rating }} RTG
+                    </span>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    {% if not coach.is_head %}
+                    <form method="POST"
+                          action="{{ url_for('designate_head_coach', coach_id=coach.coach_id) }}"
+                          style="margin:0;">
+                        <button type="submit" class="btn btn-sm"
+                                style="font-size:.65rem;padding:2px 8px;">
+                            Set as Head
+                        </button>
+                    </form>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('fire_coach') }}"
+                          style="margin:0;"
+                          onsubmit="return confirm('Release {{ coach.name }}?');">
+                        <input type="hidden" name="coach_id" value="{{ coach.coach_id }}">
+                        <button type="submit" class="btn btn-sm"
+                                style="font-size:.65rem;padding:2px 8px;
+                                       background:rgba(239,68,68,.15);color:#ef4444;
+                                       border:1px solid rgba(239,68,68,.3);">
+                            Release
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {# Trait pills #}
+            {% if coach.trait_display %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+            {% for label, category in coach.trait_display %}
+            <span style="font-size:.58rem;padding:1px 6px;border-radius:3px;font-weight:600;
                 {% if category == 'training' %}background:rgba(59,130,246,.15);color:#3b82f6;border:1px solid rgba(59,130,246,.3);
                 {% elif category == 'personality' %}background:rgba(0,255,128,.12);color:var(--neon-green);border:1px solid var(--neon-green);
                 {% elif category == 'mixed' %}background:rgba(249,115,22,.12);color:#f97316;border:1px solid rgba(249,115,22,.3);
-                {% elif category == 'negative' %}background:rgba(255,50,50,.12);color:var(--blood-red);border:1px solid var(--blood-red);
-                {% else %}background:rgba(255,255,255,.08);color:var(--text-muted);border:1px solid var(--border-color);
+                {% else %}background:rgba(239,68,68,.12);color:#ef4444;border:1px solid rgba(239,68,68,.25);
                 {% endif %}">
                 {{ label }}
             </span>
             {% endfor %}
+            </div>
+            {% endif %}
+            {# Contract + morale #}
+            <div style="font-size:.68rem;color:var(--text-muted);
+                        display:flex;gap:var(--spacing-md);flex-wrap:wrap;">
+                <span>${{ "{:,}".format(coach.salary | int) if coach.salary else '—' }}/wk</span>
+                <span>{{ coach.weeks_remaining }}w left</span>
+                <span style="color:{% if coach.morale >= 75 %}var(--neon-green){% elif coach.morale >= 40 %}var(--warning){% else %}var(--blood-red){% endif %};">
+                    ● Morale {{ coach.morale }}
+                </span>
+            </div>
+        </div>
+        {% endfor %}
+        </div>
+        {% else %}
+        <div style="color:var(--text-muted);font-size:.8rem;
+                    margin-bottom:var(--spacing-md);">
+            No coaches hired yet.
         </div>
         {% endif %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-sm);
-                    font-size:.75rem;color:var(--text-muted);
-                    margin-bottom:var(--spacing-md);">
-            <div>Salary: <span style="color:var(--text-bright);">${{ "{:,}".format(coach_status.salary) }}/wk</span>
-                {% if coach_status.is_underpaid %}
-                <span style="color:var(--blood-red);">· UNDERPAID (market ${{ "{:,}".format(coach_status.market_rate) }})</span>
-                {% endif %}
-            </div>
-            <div>Contract: <span style="color:var(--text-bright);">{{ coach_status.weeks_remaining }}w remaining</span>
-                <span style="color:var(--text-muted);">/ {{ coach_status.total_weeks }}w total</span>
-            </div>
-        </div>
-        <form action="{{ url_for('fire_coach') }}" method="POST"
-              onsubmit="return confirm('Fire {{ coach_status.name }}? Their contract has {{ coach_status.weeks_remaining }} weeks remaining. No severance penalty.');"
-              style="display:inline-block;">
-            <button type="submit" class="btn btn-secondary btn-sm">Release Coach</button>
-        </form>
+
+        {# Hire slot button #}
+        {% set slots_used = staff|length %}
+        {% if slots_used < max_slots %}
+        <a href="{{ url_for('hire_coach_page') }}"
+           class="btn btn-primary btn-sm"
+           style="width:100%;text-align:center;">
+            + Hire Coach ({{ slots_used }}/{{ max_slots }} slots used)
+        </a>
         {% else %}
-        <div style="text-align:center;padding:var(--spacing-md);">
-            <div style="font-size:1rem;color:var(--text-muted);margin-bottom:var(--spacing-sm);">
-                ⚠️ No head coach
-            </div>
-            <div style="font-size:.75rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
-                No training bonuses or corner advice until you hire one.
-            </div>
-            <a href="{{ url_for('hire_coach_page') }}" class="btn btn-primary">Hire a Coach</a>
+        <div style="font-size:.72rem;color:var(--text-muted);text-align:center;
+                    padding:var(--spacing-sm);">
+            Staff full — upgrade facility for more slots
         </div>
         {% endif %}
     </div>

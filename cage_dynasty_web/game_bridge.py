@@ -381,6 +381,14 @@ COACH_TIER_CONTRACT_OPTIONS = {
     "NATIONAL": [26, 52, 78],
     "ELITE":    [52, 78, 104],
 }
+# Ship MC1b: max coaching staff size per tier
+COACH_TIER_STAFF_SLOTS = {
+    "GARAGE":   1,
+    "LOCAL":    2,
+    "REGIONAL": 3,
+    "NATIONAL": 4,
+    "ELITE":    5,
+}
 # Placeholder when no coach hired — keeps existing read sites safe
 COACH_VACANT_PLACEHOLDER = {
     "name":      "Vacant",
@@ -1157,6 +1165,19 @@ class GameBridge:
                     "skipped_paychecks": 0,
                 }
                 print(f"  📝 Coach contract: {self._coach['name']} — {COACH_DEFAULT_CONTRACT_WEEKS}w @ ${self._coach['salary']}/wk")
+
+                # MC1c: mirror starter coach into staff so multi-coach
+                # training loop and UI see them from week 1, not just
+                # after a save-reload migration.
+                if self._coach_contract and not self._coaching_staff:
+                    import uuid as _uuid
+                    _cid = self._coach_contract.get("coach_id") or str(_uuid.uuid4())[:12]
+                    self._coach["coach_id"] = _cid
+                    self._coach_contract["coach_id"] = _cid
+                    _entry = dict(self._coach)
+                    _entry["contract"] = self._coach_contract
+                    self._coaching_staff = [_entry]
+                    self._head_coach_id = _cid
 
             # Store camp location for display
             self._camp_location = camp_location or "Las Vegas, NV"
@@ -5285,16 +5306,10 @@ class GameBridge:
         camp_tier   = player_camp.tier.upper() if player_camp else "GARAGE"
         player_fighters = self._game_state.get_player_fighters()
 
-        coach_specialty = self._coach.get("specialty", "boxing")
-        coach_rating    = self._coach.get("rating", 60)
-
-        passive_gain = max(0.1, (coach_rating - 50) / 25)  # Floor 0.1 at 50-rated, ~1.8 at 95-rated
-
-        # Four coach archetypes — S&C merged, Head Coach is MMA/strategy
-        # Striking Coach:  boxing, kicks, clinch, defense
-        # Grappling Coach: wrestling, BJJ, submissions, guard
-        # S&C Coach:       strength, cardio, chin, recovery (physical base)
-        # Head Coach/MMA:  fight_iq, composure, heart (invisible stats)
+        # SPECIALTY_MAP + _ARCHETYPE_DOMAIN — reused per coach inside the
+        # fighter loop. Ship MC1b: training gain is multi-coach. Each coach
+        # on staff contributes independently; coaches sharing a domain
+        # apply diminishing rates (1.0 / 0.50 / 0.25 / 0.10).
         SPECIALTY_MAP = {
             # Striking
             "striking": "striking_coach",    "boxing":   "striking_coach",
@@ -5314,7 +5329,12 @@ class GameBridge:
             "mma":         "mma_coach",       "head coach":  "mma_coach",
             "cornering":   "mma_coach",       "strategy":    "mma_coach",
         }
-        coach_focus = SPECIALTY_MAP.get(coach_specialty.lower(), "mma_coach")
+        _ARCHETYPE_DOMAIN = {
+            "striking_coach":  "striking",
+            "grappling_coach": "grappling",
+            "sc_coach":        "sc",
+            "mma_coach":       "mma_head",
+        }
 
         report = {}
 
@@ -5341,33 +5361,19 @@ class GameBridge:
 
             result = self.apply_training_week(fid, active_plan["focus"], active_plan["intensity"], camp_tier)
 
-            # Passive coach gains — each archetype trains a group of stats
-            # Gain split across the group (not just first attr)
-            _COACH_ATTRS = {
-                "striking_coach":  ["boxing", "kicks", "clinch_striking", "striking_defense"],
-                # Added top_control — was orphaned (in no archetype).
-                "grappling_coach": ["takedowns", "takedown_defense", "top_control",
-                                    "submissions", "guard"],
-                # Added speed + heart — full athletic-base coverage. Heart
-                # moves here from mma_coach since it's an athletic trait
-                # (grit/conditioning capacity, not ring IQ).
-                "sc_coach":        ["strength", "speed", "cardio", "chin",
-                                    "recovery", "heart"],
-                # Heart moved to sc_coach; mma_coach is now strictly ring IQ.
-                "mma_coach":       ["fight_iq", "composure"],
-            }
-            coach_attrs = _COACH_ATTRS.get(coach_focus, ["fight_iq"])
-            # Per-archetype boost. sc_coach gets 2.0× to compensate for the
-            # OVR2 athletic ×0.5 multiplier inside _diminishing_gain — without
-            # this, S&C boost rate would feel anemic vs technical coaches.
-            # mma_coach gets 1.5× because it spreads over only 2 attrs and
-            # both are technical (×1.2), so the post-split rate is steeper
-            # but the 2-attr coverage is narrow — the boost compensates.
-            _boost = self._ARCHETYPE_BOOST.get(coach_focus, 1.0)
+            # ── MC1b: Multi-coach passive gain pass ───────────────────────
+            # Each coach on staff contributes independently. Coaches in the
+            # same domain apply diminishing rates so 3 striking coaches
+            # don't 3× a fighter's striking gains.
+            if self._coaching_staff:
+                _active_coaches = list(self._coaching_staff)
+            elif self._coach_contract and self._coach:
+                # Legacy single-coach fallback (pre-MC1a saves)
+                _active_coaches = [self._coach]
+            else:
+                _active_coaches = []
 
-            # Coach trait multipliers — composable, floor at 50% gains
-            _traits = self._coach.get('traits', []) if self._coach else []
-            _trait_delta = 0.0
+            # Per-fighter context — computed once, reused across coaches
             _fighter_age = getattr(fighter, 'age', 25) or 25
             _contract_cur = self._contracts.get(fid, {})
             _morale_cur = _contract_cur.get('morale', 75)
@@ -5375,45 +5381,19 @@ class GameBridge:
             _last_result = (_hist_cur[-1].get('result')
                             if _hist_cur and isinstance(_hist_cur[-1], dict)
                             else None)
+            _lose_streak = getattr(fighter, 'lose_streak', 0) or 0
 
-            # ── Training multiplier traits (composable, flat ifs) ────────
-            if 'TECHNICAL_GENIUS' in _traits:
-                _trait_delta += 0.15
-            if 'DIAMOND_POLISHER' in _traits and _fighter_age < 28:
-                _trait_delta += 0.25
-            if 'VETERANS_TOUCH' in _traits and _fighter_age >= 30:
-                _trait_delta += 0.20
-            if 'MOTIVATOR' in _traits and _morale_cur < 60:
-                _trait_delta += 0.15
-            if 'IRON_SHARPENER' in _traits:
-                _trait_delta += 0.10
-            if 'BURNED_OUT' in _traits:
-                _trait_delta -= 0.15
-            if 'FAIR_WEATHER' in _traits:
-                if _last_result == 'L':
-                    _trait_delta -= 0.20
-                elif _last_result == 'W':
-                    _trait_delta += 0.20
-            if 'OLD_SCHOOL' in _traits:
-                _trait_delta += 0.10
-            if 'MODERN_METHODS' in _traits and _fighter_age < 26:
-                _trait_delta += 0.15
-            if 'INTENSE' in _traits:
-                _trait_delta += 0.10
-            if 'DISCIPLINARIAN' in _traits:
-                _trait_delta += 0.10
-            if 'TASKMASTER' in _traits:
-                _trait_delta += 0.15
-                # Silver lining: extra gains when morale bottomed out
-                if _morale_cur < 40:
-                    _trait_delta += 0.10
-            if 'PATIENT' in _traits:
-                _lose_streak = getattr(fighter, 'lose_streak', 0) or 0
-                if _lose_streak >= 2:
-                    _trait_delta += 0.15
-            _trait_mult = max(0.5, 1.0 + _trait_delta)
+            # Per-archetype attrs (which stats each archetype trains)
+            _COACH_ATTRS = {
+                "striking_coach":  ["boxing", "kicks", "clinch_striking", "striking_defense"],
+                "grappling_coach": ["takedowns", "takedown_defense", "top_control",
+                                    "submissions", "guard"],
+                "sc_coach":        ["strength", "speed", "cardio", "chin",
+                                    "recovery", "heart"],
+                "mma_coach":       ["fight_iq", "composure"],
+            }
 
-            # ── Specialist traits: per-attr boost (stacks on top of mult) ─
+            # Specialist attr sets (reused per coach)
             _GRAPPLING_ATTRS    = {'takedowns','takedown_defense',
                                     'top_control','submissions','guard'}
             _STRIKING_ATTRS     = {'boxing','kicks','clinch_striking',
@@ -5423,52 +5403,113 @@ class GameBridge:
                                     'submissions'}
             _DEFENSIVE_ATTRS    = {'striking_defense','takedown_defense'}
 
-            def _specialist_mult(attr_name: str) -> float:
-                _sm = 1.0
-                if 'ANALYTICAL' in _traits and attr_name in {'fight_iq', 'composure'}:
-                    _sm += 0.20
-                if 'CONDITIONING_COACH' in _traits and attr_name in _CONDITIONING_ATTRS:
-                    _sm += 0.20
-                if 'GRAPPLING_SPECIALIST' in _traits and attr_name in _GRAPPLING_ATTRS:
-                    _sm += 0.20
-                if 'STRIKING_SPECIALIST' in _traits and attr_name in _STRIKING_ATTRS:
-                    _sm += 0.20
-                if 'FINISHER' in _traits and attr_name in _FINISHER_ATTRS:
-                    _sm += 0.20
-                if 'DEFENSIVE_MINDED' in _traits and attr_name in _DEFENSIVE_ATTRS:
-                    _sm += 0.20
-                return _sm
+            _domain_coach_count: Dict[str, int] = {}
 
-            _base_per_attr_gain = (passive_gain / len(coach_attrs)) * _boost * _trait_mult
             real_fighter = self._game_state.get_fighter(fid)
             # Per-fighter potential ceiling for the coach passive boost too.
             _fp = self._game_state._fighter_data.get(fid, {}).get("potential")
             _fp = int(_fp) if _fp is not None else None
-            if real_fighter and _base_per_attr_gain > 0:
-                for attr in coach_attrs:
-                    per_attr_gain = _base_per_attr_gain * _specialist_mult(attr)
-                    current = float(getattr(real_fighter, attr,
-                                    getattr(real_fighter, 'overall_rating', 50)))
-                    effective = self._diminishing_gain(current, per_attr_gain, camp_tier,
-                                                       fighter_potential=_fp,
-                                                       stat_name=attr)
-                    if hasattr(real_fighter, attr) and effective > 0.01:
-                        setattr(real_fighter, attr, min(100.0, current + effective))
-                        if result.get("actual_gains") is not None:
-                            result["actual_gains"][f"{attr} (coach)"] = round(effective, 2)
 
-                    # Style-weighted OVR — see _compute_ovr for weight vectors.
-                    real_fighter.overall_rating = self._compute_ovr(real_fighter)
+            for _cs in _active_coaches:
+                cs_specialty = str(_cs.get("specialty", "boxing") or "boxing").lower()
+                cs_rating    = int(_cs.get("rating", 60) or 60)
+                cs_name      = _cs.get("name", "Coach")
+                cs_traits    = _cs.get("traits", []) or []
+                cs_passive   = max(0.1, (cs_rating - 50) / 25)
+                cs_focus     = SPECIALTY_MAP.get(cs_specialty, "mma_coach")
+                cs_attrs     = _COACH_ATTRS.get(cs_focus, ["fight_iq"])
+                cs_boost     = self._ARCHETYPE_BOOST.get(cs_focus, 1.0)
+
+                # Domain diminishing rate — same-domain coaches dilute
+                _domain = _ARCHETYPE_DOMAIN.get(cs_focus, "mma_head")
+                _dc = _domain_coach_count.get(_domain, 0)
+                if   _dc == 0: _rate = 1.0
+                elif _dc == 1: _rate = 0.50
+                elif _dc == 2: _rate = 0.25
+                else:          _rate = 0.10
+                _domain_coach_count[_domain] = _dc + 1
+
+                # ── Per-coach trait multiplier (composable, flat ifs) ─────
+                _trait_delta = 0.0
+                if 'TECHNICAL_GENIUS' in cs_traits:
+                    _trait_delta += 0.15
+                if 'DIAMOND_POLISHER' in cs_traits and _fighter_age < 28:
+                    _trait_delta += 0.25
+                if 'VETERANS_TOUCH' in cs_traits and _fighter_age >= 30:
+                    _trait_delta += 0.20
+                if 'MOTIVATOR' in cs_traits and _morale_cur < 60:
+                    _trait_delta += 0.15
+                if 'IRON_SHARPENER' in cs_traits:
+                    _trait_delta += 0.10
+                if 'BURNED_OUT' in cs_traits:
+                    _trait_delta -= 0.15
+                if 'FAIR_WEATHER' in cs_traits:
+                    if _last_result == 'L':
+                        _trait_delta -= 0.20
+                    elif _last_result == 'W':
+                        _trait_delta += 0.20
+                if 'OLD_SCHOOL' in cs_traits:
+                    _trait_delta += 0.10
+                if 'MODERN_METHODS' in cs_traits and _fighter_age < 26:
+                    _trait_delta += 0.15
+                if 'INTENSE' in cs_traits:
+                    _trait_delta += 0.10
+                if 'DISCIPLINARIAN' in cs_traits:
+                    _trait_delta += 0.10
+                if 'TASKMASTER' in cs_traits:
+                    _trait_delta += 0.15
+                    if _morale_cur < 40:
+                        _trait_delta += 0.10
+                if 'PATIENT' in cs_traits and _lose_streak >= 2:
+                    _trait_delta += 0.15
+                _trait_mult = max(0.5, 1.0 + _trait_delta)
+
+                # Per-coach specialist mult — closure binds cs_traits via default arg
+                def _specialist_mult(attr_name: str, _t=cs_traits) -> float:
+                    _sm = 1.0
+                    if 'ANALYTICAL' in _t and attr_name in {'fight_iq', 'composure'}:
+                        _sm += 0.20
+                    if 'CONDITIONING_COACH' in _t and attr_name in _CONDITIONING_ATTRS:
+                        _sm += 0.20
+                    if 'GRAPPLING_SPECIALIST' in _t and attr_name in _GRAPPLING_ATTRS:
+                        _sm += 0.20
+                    if 'STRIKING_SPECIALIST' in _t and attr_name in _STRIKING_ATTRS:
+                        _sm += 0.20
+                    if 'FINISHER' in _t and attr_name in _FINISHER_ATTRS:
+                        _sm += 0.20
+                    if 'DEFENSIVE_MINDED' in _t and attr_name in _DEFENSIVE_ATTRS:
+                        _sm += 0.20
+                    return _sm
+
+                _base_per_attr_gain = ((cs_passive / len(cs_attrs))
+                                       * cs_boost * _trait_mult * _rate)
+
+                if real_fighter and _base_per_attr_gain > 0:
+                    for attr in cs_attrs:
+                        per_attr_gain = _base_per_attr_gain * _specialist_mult(attr)
+                        current = float(getattr(real_fighter, attr,
+                                        getattr(real_fighter, 'overall_rating', 50)))
+                        effective = self._diminishing_gain(current, per_attr_gain, camp_tier,
+                                                           fighter_potential=_fp,
+                                                           stat_name=attr)
+                        if hasattr(real_fighter, attr) and effective > 0.01:
+                            setattr(real_fighter, attr, min(100.0, current + effective))
+                            if result.get("actual_gains") is not None:
+                                result["actual_gains"][f"{attr} (coach: {cs_name})"] = round(effective, 2)
+
+            # Recompute OVR once after all coaches have contributed
+            if real_fighter:
+                real_fighter.overall_rating = self._compute_ovr(real_fighter)
 
             ovr_after = getattr(self._game_state.get_fighter(fid), 'overall_rating', ovr_before)
 
             # ── Terminal: player training report ──────────────────────
             _ptype = "FIGHT CAMP" if fight_plan else "WEEKLY PLAN"
             _ag    = result.get("actual_gains") or {}
-            _main  = {k: v for k, v in _ag.items() if not k.endswith("(coach)")}
-            _cch   = {k: v for k, v in _ag.items() if k.endswith("(coach)")}
+            _main  = {k: v for k, v in _ag.items() if "(coach:" not in k}
+            _cch   = {k: v for k, v in _ag.items() if "(coach:" in k}
             _m_str = ", ".join(f"{k}+{v:.1f}" for k, v in list(_main.items())[:3] if v)
-            _c_str = ", ".join(f"{k.replace(' (coach)','')}+{v:.1f}" for k, v in list(_cch.items())[:2] if v)
+            _c_str = ", ".join(f"{k.split(' (coach:')[0]}+{v:.1f}" for k, v in list(_cch.items())[:2] if v)
             _ftr   = self._game_state.get_fighter(fid) if self._game_state else None
             _ovr_n = getattr(_ftr, 'overall_rating', ovr_before)
             print(f"  📊 [{_ptype}] {getattr(fighter,'name',fid)[:12]} "
@@ -5482,7 +5523,7 @@ class GameBridge:
                 self._camp_stat_totals[fid] = {}
             week_gains = result.get("actual_gains", {})
             for stat, gain in week_gains.items():
-                if "(coach)" not in stat and gain > 0.05:
+                if "(coach:" not in stat and gain > 0.05:
                     self._camp_stat_totals[fid][stat] = (
                         self._camp_stat_totals[fid].get(stat, 0.0) + float(gain)
                     )
@@ -11394,61 +11435,81 @@ class GameBridge:
     # =========================================================================
 
     def _process_coach_contract(self, current_week: int) -> None:
+        """Weekly coach contract tick. Ship MC1b: iterates over all staff
+        coaches independently. Each has its own contract clock + morale.
+        Releases mutate the staff list, so iterate over a snapshot.
         """
-        Weekly coach contract tick — Ship C2.
-        Two morale triggers:
-          1. Underpaid (salary < 85% of market rate)
-          2. Skipped paychecks (decay applied per skip in _deduct_weekly_overhead)
-        No holdout. Coach walks immediately at morale <= COACH_MORALE_WALKOUT
-        or when contract weeks_remaining reaches 0.
-        """
-        if not self._coach_contract:
-            return  # No coach hired, nothing to process
-
-        contract = self._coach_contract
-
-        # Decrement contract clock
-        contract["weeks_completed"] = contract.get("weeks_completed", 0) + 1
-        contract["weeks_remaining"] = max(0,
-            contract["total_weeks"] - contract["weeks_completed"])
-
-        # Apply morale decay from skipped paychecks (cumulative, then reset count
-        # to avoid re-decaying past skips every tick).
-        skipped = contract.get("skipped_paychecks", 0)
-        if skipped > 0:
-            contract["morale"] = max(0,
-                contract.get("morale", COACH_MORALE_START)
-                - (skipped * COACH_SKIPPED_PAYCHECK_DECAY))
-            contract["skipped_paychecks"] = 0  # consumed
-
-        # Apply underpaid morale decay
-        market_rate = int(contract["rating"] * COACH_MARKET_RATE_PER_RATING)
-        if contract["salary"] < market_rate * COACH_UNDERPAID_THRESHOLD:
-            contract["morale"] = max(0,
-                contract.get("morale", COACH_MORALE_START) - COACH_UNDERPAID_DECAY)
-
-        # Contract expiry → immediate walk (no holdout, per Lock 3)
-        if contract["weeks_remaining"] <= 0:
-            self._release_coach('contract_expired')
+        # Build iteration source: prefer staff, fall back to legacy single
+        if self._coaching_staff:
+            _iter_source = list(self._coaching_staff)
+        elif self._coach_contract:
+            _iter_source = [{"coach_id": self._coach_contract.get("coach_id"),
+                             "contract": self._coach_contract}]
+        else:
             return
 
-        # Morale walkout → immediate
-        if contract.get("morale", COACH_MORALE_START) <= COACH_MORALE_WALKOUT:
-            # Determine which trigger dominated for news headline
-            underpaid = contract["salary"] < market_rate * COACH_UNDERPAID_THRESHOLD
-            if underpaid:
-                self._release_coach('quit_underpaid')
-            else:
-                self._release_coach('quit_skipped_pay')
+        for _cs in _iter_source:
+            contract = _cs.get('contract') if 'contract' in _cs else _cs
+            if not contract:
+                continue
+            cid = _cs.get('coach_id') or contract.get('coach_id')
 
-    def _release_coach(self, reason: str) -> None:
-        """
-        Coach departs — clears contract, sets _coach to vacant placeholder.
-        Branched news per reason. Ship C2.
-        """
-        if not self._coach_contract:
+            # Decrement contract clock
+            contract["weeks_completed"] = contract.get("weeks_completed", 0) + 1
+            contract["weeks_remaining"] = max(0,
+                contract.get("total_weeks", 26) - contract["weeks_completed"])
+
+            # Skipped-paycheck morale decay
+            skipped = contract.get("skipped_paychecks", 0)
+            if skipped > 0:
+                contract["morale"] = max(0,
+                    contract.get("morale", COACH_MORALE_START)
+                    - (skipped * COACH_SKIPPED_PAYCHECK_DECAY))
+                contract["skipped_paychecks"] = 0
+
+            # Underpaid morale decay
+            market_rate = int(contract.get("rating", 60) * COACH_MARKET_RATE_PER_RATING)
+            if contract.get("salary", 0) < market_rate * COACH_UNDERPAID_THRESHOLD:
+                contract["morale"] = max(0,
+                    contract.get("morale", COACH_MORALE_START) - COACH_UNDERPAID_DECAY)
+
+            # Legacy mirror: if this is the head coach, keep _coach_contract in sync
+            if cid and cid == self._head_coach_id:
+                self._coach_contract = contract
+
+            # Contract expiry → immediate walk
+            if contract["weeks_remaining"] <= 0:
+                self._release_coach('contract_expired', coach_id=cid)
+                continue
+
+            # Morale walkout → immediate
+            if contract.get("morale", COACH_MORALE_START) <= COACH_MORALE_WALKOUT:
+                underpaid = contract.get("salary", 0) < market_rate * COACH_UNDERPAID_THRESHOLD
+                if underpaid:
+                    self._release_coach('quit_underpaid', coach_id=cid)
+                else:
+                    self._release_coach('quit_skipped_pay', coach_id=cid)
+
+    def _release_coach(self, reason: str, coach_id: Optional[str] = None) -> None:
+        """Coach departs. Ship MC1b: accepts optional coach_id to target a
+        specific staff member; falls back to head coach. Removes from
+        _coaching_staff, re-elects head if needed, mirrors legacy state."""
+        # Resolve target — prefer staff lookup, fall back to legacy contract
+        target_entry = None
+        target_id = coach_id or self._head_coach_id
+        if target_id:
+            for c in self._coaching_staff:
+                if c.get('coach_id') == target_id:
+                    target_entry = c
+                    break
+        if target_entry:
+            name = target_entry.get('name', 'Coach')
+        elif self._coach_contract:
+            name = self._coach_contract.get("name", "Coach")
+            target_id = self._coach_contract.get("coach_id") or target_id
+        else:
             return
-        name = self._coach_contract.get("name", "Coach")
+
         current_week = self._game_state.week_number if self._game_state else 0
 
         if reason == 'quit_underpaid':
@@ -11469,9 +11530,46 @@ class GameBridge:
         })
         print(f"  💼 [COACH] {name} departed — {reason}")
 
-        # Clear contract; set placeholder coach so read sites stay safe
-        self._coach_contract = {}
-        self._coach = dict(COACH_VACANT_PLACEHOLDER)
+        # Remove from staff list
+        if target_id:
+            self._coaching_staff = [
+                c for c in self._coaching_staff
+                if c.get('coach_id') != target_id
+            ]
+
+        # Re-elect head if the departing coach was head
+        if self._head_coach_id == target_id:
+            self._head_coach_id = (
+                self._coaching_staff[0].get('coach_id')
+                if self._coaching_staff else None
+            )
+
+        # Legacy dual-write — sync _coach/_coach_contract to new head, or
+        # clear to placeholder if no coaches remain
+        if self._head_coach_id:
+            new_head = next(
+                (c for c in self._coaching_staff
+                 if c.get('coach_id') == self._head_coach_id),
+                None,
+            )
+            if new_head:
+                self._coach = {
+                    "name":      new_head["name"],
+                    "specialty": new_head["specialty"],
+                    "rating":    new_head["rating"],
+                    "salary":    new_head["salary"],
+                    "traits":    new_head.get("traits", []),
+                    "archetype": new_head.get("archetype", "mma_head"),
+                    "coach_id":  self._head_coach_id,
+                }
+                self._coach_contract = new_head.get("contract", {})
+            else:
+                self._coach_contract = {}
+                self._coach = dict(COACH_VACANT_PLACEHOLDER)
+        else:
+            self._coach_contract = {}
+            self._coach = dict(COACH_VACANT_PLACEHOLDER)
+
         self._clear_cache()
 
     def _process_contracts(self, current_week: int) -> None:
@@ -11826,63 +11924,248 @@ class GameBridge:
             "morale_color":      morale_color,
             "traits":            c.get("traits", []),
             "archetype":         c.get("archetype", ""),
+            # Ship MC1b — staff list for facility multi-coach UI
+            "staff_list":        self._get_staff_list_for_ui(),
         }
 
-    def fire_coach(self) -> Dict[str, Any]:
-        """
-        Player-initiated coach release. No severance. Ship C2.
-        """
-        if not self._coach_contract:
+    def _get_staff_list_for_ui(self) -> List[Dict[str, Any]]:
+        """Return coaching staff formatted for the facility template.
+        Ship MC1b."""
+        try:
+            from routes import _TRAIT_DISPLAY as _td
+        except Exception:
+            _td = {}
+        result = []
+        for c in self._coaching_staff:
+            contract = c.get('contract', {})
+            traits = c.get('traits', [])
+            trait_display = [
+                _td.get(t, (t.replace('_', ' ').title(), 'personality'))
+                for t in traits
+            ]
+            result.append({
+                "coach_id":        c.get('coach_id'),
+                "name":            c.get('name', 'Coach'),
+                "specialty":       c.get('specialty', 'mma'),
+                "archetype":       c.get('archetype', 'mma_head'),
+                "rating":          c.get('rating', 60),
+                "salary":          c.get('salary', 800),
+                "traits":          traits,
+                "trait_display":   trait_display,
+                "is_head":         (c.get('coach_id') == self._head_coach_id),
+                "morale":          contract.get('morale', 85),
+                "weeks_remaining": contract.get('weeks_remaining', 0),
+                "total_weeks":     contract.get('total_weeks', 52),
+            })
+        return result
+
+    def fire_coach(self, coach_id: Optional[str] = None) -> Dict[str, Any]:
+        """Fire a coach by id, or head coach if no id given. Ship MC1b."""
+        if not self._coaching_staff and not self._coach_contract:
             return {"success": False, "error": "No coach to fire"}
-        self._release_coach('fired')
+        target_id = coach_id or self._head_coach_id or (
+            self._coaching_staff[0].get('coach_id')
+            if self._coaching_staff else None
+        )
+        self._release_coach('fired', coach_id=target_id)
         return {"success": True, "message": "Coach released"}
 
     def hire_coach(self, coach_data: Dict[str, Any], contract_weeks: int) -> Dict[str, Any]:
-        """
-        Mid-game coach hiring. Replaces current coach contract entirely.
-        Validates contract length against tier. Ship C2.
-        """
-        if self._coach_contract:
-            return {"success": False, "error": "Already have a coach — fire them first"}
+        """Hire a coach onto the staff. Ship MC1b: supports multiple coaches
+        up to tier slot limit. Dual-writes to legacy _coach/_coach_contract
+        AND _coaching_staff so existing read sites continue to work until
+        MC1c migrates them."""
+        import uuid as _uuid
         tier = self._get_camp_tier()
-        allowed = COACH_TIER_CONTRACT_OPTIONS.get(tier, [26])
-        if contract_weeks not in allowed:
-            return {"success": False, "error": f"Your {tier} camp can only offer contracts of {allowed} weeks"}
-        # Build new contract + sync _coach dict
-        _ct = coach_data.get("traits", [])
-        _traits_norm = [t if isinstance(t, str) else getattr(t, 'value', str(t)) for t in _ct]
-        _arch = coach_data.get("archetype", "")
-        _arch_norm = _arch.value if hasattr(_arch, 'value') else str(_arch)
-        self._coach = {
-            "name":      coach_data.get("name", "Head Coach"),
-            "specialty": coach_data.get("specialty", "boxing").lower(),
-            "rating":    int(coach_data.get("rating", 60)),
-            "salary":    int(coach_data.get("salary", 800)),
-            "traits":    _traits_norm,
-            "archetype": _arch_norm,
-        }
-        self._coach_contract = {
-            "coach_id":          coach_data.get("id", "hired_coach"),
-            "name":              self._coach["name"],
-            "specialty":         self._coach["specialty"],
-            "rating":            self._coach["rating"],
-            "salary":            self._coach["salary"],
-            "traits":            _traits_norm,
-            "archetype":         _arch_norm,
+        max_slots = COACH_TIER_STAFF_SLOTS.get(tier, 1)
+        if len(self._coaching_staff) >= max_slots:
+            return {
+                "success": False,
+                "error": (f"Staff full — {tier} tier allows "
+                          f"{max_slots} coach"
+                          f"{'es' if max_slots != 1 else ''}"),
+            }
+        valid_weeks = COACH_TIER_CONTRACT_OPTIONS.get(tier, [26])
+        if contract_weeks not in valid_weeks:
+            contract_weeks = valid_weeks[-1]
+
+        coach_id = (coach_data.get("coach_id")
+                    or coach_data.get("id")
+                    or str(_uuid.uuid4())[:12])
+        name      = coach_data.get("name", "Coach")
+        specialty = str(coach_data.get("specialty", "mma") or "mma").lower()
+        rating    = int(coach_data.get("rating", 60) or 60)
+        salary    = int(coach_data.get("salary", 800) or 800)
+        _ct = coach_data.get("traits", []) or []
+        traits = [t if isinstance(t, str) else getattr(t, 'value', str(t)) for t in _ct]
+        _arch = coach_data.get("archetype", "mma_head")
+        archetype = _arch.value if hasattr(_arch, 'value') else str(_arch) or "mma_head"
+
+        contract = {
+            "coach_id":          coach_id,
+            "name":              name,
+            "specialty":         specialty,
+            "rating":            rating,
+            "salary":            salary,
+            "traits":            traits,
+            "archetype":         archetype,
             "total_weeks":       contract_weeks,
             "weeks_completed":   0,
             "weeks_remaining":   contract_weeks,
             "morale":            COACH_MORALE_START,
-            "signed_week":       self._game_state.week_number if self._game_state else 0,
+            "signed_week":       (self._game_state.week_number
+                                  if self._game_state else 0),
             "skipped_paychecks": 0,
         }
+        staff_entry = {
+            "coach_id":  coach_id,
+            "name":      name,
+            "specialty": specialty,
+            "rating":    rating,
+            "salary":    salary,
+            "traits":    traits,
+            "archetype": archetype,
+            "contract":  contract,
+        }
+        self._coaching_staff.append(staff_entry)
+
+        # Designate as head if first on staff
+        if not self._head_coach_id:
+            self._head_coach_id = coach_id
+
+        # Legacy dual-write — existing read sites continue to work until MC1c
+        if self._head_coach_id == coach_id:
+            self._coach = {
+                "name":      name,
+                "specialty": specialty,
+                "rating":    rating,
+                "salary":    salary,
+                "traits":    traits,
+                "archetype": archetype,
+                "coach_id":  coach_id,
+            }
+            self._coach_contract = contract
+
         self._news_items.insert(0, {
-            "headline": f"✅ Signed {self._coach['name']} as head coach — {contract_weeks}w @ ${self._coach['salary']}/wk",
+            "headline": (f"✅ Signed {name} as head coach — "
+                         f"{contract_weeks}w @ ${salary:,}/wk"
+                         if self._head_coach_id == coach_id else
+                         f"📝 Signed {name} to coaching staff — "
+                         f"{contract_weeks}w @ ${salary:,}/wk"),
             "category": "coach",
-            "week":     self._game_state.week_number if self._game_state else 0,
+            "week":     (self._game_state.week_number
+                         if self._game_state else 0),
         })
+        print(f"  ✅ Coach: {name} ({specialty}, {rating} rating)")
+        print(f"  📝 Coach contract: {name} — {contract_weeks}w @ ${salary:,}/wk")
         self._clear_cache()
-        return {"success": True, "message": f"Signed {self._coach['name']}"}
+        return {"success": True, "coach_id": coach_id,
+                "message": f"Signed {name}"}
+
+    def set_head_coach(self, coach_id: str) -> Dict[str, Any]:
+        """Designate a staff coach as head coach. Updates legacy
+        _coach/_coach_contract to point at the new head. Ship MC1b."""
+        target = None
+        for c in self._coaching_staff:
+            if c.get('coach_id') == coach_id:
+                target = c
+                break
+        if not target:
+            return {"success": False, "error": "Coach not on staff"}
+        self._head_coach_id = coach_id
+        self._coach = {
+            "name":      target["name"],
+            "specialty": target["specialty"],
+            "rating":    target["rating"],
+            "salary":    target["salary"],
+            "traits":    target.get("traits", []),
+            "archetype": target.get("archetype", "mma_head"),
+            "coach_id":  coach_id,
+        }
+        self._coach_contract = target.get("contract", {})
+        self._clear_cache()
+        return {"success": True}
+
+    def get_coach_market(self, force_refresh: bool = False) -> List[Dict[str, Any]]:
+        """Return the persistent coaching market. Refreshes if empty,
+        force_refresh=True, or market is older than 12 weeks. Ship MC1b."""
+        current_week = (self._game_state.week_number
+                        if self._game_state else 0)
+        age = current_week - self._coach_market_week
+        if (not self._coach_market or force_refresh or age >= 12):
+            self._coach_market = self._generate_coach_market()
+            self._coach_market_week = current_week
+        return self._coach_market
+
+    def _generate_coach_market(self) -> List[Dict[str, Any]]:
+        """Generate a fresh pool of available coaches. 6 candidates,
+        excludes coaches already on staff. Ship MC1b."""
+        import uuid as _uuid
+        try:
+            from game_start import COACH_TRAITS, generate_starting_coaches
+            raw = generate_starting_coaches(num_coaches=8)
+        except Exception:
+            return []
+
+        staff_names = {c.get('name', '') for c in self._coaching_staff}
+        pool = []
+        for c in raw:
+            name = getattr(c, 'name', '') or (c.get('name', '') if isinstance(c, dict) else '')
+            if not name or name in staff_names:
+                continue
+            raw_traits = getattr(c, 'traits', None)
+            if raw_traits is None and isinstance(c, dict):
+                raw_traits = c.get('traits', [])
+            raw_traits = raw_traits or []
+            traits = []
+            for t in raw_traits:
+                _k = str(t).upper().replace(' ', '_').replace("'", '')
+                if _k in COACH_TRAITS:
+                    traits.append(_k)
+            specialty = (getattr(c, 'specialty', None)
+                         or (c.get('specialty') if isinstance(c, dict) else None)
+                         or 'mma')
+            rating = int(getattr(c, 'skill_level', None)
+                         or getattr(c, 'rating', None)
+                         or (c.get('rating') if isinstance(c, dict) else 60)
+                         or 60)
+            salary = int(getattr(c, 'weekly_salary', None)
+                         or getattr(c, 'salary', None)
+                         or (c.get('salary') if isinstance(c, dict) else 800)
+                         or 800)
+            pool.append({
+                "coach_id": str(_uuid.uuid4())[:12],
+                "name":      name,
+                "specialty": specialty,
+                "rating":    rating,
+                "salary":    salary,
+                "traits":    traits,
+                "archetype": self._specialty_to_archetype(specialty),
+            })
+            if len(pool) >= 6:
+                break
+        return pool
+
+    def _specialty_to_archetype(self, specialty: str) -> str:
+        """Map specialty string to archetype bucket. Ship MC1b."""
+        _s = str(specialty).lower()
+        if _s in {'boxing','kickboxing','muay thai','muay_thai',
+                  'striking','clinch'}:
+            return 'striking'
+        if _s in {'wrestling','bjj','judo','grappling','submissions',
+                  'sambo','jiu-jitsu','jiu_jitsu'}:
+            return 'grappling'
+        if _s in {'strength','conditioning','sc','s&c','s and c',
+                  'fitness','athletic','cardio'}:
+            return 'sc'
+        return 'mma_head'
+
+    def remove_from_coach_market(self, coach_id: str) -> None:
+        """Remove a hired coach from the market. Ship MC1b."""
+        self._coach_market = [
+            c for c in self._coach_market
+            if c.get('coach_id') != coach_id
+        ]
 
     def get_coach_contract_options(self) -> List[int]:
         """Available contract lengths for hiring at current tier. Ship C2."""

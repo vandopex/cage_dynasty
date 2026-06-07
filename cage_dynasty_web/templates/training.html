@@ -29,6 +29,21 @@
             <div class="stat-label">Fighters</div>
         </div>
     </div>
+    {% if staff_developing %}
+    <div style="font-size:.72rem;color:var(--text-muted);
+                padding:0 var(--spacing-lg) var(--spacing-md);">
+        Staff also developing:
+        {% for label, archetype, name in staff_developing %}
+        <span style="margin-left:6px;">
+            {% if archetype == 'striking' %}🥊
+            {% elif archetype == 'grappling' %}🤼
+            {% elif archetype == 'sc' %}💪
+            {% else %}🧠{% endif %}
+            {{ label }} ({{ name }})
+        </span>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 {% if not fighters %}

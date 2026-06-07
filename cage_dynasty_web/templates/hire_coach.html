@@ -3,9 +3,15 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>💼 Hire a Head Coach</h1>
+    <h1>💼 Hire a Coach</h1>
     <p class="text-muted">Your {{ tier }} camp can offer contracts of {{ contract_options }} weeks.</p>
 </div>
+
+{% if slot_context %}
+<div style="font-size:.8rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
+    {{ slot_context }}
+</div>
+{% endif %}
 
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
             gap:var(--spacing-md);">
