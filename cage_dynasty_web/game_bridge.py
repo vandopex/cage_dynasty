@@ -2658,7 +2658,7 @@ class GameBridge:
             self._fight_offers.append(offer)
 
             self._news_items.insert(0, {
-                "headline": f"📨 DFC offers {pf.name} a fight vs {opp.name}"
+                "headline": f"📨 {PROMOTION_NAME} offers {pf.name} a fight vs {opp.name}"
                             f" ({opp.wins}-{opp.losses})"
                             f"{f' · #{opp_rank}' if opp_rank else ''}",
                 "category": "signing",
@@ -2730,7 +2730,7 @@ class GameBridge:
             if len(getattr(ftr, 'fight_history', []) or []) == 1:
                 _sys = self._get_amateur_system()
                 if _sys and _sys.amateurs.get(fid):
-                    _ev = fight.get('event_name', 'DFC')
+                    _ev = fight.get('event_name', PROMOTION_NAME)
                     _opp_name = loser.name if is_win else winner.name
                     if is_win:
                         _hl = f"🆕 {ftr.name} wins pro debut over {_opp_name} at {_ev} — {method}"
@@ -2766,9 +2766,9 @@ class GameBridge:
                     _fname = ftr.name.split()[0] if ftr.name else "Fighter"
                     _opp_name = loser.name if is_win else winner.name
                     if is_title_fight:
-                        _hl = f"🏆 {ftr.name} IS THE NEW CHAMPION — stunning title win at {fight.get('event_name','DFC')}!"
+                        _hl = f"🏆 {ftr.name} IS THE NEW CHAMPION — stunning title win at {fight.get('event_name', PROMOTION_NAME)}!"
                     elif method in ("KO", "TKO"):
-                        _hl = f"💥 {ftr.name} puts the division on notice — {method} finish at {fight.get('event_name','DFC')}"
+                        _hl = f"💥 {ftr.name} puts the division on notice — {method} finish at {fight.get('event_name', PROMOTION_NAME)}"
                     elif method == "SUB":
                         _hl = f"🔒 {ftr.name} locks up the submission — makes a statement at {fight.get('event_name','DFC')}"
                     else:
@@ -8273,7 +8273,7 @@ class GameBridge:
             _dec = sum(1 for m in _methods if m == "DEC")
             _total = len(_methods)
             _fin_rate = int((_ko + _tko + _sub) / _total * 100) if _total else 0
-            print(f"  📊 [{event.get('event_name','DFC')}] {_total} fights "
+            print(f"  📊 [{event.get('event_name', PROMOTION_NAME)}] {_total} fights "
                   f"— KO:{_ko} TKO:{_tko} SUB:{_sub} DEC:{_dec} "
                   f"(finish rate: {_fin_rate}%)")
 
@@ -9396,6 +9396,62 @@ class GameBridge:
         )
         return slot.value
 
+    def _print_event_card(
+        self,
+        card: Dict[str, Any],
+        event_name: str,
+        target_week: int,
+    ) -> None:
+        """Structured card printer — Ship CB1.
+        Groups fights by slot with headers and scores visible
+        for diagnostics. Replaces two inline print blocks."""
+        SLOT_HEADERS = {
+            "main_event":  "── MAIN EVENT ──",
+            "co_main":     "── CO-MAIN ──",
+            "main_card":   "── MAIN CARD ──",
+            "prelim":      "── PRELIMS ──",
+            "early_prelim":"── EARLY PRELIMS ──",
+        }
+        SLOT_ORDER = ["main_event", "co_main", "main_card",
+                      "prelim", "early_prelim"]
+
+        def _rank_str(r):
+            if r == 0: return "#C"
+            if r is not None: return f"#{r}"
+            return "UR"
+
+        def _rank_of(fid):
+            if not fid or not self._game_state:
+                return None
+            ftr = self._game_state.get_fighter(fid)
+            return self._get_fighter_rank(ftr) if ftr else None
+
+        fights = card.get("fights", [])
+        by_slot: Dict[str, List[Dict[str, Any]]] = {s: [] for s in SLOT_ORDER}
+        for f in fights:
+            slot = f.get("card_slot", "prelim")
+            if slot not in by_slot:
+                slot = "prelim"
+            by_slot[slot].append(f)
+
+        total = len(fights)
+        print(f"📅 {event_name} (Wk {target_week}) — {total} fights:")
+
+        for slot in SLOT_ORDER:
+            slot_fights = by_slot[slot]
+            if not slot_fights:
+                continue
+            print(f"   {SLOT_HEADERS[slot]}")
+            for f in slot_fights:
+                f1 = f.get("fighter1_name", "?")
+                f2 = f.get("fighter2_name", "?")
+                r1 = _rank_str(_rank_of(f.get("fighter1_id")))
+                r2 = _rank_str(_rank_of(f.get("fighter2_id")))
+                title = "🏆" if f.get("is_title_fight") else ""
+                score = f.get("_g1_score")
+                score_str = f" [score:{score:.0f}]" if score is not None else ""
+                print(f"   {title}{f1}{r1} vs {f2}{r2}{score_str}")
+
     def _score_and_slot_fights(self, event_name: str, target_week: int,
                                   fight_dicts: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """
@@ -9835,21 +9891,8 @@ class GameBridge:
             all_booked.add(f1.fighter_id)
             all_booked.add(f2.fighter_id)
 
-        # ── Terminal summary — one line per card ──────────────────────────
-        slot_icons = {"main_event":"🏆","co_main":"⭐","main_card":"🥊","prelim":"📋","early_prelim":"📋"}
-        def _rank_str(r): return "#C" if r == 0 else f"#{r}" if r is not None else "UR"
-        summary_parts = []
-        for f in sorted(card["fights"], key=lambda x: {"main_event":0,"co_main":1,"main_card":2,"prelim":3,"early_prelim":4}.get(x.get("card_slot","prelim"),3)):
-            icon = slot_icons.get(f.get("card_slot","prelim"), "📋")
-            title_tag = "🏆" if f.get("is_title_fight") else ""
-            r1_raw = self._get_fighter_rank(self._game_state.get_fighter(f['fighter1_id'])) if self._game_state and self._game_state.get_fighter(f.get('fighter1_id','')) else None
-            r2_raw = self._get_fighter_rank(self._game_state.get_fighter(f['fighter2_id'])) if self._game_state and self._game_state.get_fighter(f.get('fighter2_id','')) else None
-            r1 = _rank_str(r1_raw)
-            r2 = _rank_str(r2_raw)
-            summary_parts.append(f"{icon}{title_tag}{f['fighter1_name']}{r1} vs {f['fighter2_name']}{r2}")
-        print(f"📅 {event_name} (Wk {target_week}) — {len(card['fights'])} fights:")
-        for part in summary_parts:
-            print(f"   {part}")
+        # ── Terminal summary ── Ship CB1: structured by slot
+        self._print_event_card(card, event_name, target_week)
 
         return card
 
@@ -9920,7 +9963,7 @@ class GameBridge:
                 pipeline_booked.add(f.get("fighter1_id", ""))
                 pipeline_booked.add(f.get("fighter2_id", ""))
 
-        print(f"✅ Card pipeline initialized: DFC {current+1} – DFC {current+num_cards}")
+        print(f"✅ Card pipeline initialized: {PROMOTION_NAME} {current+1} – {PROMOTION_NAME} {current+num_cards}")
 
     def _build_card_for_week_planned(
         self,
@@ -10102,23 +10145,8 @@ class GameBridge:
             locally_booked.add(f1.fighter_id)
             locally_booked.add(f2.fighter_id)
 
-        # Print card summary
-        slot_icons = {"main_event":"🏆","co_main":"⭐","main_card":"🥊",
-                      "prelim":"📋","early_prelim":"📋"}
-        slot_order = {"main_event":0,"co_main":1,"main_card":2,"prelim":3,"early_prelim":4}
-        print(f"📅 {event_name} (Wk {target_week}) — {len(card['fights'])} fights:")
-        for f in sorted(card["fights"],
-                        key=lambda x: slot_order.get(x.get("card_slot","prelim"),3)):
-            icon = slot_icons.get(f.get("card_slot","prelim"),"📋")
-            title_tag = "🏆" if f.get("is_title_fight") else ""
-            ftr1 = self._game_state.get_fighter(f["fighter1_id"])
-            ftr2 = self._game_state.get_fighter(f["fighter2_id"])
-            r1 = self._get_fighter_rank(ftr1) if ftr1 else None
-            r2 = self._get_fighter_rank(ftr2) if ftr2 else None
-            rs1 = f"#{r1}" if r1 is not None else "UR"
-            rs2 = f"#{r2}" if r2 is not None else "UR"
-            print(f"   {icon}{title_tag} {f['fighter1_name']}{rs1} vs "
-                  f"{f['fighter2_name']}{rs2}")
+        # Print card summary ── Ship CB1: structured by slot
+        self._print_event_card(card, event_name, target_week)
         return card
 
     def _top_up_pipeline(self) -> None:
