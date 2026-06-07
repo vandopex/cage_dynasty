@@ -886,6 +886,16 @@ class GameBridge:
         # {} when no coach hired (vacant). Always paired with _coach dict.
         self._coach_contract: Dict[str, Any] = {}
 
+        # Ship MC1a (foundation): multi-coach staff structures. Dormant —
+        # legacy save migration on load mirrors _coach into _coaching_staff.
+        # Read sites still consume _coach / _coach_contract above until
+        # MC1b migrates them. New code can call _get_head_coach() to read
+        # through whichever storage is populated.
+        self._coaching_staff: List[Dict[str, Any]] = []
+        self._head_coach_id: Optional[str] = None
+        self._coach_market: List[Dict[str, Any]] = []
+        self._coach_market_week: int = 0
+
         # Per-fighter weekly training plans — {fighter_id: {focus, intensity}}
         # Set once, applied automatically every week advance
         self._fighter_training_plans: Dict[str, Dict[str, Any]] = {}
@@ -1358,6 +1368,11 @@ class GameBridge:
             "total_purses_earned":      self._total_purses_earned,
             "coach":                    self._coach,
             "coach_contract":           self._coach_contract,
+            # Ship MC1a foundation — additive multi-coach state
+            "coaching_staff":           self._coaching_staff,
+            "head_coach_id":            self._head_coach_id,
+            "coach_market":             self._coach_market,
+            "coach_market_week":        self._coach_market_week,
             "scheduled_fights":         [clean_fight(f) for f in self._scheduled_fights],
             "ai_deferred_bookings":     [clean_fight(f) for f in self._ai_deferred_bookings],
             "upcoming_cards":           upcoming_clean,
@@ -1441,6 +1456,26 @@ class GameBridge:
         self._total_purses_earned     = data.get("total_purses_earned", 0)
         self._coach                   = data.get("coach", {})
         self._coach_contract          = data.get("coach_contract", {})
+
+        # Ship MC1a foundation — additive multi-coach state restore.
+        # Reads still hit _coach/_coach_contract above; staff is populated
+        # for future MC1b code to consume.
+        self._coaching_staff          = data.get("coaching_staff", [])
+        self._head_coach_id           = data.get("head_coach_id", None)
+        self._coach_market            = data.get("coach_market", [])
+        self._coach_market_week       = data.get("coach_market_week", 0)
+        # Legacy save migration: if old save has a populated coach contract
+        # but no coaching_staff entry, mirror it into the staff list so
+        # future _coaching_staff reads see the data. Idempotent — skipped
+        # once staff is populated.
+        if not self._coaching_staff and self._coach_contract:
+            import uuid as _uuid_mig
+            _cid = self._coach_contract.get("coach_id") or str(_uuid_mig.uuid4())[:8]
+            _legacy_entry = dict(self._coach or {})
+            _legacy_entry["coach_id"] = _cid
+            _legacy_entry["contract"] = dict(self._coach_contract or {})
+            self._coaching_staff = [_legacy_entry]
+            self._head_coach_id = _cid
         self._scheduled_fights        = data.get("scheduled_fights", [])
         self._ai_deferred_bookings    = data.get("ai_deferred_bookings", [])
 
@@ -11717,6 +11752,43 @@ class GameBridge:
             })
         print(f"  {arch_emoji} [AI SIGNING] {fighter.name} → {winning_camp.name} "
               f"({arch}) [score: {_top_score:.0f}]")
+
+    def _get_head_coach(self) -> Dict[str, Any]:
+        """Ship MC1a foundation: return head coach dict.
+        Prefers _coaching_staff if populated; falls back to legacy
+        self._coach until MC1b migrates write sites. Never returns None.
+        """
+        if self._coaching_staff:
+            if self._head_coach_id:
+                for c in self._coaching_staff:
+                    if c.get('coach_id') == self._head_coach_id:
+                        return c
+            return self._coaching_staff[0]
+        _legacy = getattr(self, '_coach', None)
+        if _legacy:
+            return _legacy
+        return {
+            "name":      "Head Coach",
+            "specialty": "boxing",
+            "rating":    60,
+            "salary":    800,
+            "traits":    [],
+            "archetype": "mma_head",
+        }
+
+    def _get_head_coach_contract(self) -> Dict[str, Any]:
+        """Ship MC1a foundation: return head coach contract dict.
+        Prefers _coaching_staff if populated; falls back to legacy
+        self._coach_contract. Empty dict signals no coach hired."""
+        if self._coaching_staff:
+            hc = self._get_head_coach()
+            cid = hc.get('coach_id')
+            if cid:
+                for c in self._coaching_staff:
+                    if c.get('coach_id') == cid:
+                        return c.get('contract', {})
+            return {}
+        return getattr(self, '_coach_contract', None) or {}
 
     def get_coach_contract_status(self) -> Dict[str, Any]:
         """
