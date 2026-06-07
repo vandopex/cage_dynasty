@@ -397,6 +397,10 @@ COACH_VACANT_PLACEHOLDER = {
     "salary":    0,
 }
 
+# Promotion brand name — used for all event name generation.
+# Change here to rename everywhere.
+PROMOTION_NAME = "Cage Dynasty"
+
 # ── Corner advice ────────────────────────────────────────────────
 # Ship K1: between-round coach advice for player fights. Reactive
 # to RoundStats; specialty + rating tier determine content depth.
@@ -1334,7 +1338,7 @@ class GameBridge:
         """Ship C: format DFC event name with the world-gen offset applied.
         week=1 + offset=130 → "DFC 131". offset=0 (legacy saves) preserves
         the original labels."""
-        return f"DFC {week + self._dfc_event_offset}"
+        return f"{PROMOTION_NAME} {week + self._dfc_event_offset}"
 
     def web_save(self, slot: str = "autosave") -> Dict[str, Any]:
         """
@@ -1522,7 +1526,7 @@ class GameBridge:
                 _dropped = len(_fights) - len(_kept)
                 _card["fights"] = _kept
                 _truncated_total += _dropped
-                print(f"  🔧 [CARD TRUNCATE] DFC {_wk} had {len(_fights)} fights, "
+                print(f"  🔧 [CARD TRUNCATE] {PROMOTION_NAME} {_wk} had {len(_fights)} fights, "
                       f"kept top {CARD_TARGET_FIGHTS} (player fights protected), dropped {_dropped}")
         if _truncated_total > 0:
             print(f"🔧 [SUB-SHIP A LOAD CLEANUP] Truncated {_truncated_total} fights total "
@@ -5547,9 +5551,12 @@ class GameBridge:
             # stitched onto the same entry later in _advance_maintenance_week.
             _ag_all      = result.get("actual_gains", {}) or {}
             _plan_gains  = {k: v for k, v in _ag_all.items()
-                            if not k.endswith("(coach)") and v > 0.05}
-            _coach_gains = {k.replace(" (coach)", ""): v for k, v in _ag_all.items()
-                            if k.endswith("(coach)") and v > 0.05}
+                            if "(coach:" not in k and v > 0.05}
+            _coach_gains: Dict[str, float] = {}
+            for _k, _v in _ag_all.items():
+                if "(coach:" in _k and _v > 0.05:
+                    _attr = _k.split(" (coach:")[0]
+                    _coach_gains[_attr] = _coach_gains.get(_attr, 0.0) + _v
             self._record_training_week(
                 fighter_id    = fid,
                 week          = self._game_state.week_number,
