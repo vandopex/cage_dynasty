@@ -599,12 +599,23 @@ def register_routes(app):
             plan = bridge.get_training_plan(f.fighter_id)
             training_plans[f.fighter_id] = plan
 
+        # Roster enrichment — contract fights remaining
+        contracts_map = {}
+        for f in fighters:
+            try:
+                contract = bridge.get_contract_status(f.fighter_id)
+                if contract:
+                    contracts_map[f.fighter_id] = contract
+            except Exception:
+                pass
+
         return render_template('roster.html',
             camp=camp,
             fighters=fighters,
             sort_by=sort_by,
             scheduled_map=scheduled_map,
             training_plans=training_plans,
+            contracts_map=contracts_map,
             week=bridge.week_number,
         )
     
