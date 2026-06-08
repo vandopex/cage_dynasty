@@ -11,7 +11,11 @@ from game_bridge import get_bridge, GameBridge
 
 def create_app():
     """Application factory pattern for Flask app creation."""
-    app = Flask(__name__)
+    import os as _os2
+_here = _os2.path.dirname(_os2.path.abspath(__file__))
+app = Flask(__name__,
+    template_folder=_os2.path.join(_here, 'templates'),
+    static_folder=_os2.path.join(_here, 'static'))
 
     # Configuration — env-var overrides for production deployment
     app.config['SECRET_KEY'] = _os.environ.get(
