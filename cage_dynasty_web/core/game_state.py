@@ -10,12 +10,10 @@ from game_state import (
     GamePhase,
     FighterRecord,
     CampRecord,
-    DivisionRecord,
     get_game_state,
     reset_game_state,
 )
 
 __all__ = [
     'GameState', 'GamePhase', 'FighterRecord', 'CampRecord',
-    'DivisionRecord', 'get_game_state', 'reset_game_state',
 ]
