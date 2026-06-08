@@ -923,6 +923,10 @@ class GameBridge:
         # Records every championship reign chronologically
         self._title_history: Dict[str, List[Dict[str, Any]]] = {}
 
+        # Ship HOF1: Hall of Fame inductees — career-end records
+        # for retired fighters who crossed the prestige threshold.
+        self._hof_inductees: List[Dict[str, Any]] = []
+
         # Injury system — tracks active injuries and history
         self._injury_system = InjurySystem() if INJURY_AVAILABLE and InjurySystem else None
 
@@ -1411,6 +1415,8 @@ class GameBridge:
             "watchlist":                self._watchlist,
             "fight_commentary":         {k: v for k, v in self._fight_commentary.items()},
             "title_history":            self._title_history,
+            "yearly_awards":            self._yearly_awards if hasattr(self, '_yearly_awards') else [],
+            "hof_inductees":            self._hof_inductees,
             "camp_stat_totals":         self._camp_stat_totals,
             "training_history":         self._training_history,
             "contracts":                self._contracts,
@@ -1545,6 +1551,8 @@ class GameBridge:
         self._camp_stat_totals        = data.get("camp_stat_totals", {})
         self._training_history        = data.get("training_history", {})
         self._contracts               = data.get("contracts", {})
+        self._yearly_awards           = data.get("yearly_awards", [])
+        self._hof_inductees           = data.get("hof_inductees", [])
         self._camp_archetypes         = data.get("camp_archetypes", {})
         self._champ_weeks_since_defense = data.get("champ_weeks_since_defense", {})
         self._pending_injury_decisions  = data.get("pending_injury_decisions", [])
@@ -2479,6 +2487,65 @@ class GameBridge:
         if not hasattr(self, '_yearly_awards'):
             self._yearly_awards = []
         self._yearly_awards.append({"year": year, "week": week, "awards": awards})
+
+        # Ship HOF1: induct eligible retired fighters at each year boundary.
+        HOF_THRESHOLD = 60
+        _all_ftrs = list(self._game_state.fighters.values())
+        _inducted_ids = {h["fighter_id"] for h in self._hof_inductees}
+        for _ftr in _all_ftrs:
+            if getattr(_ftr, 'is_active', True):
+                continue
+            if _ftr.fighter_id in _inducted_ids:
+                continue
+            _reigns = [
+                r for _wc_list in self._title_history.values()
+                for r in _wc_list
+                if r.get("champion_id") == _ftr.fighter_id
+            ]
+            _title_count = len(_reigns)
+            _def_count = sum(r.get("successful_defenses", 0) for r in _reigns)
+            _best = getattr(_ftr, 'best_rank', 99)
+            _rank_pts = max(0, (15 - _best) * 2)
+            _score = (
+                _ftr.wins * 3
+                + _ftr.ko_wins * 2
+                + _ftr.sub_wins * 2
+                + _title_count * 25
+                + _def_count * 10
+                + _rank_pts
+                + getattr(_ftr, 'popularity', 10) * 0.3
+            )
+            if _score < HOF_THRESHOLD:
+                continue
+            _wc = getattr(_ftr, 'weight_class', '')
+            self._hof_inductees.append({
+                "fighter_id":     _ftr.fighter_id,
+                "name":           _ftr.name,
+                "nickname":       getattr(_ftr, 'nickname', None),
+                "weight_class":   _wc,
+                "record":         f"{_ftr.wins}-{_ftr.losses}-{_ftr.draws}",
+                "wins":           _ftr.wins,
+                "losses":         _ftr.losses,
+                "ko_wins":        _ftr.ko_wins,
+                "sub_wins":       _ftr.sub_wins,
+                "title_reigns":   _title_count,
+                "title_defenses": _def_count,
+                "best_rank":      _best,
+                "popularity":     getattr(_ftr, 'popularity', 10),
+                "prestige_score": round(_score),
+                "year_inducted":  year,
+                "week_inducted":  week,
+            })
+            _inducted_ids.add(_ftr.fighter_id)
+            self._news_items.insert(0, {
+                "headline":    (f"🏛️ HALL OF FAME: {_ftr.name} inducted "
+                                f"into the Cage Dynasty Hall of Fame!"),
+                "category":    "award",
+                "week":        week,
+                "icon":        "🏛️",
+                "fighter1_id": _ftr.fighter_id,
+            })
+            print(f"  🏛️  [HOF] {_ftr.name} inducted (score: {round(_score)})")
 
     def _expire_stale_offers(self, max_age_weeks: int = 3) -> None:
         """Drop offers older than max_age_weeks. Fires once per advance.
@@ -8928,6 +8995,39 @@ class GameBridge:
             "active_streak":  [{"fighter": web(f), "value": streak(f)}    for f in by_streak[:5] if streak(f) > 0],
             "longest_streak": [{"fighter": web(f), "value": max_streak(f)} for f in by_maxstreak[:5] if max_streak(f) > 0],
             "most_fights":    [{"fighter": web(f), "value": f.wins+f.losses} for f in by_total[:5]],
+            "hof_inductees":  sorted(self._hof_inductees,
+                                     key=lambda h: h["prestige_score"], reverse=True),
+            "title_records":  self._get_title_records(),
+        }
+
+    def _get_title_records(self) -> Dict[str, Any]:
+        """Ship HOF1: aggregate title-related records across champions."""
+        champ_data: Dict[str, Dict[str, Any]] = {}
+        for _wc_reigns in self._title_history.values():
+            for _r in _wc_reigns:
+                _fid = _r.get("champion_id", "")
+                if not _fid:
+                    continue
+                if _fid not in champ_data:
+                    champ_data[_fid] = {
+                        "fighter_id": _fid,
+                        "name":       _r.get("champion_name", ""),
+                        "reigns":     0,
+                        "defenses":   0,
+                        "divisions":  set(),
+                    }
+                _cd = champ_data[_fid]
+                _cd["reigns"]   += 1
+                _cd["defenses"] += _r.get("successful_defenses", 0)
+                _cd["divisions"].add(_r.get("weight_class", ""))
+        for _cd in champ_data.values():
+            _cd["division_count"] = len(_cd["divisions"])
+            del _cd["divisions"]
+        _ranked = sorted(champ_data.values(), key=lambda x: x["reigns"],   reverse=True)
+        _by_def = sorted(champ_data.values(), key=lambda x: x["defenses"], reverse=True)
+        return {
+            "most_reigns":   _ranked[:5],
+            "most_defenses": _by_def[:5],
         }
 
     # =========================================================================

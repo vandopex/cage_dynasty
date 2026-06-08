@@ -19,6 +19,7 @@
         ('injury',   '🏥 Injuries','btn-primary',  'injury'),
         ('scouting', '👀 Scouting','btn-primary',  'scouting'),
         ('facility', '🏗️ Facility','btn-primary',  'facility'),
+        ('award',    '🏛️ Awards', 'btn-warning',  'award'),
     ] %}
     {% for cat_id, label, style, _ in cats %}
     <a href="{{ url_for('news_feed', category=cat_id) }}"
