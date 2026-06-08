@@ -3261,23 +3261,33 @@ class GameBridge:
                 loser_rating  = loser.overall_rating
                 dominance = calculate_dominance_from_fight(winner_rating, loser_rating)
                 # fighter1 is always "fighter 1" in generate_decision
-                if winner_num == 1:
-                    dec = generate_decision(
-                        winner_dominance=dominance,
-                        total_rounds=round_finished,
-                        is_title_fight=is_title_fight,
-                        fighter1_name=f1_name,
-                        fighter2_name=f2_name,
-                    )
-                else:
-                    # Invert so fighter 1 in the card is the actual loser
-                    dec = generate_decision(
-                        winner_dominance=1.0 - dominance,
-                        total_rounds=round_finished,
-                        is_title_fight=is_title_fight,
-                        fighter1_name=f1_name,
-                        fighter2_name=f2_name,
-                    )
+                # F39 fix: regenerate scorecard until tally agrees with
+                # bridge's winner_num. Caps at 5 attempts (~99.99%
+                # resolution at ~15% base mismatch rate).
+                for _f39_attempt in range(5):
+                    if winner_num == 1:
+                        dec = generate_decision(
+                            winner_dominance=dominance,
+                            total_rounds=round_finished,
+                            is_title_fight=is_title_fight,
+                            fighter1_name=f1_name,
+                            fighter2_name=f2_name,
+                        )
+                    else:
+                        # Invert so fighter 1 in the card is the actual loser
+                        dec = generate_decision(
+                            winner_dominance=1.0 - dominance,
+                            total_rounds=round_finished,
+                            is_title_fight=is_title_fight,
+                            fighter1_name=f1_name,
+                            fighter2_name=f2_name,
+                        )
+                    _f1_tot = sum(sc.fighter1_score for sc in dec.scorecards)
+                    _f2_tot = sum(sc.fighter2_score for sc in dec.scorecards)
+                    _card_w = (1 if _f1_tot > _f2_tot
+                               else 2 if _f2_tot > _f1_tot else 0)
+                    if _card_w == winner_num or _card_w == 0:
+                        break  # tally matches winner_num, or draw
                 # Store scorecard as plain dicts for template rendering
                 scorecard_data = {
                     "decision_type":    dec.decision_type.value,
@@ -11016,13 +11026,22 @@ class GameBridge:
                     winner.overall_rating, loser.overall_rating)
                 if winner_num != 1:
                     dominance = 1.0 - dominance
-                dec = generate_decision(
-                    winner_dominance=dominance,
-                    total_rounds=round_finished,
-                    is_title_fight=is_title_fight,
-                    fighter1_name=f1_name,
-                    fighter2_name=f2_name,
-                )
+                # F39 fix: regenerate scorecard until tally agrees with
+                # winner_num. Caps at 5 attempts.
+                for _f39_attempt in range(5):
+                    dec = generate_decision(
+                        winner_dominance=dominance,
+                        total_rounds=round_finished,
+                        is_title_fight=is_title_fight,
+                        fighter1_name=f1_name,
+                        fighter2_name=f2_name,
+                    )
+                    _f1_tot = sum(sc.fighter1_score for sc in dec.scorecards)
+                    _f2_tot = sum(sc.fighter2_score for sc in dec.scorecards)
+                    _card_w = (1 if _f1_tot > _f2_tot
+                               else 2 if _f2_tot > _f1_tot else 0)
+                    if _card_w == winner_num or _card_w == 0:
+                        break  # tally matches or draw
                 scorecard_data = {
                     "decision_type":    dec.decision_type.value,
                     "is_split":         dec.is_split,
