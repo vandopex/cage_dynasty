@@ -34,10 +34,14 @@ class GameCalendar:
     def __init__(self, start_date=None):
         self.start_date = start_date
         self.current_week = 0
+        self.current_date = GameDate()
 
-    def advance_week(self) -> int:
+    def advance_week(self) -> "GameDate":
         self.current_week += 1
-        return self.current_week
+        self.current_date = GameDate(
+            week=self.current_week % 52 or 52,
+            year=(self.current_week - 1) // 52 + 1)
+        return self.current_date
 
     def get_current_week(self) -> int:
         return self.current_week
@@ -46,11 +50,14 @@ class GameCalendar:
         return GameDate(week=week)
 
     def to_dict(self):
-        return {"current_week": self.current_week, "start_date": str(self.start_date)}
+        return {"current_week": self.current_week,
+                "start_date": str(self.start_date)}
 
     @classmethod
     def from_dict(cls, data: dict) -> "GameCalendar":
-        from datetime import date as _d
         cal = cls()
         cal.current_week = data.get("current_week", 0)
+        cal.current_date = GameDate(
+            week=cal.current_week % 52 or 52,
+            year=(cal.current_week - 1) // 52 + 1)
         return cal
