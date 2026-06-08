@@ -946,7 +946,7 @@ class GameState:
         
         summary = {
             "week": self.week_number,
-            "date": new_date.format("long"),
+            "date": f"Week {self.week_number}",
             "events": [],
             "fights": 0,
             "signings": 0,
