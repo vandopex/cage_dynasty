@@ -5249,6 +5249,7 @@ class GameBridge:
                                              f"bout vs {_opp} cancelled."),
                                 "category": "injury",
                                 "week":     self._game_state.week_number,
+                                "icon":     "⚕️",
                             })
                             print(f"  ⚕️  [INJURY CANCEL] {_fname} vs {_opp} "
                                   f"cancelled ({_inj_weeks}w injury)")
@@ -8309,6 +8310,8 @@ class GameBridge:
                     "week":      week,
                     "winner_id": winner.fighter_id,
                     "loser_id":  loser.fighter_id,
+                    "fight_id":  fight.get("fight_id", ""),
+                    "event_id":  event.get("event_id", ""),
                 })
 
         # ── Terminal: card fight distribution summary ─────────────────
@@ -8536,6 +8539,8 @@ class GameBridge:
                     "week":      week,
                     "winner_id": winner.fighter_id,
                     "loser_id":  loser.fighter_id,
+                    "fight_id":  fight.get("fight_id", ""),
+                    "event_id":  event.get("event_id", ""),
                 })
 
         # Ship G1: apply unified slot assignment via shared helper.

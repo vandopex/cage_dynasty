@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}DFC News Feed{% endblock %}
+{% block title %}Cage Dynasty News Feed{% endblock %}
 {% block content %}
 <div class="page-header">
-    <h1 class="page-title">📰 DFC News Feed</h1>
+    <h1 class="page-title">📰 Cage Dynasty News Feed</h1>
 </div>
 
 <!-- Category filters -->
@@ -52,6 +52,18 @@
                     {% if item.loser_id %}
                     <a href="{{ url_for('fighter_profile', fighter_id=item.loser_id) }}"
                        style="color:var(--text-muted);text-decoration:none;font-size:.68rem;">Loser →</a>
+                    {% endif %}
+                    {% if item.fight_id %}
+                    <a href="{{ url_for('watch_fight', fight_id=item.fight_id) }}"
+                       style="font-size:.68rem;color:var(--text-muted);text-decoration:none;margin-left:8px;">
+                        📋 View fight
+                    </a>
+                    {% endif %}
+                    {% if item.event_id %}
+                    <a href="{{ url_for('event_detail', event_id=item.event_id) }}"
+                       style="font-size:.68rem;color:var(--text-muted);text-decoration:none;margin-left:8px;">
+                        📅 View event
+                    </a>
                     {% endif %}
                 </div>
             </div>
