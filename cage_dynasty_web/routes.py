@@ -2304,6 +2304,12 @@ def register_routes(app):
                 fotn_player_fight = fight
                 break
 
+        # Ship YS1: year-end summary (fires every 52-week boundary)
+        year_summary = None
+        if bridge.week_number % 52 == 0 and bridge.week_number > 0:
+            _ya = bridge.get_yearly_awards() if hasattr(bridge, 'get_yearly_awards') else []
+            year_summary = _ya[-1] if _ya else None
+
         # Detect notable moments from AI fights
         notable = []
         for fight in recap.get('ai_fights', []):
@@ -2352,6 +2358,7 @@ def register_routes(app):
             notable=notable,
             fotn_player_fight=fotn_player_fight,
             training_report=recap.get('training_report', {}),
+            year_summary=year_summary,
             finances={
                 'balance':       recap.get('balance', 0),
                 'overhead':      recap.get('overhead', 0),

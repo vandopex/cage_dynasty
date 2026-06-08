@@ -2367,6 +2367,7 @@ class GameBridge:
             return best
 
         awards = []
+        structured: Dict[str, Any] = {}   # Ship YS1: structured per-award capture
 
         # ── GOAT formula applied to this year's fights only ────────
         # Points = (wins × 10) + (KO/TKO wins × 5) + (SUB wins × 3) − (losses × 2)
@@ -2395,6 +2396,13 @@ class GameBridge:
                 wins = wins_this_year(foty_id)
                 awards.append(f"🏆 FIGHTER OF THE YEAR (Year {year}): {foty.name} "
                               f"({foty_pts} pts · {wins} wins · {foty.wins}-{foty.losses})")
+                structured["fighter_of_year"] = {
+                    "fighter_id": foty_id,
+                    "name":       foty.name,
+                    "pts":        foty_pts,
+                    "wins":       wins,
+                    "record":     f"{foty.wins}-{foty.losses}-{foty.draws}",
+                }
 
         # ── Young Fighter of the Year (under 25) ────────────────────
         young = [(fid, year_points(fid))
@@ -2408,6 +2416,13 @@ class GameBridge:
                 wins = wins_this_year(yoty_id)
                 awards.append(f"⭐ YOUNG FIGHTER OF THE YEAR (Year {year}): {yoty.name} "
                               f"(Age {yoty.age} · {yoty_pts} pts · {wins} wins)")
+                structured["young_foty"] = {
+                    "fighter_id": yoty_id,
+                    "name":       yoty.name,
+                    "pts":        yoty_pts,
+                    "wins":       wins,
+                    "age":        getattr(yoty, 'age', 0),
+                }
 
         # ── KO of the Year ──────────────────────────────────────────
         ko_fights = [
@@ -2421,6 +2436,14 @@ class GameBridge:
             awards.append(f"💥 KO OF THE YEAR (Year {year}): "
                           f"{ko.get('winner_name')} def. {ko.get('loser_name')} "
                           f"via {ko.get('method')} R{ko.get('round_finished', '?')}")
+            structured["ko_of_year"] = {
+                "winner_id":   ko.get("winner_id", ""),
+                "winner_name": ko.get("winner_name", ""),
+                "loser_name":  ko.get("loser_name", ""),
+                "method":      ko.get("method", "KO"),
+                "round":       ko.get("round_finished", 0),
+                "fight_id":    ko.get("fight_id", ""),
+            }
 
         # ── Submission of the Year ──────────────────────────────────
         sub_fights = [
@@ -2434,6 +2457,13 @@ class GameBridge:
             awards.append(f"🥋 SUBMISSION OF THE YEAR (Year {year}): "
                           f"{sub.get('winner_name')} def. {sub.get('loser_name')} "
                           f"by SUB R{sub.get('round_finished', '?')}")
+            structured["sub_of_year"] = {
+                "winner_id":   sub.get("winner_id", ""),
+                "winner_name": sub.get("winner_name", ""),
+                "loser_name":  sub.get("loser_name", ""),
+                "round":       sub.get("round_finished", 0),
+                "fight_id":    sub.get("fight_id", ""),
+            }
 
         # ── Comeback Fighter of the Year ────────────────────────────
         comeback = None
@@ -2454,6 +2484,11 @@ class GameBridge:
         if comeback:
             awards.append(f"💪 COMEBACK FIGHTER OF THE YEAR (Year {year}): "
                           f"{comeback.name} ({wins_this_year(comeback.fighter_id)} wins this year)")
+            structured["comeback"] = {
+                "fighter_id": comeback.fighter_id,
+                "name":       comeback.name,
+                "wins":       best_comeback_wins,
+            }
 
         # ── Camp of the Year ────────────────────────────────────────
         camp_wins: Dict[str, int] = {}
@@ -2472,6 +2507,11 @@ class GameBridge:
             if best_camp:
                 awards.append(f"🏟️ CAMP OF THE YEAR (Year {year}): "
                               f"{best_camp.name} ({camp_wins[best_camp_id]} wins)")
+                structured["camp_of_year"] = {
+                    "camp_id": best_camp_id,
+                    "name":    best_camp.name,
+                    "wins":    camp_wins[best_camp_id],
+                }
 
         # ── Fire all awards as news ──────────────────────────────────
         for award_text in awards:
@@ -2486,7 +2526,8 @@ class GameBridge:
         # Store in record
         if not hasattr(self, '_yearly_awards'):
             self._yearly_awards = []
-        self._yearly_awards.append({"year": year, "week": week, "awards": awards})
+        self._yearly_awards.append({"year": year, "week": week,
+                                    "awards": awards, "structured": structured})
 
         # Ship HOF1: induct eligible retired fighters at each year boundary.
         HOF_THRESHOLD = 60
@@ -2546,6 +2587,11 @@ class GameBridge:
                 "fighter1_id": _ftr.fighter_id,
             })
             print(f"  🏛️  [HOF] {_ftr.name} inducted (score: {round(_score)})")
+
+    def get_yearly_awards(self) -> List[Dict[str, Any]]:
+        """Ship YS1: return all yearly award records for the year-summary
+        surface. Each entry: {year, week, awards: List[str], structured: Dict}."""
+        return list(getattr(self, '_yearly_awards', []))
 
     def _expire_stale_offers(self, max_age_weeks: int = 3) -> None:
         """Drop offers older than max_age_weeks. Fires once per advance.

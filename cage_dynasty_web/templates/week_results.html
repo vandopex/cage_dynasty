@@ -20,10 +20,95 @@
 {# ── Header ── #}
 <div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
     <div style="font-size:.72rem;letter-spacing:.2em;color:var(--text-muted);
-                text-transform:uppercase;margin-bottom:4px;">DFC — Week {{ week }}</div>
+                text-transform:uppercase;margin-bottom:4px;">Cage Dynasty — Week {{ week }}</div>
     <h1 style="font-family:var(--font-display);font-size:2.4rem;
                color:var(--text-bright);margin:0;">Weekend Recap</h1>
 </div>
+
+{# ── Ship YS1: Year-end summary banner ── #}
+{% if year_summary %}
+<div style="border:2px solid var(--warning);border-radius:12px;padding:20px;
+            margin-bottom:var(--spacing-lg);background:rgba(255,200,0,.06);">
+  <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--warning);
+              text-align:center;margin-bottom:16px;">
+    🏆 Year {{ year_summary.year }} Awards
+  </div>
+  {% set s = year_summary.structured %}
+  {% if s.fighter_of_year %}
+  <div style="margin-bottom:10px;">
+    <span style="color:var(--warning);font-weight:600;">🏆 Fighter of the Year</span>
+    <a href="{{ url_for('fighter_profile', fighter_id=s.fighter_of_year.fighter_id) }}"
+       style="color:var(--neon-green);text-decoration:none;margin-left:8px;">
+      {{ s.fighter_of_year.name }}
+    </a>
+    <span style="color:var(--text-muted);font-size:.8rem;margin-left:6px;">
+      {{ s.fighter_of_year.record }} · {{ s.fighter_of_year.wins }}W this year
+    </span>
+  </div>
+  {% endif %}
+  {% if s.young_foty %}
+  <div style="margin-bottom:10px;">
+    <span style="color:var(--warning);font-weight:600;">⭐ Young Fighter of the Year</span>
+    <a href="{{ url_for('fighter_profile', fighter_id=s.young_foty.fighter_id) }}"
+       style="color:var(--neon-green);text-decoration:none;margin-left:8px;">
+      {{ s.young_foty.name }}
+    </a>
+    <span style="color:var(--text-muted);font-size:.8rem;margin-left:6px;">
+      Age {{ s.young_foty.age }} · {{ s.young_foty.wins }}W this year
+    </span>
+  </div>
+  {% endif %}
+  {% if s.ko_of_year %}
+  <div style="margin-bottom:10px;">
+    <span style="color:var(--warning);font-weight:600;">💥 KO of the Year</span>
+    <span style="color:var(--text-muted);margin-left:8px;font-size:.9rem;">
+      {{ s.ko_of_year.winner_name }} def. {{ s.ko_of_year.loser_name }} · R{{ s.ko_of_year.round }}
+    </span>
+    {% if s.ko_of_year.fight_id %}
+    <a href="{{ url_for('watch_fight', fight_id=s.ko_of_year.fight_id) }}"
+       style="font-size:.75rem;color:var(--text-muted);margin-left:6px;text-decoration:none;">
+      📋 Watch
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if s.sub_of_year %}
+  <div style="margin-bottom:10px;">
+    <span style="color:var(--warning);font-weight:600;">🥋 Submission of the Year</span>
+    <span style="color:var(--text-muted);margin-left:8px;font-size:.9rem;">
+      {{ s.sub_of_year.winner_name }} def. {{ s.sub_of_year.loser_name }} · R{{ s.sub_of_year.round }}
+    </span>
+    {% if s.sub_of_year.fight_id %}
+    <a href="{{ url_for('watch_fight', fight_id=s.sub_of_year.fight_id) }}"
+       style="font-size:.75rem;color:var(--text-muted);margin-left:6px;text-decoration:none;">
+      📋 Watch
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% if s.comeback %}
+  <div style="margin-bottom:10px;">
+    <span style="color:var(--warning);font-weight:600;">💪 Comeback Fighter</span>
+    <a href="{{ url_for('fighter_profile', fighter_id=s.comeback.fighter_id) }}"
+       style="color:var(--neon-green);text-decoration:none;margin-left:8px;">
+      {{ s.comeback.name }}
+    </a>
+    <span style="color:var(--text-muted);font-size:.8rem;margin-left:6px;">
+      {{ s.comeback.wins }}W this year
+    </span>
+  </div>
+  {% endif %}
+  {% if s.camp_of_year %}
+  <div>
+    <span style="color:var(--warning);font-weight:600;">🏟️ Camp of the Year</span>
+    <span style="color:var(--text-primary);margin-left:8px;">{{ s.camp_of_year.name }}</span>
+    <span style="color:var(--text-muted);font-size:.8rem;margin-left:6px;">
+      {{ s.camp_of_year.wins }} wins
+    </span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 
 {# ── Continue (top — duplicated at bottom) ── #}
 <div style="text-align:center;padding:0 0 var(--spacing-lg);">
