@@ -353,6 +353,22 @@
         </div>
         {% endif %}
 
+        {# ── Ship IN1: Injury-vs-Fight collision alerts ── #}
+        {% if injury_alerts %}
+        {% for alert in injury_alerts %}
+        <div style="background:rgba(211,47,47,.15);
+                    border:1px solid var(--blood-red);
+                    border-radius:8px;padding:12px;
+                    margin-bottom:8px;">
+            ⚕️ <strong>{{ alert.fighter_name }}</strong>
+            injured — bout vs
+            <strong>{{ alert.opponent }}</strong>
+            in {{ alert.weeks_until }}w may be at risk
+            ({{ alert.recovery_weeks }}w recovery).
+        </div>
+        {% endfor %}
+        {% endif %}
+
         {# ── Scheduled Fights ── #}
         {% if scheduled_fights %}
         <div class="card mb-lg">

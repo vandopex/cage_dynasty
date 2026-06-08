@@ -5205,6 +5205,53 @@ class GameBridge:
                         "week": self._game_state.week_number,
                     })
                     self._maybe_queue_champion_injury_decision(_rftr, injury)
+
+                    # Ship IN1: auto-cancel scheduled fights the injured
+                    # player fighter can't make (recovery > weeks until
+                    # the bout). Mirrors the division-move cancellation
+                    # pipeline at line ~13060: drop from _scheduled_fights,
+                    # _upcoming_cards (unlock if under cap), and
+                    # _ai_deferred_bookings.
+                    if fighter_id in _pids:
+                        _inj_fid   = fighter_id
+                        _inj_weeks = getattr(injury, 'recovery_weeks',
+                                             getattr(injury, 'weeks', 0))
+                        _fights_to_cancel = []
+                        for _sf in list(self._scheduled_fights):
+                            if (_sf.get("fighter1_id") == _inj_fid
+                                    or _sf.get("fighter2_id") == _inj_fid):
+                                _wks = _sf.get("weeks_until",
+                                               _sf.get("week", 0) -
+                                               self._game_state.week_number)
+                                if _inj_weeks > max(_wks, 0):
+                                    _fights_to_cancel.append(_sf)
+                        for _sf in _fights_to_cancel:
+                            _opp = (_sf.get("fighter2_name", "?")
+                                    if _sf.get("fighter1_id") == _inj_fid
+                                    else _sf.get("fighter1_name", "?"))
+                            if _sf in self._scheduled_fights:
+                                self._scheduled_fights.remove(_sf)
+                            _tgt_wk = _sf.get("week", 0)
+                            if _tgt_wk in self._upcoming_cards:
+                                _card = self._upcoming_cards[_tgt_wk]
+                                _card["fights"] = [
+                                    f for f in _card.get("fights", [])
+                                    if f.get("fight_id") != _sf.get("fight_id")
+                                ]
+                                if len(_card.get("fights", [])) < CARD_TARGET_FIGHTS:
+                                    _card["locked"] = False
+                            self._ai_deferred_bookings = [
+                                q for q in self._ai_deferred_bookings
+                                if q.get("fight_id") != _sf.get("fight_id")
+                            ]
+                            self._news_items.insert(0, {
+                                "headline": (f"⚕️ {_fname} injured — "
+                                             f"bout vs {_opp} cancelled."),
+                                "category": "injury",
+                                "week":     self._game_state.week_number,
+                            })
+                            print(f"  ⚕️  [INJURY CANCEL] {_fname} vs {_opp} "
+                                  f"cancelled ({_inj_weeks}w injury)")
         else:
             # Fallback if injury system not available
             _INJURY_BASE = {"REST":0.0,"LIGHT":0.0,"MODERATE":0.01,

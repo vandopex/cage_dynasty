@@ -560,6 +560,33 @@ def register_routes(app):
         # Expiring contracts — fighters with <=2 fights left on their deals
         expiring_contracts = bridge.get_expiring_contracts()
 
+        # Ship IN1: surface injury-vs-fight collisions for dashboard warning.
+        # Auto-cancellation (long-recovery cases) happens in the bridge during
+        # advance_week; this alert covers short-recovery cases where the fight
+        # is still scheduled but the player should know about the risk.
+        injury_alerts = []
+        _isys = getattr(bridge, '_injury_system', None)
+        if _isys:
+            for pf in fighters:
+                pf_id = pf.fighter_id
+                try:
+                    inj = _isys.get_worst_injury(pf_id)
+                except Exception:
+                    inj = None
+                if inj:
+                    for sf in scheduled_fights:
+                        if (sf.get('fighter1_id') == pf_id
+                                or sf.get('fighter2_id') == pf_id):
+                            injury_alerts.append({
+                                "fighter_name":   pf.name,
+                                "opponent":       (sf.get('fighter2_name')
+                                                   if sf.get('fighter1_id') == pf_id
+                                                   else sf.get('fighter1_name')),
+                                "weeks_until":    sf.get('weeks_until', 0),
+                                "recovery_weeks": getattr(inj, 'recovery_weeks',
+                                                          getattr(inj, 'weeks', 0)),
+                            })
+
         # Ship K5: pending challenges awaiting AI response
         pending_challenges = bridge.get_pending_challenges()
         # Ship K5b: accepted challenges awaiting player to finalize negotiation
@@ -585,6 +612,7 @@ def register_routes(app):
             expiring_contracts=expiring_contracts,
             pending_challenges=pending_challenges,
             pending_negotiations=pending_negotiations,
+            injury_alerts=injury_alerts,
         )
     
     # =========================================================================
