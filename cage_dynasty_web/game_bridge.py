@@ -1923,6 +1923,22 @@ class GameBridge:
                         is_champ = getattr(ftr, 'is_champion', False)
                         self._apply_cooldown(ftr, current_week, is_champ)
                         self._apply_signing_delay(ftr, current_week, is_champ)
+                # Ship DR2b: draws have winner_id=None + loser_id=None so
+                # the fid loop above skips both fighters. Apply cooldown
+                # to both directly via fighter1_id/fighter2_id.
+                if result.get("method") == "Draw":
+                    for _dfid in [result.get("fighter1_id"),
+                                  result.get("fighter2_id")]:
+                        if not _dfid:
+                            continue
+                        _dftr = self._game_state.get_fighter(_dfid)
+                        if _dftr:
+                            self._apply_cooldown(
+                                _dftr, current_week,
+                                getattr(_dftr, 'is_champion', False))
+                            self._apply_signing_delay(
+                                _dftr, current_week,
+                                getattr(_dftr, 'is_champion', False))
             if ai_event:
                 for fight in ai_event.get("fights", []):
                     for fid in [fight.get("winner_id"), fight.get("loser_id")]:
@@ -1934,6 +1950,20 @@ class GameBridge:
                                                   getattr(ftr, 'is_champion', False))
                             self._apply_signing_delay(ftr, current_week,
                                                        getattr(ftr, 'is_champion', False))
+                    # Ship DR2b: same draw fallback as player loop above.
+                    if fight.get("method") == "Draw":
+                        for _dfid in [fight.get("fighter1_id"),
+                                      fight.get("fighter2_id")]:
+                            if not _dfid:
+                                continue
+                            _dftr = self._game_state.get_fighter(_dfid)
+                            if _dftr:
+                                self._apply_cooldown(
+                                    _dftr, current_week,
+                                    getattr(_dftr, 'is_champion', False))
+                                self._apply_signing_delay(
+                                    _dftr, current_week,
+                                    getattr(_dftr, 'is_champion', False))
 
             # ── Contract processing — decrement and handle expiry ─────
             self._process_contracts(current_week)
