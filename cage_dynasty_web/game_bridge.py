@@ -8244,6 +8244,8 @@ class GameBridge:
                     })
                     continue
 
+            # Ship DR2: track draws to skip winner/loser-specific blocks
+            _is_draw_a = False
             # Use real engine or fallback
             if FIGHT_ENGINE_AVAILABLE:
                 try:
@@ -8252,22 +8254,30 @@ class GameBridge:
                     _slot = fight.get("card_slot", "prelim")
                     _rnds = 5 if (fight.get("is_title_fight") or _slot in ("main_event","co_main")) else 3
                     _eng = _simulate_narrated_fight_fn(fa1, fa2, rounds=_rnds)
-                    winner = f1 if _eng.winner_id in (f1.fighter_id, "fighter_1") else f2
-                    loser  = f2 if winner is f1 else f1
-                    _raw   = _eng.method or "DEC"
-                    # Engine returns "Submission (xxx)" — normalise to SUB
-                    if _raw.startswith("Submission"):
-                        method = "SUB"
-                    elif _raw in ("KO",):
-                        method = "KO"
-                    elif _raw in ("TKO",):
-                        method = "TKO"
-                    elif "Decision" in _raw or _raw == "DEC":
-                        method = "DEC"
+                    if _eng.winner_id is None:
+                        # Ship DR2: engine returned a draw — skip winner pick
+                        _is_draw_a = True
+                        winner = None
+                        loser  = None
+                        method = "Draw"
+                        rnd    = _rnds
                     else:
-                        method = "DEC"
-                    rnd    = getattr(_eng,'finish_round',None) or _rnds
-                    rnd = rnd or _rnds
+                        winner = f1 if _eng.winner_id in (f1.fighter_id, "fighter_1") else f2
+                        loser  = f2 if winner is f1 else f1
+                        _raw   = _eng.method or "DEC"
+                        # Engine returns "Submission (xxx)" — normalise to SUB
+                        if _raw.startswith("Submission"):
+                            method = "SUB"
+                        elif _raw in ("KO",):
+                            method = "KO"
+                        elif _raw in ("TKO",):
+                            method = "TKO"
+                        elif "Decision" in _raw or _raw == "DEC":
+                            method = "DEC"
+                        else:
+                            method = "DEC"
+                        rnd    = getattr(_eng,'finish_round',None) or _rnds
+                        rnd = rnd or _rnds
                 except Exception:
                     f1_s = f1.wins/(max(1,f1.wins+f1.losses))*60 + random.randint(0,30)
                     f2_s = f2.wins/(max(1,f2.wins+f2.losses))*60 + random.randint(0,30)
@@ -8288,6 +8298,39 @@ class GameBridge:
                 elif roll < 0.48: method, rnd = "TKO", random.randint(1,3)
                 elif roll < 0.63: method, rnd = "SUB", random.randint(1,3)
                 else:             method, rnd = "DEC", 3
+
+            # Ship DR2: draw short-circuit. Increment draws on both fighters,
+            # build a draw-shape result dict, append, and skip the rest of the
+            # per-fight loop body (record mutations, fight history, rankings,
+            # title record, terminal log all assume winner/loser non-None).
+            if _is_draw_a:
+                f1.draws = getattr(f1, 'draws', 0) + 1
+                f2.draws = getattr(f2, 'draws', 0) + 1
+                result = {
+                    "fight_id":          fight["fight_id"],
+                    "fighter1_id":       fight["fighter1_id"],
+                    "fighter2_id":       fight["fighter2_id"],
+                    "fighter1_name":     fight["fighter1_name"],
+                    "fighter2_name":     fight["fighter2_name"],
+                    "winner_id":         None,
+                    "winner_name":       "",
+                    "loser_id":          None,
+                    "loser_name":        "",
+                    "method":            "Draw",
+                    "round_finished":    rnd,
+                    "weight_class":      fight["weight_class"],
+                    "event_name":        event_name,
+                    "is_title_fight":    fight.get("is_title_fight", False),
+                    "is_ai_fight":       True,
+                    "card_slot":         fight.get("card_slot", "prelim"),
+                    "winner_new_rank":   None,
+                    "loser_new_rank":    None,
+                    "winner_rank_delta": 0,
+                    "loser_rank_delta":  0,
+                }
+                event["fights"].append(result)
+                print(f"   [DRAW] {f1.name} vs {f2.name} — Draw (R{rnd})")
+                continue
 
             pre_w = pre_rank_snapshot.get(winner.fighter_id)
             pre_l = pre_rank_snapshot.get(loser.fighter_id)
@@ -8534,6 +8577,8 @@ class GameBridge:
             is_title = getattr(f1, 'is_champion', False) or getattr(f2, 'is_champion', False)
 
             # ── AI fight outcome ────────────────────────────────────
+            # Ship DR2: track draws to skip winner/loser-specific blocks
+            _is_draw_b = False
             if FIGHT_ENGINE_AVAILABLE:
                 try:
                     # Use real engine — no commentary stored for AI fights
@@ -8541,19 +8586,27 @@ class GameBridge:
                     fa2 = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
                     _rnds = 5 if is_title else 3
                     _eng = _simulate_narrated_fight_fn(fa1, fa2, rounds=_rnds)
-                    winner = f1 if _eng.winner_id in (f1.fighter_id, "fighter_1") else f2
-                    loser  = f2 if winner is f1 else f1
-                    _raw   = _eng.method or "DEC"
-                    if _raw.startswith("Submission"):
-                        method = "SUB"
-                    elif _raw in ("KO",):
-                        method = "KO"
-                    elif _raw in ("TKO",):
-                        method = "TKO"
+                    if _eng.winner_id is None:
+                        # Ship DR2: engine returned a draw
+                        _is_draw_b = True
+                        winner = None
+                        loser  = None
+                        method = "Draw"
+                        rnd    = _rnds
                     else:
-                        method = "DEC"
-                    rnd    = getattr(_eng,'finish_round',None) or _rnds
-                    rnd = rnd or _rnds
+                        winner = f1 if _eng.winner_id in (f1.fighter_id, "fighter_1") else f2
+                        loser  = f2 if winner is f1 else f1
+                        _raw   = _eng.method or "DEC"
+                        if _raw.startswith("Submission"):
+                            method = "SUB"
+                        elif _raw in ("KO",):
+                            method = "KO"
+                        elif _raw in ("TKO",):
+                            method = "TKO"
+                        else:
+                            method = "DEC"
+                        rnd    = getattr(_eng,'finish_round',None) or _rnds
+                        rnd = rnd or _rnds
                 except Exception:
                     # Fallback to score-based if engine errors
                     f1_pct = f1.wins / max(1, f1.wins + f1.losses)
@@ -8583,6 +8636,36 @@ class GameBridge:
                 elif roll < 0.48: method, rnd = "TKO", random.randint(1,3)
                 elif roll < 0.63: method, rnd = "SUB", random.randint(1,3)
                 else:             method, rnd = "DEC", 3
+
+            # Ship DR2: draw short-circuit — see site A comment for rationale.
+            if _is_draw_b:
+                f1.draws = getattr(f1, 'draws', 0) + 1
+                f2.draws = getattr(f2, 'draws', 0) + 1
+                fight_result: Dict[str, Any] = {
+                    "fight_id":          f"ai_fight_{week}_{f1.fighter_id}_{f2.fighter_id}",
+                    "fighter1_id":       f1.fighter_id,
+                    "fighter2_id":       f2.fighter_id,
+                    "fighter1_name":     f1.name,
+                    "fighter2_name":     f2.name,
+                    "winner_id":         None,
+                    "winner_name":       "",
+                    "loser_id":          None,
+                    "loser_name":        "",
+                    "method":            "Draw",
+                    "round_finished":    rnd,
+                    "weight_class":      wc,
+                    "event_name":        event_name,
+                    "is_title_fight":    False,
+                    "is_ai_fight":       True,
+                    "scorecard":         None,
+                    "rivalry":           None,
+                    "winner_new_rank":   None,
+                    "loser_new_rank":    None,
+                    "winner_rank_delta": 0,
+                    "loser_rank_delta":  0,
+                }
+                event["fights"].append(fight_result)
+                continue
 
             # Snapshot ranks BEFORE record update
             pre_w_rank = self._get_fighter_rank(winner)
