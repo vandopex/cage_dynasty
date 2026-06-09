@@ -6003,16 +6003,16 @@ class GameBridge:
             # Fatigue color
             if fatigue > 65:
                 fatigue_color = "var(--blood-red)"
-                fatigue_label = f"Fatigued ({fatigue}%)"
+                fatigue_label = "Fatigued"
             elif fatigue > 40:
                 fatigue_color = "var(--warning)"
-                fatigue_label = f"Tired ({fatigue}%)"
+                fatigue_label = "Tired"
             elif fatigue < 20:
                 fatigue_color = "var(--neon-green)"
-                fatigue_label = f"Fresh ({fatigue}%)"
+                fatigue_label = "Fresh"
             else:
                 fatigue_color = "var(--text-muted)"
-                fatigue_label = f"Ready ({fatigue}%)"
+                fatigue_label = "Ready"
 
             observations.append({
                 "fighter_id":    f.fighter_id,
