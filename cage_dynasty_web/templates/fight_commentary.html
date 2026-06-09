@@ -56,7 +56,7 @@
 {% for line in commentary %}
 
 {# ── Round header detection ── #}
-{% if ('=== ROUND' in line or line.startswith('Round ') or 'ROUND ' in line|upper) and line|length < 40 %}
+{% if ('=== ROUND' in line or line.startswith('Round ') or 'ROUND ' in line|upper) and ('Round' in line or 'ROUND' in line) and line|length < 80 and '[Round' not in line %}
   {% set ns.round_num = ns.round_num + 1 %}
   {% set ns.in_corner = false %}
 
