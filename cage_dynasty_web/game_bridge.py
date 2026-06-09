@@ -1437,6 +1437,13 @@ class GameBridge:
                 for ev in self._completed_events[-50:]  # Last 50 events
             ],
             "news_items":               self._news_items[-100:],
+            # Ship WS1: serialize game_state so fighters persist across saves
+            "fighters":             {fid: f.to_dict() for fid, f in self._game_state.fighters.items()},
+            "fighter_data":         dict(self._game_state._fighter_data),
+            "camps":                {cid: c.to_dict() for cid, c in self._game_state.camps.items()},
+            "divisions":            {wc: d.to_dict() for wc, d in self._game_state.divisions.items()},
+            "player_camp_id":       self._game_state.player_camp_id,
+            "game_week_number":     self._game_state.week_number,
             "media_reactions":          self._media_reactions,
             "aging_processed":          self._aging_system._last_processed_year
                                         if self._aging_system else {},
@@ -1553,6 +1560,37 @@ class GameBridge:
         self._contracts               = data.get("contracts", {})
         self._yearly_awards           = data.get("yearly_awards", [])
         self._hof_inductees           = data.get("hof_inductees", [])
+
+        # Ship WS1: restore game_state fighters/camps/divisions from save
+        if self._game_state:
+            from core.game_state import FighterRecord, CampRecord, DivisionState
+            _fighters_data = data.get("fighters", {})
+            if _fighters_data:
+                self._game_state.fighters = {
+                    fid: FighterRecord.from_dict(fd)
+                    for fid, fd in _fighters_data.items()
+                }
+            _fd = data.get("fighter_data", {})
+            if _fd:
+                self._game_state._fighter_data = _fd
+            _camps_data = data.get("camps", {})
+            if _camps_data:
+                self._game_state.camps = {
+                    cid: CampRecord.from_dict(cd)
+                    for cid, cd in _camps_data.items()
+                }
+            _divs_data = data.get("divisions", {})
+            if _divs_data:
+                self._game_state.divisions = {
+                    wc: DivisionState.from_dict(dd)
+                    for wc, dd in _divs_data.items()
+                }
+            _pci = data.get("player_camp_id")
+            if _pci:
+                self._game_state.player_camp_id = _pci
+            _gwn = data.get("game_week_number")
+            if _gwn is not None:
+                self._game_state.week_number = _gwn
         self._camp_archetypes         = data.get("camp_archetypes", {})
         self._champ_weeks_since_defense = data.get("champ_weeks_since_defense", {})
         self._pending_injury_decisions  = data.get("pending_injury_decisions", [])
