@@ -5472,7 +5472,7 @@ class GameBridge:
             "is_fight_camp": is_fight_camp,
             "ovr_before":    ovr_before,
             "ovr_after":     ovr_after,
-            "gains":         {k: float(v) for k, v in gains.items() if v > 0.05},
+            "gains":         {k: float(v) for k, v in gains.items() if v > 0.01},
             "coach_boosts":  {},   # filled in by _advance_maintenance_week
             "decays":        {},   # filled in by _advance_maintenance_week
         }
@@ -5737,7 +5737,7 @@ class GameBridge:
                 "name":          fighter.name if hasattr(fighter, 'name') else fid,
                 "focus":         active_plan["focus"].replace("_", " ").title(),
                 "intensity":     active_plan["intensity"],
-                "gains":         {k: v for k, v in result.get("actual_gains", {}).items() if v > 0.05},
+                "gains":         {k: v for k, v in result.get("actual_gains", {}).items() if v > 0.01},
                 "camp_totals":   dict(self._camp_stat_totals.get(fid, {})),
                 "ovr_before":    ovr_before,
                 "ovr_after":     ovr_after,
@@ -5752,10 +5752,10 @@ class GameBridge:
             # stitched onto the same entry later in _advance_maintenance_week.
             _ag_all      = result.get("actual_gains", {}) or {}
             _plan_gains  = {k: v for k, v in _ag_all.items()
-                            if "(coach:" not in k and v > 0.05}
+                            if "(coach:" not in k and v > 0.01}
             _coach_gains: Dict[str, float] = {}
             for _k, _v in _ag_all.items():
-                if "(coach:" in _k and _v > 0.05:
+                if "(coach:" in _k and _v > 0.01:
                     _attr = _k.split(" (coach:")[0]
                     _coach_gains[_attr] = _coach_gains.get(_attr, 0.0) + _v
             self._record_training_week(
