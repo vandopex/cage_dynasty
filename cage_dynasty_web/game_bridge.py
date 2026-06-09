@@ -5298,6 +5298,11 @@ class GameBridge:
                     getattr(fighter, 'fatigue', 0) + fatigue_delta))
                 if hasattr(fighter, 'fatigue'):
                     fighter.fatigue = fatigue
+                    # Sync fatigue to _fighter_data for UI reads
+                    if (self._game_state and fighter.fighter_id
+                            in self._game_state._fighter_data):
+                        self._game_state._fighter_data[
+                            fighter.fighter_id]['fatigue'] = fatigue
 
                 # Style-weighted OVR — see _compute_ovr for weight vectors.
                 fighter.overall_rating = self._compute_ovr(fighter)
