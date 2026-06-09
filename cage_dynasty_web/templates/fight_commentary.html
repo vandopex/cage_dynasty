@@ -1,83 +1,192 @@
 {% extends "base.html" %}
 {% block title %}Fight Commentary{% endblock %}
-
 {% block content %}
-<div style="max-width:760px;margin:0 auto;">
+<div style="max-width:780px;margin:0 auto;">
 
 {% if fight %}
 <div class="page-header">
-    <div>
-        <h1 class="page-title">📝 Fight Commentary</h1>
-        <div class="page-subtitle">
-            {{ fight.fighter1_name }} vs {{ fight.fighter2_name }}
-            &nbsp;•&nbsp; {{ fight.event_name }}
-        </div>
+  <div>
+    <h1 class="page-title">📝 Fight Commentary</h1>
+    <div class="page-subtitle">
+      {{ fight.fighter1_name }} vs {{ fight.fighter2_name }}
+      &nbsp;•&nbsp; {{ fight.event_name }}
     </div>
+  </div>
 </div>
 
-<!-- Result summary -->
-<div class="card mb-lg" style="border-color:var(--border-light);">
-    <div class="card-body" style="text-align:center;padding:var(--spacing-lg);">
-        <div style="font-family:var(--font-display);font-size:1.5rem;color:var(--neon-green);">
-            {{ fight.winner_name }}
-        </div>
-        <div class="text-muted" style="margin:var(--spacing-sm) 0;">defeats</div>
-        <div style="font-family:var(--font-display);font-size:1.2rem;color:var(--text-secondary);">
-            {{ fight.loser_name }}
-        </div>
-        <div style="margin-top:var(--spacing-md);">
-            <span style="font-family:var(--font-display);color:var(--warning);font-size:1.1rem;">
-                {{ fight.method }}
-            </span>
-            {% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC') %}
-            <span class="text-muted"> — Round {{ fight.round_finished }}</span>
-            {% endif %}
-        </div>
+{# ── Result card ── #}
+<div class="card mb-lg" style="border-color:var(--neon-green);
+    background:linear-gradient(135deg,rgba(0,230,118,.06),transparent);">
+  <div class="card-body" style="text-align:center;padding:var(--spacing-xl);">
+    <div style="font-family:var(--font-display);font-size:2rem;
+        color:var(--neon-green);letter-spacing:.05em;">
+      {{ fight.winner_name }}
     </div>
+    <div style="color:var(--text-muted);font-size:.8rem;
+        letter-spacing:.15em;text-transform:uppercase;
+        margin:6px 0;">defeats</div>
+    <div style="font-family:var(--font-display);font-size:1.3rem;
+        color:var(--text-secondary);">
+      {{ fight.loser_name }}
+    </div>
+    <div style="margin-top:var(--spacing-md);display:flex;
+        justify-content:center;align-items:center;gap:12px;">
+      <span style="font-family:var(--font-display);
+          color:var(--warning);font-size:1.2rem;
+          background:rgba(255,200,0,.1);
+          padding:4px 14px;border-radius:6px;
+          border:1px solid rgba(255,200,0,.3);">
+        {{ fight.method }}
+      </span>
+      {% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC','Draw') %}
+      <span style="color:var(--text-muted);font-size:.85rem;">
+        Round {{ fight.round_finished }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
 </div>
 {% endif %}
 
-<!-- Commentary feed -->
+{# ── Commentary feed ── #}
 {% if commentary %}
-<div class="card">
-    <div class="card-header"><h3>📝 Play by Play</h3></div>
-    <div class="card-body" style="padding:0;">
-        {% for line in commentary %}
-        <div style="padding:var(--spacing-sm) var(--spacing-md);
-                    border-bottom:1px solid var(--border-color);
-                    font-size:.88rem;line-height:1.5;
-                    {% if 'ROUND' in line|upper and line|length < 30 %}
-                    font-family:var(--font-display);letter-spacing:.1em;
-                    color:var(--warning);background:var(--bg-dark);
-                    padding:var(--spacing-md);font-size:.8rem;
-                    {% elif 'wins' in line|lower or 'FINAL' in line|upper or 'KNOCKOUT' in line|upper or 'SUBMISSION' in line|upper %}
-                    color:var(--neon-green);font-family:var(--font-display);
-                    {% elif 'drops' in line|lower or 'ROCKS' in line|upper or 'hurt' in line|lower %}
-                    color:var(--warning);
-                    {% else %}
-                    color:var(--text-secondary);
-                    {% endif %}">
-            {{ line }}
-        </div>
-        {% endfor %}
+
+{% set ns = namespace(round_num=0, in_corner=false) %}
+
+{% for line in commentary %}
+
+{# ── Round header detection ── #}
+{% if ('=== ROUND' in line or line.startswith('Round ') or 'ROUND ' in line|upper) and line|length < 40 %}
+  {% set ns.round_num = ns.round_num + 1 %}
+  {% set ns.in_corner = false %}
+
+  {% if ns.round_num > 1 %}
+  <div style="height:12px;"></div>
+  {% endif %}
+
+  <div style="display:flex;align-items:center;gap:12px;
+      margin:16px 0 8px;padding:10px 16px;
+      background:rgba(255,200,0,.08);
+      border-left:3px solid var(--warning);
+      border-radius:0 6px 6px 0;">
+    <span style="font-family:var(--font-display);
+        color:var(--warning);font-size:.75rem;
+        letter-spacing:.2em;text-transform:uppercase;">
+      {{ line | replace('=== ', '') | replace(' ===', '') }}
+    </span>
+  </div>
+  <div class="card" style="margin-bottom:0;border-radius:6px;">
+  <div class="card-body" style="padding:8px 0;">
+
+{# ── Corner advice detection ── #}
+{% elif '💼' in line or 'IN THE CORNER' in line|upper or 'Corner' in line %}
+  </div></div>
+  {% set ns.in_corner = true %}
+  <div class="card mb-0 mt-sm" style="border-color:rgba(100,150,255,.3);
+      background:rgba(100,150,255,.05);">
+    <div style="padding:10px 14px 6px;">
+      <span style="font-size:.65rem;letter-spacing:.15em;
+          color:rgba(100,150,255,.8);text-transform:uppercase;">
+        💼 In the Corner
+      </span>
     </div>
-</div>
+
+{% elif ns.in_corner and line | trim %}
+    <div style="padding:4px 14px 10px;font-size:.85rem;
+        color:var(--text-secondary);font-style:italic;
+        line-height:1.5;">
+      {{ line }}
+    </div>
+  </div>
+  {% set ns.in_corner = false %}
+
+{# ── Round summary ── #}
+{% elif line.startswith('[Round') or (line.startswith('[') and 'won by' in line) %}
+  </div></div>
+  <div style="padding:8px 14px;margin:4px 0;
+      background:rgba(0,0,0,.2);border-radius:4px;
+      font-size:.78rem;color:var(--text-muted);
+      font-style:italic;">
+    {{ line }}
+  </div>
+
+{# ── Finish lines ── #}
+{% elif 'FINISH' in line|upper or 'LIGHTS OUT' in line|upper
+    or 'STOPS THE FIGHT' in line|upper or 'STOP THE FIGHT' in line|upper
+    or 'PUTS THEM TO SLEEP' in line|upper or 'SLEEP' in line|upper
+    or 'ENDS IT' in line|upper or 'GETS THE TKO' in line|upper
+    or 'GETS THE FINISH' in line|upper or 'TAPS' in line|upper %}
+  <div style="padding:8px 16px;
+      background:rgba(255,50,50,.08);
+      border-left:2px solid var(--blood-red);
+      color:var(--warning);
+      font-family:var(--font-display);
+      font-size:.9rem;letter-spacing:.03em;">
+    {{ line }}
+  </div>
+
+{# ── Hype lines ── #}
+{% elif 'HURT' in line|upper or 'ROCKED' in line|upper
+    or 'WOBBLES' in line|upper or 'POUNCES' in line|upper
+    or 'DANGER' in line|upper or 'NEAR' in line|upper
+    or 'KILL' in line|upper or 'SERIOUS' in line|upper
+    or 'UNLOADS' in line|upper or 'SURVIVING' in line|upper %}
+  <div style="padding:6px 16px;
+      color:var(--warning);
+      font-size:.87rem;font-weight:600;">
+    {{ line }}
+  </div>
+
+{# ── Takedown / dominant position ── #}
+{% elif 'TAKEDOWN' in line|upper or 'MOUNT' in line|upper
+    or 'BACK CONTROL' in line|upper or 'BACK MOUNT' in line|upper
+    or 'TRUCK' in line|upper or 'SIDE CONTROL' in line|upper
+    or 'BEAUTIFUL' in line|upper or 'PERFECT' in line|upper %}
+  <div style="padding:5px 16px;
+      color:var(--neon-green);font-size:.86rem;">
+    {{ line }}
+  </div>
+
+{# ── Defense lines ── #}
+{% elif 'DEFEND' in line|upper or 'STUFFS' in line|upper
+    or 'SPRAWLS' in line|upper or 'BLOCKS' in line|upper
+    or 'CHECKS' in line|upper or 'CIRCLES' in line|upper
+    or 'FRAMES' in line|upper %}
+  <div style="padding:5px 16px;
+      color:rgba(120,140,160,.85);font-size:.84rem;">
+    {{ line }}
+  </div>
+
+{# ── Regular action ── #}
+{% elif line | trim %}
+  <div style="padding:5px 16px;
+      color:var(--text-secondary);font-size:.85rem;
+      line-height:1.5;">
+    {{ line }}
+  </div>
+
+{% endif %}
+{% endfor %}
+
+{# Close any open round card #}
+</div></div>
 
 {% else %}
 <div class="card">
-    <div class="card-body text-center p-lg">
-        <div style="font-size:2rem;margin-bottom:var(--spacing-md);">📋</div>
-        <h3>No Commentary Available</h3>
-        <p class="text-muted">
-            Commentary is generated by the full fight engine.<br>
-            Fights simulated before the engine was wired won't have play-by-play.
-        </p>
-    </div>
+  <div class="card-body text-center p-lg">
+    <div style="font-size:2rem;margin-bottom:var(--spacing-md);">📋</div>
+    <h3>No Commentary Available</h3>
+    <p class="text-muted">
+      Commentary is generated by the full fight engine.<br>
+      Fights simulated before the engine was wired won't have play-by-play.
+    </p>
+  </div>
 </div>
 {% endif %}
 
-<div class="mt-lg">
-    <a href="{{ url_for('archives') }}" class="btn btn-outline">← Back to Archives</a>
+<div class="mt-lg" style="display:flex;gap:12px;">
+  <a href="{{ url_for('archives') }}" class="btn btn-outline">← Archives</a>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-outline">🏠 Dashboard</a>
 </div>
 
 </div>
