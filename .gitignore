@@ -13,3 +13,4 @@ __pycache__/
 # Save files (user/playtest data, not source)
 saves/
 cage_dynasty_web/saves/
+deploy.sh
