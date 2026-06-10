@@ -379,7 +379,7 @@ def register_routes(app):
         for key in ['camp_name', 'camp_location', 'camp_tier', 'selected_coach', 'selected_fighter', 'available_coaches', 'available_prospects']:
             session.pop(key, None)
         
-        flash(f"Welcome to the DFC! Your journey begins now.", "success")
+        flash(f"Welcome to Cage Dynasty! Your journey begins now.", "success")
         return redirect(url_for('dashboard'))
     
     def _generate_available_prospects():
