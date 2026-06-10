@@ -6,7 +6,7 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from game_state import (
-    GameState,
+    DivisionState,    GameState,
     GamePhase,
     FighterRecord,
     CampRecord,
