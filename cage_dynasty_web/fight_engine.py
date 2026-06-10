@@ -361,6 +361,7 @@ class GrapplingAction(Enum):
     # Clinch transitions
     CLINCH_ENTRY = "clinch_entry"
     CLINCH_BREAK = "clinch_break"
+    GUARD_PULL = "guard_pull"
     PUSH_TO_CAGE = "push_to_cage"
     
     # Front headlock entries
@@ -411,7 +412,7 @@ class GrapplingAction(Enum):
 # ============================================================================
 # BALANCE CONSTANTS — exported for fight_integration.py
 # ============================================================================
-DAMAGE_MULTIPLIER            = 0.42   # Tuned: was 0.70 (produced 73% finish rate)
+DAMAGE_MULTIPLIER            = 0.55   # Tuned: was 0.70 (produced 73% finish rate)
 FLASH_KO_DAMAGE_THRESHOLD    = 70.0
 FLASH_KO_BASE_CHANCE         = 0.03
 FLASH_KO_MAX_CHANCE          = 0.12
@@ -970,7 +971,8 @@ def get_available_grappling_actions(
 ) -> List[GrapplingAction]:
     """Get grappling actions available from current position."""
     actions = []
-    
+    my_style_hint = detect_fighter_style(fighter_attrs)
+
     if position in STANDING_POSITIONS:
         actions.extend([
             GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG,
@@ -982,6 +984,9 @@ def get_available_grappling_actions(
             actions.append(GrapplingAction.IMANARI_ROLL)
         if fighter_attrs.takedowns >= 50:
             actions.append(GrapplingAction.SNAP_DOWN)
+        # BJJ fighters with low takedowns can pull guard from standing
+        if my_style_hint == "bjj" and fighter_attrs.takedowns < 62:
+            actions.append(GrapplingAction.GUARD_PULL)
     
     elif position in CLINCH_POSITIONS:
         actions.extend([
@@ -1098,63 +1103,132 @@ def get_available_grappling_actions(
 
 def detect_fighter_style(fighter: FighterAttributes) -> str:
     """
-    Detect a fighter's primary style based on their attributes.
-    Returns: 'striker', 'wrestler', 'bjj', 'sambo', 'muay_thai', 'kickboxer', 'balanced'
-    
-    Uses new 17-attribute system:
-    - takedowns + top_control = wrestling ability
-    - submissions + guard = BJJ ability
+    Detect a fighter's primary style based on attributes.
+    Returns one of 11 styles matching styles.py FightingStyle definitions.
+    Thresholds calibrated for LOCAL tier (60-75 range) so styles emerge
+    at mid-level play, not just elite.
     """
-    # Calculate style scores from new attributes
-    striking_score = (fighter.boxing * 2 + fighter.kicks) / 3
-    wrestling_score = (fighter.takedowns + fighter.top_control) / 2  # Combined wrestling
-    bjj_score = (fighter.submissions + fighter.guard) / 2  # Combined BJJ
-    clinch_score = fighter.clinch_striking
-    
-    # Check if fighter is well-rounded first (prevents false positives)
-    all_skills = [fighter.boxing, fighter.kicks, fighter.takedowns, fighter.submissions]
+    striking_score    = (fighter.boxing * 2 + fighter.kicks) / 3
+    wrestling_score   = (fighter.takedowns + fighter.top_control) / 2
+    bjj_score         = (fighter.submissions + fighter.guard) / 2
+    clinch_score      = fighter.clinch_striking
+    defense_score     = (fighter.striking_defense + fighter.composure) / 2
+    pressure_score    = (fighter.cardio + fighter.heart + fighter.chin) / 3
+
+    # Well-rounded check — if no skill more than 10 above others AND decent avg
+    all_skills = [fighter.boxing, fighter.kicks, fighter.takedowns,
+                  fighter.submissions, fighter.clinch_striking]
     skill_range = max(all_skills) - min(all_skills)
-    avg_skill = sum(all_skills) / 4
-    if skill_range <= 12 and avg_skill >= 70:
+    avg_skill   = sum(all_skills) / len(all_skills)
+    if skill_range <= 10 and avg_skill >= 68:
         return "balanced"
-    
-    # Sambo: High wrestling AND high BJJ (must have BOTH elite)
-    # Check this before wrestler to catch true sambo fighters
-    if wrestling_score >= 85 and bjj_score >= 80:
+
+    # ── STYLE HINT: stored fighting_style as soft tiebreaker ───────────────
+    # The stored style from world-gen/game_start reflects intent.
+    # If stats are borderline, honor the stored style rather than defaulting
+    # to balanced. Only fires when stats are close to a threshold.
+    _hint = ""
+    if hasattr(fighter, 'fighting_style') and fighter.fighting_style is not None:
+        _fs = str(fighter.fighting_style.name if hasattr(fighter.fighting_style, 'name') else fighter.fighting_style).upper()
+        _HINT_MAP = {
+            "BJJ_SPECIALIST":   "bjj",
+            "WRESTLER":         "wrestler",
+            "MUAY_THAI":        "muay_thai",
+            "GROUND_AND_POUND": "ground_and_pound",
+            "SPRAWL_AND_BRAWL": "sprawl_and_brawl",
+            "CLINCH_FIGHTER":   "clinch_fighter",
+            "PRESSURE_FIGHTER": "pressure_fighter",
+            "COUNTER_STRIKER":  "counter_striker",
+            "POINT_FIGHTER":    "point_fighter",
+            "STRIKER":          "striker",
+            "SAMBO":            "sambo",
+        }
+        _hint = _HINT_MAP.get(_fs, "")
+
+    # ── PRIMARY CHECKS (highest thresholds first) ──────────────────────────
+
+    # Sambo: strong wrestling AND strong BJJ — the complete grappler
+    # Real examples: Khabib, Makhachev, Chimaev
+    if wrestling_score >= 72 and bjj_score >= 68:
         return "sambo"
-    
-    # Pure Wrestler: High wrestling, BJJ not elite
-    if wrestling_score >= 80 and bjj_score < 80:
+
+    # Pure Wrestler: wrestling dominant, BJJ secondary
+    # Real examples: Usman, Covington, Belal
+    if wrestling_score >= 70 and bjj_score < 65:
         return "wrestler"
-    
-    # Pure BJJ: High BJJ, wrestling not elite
-    if bjj_score >= 80 and wrestling_score < 80:
+
+    # BJJ Specialist: submission/guard dominant, wrestling not required
+    # Real examples: Oliveira, Maia, Ryan Hall
+    if bjj_score >= 70 and wrestling_score < 68:
         return "bjj"
-    
-    # Muay Thai: Must have ELITE clinch (90+) and good kicks
-    if clinch_score >= 90 and fighter.kicks >= 80:
+
+    # Muay Thai: clinch + kicks combo — the complete 8-limb striker
+    # Real examples: Aldo, Shevchenko, Yan
+    if clinch_score >= 72 and fighter.kicks >= 68:
         return "muay_thai"
-    
-    # Kickboxer: High kicks, good boxing, weak grappling
-    if fighter.kicks >= 85 and fighter.boxing >= 75 and wrestling_score < 60:
+
+    # Ground & Pound: wrestling + power, hunts TKO not sub
+    # Real examples: early Khabib, DC, Derrick Lewis on the ground
+    if wrestling_score >= 65 and fighter.strength >= 68 and bjj_score < 65:
+        return "ground_and_pound"
+
+    # Sprawl & Brawl: elite TDD + strong striking — the anti-wrestler
+    # Real examples: Liddell, Cro Cop, Wonderboy
+    if fighter.takedown_defense >= 70 and striking_score >= 65:
+        return "sprawl_and_brawl"
+
+    # Clinch Fighter: cage pressure + dirty boxing + cardio
+    # Real examples: Couture, Covington, Dvalishvili
+    if clinch_score >= 65 and fighter.cardio >= 68 and wrestling_score >= 58:
+        return "clinch_fighter"
+
+    # Pressure Fighter: cardio + chin + heart — the walking forward style
+    # Real examples: Gaethje, Holloway, Poirier
+    if pressure_score >= 70 and striking_score >= 60:
+        return "pressure_fighter"
+
+    # Counter Striker: defense + composure + fight IQ — wait and punish
+    # Real examples: Machida, Thompson, early Anderson
+    if defense_score >= 68 and fighter.fight_iq >= 65 and striking_score >= 62:
+        return "counter_striker"
+
+    # Point Fighter: speed + defense + fight IQ — move and score
+    # Real examples: Cruz, Dillashaw, early O'Malley
+    if fighter.speed >= 70 and defense_score >= 65 and fighter.fight_iq >= 65:
+        return "point_fighter"
+
+    # Kickboxer: high kicks + boxing, weak grappling
+    # Real examples: Holloway (early), Volkov, Machida (striking side)
+    if fighter.kicks >= 70 and fighter.boxing >= 65 and wrestling_score < 58:
         return "kickboxer"
-    
-    # Pure Striker: High striking, weak grappling
-    if striking_score >= 80 and wrestling_score < 65 and bjj_score < 65:
+
+    # Pure Striker: boxing dominant
+    if striking_score >= 68 and wrestling_score < 62 and bjj_score < 62:
         return "striker"
-    
-    # Secondary checks with lower thresholds
-    if wrestling_score >= 75 and bjj_score >= 75:
+
+    # ── SECONDARY CHECKS (lower thresholds, style is present but not dominant) ─
+
+    if wrestling_score >= 65 and bjj_score >= 62:
         return "sambo"
-    if wrestling_score >= 75:
+    if wrestling_score >= 63:
         return "wrestler"
-    if bjj_score >= 75:
+    if bjj_score >= 63:
         return "bjj"
-    if clinch_score >= 80 and fighter.kicks >= 75:
+    if clinch_score >= 65 and fighter.kicks >= 62:
         return "muay_thai"
-    if striking_score >= 70:
+    if fighter.takedown_defense >= 65 and striking_score >= 60:
+        return "sprawl_and_brawl"
+    if pressure_score >= 65 and striking_score >= 58:
+        return "pressure_fighter"
+    if defense_score >= 63 and fighter.fight_iq >= 62:
+        return "counter_striker"
+    if striking_score >= 62:
         return "striker"
-    
+
+    # If stats don't clearly identify a style but we have a stored hint,
+    # use it — the fighter was generated with that identity in mind.
+    if _hint:
+        return _hint
     return "balanced"
 
 
@@ -1256,159 +1330,278 @@ def select_action(
     # =========================================================================
     
     if position in STANDING_POSITIONS:
-        # --- WRESTLER VS STRIKER: More cautious approach ---
-        if my_style in ("wrestler", "sambo") and opp_style in ("striker", "kickboxer"):
-            # Wrestlers can't just spam takedowns - strikers have good TDD in modern MMA
-            strike_weight = 60  # INCREASED - must strike more
-            grapple_weight = 30  # REDUCED significantly
-            # Prioritize clinch entry over shooting from distance
+
+        # ── WRESTLER / SAMBO: Clinch first, avoid striking exchanges ──────
+        # Real MMA: wrestlers don't just spam shots — they use strikes to set
+        # up clinch entries, then get the takedown from body lock or trip.
+        if my_style in ("wrestler", "sambo") and opp_style in (
+                "striker", "kickboxer", "sprawl_and_brawl", "counter_striker",
+                "point_fighter", "pressure_fighter"):
+            strike_weight = 55
+            grapple_weight = 35
             if GrapplingAction.CLINCH_ENTRY in grappling:
-                grapple_weight += 10
-        
-        # Also handle wrestler vs bjj, wrestler vs balanced
-        elif my_style in ("wrestler", "sambo") and opp_style in ("bjj", "balanced", "muay_thai"):
+                grapple_weight += 15  # Strongly prefer clinch entry vs strikers
+
+        elif my_style in ("wrestler", "sambo"):
             strike_weight -= 5
-            grapple_weight += 10  # REDUCED
+            grapple_weight += 15
             if GrapplingAction.CLINCH_ENTRY in grappling:
-                grapple_weight += 5
-        
-        # --- MUAY THAI: Wants clinch for knees/elbows, uses leg kicks vs boxers ---
+                grapple_weight += 8
+
+        # ── MUAY THAI: Seeks clinch vs grapplers, leg kicks vs boxers ─────
+        # Real MMA: Thai fighters use leg kicks to set up clinch, punish
+        # wrestlers trying to shoot with knees, dominate in close range.
         elif my_style == "muay_thai":
             if GrapplingAction.CLINCH_ENTRY in grappling:
-                grapple_weight += 25  # Thai fighters love clinch
-            strike_weight += 10  # But still good strikers
-            
-            # MUAY THAI VS PURE BOXER: Leg kicks disrupt boxing rhythm
-            # This is a well-known stylistic advantage
-            if opp_style == "striker":
-                strike_weight += 15  # More aggressive striking - leg kicks work
-            
-            # Muay Thai vs Kickboxer is more even
-            elif opp_style == "kickboxer":
-                strike_weight += 5
-            
-            # MUAY THAI VS WRESTLER: Thai clinch is dangerous for wrestlers
-            # In real MMA, Muay Thai fighters can catch wrestlers in the clinch
-            # with devastating knees as they shoot or in the clinch
-            elif opp_style in ("wrestler", "sambo"):
-                strike_weight += 20  # More aggressive - punish takedown attempts
-                grapple_weight += 15  # Want to get to clinch to land knees
-        
-        # --- SAMBO: Clinch for trips and throws ---
-        elif my_style == "sambo":
-            grapple_weight += 20  # REDUCED from 35
+                grapple_weight += 22
+            strike_weight += 12
+            if opp_style in ("striker", "kickboxer", "counter_striker"):
+                strike_weight += 12  # Leg kicks work vs pure boxers
+            elif opp_style in ("wrestler", "sambo", "ground_and_pound"):
+                strike_weight += 18  # Punish takedown attempts with knees
+                grapple_weight += 12  # Want clinch to land knees on entry
+
+        # ── GROUND & POUND: Takedown hunting machine ───────────────────────
+        # Real MMA: G&P fighters use strikes only to create openings for
+        # takedowns. They don't want a boxing match — they want the cage.
+        elif my_style == "ground_and_pound":
+            strike_weight = 50   # Strike to set up, not to finish standing
+            grapple_weight = 50  # Equally happy shooting as striking
             if GrapplingAction.CLINCH_ENTRY in grappling:
-                grapple_weight += 10  # REDUCED from 15
-        
-        # --- PURE STRIKER: Keep distance, avoid clinch ---
+                grapple_weight += 20  # Clinch → body lock → slam
+
+        # ── SPRAWL & BRAWL: Elite TDD + forward striking pressure ─────────
+        # Real MMA: Chuck Liddell didn't just defend takedowns — he punished
+        # every shot attempt with an uppercut on the way up. Stays outside,
+        # times opponents, explodes on counters.
+        elif my_style == "sprawl_and_brawl":
+            strike_weight += 30
+            grapple_weight -= 20  # Never wants to grapple
+            # If opponent tries to grapple, punish harder
+            if opp_style in ("wrestler", "sambo", "bjj", "ground_and_pound"):
+                strike_weight += 15  # Explosive counter on every shot
+
+        # ── CLINCH FIGHTER: Cage pressure and dirty boxing ────────────────
+        # Real MMA: Covington, Dvalishvili — they smother opponents against
+        # the cage, drain them with clinch work, win ugly. Not flashy,
+        # but suffocating. Mid-range is their kill zone.
+        elif my_style == "clinch_fighter":
+            if GrapplingAction.CLINCH_ENTRY in grappling:
+                grapple_weight += 35  # Always seeking clinch
+            strike_weight += 5   # Some strikes to close distance
+
+        # ── PRESSURE FIGHTER: Never stops coming forward ──────────────────
+        # Real MMA: Gaethje, Holloway — they eat shots to land shots.
+        # High output, always forward, cardio is their weapon.
+        # Late rounds are where they take over.
+        elif my_style == "pressure_fighter":
+            strike_weight += 35  # High volume forward pressure
+            grapple_weight -= 5  # Occasionally clinch to rest or land body work
+
+        # ── COUNTER STRIKER: Wait, bait, punish ───────────────────────────
+        # Real MMA: Machida would circle for 90 seconds then land one clean
+        # counter for a KO. Thompson waits on the back foot. Low output,
+        # very high accuracy. The engine should reflect the patience.
+        elif my_style == "counter_striker":
+            strike_weight = 80   # Lower output — selective not spammy
+            grapple_weight -= 15 # Stay outside, don't engage
+
+        # ── POINT FIGHTER: Move, score, exit ──────────────────────────────
+        # Real MMA: Cruz, early Dillashaw — constant movement, touch-and-go
+        # striking, never stays in the pocket. Makes opponents chase.
+        elif my_style == "point_fighter":
+            strike_weight += 15  # Active but not heavy
+            grapple_weight -= 20  # Never wants to grapple
+
+        # ── BJJ: Close distance, pull guard if needed ─────────────────────
+        # Real MMA: Maia would shoot a sloppy double leg, get stuffed, end
+        # up in a scramble and somehow wind up with a choke. Ryan Hall pulls
+        # guard from standing when takedowns fail. They find a way down.
+        elif my_style == "bjj":
+            if fighter_attrs.takedowns >= 62:
+                grapple_weight += 25  # Try takedown first
+            else:
+                grapple_weight += 18  # Close distance, look for any entry
+            # BJJ fighters with low takedowns use guard pull
+            if fighter_attrs.takedowns < 60 and GrapplingAction.GUARD_PULL in grappling:
+                grapple_weight += 20  # Prefer guard pull over failed shots
+
+        # ── SAMBO (standalone): Clinch trips and throws ───────────────────
+        elif my_style == "sambo":
+            grapple_weight += 22
+            if GrapplingAction.CLINCH_ENTRY in grappling:
+                grapple_weight += 12
+
+        # ── PURE STRIKER / KICKBOXER: Keep distance ───────────────────────
         elif my_style in ("striker", "kickboxer"):
             strike_weight += 25
-            grapple_weight -= 15  # Don't want to grapple
-        
-        # --- BJJ: Pull guard or get clinched ---
-        elif my_style == "bjj":
-            if fighter_attrs.takedowns >= 60:
-                grapple_weight += 30  # Try to take it down
-            else:
-                # Lower takedown BJJ guys still try to close distance
-                grapple_weight += 20
-        
-        # --- Generic grappler advantage ---
-        elif is_grappler(fighter_attrs):
-            strike_weight -= 20
-            grapple_weight += 40
-            if fighter_attrs.takedowns > 70:
-                grapple_weight += 15
-            if fighter_attrs.takedowns > 85:
-                grapple_weight += 15  # Elite wrestlers shoot constantly
-    
-    elif position in CLINCH_POSITIONS:
-        # --- IN CLINCH: Style determines what happens ---
-        
-        # Muay Thai DOMINATES clinch striking - this is their home
-        if my_style == "muay_thai":
-            strike_weight += 50  # INCREASED - Devastating knees and elbows
-            grapple_weight -= 15  # Very happy to stay in clinch
-            
-            # MUAY THAI VS WRESTLER IN CLINCH: Thai clinch is nightmare for wrestlers
-            # Real MMA: Wanderlei Silva, Anderson Silva used this
-            if opp_style in ("wrestler", "sambo"):
-                strike_weight += 25  # Even MORE aggressive - punish them
-        
-        # Wrestlers/Sambo want takedowns from clinch but not 95% of the time
-        elif my_style in ("wrestler", "sambo"):
-            strike_weight = 15  # INCREASED from 5 - throw some dirty boxing
-            grapple_weight = 70  # REDUCED from 85 - still mainly TD focused
-        
-        # Generic grapplers also want takedowns
+            grapple_weight -= 15
+
+        # ── GENERIC GRAPPLER: Catch-all for high-grapple fighters ─────────
         elif is_grappler(fighter_attrs):
             strike_weight -= 15
-            grapple_weight += 35
-        
-        # Strikers in clinch - dirty boxing can work, but mainly want to escape
-        elif my_style in ("striker", "kickboxer"):
-            # Strikers can use dirty boxing in clinch
-            strike_weight += 10  # CHANGED from -20 - can throw short punches
-            grapple_weight += 25  # Want to escape but less desperate
-            
-            # STRIKER VS WRESTLER IN CLINCH: Dirty boxing and elbows
-            # Strikers train elbows and short punches for this scenario
-            if opp_style in ("wrestler", "sambo"):
-                strike_weight += 15  # Punish wrestler for clinching
-        
-        # BJJ wants to pull guard or get takedown
+            grapple_weight += 25
+            if fighter_attrs.takedowns > 68:
+                grapple_weight += 10
+    
+    elif position in CLINCH_POSITIONS:
+
+        # ── MUAY THAI: This is their home ─────────────────────────────────
+        # Knees and elbows from clinch are their signature.
+        # Nightmare for wrestlers who shoot into a clinch.
+        if my_style == "muay_thai":
+            strike_weight += 55
+            grapple_weight -= 10
+            if opp_style in ("wrestler", "sambo", "ground_and_pound"):
+                strike_weight += 25  # Punish with knees on entry
+
+        # ── WRESTLER / SAMBO: Takedown from clinch ────────────────────────
+        elif my_style in ("wrestler", "sambo"):
+            strike_weight = 15   # Some dirty boxing to set up
+            grapple_weight = 75  # But mainly want the takedown
+
+        # ── GROUND & POUND: Body lock to slam ─────────────────────────────
+        elif my_style == "ground_and_pound":
+            strike_weight = 10
+            grapple_weight = 85  # All-in on the takedown from here
+
+        # ── CLINCH FIGHTER: This is their kill zone ───────────────────────
+        # Dirty boxing, knees, trips — they thrive here.
+        # Covington, Dvalishvili grind you against the cage.
+        elif my_style == "clinch_fighter":
+            strike_weight += 40  # Dirty boxing and elbows
+            grapple_weight += 20  # Cage trips and body locks
+
+        # ── SPRAWL & BRAWL: Escape and punish ────────────────────────────
+        # Chuck Liddell would break the clinch and counter.
+        elif my_style == "sprawl_and_brawl":
+            strike_weight += 20   # Short punches while breaking
+            grapple_weight += 30  # Get out of here
+
+        # ── PRESSURE FIGHTER: Loves being close ──────────────────────────
+        # Body work, short hooks, knees — pressure fighters are comfortable
+        # in tight quarters.
+        elif my_style == "pressure_fighter":
+            strike_weight += 30  # Body work and short hooks
+            grapple_weight += 10
+
+        # ── COUNTER STRIKER: Clinch is bad, escape ───────────────────────
+        elif my_style == "counter_striker":
+            strike_weight += 10
+            grapple_weight += 35  # Wants to break out and get back to distance
+
+        # ── POINT FIGHTER: Get out immediately ───────────────────────────
+        elif my_style == "point_fighter":
+            grapple_weight += 50  # Break clinch, reset to distance
+
+        # ── BJJ: Pull guard from here ─────────────────────────────────────
         elif my_style == "bjj":
-            grapple_weight += 30
+            grapple_weight += 40  # Guard pull or takedown
+            strike_weight -= 15
+
+        # ── GENERIC GRAPPLER ──────────────────────────────────────────────
+        elif is_grappler(fighter_attrs):
             strike_weight -= 10
+            grapple_weight += 30
+
+        # ── STRIKER / KICKBOXER: Dirty boxing, look to break ─────────────
+        elif my_style in ("striker", "kickboxer"):
+            strike_weight += 12
+            grapple_weight += 22
+            if opp_style in ("wrestler", "sambo", "ground_and_pound"):
+                strike_weight += 15  # Short elbows and punches to punish
     
     elif position in DOMINANT_POSITIONS:
         if position_secured:
-            # Tiered submission weights - now more accessible
-            if fighter_attrs.submissions >= 92:  # Pure BJJ specialists
-                sub_weight += 200  # INCREASED - constant sub threat
-            elif fighter_attrs.submissions >= 85:  # High-level BJJ/Sambo
-                sub_weight += 100  # INCREASED significantly
-            elif fighter_attrs.submissions >= 75:  # Competent grapplers
-                sub_weight += 40   # NEW - can attempt subs
-        strike_weight += 50  # GNP
-        grapple_weight += 10  # Position advancement
+            # Ground & Pound: GNP all day, subs are an afterthought
+            # Real MMA: Khabib rarely hunted subs — he just smothered and hit
+            if my_style == "ground_and_pound":
+                strike_weight += 80  # Heavy GNP bias
+                sub_weight += 10     # Rare sub attempt
+            # BJJ / Sambo: Hunt the submission from top
+            elif my_style in ("bjj", "sambo"):
+                if fighter_attrs.submissions >= 60:
+                    sub_weight += 120
+                elif fighter_attrs.submissions >= 50:
+                    sub_weight += 60
+                strike_weight += 20  # Some GNP to open sub attempts
+            # Everyone else — tiered by skill
+            else:
+                if fighter_attrs.submissions >= 85:
+                    sub_weight += 100
+                elif fighter_attrs.submissions >= 75:
+                    sub_weight += 50
+                elif fighter_attrs.submissions >= 60:
+                    sub_weight += 20
+                strike_weight += 50  # GNP default
+        else:
+            strike_weight += 50  # GNP while working to secure position
+        grapple_weight += 10   # Position advancement always available
     
     elif position in INFERIOR_POSITIONS:
-        grapple_weight += 45  # Want to escape badly
+        grapple_weight += 45  # Escape is priority
         if position_secured:
-            if fighter_attrs.submissions >= 92:
-                sub_weight += 150  # INCREASED - dangerous from bottom
-            elif fighter_attrs.submissions >= 85:
-                sub_weight += 70   # INCREASED
-            elif fighter_attrs.submissions >= 75:
-                sub_weight += 25   # NEW - can threaten
+            # BJJ fighters are dangerous from bottom — guard recovery
+            if my_style in ("bjj", "sambo"):
+                if fighter_attrs.submissions >= 55:
+                    sub_weight += 100  # Dangerous from bad spots
+                elif fighter_attrs.submissions >= 45:
+                    sub_weight += 50
+            else:
+                if fighter_attrs.submissions >= 85:
+                    sub_weight += 70
+                elif fighter_attrs.submissions >= 75:
+                    sub_weight += 35
+                elif fighter_attrs.submissions >= 60:
+                    sub_weight += 15
     
     elif position in LEG_ENTANGLEMENT_POSITIONS:
         if position_secured:
-            if fighter_attrs.submissions >= 92:
-                sub_weight += 250  # INCREASED - leg lock specialists
-            elif fighter_attrs.submissions >= 85:
-                sub_weight += 120  # INCREASED
-            elif fighter_attrs.submissions >= 75:
-                sub_weight += 50   # NEW - can threaten leg locks
-        grapple_weight += 20  # Position battles common
+            # Sambo gets a strong leg lock bonus — this is their scramble game
+            # Real MMA: Khabib, Makhachev, Chimaev love leg entanglements
+            if my_style == "sambo":
+                if fighter_attrs.submissions >= 55:
+                    sub_weight += 200
+                elif fighter_attrs.submissions >= 45:
+                    sub_weight += 120
+            elif my_style == "bjj":
+                if fighter_attrs.submissions >= 60:
+                    sub_weight += 180
+                elif fighter_attrs.submissions >= 50:
+                    sub_weight += 100
+            else:
+                if fighter_attrs.submissions >= 85:
+                    sub_weight += 120
+                elif fighter_attrs.submissions >= 75:
+                    sub_weight += 70
+                elif fighter_attrs.submissions >= 60:
+                    sub_weight += 35
+        grapple_weight += 20
         strike_weight = 0
     
-    # GUARD POSITIONS - BJJ's specialty
     elif position in GUARD_POSITIONS:
         if is_top:
-            strike_weight += 45  # GNP from top
-            grapple_weight += 20  # Passing guard
+            strike_weight += 45   # GNP from top guard
+            grapple_weight += 20  # Guard passing
         else:
-            # BOTTOM GUARD - BJJ's home
-            grapple_weight += 20  # Sweeps
+            # Bottom guard — BJJ's domain
+            grapple_weight += 20  # Sweeps and transitions
             if position_secured:
-                if fighter_attrs.submissions >= 92:
-                    sub_weight += 280  # INCREASED - guard is BJJ's domain
-                elif fighter_attrs.submissions >= 85:
-                    sub_weight += 140  # INCREASED
-                elif fighter_attrs.submissions >= 75:
-                    sub_weight += 50   # NEW - can threaten from guard
+                if my_style in ("bjj", "sambo"):
+                    # Dangerous from guard bottom even at lower skill
+                    if fighter_attrs.submissions >= 55:
+                        sub_weight += 200
+                    elif fighter_attrs.submissions >= 45:
+                        sub_weight += 120
+                    elif fighter_attrs.submissions >= 35:
+                        sub_weight += 60
+                else:
+                    if fighter_attrs.submissions >= 85:
+                        sub_weight += 140
+                    elif fighter_attrs.submissions >= 75:
+                        sub_weight += 70
+                    elif fighter_attrs.submissions >= 60:
+                        sub_weight += 30
     
     # Fight state adjustments - removed desperate sub boost
     
@@ -1423,11 +1616,12 @@ def select_action(
     
     # Ensure minimum weights
     strike_weight = max(5, strike_weight) if strikes else 0
-    # Submission attempts now available at 75+ skill
-    if submissions and fighter_attrs.submissions >= 75:
+    # Sub gate: BJJ/Sambo can attempt subs at 45+, everyone else at 60+
+    _sub_threshold = 45 if my_style in ("bjj", "sambo") else 60
+    if submissions and fighter_attrs.submissions >= _sub_threshold:
         sub_weight = max(1, sub_weight)
     else:
-        sub_weight = 0  # No subs for non-grapplers
+        sub_weight = 0
     grapple_weight = max(5, grapple_weight) if grappling else 0
     
     # Select action category
@@ -1531,7 +1725,11 @@ def select_grappling_action(
         elif action == GrapplingAction.CLINCH_BREAK:
             if fighter.boxing > fighter.takedowns:
                 weight += 20  # Strikers really want to break clinch
-        
+
+        # Guard pull - BJJ fighters with low takedowns
+        elif action == GrapplingAction.GUARD_PULL:
+            weight += fighter.guard // 4  # Better guard = more confident pulling
+
         weights[action] = max(1, int(weight))
     
     actions_list = list(weights.keys())
@@ -2063,6 +2261,9 @@ def apply_position_change(
     elif action == GrapplingAction.CLINCH_BREAK:
         new_position = Position.STANDING_OPEN
         new_top = None
+    elif action == GrapplingAction.GUARD_PULL:
+        new_position = Position.CLOSED_GUARD_BOTTOM
+        new_top = None  # opponent becomes top
     elif action == GrapplingAction.PUSH_TO_CAGE:
         new_position = Position.CLINCH_CAGE
     
@@ -2513,34 +2714,20 @@ def simulate_exchange(
             
             is_knockdown, is_finish = defender_state.apply_damage(damage, target)
             
-            # FLASH KO MECHANIC: Underdogs can score flash knockouts
-            # This represents the "anyone can get caught" reality of MMA
-            # Reduced to rare occurrence for balanced finish rate
-            if not is_finish and target == "head":
-                attacker_overall = attacker.overall
-                defender_overall = defender.overall
-                skill_gap = defender_overall - attacker_overall
-                
-                # Triggers when attacker is underdog (5+ points)
-                if skill_gap >= 5:
-                    # Flash KO chance - REDUCED for balance
-                    # 5 point gap: 0.5%, 10 point gap: 1%, 20 point gap: 2%, 30 point gap: 3%
-                    flash_ko_chance = min(0.03, skill_gap * 0.001)
-                    
-                    # Damage bonus - harder shots more likely to flash KO
-                    if damage >= 8:
-                        flash_ko_chance *= 1.5
-                    elif damage >= 5:
-                        flash_ko_chance *= 1.2
-                    
-                    # Bonus if underdog has decent power/boxing
-                    if attacker.strength >= 75 or attacker.boxing >= 75:
-                        flash_ko_chance *= 1.3  # 30% bonus for power punchers
-                    elif attacker.strength >= 65 or attacker.boxing >= 65:
-                        flash_ko_chance *= 1.15
-                    
-                    if random.random() < flash_ko_chance:
-                        is_finish = True  # Flash KO!
+            # FLASH KO MECHANIC: anyone can catch their opponent with
+            # a clean head shot. Power/boxing fighters more likely;
+            # already-hurt defenders much more vulnerable.
+            if not is_finish and target == "head" and damage >= 5:
+                flash_ko_chance = 0.01
+                if attacker.boxing >= 75 or attacker.strength >= 75:
+                    flash_ko_chance *= 1.5
+                elif attacker.boxing >= 65 or attacker.strength >= 65:
+                    flash_ko_chance *= 1.2
+                if defender.health < 40:
+                    flash_ko_chance *= 2.0
+                flash_ko_chance = min(0.12, flash_ko_chance)
+                if random.random() < flash_ko_chance:
+                    is_finish = True  # Flash KO!
             
             round_stats[attacker.fighter_id].significant_strikes_landed += 1
             round_stats[attacker.fighter_id].damage_dealt += damage
@@ -2623,25 +2810,20 @@ def simulate_exchange(
             extra={"locked_in": locked_in, "progress": progress}
         )
         
-        # FLASH SUBMISSION: Submission specialists can catch people quickly
-        # Think Ryan Hall, Demian Maia - they catch people in transitions
-        if locked_in and not finished:
-            attacker_overall = attacker.overall
-            defender_overall = defender.overall
-            skill_gap = defender_overall - attacker_overall
-            
-            if skill_gap >= 5 and attacker.submissions >= 70:
-                # Flash sub chance based on skill gap and submission skill
-                flash_sub_chance = min(0.06, skill_gap * 0.002)
-                
-                # Submission specialist bonus
-                if attacker.submissions >= 85:
-                    flash_sub_chance *= 1.5
-                elif attacker.submissions >= 75:
-                    flash_sub_chance *= 1.25
-                
-                if random.random() < flash_sub_chance:
-                    finished = True  # Flash submission!
+        # FLASH SUBMISSION: any fighter with submission skill who
+        # locks in gets a chance to finish — specialists much more often,
+        # already-hurt defenders harder to defend.
+        if locked_in and not finished and attacker.submissions >= 60:
+            flash_sub_chance = 0.02
+            if attacker.submissions >= 85:
+                flash_sub_chance *= 2.0
+            elif attacker.submissions >= 75:
+                flash_sub_chance *= 1.5
+            if defender.health < 50:
+                flash_sub_chance *= 1.3
+            flash_sub_chance = min(0.10, flash_sub_chance)
+            if random.random() < flash_sub_chance:
+                finished = True  # Flash submission!
         
         if finished:
             log_event(
@@ -3081,9 +3263,9 @@ def simulate_fight(
     f2_effective_composure = max(20, fighter2.composure - heat_composure_penalty)
     
     # Calculate starting health (base + chin bonus)
-    # Base health 125 for balanced finish rate (~45-55%)
-    f1_max_health = 125.0 + fighter1.chin * 0.5
-    f2_max_health = 125.0 + fighter2.chin * 0.5
+    # Lowered to 100 + chin*0.3 for raised finish rate
+    f1_max_health = 100.0 + fighter1.chin * 0.3
+    f2_max_health = 100.0 + fighter2.chin * 0.3
     
     # Initialize states with recovery rating for between-round mechanics
     f1_state = FighterState(

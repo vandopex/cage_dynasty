@@ -3078,21 +3078,23 @@ class GameBridge:
         _fp = self._game_state._fighter_data.get(fighter_id, {}).get("potential")
         _fp = int(_fp) if _fp is not None else None
 
+        # Stats live in _fighter_data (Ship #32) — read/write there.
+        _exp_fdata = self._game_state._fighter_data.get(fighter_id, {})
         for stat, raw in list(nudges.items()):
             if raw == 0:
                 continue
-            if not hasattr(fighter, stat):
-                continue
-            current = float(getattr(fighter, stat, 50))
+            current = float(_exp_fdata.get(stat, 50))
             if raw > 0:
                 effective = self._diminishing_gain(
                     current, raw, camp_tier,
                     fighter_potential=_fp, stat_name=stat,
                 )
-                setattr(fighter, stat, min(100.0, current + effective))
+                new_val = min(100.0, current + effective)
             else:
                 # Negative nudge (damage / loss) — direct, floor at 1.
-                setattr(fighter, stat, max(1.0, current + raw))
+                new_val = max(1.0, current + raw)
+            if fighter_id in self._game_state._fighter_data:
+                self._game_state._fighter_data[fighter_id][stat] = round(new_val, 2)
 
         # Style-weighted OVR — see _compute_ovr for weight vectors.
         fighter.overall_rating = self._compute_ovr(fighter)
@@ -5297,39 +5299,41 @@ class GameBridge:
                 # Apply gains using emphasis weights (1.0=primary, 0.5=secondary,
                 # 0.25=tertiary). Stats outside the emphasis dict get 0 gain.
                 # Stats in domain but not emphasis still benefit from coach passive.
+                # Stats live in _fighter_data dict, not on FighterRecord
+                # (Ship #32). Read from there; setattr-on-FighterRecord
+                # writes never reach the UI or save layer.
+                _fdata = self._game_state._fighter_data.get(fighter_id, {})
+                _style = str(getattr(fighter, 'fighting_style',
+                             _fdata.get('style', 'Balanced')) or 'Balanced')
+                _STYLE_AFFINITY = {
+                    "Striker":        {"boxing":1.3,"kicks":1.2,"striking_defense":1.2,
+                                       "clinch_striking":1.1,"takedowns":0.75,"submissions":0.75},
+                    "Wrestler":       {"takedowns":1.35,"top_control":1.3,"takedown_defense":1.25,
+                                       "boxing":0.9,"kicks":0.8},
+                    "BJJ Specialist": {"submissions":1.35,"guard":1.3,"top_control":1.2,
+                                       "takedowns":1.1,"boxing":0.85},
+                    "Ground & Pound": {"takedowns":1.3,"top_control":1.25,"boxing":1.2,
+                                       "submissions":0.85},
+                    "Pressure Fighter":{"boxing":1.2,"clinch_striking":1.25,"chin":1.1,
+                                        "cardio":1.15,"takedown_defense":1.1},
+                    "Counter Striker":{"striking_defense":1.3,"fight_iq":1.25,"composure":1.2,
+                                       "boxing":1.1,"takedowns":0.8},
+                    "Balanced":       {},
+                }
+                _affinity = _STYLE_AFFINITY.get(_style, {})
                 for stat, weight in _emphasis_weights.items():
-                    if not hasattr(fighter, stat):
-                        continue
-                    current = float(getattr(fighter, stat,
+                    current = float(_fdata.get(stat,
                                     getattr(fighter, 'overall_rating', 65)))
                     weighted_gain = raw_gain * weight
                     effective = self._diminishing_gain(
                         current, weighted_gain, camp_tier,
                         fighter_potential=_fp, stat_name=stat
                     )
-                    # Style affinity multiplier
-                    _STYLE_AFFINITY = {
-                        "Striker":        {"boxing":1.3,"kicks":1.2,"striking_defense":1.2,
-                                           "clinch_striking":1.1,"takedowns":0.75,"submissions":0.75},
-                        "Wrestler":       {"takedowns":1.35,"top_control":1.3,"takedown_defense":1.25,
-                                           "boxing":0.9,"kicks":0.8},
-                        "BJJ Specialist": {"submissions":1.35,"guard":1.3,"top_control":1.2,
-                                           "takedowns":1.1,"boxing":0.85},
-                        "Ground & Pound": {"takedowns":1.3,"top_control":1.25,"boxing":1.2,
-                                           "submissions":0.85},
-                        "Pressure Fighter":{"boxing":1.2,"clinch_striking":1.25,"chin":1.1,
-                                            "cardio":1.15,"takedown_defense":1.1},
-                        "Counter Striker":{"striking_defense":1.3,"fight_iq":1.25,"composure":1.2,
-                                           "boxing":1.1,"takedowns":0.8},
-                        "Balanced":       {},
-                    }
-                    _style = str(getattr(fighter, 'fighting_style', 'Balanced') or 'Balanced')
-                    _affinity = _STYLE_AFFINITY.get(_style, {})
-                    _aff_mult = _affinity.get(stat, 1.0)
-                    effective *= _aff_mult
+                    effective *= _affinity.get(stat, 1.0)
                     if effective > 0.01:
-                        setattr(fighter, stat, min(100.0,
-                                float(getattr(fighter, stat, 65)) + effective))
+                        if fighter_id in self._game_state._fighter_data:
+                            self._game_state._fighter_data[fighter_id][stat] = round(
+                                min(100.0, current + effective), 2)
                         actual_gains[stat] = round(effective, 2)
 
                 fatigue = max(0, min(100,
@@ -5733,15 +5737,18 @@ class GameBridge:
                                        * cs_boost * _trait_mult * _rate)
 
                 if real_fighter and _base_per_attr_gain > 0:
+                    _fdata_c = self._game_state._fighter_data.get(fid, {})
                     for attr in cs_attrs:
                         per_attr_gain = _base_per_attr_gain * _specialist_mult(attr)
-                        current = float(getattr(real_fighter, attr,
+                        current = float(_fdata_c.get(attr,
                                         getattr(real_fighter, 'overall_rating', 50)))
                         effective = self._diminishing_gain(current, per_attr_gain, camp_tier,
                                                            fighter_potential=_fp,
                                                            stat_name=attr)
-                        if hasattr(real_fighter, attr) and effective > 0.01:
-                            setattr(real_fighter, attr, min(100.0, current + effective))
+                        if effective > 0.01:
+                            if fid in self._game_state._fighter_data:
+                                self._game_state._fighter_data[fid][attr] = round(
+                                    min(100.0, current + effective), 2)
                             if result.get("actual_gains") is not None:
                                 result["actual_gains"][f"{attr} (coach: {cs_name})"] = round(effective, 2)
 
@@ -5847,6 +5854,11 @@ class GameBridge:
                 self._maintenance_system.record_training_camp_activity(
                     fid, _domain_stats, self._game_state.week_number,
                 )
+
+        # Cache invalidation parity — Block 1's apply_training_week fires
+        # _clear_cache() per-fighter; this weekly path needs the same so
+        # _convert_real_fighter rebuilds WebFighters with fresh _fighter_data stats.
+        self._clear_cache()
 
         return report
 
@@ -7122,10 +7134,10 @@ class GameBridge:
                 effective_cap = min(tier_cap, int(stored_potential))
 
                 # Train both primary (full gain) and secondary (50%).
+                # Stats live in _fighter_data (Ship #32) — writes here.
+                _ai_fdata = self._game_state._fighter_data.get(fid, {})
                 for attr, mult in ((focus_attr, 1.0), (secondary_attr, 0.5)):
-                    if not hasattr(fighter, attr):
-                        continue
-                    current = float(getattr(fighter, attr, 60))
+                    current = float(_ai_fdata.get(attr, 60))
                     gain = base_gain * mult
                     # Athletic vs technical per-stat multiplier — mirrors
                     # _diminishing_gain on the player side.
@@ -7136,7 +7148,9 @@ class GameBridge:
                     if current >= effective_cap:
                         gain *= max(0.1, 1 - (current - effective_cap) * 0.1)
                     if gain > 0.05:
-                        setattr(fighter, attr, min(100.0, current + gain))
+                        if fid in self._game_state._fighter_data:
+                            self._game_state._fighter_data[fid][attr] = round(
+                                min(100.0, current + gain), 2)
 
                 # Style-weighted OVR — see _compute_ovr for weight vectors.
                 fighter.overall_rating = self._compute_ovr(fighter)
@@ -10743,6 +10757,7 @@ class GameBridge:
 
     # Style string → FightingStyle enum mapping
     _STYLE_MAP = {
+        # Current 11 display names
         "Striker":          "STRIKER",
         "Counter Striker":  "COUNTER_STRIKER",
         "Pressure Fighter": "PRESSURE_FIGHTER",
@@ -10754,6 +10769,20 @@ class GameBridge:
         "Clinch Fighter":   "CLINCH_FIGHTER",
         "Sprawl & Brawl":   "SPRAWL_AND_BRAWL",
         "Balanced":         "BALANCED",
+        # Generation style names that need mapping
+        "Orthodox Boxer":   "STRIKER",
+        "Kickboxer":        "STRIKER",
+        "Submission Artist":"BJJ_SPECIALIST",
+        "Sambo":            "WRESTLER",
+        "Karate":           "POINT_FIGHTER",
+        "Brawler":          "PRESSURE_FIGHTER",
+        # Legacy names from _STYLE_XLAT
+        "MMA Hybrid":       "BALANCED",
+        "Boxing":           "STRIKER",
+        "Judo":             "WRESTLER",
+        "Grappling":        "WRESTLER",
+        "Submissions":      "BJJ_SPECIALIST",
+        "Counter-Striker":  "COUNTER_STRIKER",
     }
 
     def _make_fighter_attrs(self, fighter, name: str, fighter_id: str):
@@ -10888,11 +10917,9 @@ class GameBridge:
             else getattr(eng_result, "fighter1_final_health", 100.0)
         )
 
-        # Stamina isn't surfaced on NarratedFightResult — approximate from
-        # cumulative volume (high output → more fatigue). Rough proxy.
-        total_p_strikes = sum(s.get("sig_strikes_att", 0) for s in p_stats_list)
-        total_p_td_att  = sum(s.get("td_att", 0)            for s in p_stats_list)
-        approx_player_stamina = max(0, 100 - (total_p_strikes // 2) - (total_p_td_att * 3))
+        # Stamina approximated per-round from cumulative volume up to
+        # that round — computed inside the loop below, not here.
+        # (Was a bug: single value computed once → same tags every round.)
 
         # Per-round score deltas accumulate into a cards-style gap.
         from corner_advice import _round_score
@@ -10914,6 +10941,10 @@ class GameBridge:
             p_rs = p_stats_list[r_idx] if isinstance(p_stats_list[r_idx], dict) else {}
             o_rs = o_stats_list[r_idx] if (r_idx < len(o_stats_list) and isinstance(o_stats_list[r_idx], dict)) else {}
             cumulative_gap += _round_score(p_rs) - _round_score(o_rs)
+            # Per-round stamina: cumulative volume up to this round
+            _cum_strikes = sum(s.get("sig_strikes_att", 0) for s in p_stats_list[:r_idx+1])
+            _cum_td      = sum(s.get("td_att", 0) for s in p_stats_list[:r_idx+1])
+            approx_player_stamina = max(0, 100 - (_cum_strikes // 2) - (_cum_td * 3))
             adv = generate_corner_advice(
                 coach_dict             = self._coach,
                 fighter_name           = getattr(player_fighter, "name", "Fighter"),
@@ -11042,12 +11073,29 @@ class GameBridge:
         if STYLES_AVAILABLE:
             try:
                 _STYLE_STR_MAP = {
-                    "Striker": "STRIKER", "Counter Striker": "COUNTER_STRIKER",
-                    "Pressure Fighter": "PRESSURE_FIGHTER", "Point Fighter": "POINT_FIGHTER",
-                    "Muay Thai": "MUAY_THAI", "Wrestler": "WRESTLER",
-                    "Ground & Pound": "GROUND_AND_POUND", "BJJ Specialist": "BJJ_SPECIALIST",
-                    "Clinch Fighter": "CLINCH_FIGHTER", "Sprawl & Brawl": "SPRAWL_AND_BRAWL",
-                    "Balanced": "BALANCED",
+                    "Striker":          "STRIKER",
+                    "Counter Striker":  "COUNTER_STRIKER",
+                    "Counter-Striker":  "COUNTER_STRIKER",
+                    "Pressure Fighter": "PRESSURE_FIGHTER",
+                    "Point Fighter":    "POINT_FIGHTER",
+                    "Muay Thai":        "MUAY_THAI",
+                    "Wrestler":         "WRESTLER",
+                    "Ground & Pound":   "GROUND_AND_POUND",
+                    "BJJ Specialist":   "BJJ_SPECIALIST",
+                    "Clinch Fighter":   "CLINCH_FIGHTER",
+                    "Sprawl & Brawl":   "SPRAWL_AND_BRAWL",
+                    "Balanced":         "BALANCED",
+                    "Orthodox Boxer":   "STRIKER",
+                    "Kickboxer":        "STRIKER",
+                    "Submission Artist":"BJJ_SPECIALIST",
+                    "Sambo":            "WRESTLER",
+                    "Karate":           "POINT_FIGHTER",
+                    "Brawler":          "PRESSURE_FIGHTER",
+                    "MMA Hybrid":       "BALANCED",
+                    "Boxing":           "STRIKER",
+                    "Judo":             "WRESTLER",
+                    "Grappling":        "WRESTLER",
+                    "Submissions":      "BJJ_SPECIALIST",
                 }
                 s1 = self._game_state._fighter_data.get(f1_id, {}).get('style', 'Balanced') if self._game_state else 'Balanced'
                 s2 = self._game_state._fighter_data.get(f2_id, {}).get('style', 'Balanced') if self._game_state else 'Balanced'
