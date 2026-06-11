@@ -1152,6 +1152,14 @@ def detect_fighter_style(fighter: FighterAttributes) -> str:
     if wrestling_score >= 72 and bjj_score >= 68:
         return "sambo"
 
+    # Ground & Pound: wrestling + power, hunts TKO not sub
+    # Real examples: early Khabib, DC, Derrick Lewis on the ground
+    # Checked BEFORE wrestler since G&P adds a strength requirement —
+    # otherwise a 70+ wrestling fighter with high strength gets caught
+    # by the wrestler check and never reaches the more specific G&P check.
+    if wrestling_score >= 65 and fighter.strength >= 68 and bjj_score < 65:
+        return "ground_and_pound"
+
     # Pure Wrestler: wrestling dominant, BJJ secondary
     # Real examples: Usman, Covington, Belal
     if wrestling_score >= 70 and bjj_score < 65:
@@ -1166,11 +1174,6 @@ def detect_fighter_style(fighter: FighterAttributes) -> str:
     # Real examples: Aldo, Shevchenko, Yan
     if clinch_score >= 72 and fighter.kicks >= 68:
         return "muay_thai"
-
-    # Ground & Pound: wrestling + power, hunts TKO not sub
-    # Real examples: early Khabib, DC, Derrick Lewis on the ground
-    if wrestling_score >= 65 and fighter.strength >= 68 and bjj_score < 65:
-        return "ground_and_pound"
 
     # Sprawl & Brawl: elite TDD + strong striking — the anti-wrestler
     # Real examples: Liddell, Cro Cop, Wonderboy
@@ -2723,7 +2726,7 @@ def simulate_exchange(
                     flash_ko_chance *= 1.5
                 elif attacker.boxing >= 65 or attacker.strength >= 65:
                     flash_ko_chance *= 1.2
-                if defender.health < 40:
+                if defender_state.health < 40:
                     flash_ko_chance *= 2.0
                 flash_ko_chance = min(0.12, flash_ko_chance)
                 if random.random() < flash_ko_chance:
@@ -2819,7 +2822,7 @@ def simulate_exchange(
                 flash_sub_chance *= 2.0
             elif attacker.submissions >= 75:
                 flash_sub_chance *= 1.5
-            if defender.health < 50:
+            if defender_state.health < 50:
                 flash_sub_chance *= 1.3
             flash_sub_chance = min(0.10, flash_sub_chance)
             if random.random() < flash_sub_chance:
