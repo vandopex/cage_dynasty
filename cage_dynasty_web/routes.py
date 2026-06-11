@@ -8,6 +8,7 @@ from functools import wraps
 import uuid
 import sys
 import traceback
+import subprocess  # NEW — for /api/git-pull webhook
 
 
 # Trait display labels — maps internal enum strings to (label, category)
@@ -2538,7 +2539,7 @@ def register_routes(app):
         """API endpoint for division rankings."""
         bridge = get_bridge()
         rankings = bridge.get_division_rankings(division)
-        
+
         return jsonify([{
             'id': f.fighter_id,
             'name': f.name,
@@ -2547,3 +2548,35 @@ def register_routes(app):
             'is_champion': f.is_champion,
             'ranking': f.ranking,
         } for f in rankings[:20]])
+
+    @app.route('/api/git-pull', methods=['GET'])
+    def api_git_pull():
+        """Deployment webhook — runs git pull on the PA server.
+        Gated by a query-param token. Called by deploy.sh after pushing
+        to GitHub so the new code lands on disk before the webapp reload."""
+        DEPLOY_TOKEN = "cd_deploy_2026"
+        PA_REPO_DIR  = "/home/vandopegaming/cage_dynasty/cage_dynasty_web"
+
+        if request.args.get('token', '') != DEPLOY_TOKEN:
+            return jsonify({"status": "error", "message": "invalid token"}), 403
+
+        try:
+            result = subprocess.run(
+                ['git', 'pull'],
+                cwd=PA_REPO_DIR,
+                capture_output=True,
+                timeout=25,
+            )
+            stdout = result.stdout.decode('utf-8', errors='replace')
+            stderr = result.stderr.decode('utf-8', errors='replace')
+            if result.returncode != 0:
+                return jsonify({
+                    "status": "error",
+                    "message": f"git pull exit {result.returncode}: {stderr}",
+                    "output": stdout,
+                }), 500
+            return jsonify({"status": "ok", "output": stdout + stderr})
+        except subprocess.TimeoutExpired:
+            return jsonify({"status": "error", "message": "git pull timed out after 25s"}), 504
+        except Exception as e:
+            return jsonify({"status": "error", "message": f"{type(e).__name__}: {e}"}), 500
