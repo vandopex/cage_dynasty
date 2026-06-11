@@ -555,8 +555,18 @@ def generate_starting_prospects(
         potential_ceiling = random.randint(ceiling_min, ceiling_max)
         
         # Current overall is lower than ceiling (room to grow)
-        growth_room = random.randint(8, 18)
-        overall = max(60, potential_ceiling - growth_room)
+        # Higher potential = more variance in rawness.
+        # Elite prospects can be polished (75 OVR) OR raw diamonds (58 OVR).
+        # That variance is what makes scouting exciting.
+        _growth_ranges = {
+            "Elite":   (15, 38),  # ceiling 90-97 → OVR lands ~52-82
+            "High":    (12, 28),  # ceiling 79-87 → OVR lands ~51-75
+            "Average": (8,  18),  # ceiling 68-77 → OVR lands ~50-69
+            "Limited": (4,  10),  # ceiling 55-66 → OVR lands ~45-62
+        }
+        _gr_min, _gr_max = _growth_ranges.get(potential_grade, (8, 18))
+        growth_room = random.randint(_gr_min, _gr_max)
+        overall = max(52, potential_ceiling - growth_room)
         
         # Country - 40% chance from player's region
         if random.random() < 0.4:
@@ -601,10 +611,22 @@ def generate_starting_prospects(
         traits = random.sample(available_traits, num_traits)
         
         # Contract demands based on potential
+        # Raw prospects (OVR much lower than ceiling) don't know their own value yet —
+        # discount signing demands. The rougher the diamond, the cheaper to sign.
         demands = PROSPECT_DEMANDS[potential_grade]
         sign_min, sign_max = demands[0], demands[1]
         purse_min, purse_max = demands[2], demands[3]
         win_min, win_max = demands[4], demands[5]
+
+        # Rawness discount: if OVR is 20+ below ceiling, reduce signing bonus by 30%
+        # If OVR is 30+ below ceiling, reduce by 50% — truly raw = cheap to acquire
+        _rawness = potential_ceiling - overall
+        if _rawness >= 30:
+            sign_min = int(sign_min * 0.50)
+            sign_max = int(sign_max * 0.50)
+        elif _rawness >= 20:
+            sign_min = int(sign_min * 0.70)
+            sign_max = int(sign_max * 0.70)
         
         # Estimated cost is just the signing bonus (purse/win paid per fight later)
         estimated_cost = (sign_min + sign_max) // 2
