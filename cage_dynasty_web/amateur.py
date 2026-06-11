@@ -175,12 +175,13 @@ POINTS_FINISH_BONUS = 1
 POINTS_FOTN_BONUS = 1
 
 # Pro eligibility
-MIN_FIGHTS_FOR_ELIGIBILITY = 4
+MIN_FIGHTS_FOR_ELIGIBILITY = 8
 MIN_AGE_FOR_PRO = 18
-MIN_FIGHTS_FOR_RECORD_PATH = 8
+MIN_FIGHTS_FOR_RECORD_PATH = 16
 MIN_WIN_RATE_FOR_RECORD_PATH = 0.65
-TOP_REGIONAL_RANK_FOR_ELIGIBILITY = 5
-PRODIGY_RATING_THRESHOLD = 68
+TOP_REGIONAL_RANK_FOR_ELIGIBILITY = 3
+MIN_WEEKS_FOR_ELIGIBILITY = 26  # Must be in circuit at least 6 months
+PRODIGY_RATING_THRESHOLD = 82   # Harder to be an instant prodigy
 
 # Signing costs by rating (early-game friendly)
 SIGNING_COSTS = {
@@ -191,10 +192,10 @@ SIGNING_COSTS = {
 }
 
 # Age constants
-MIN_AMATEUR_AGE = 18
-MAX_AMATEUR_AGE = 27
-RETIREMENT_AGE_LOSING = 28  # Retire if losing record at this age
-RETIREMENT_AGE_MAX = 30
+MIN_AMATEUR_AGE = 17
+MAX_AMATEUR_AGE = 30
+RETIREMENT_AGE_LOSING = 30  # Retire if losing record at this age
+RETIREMENT_AGE_MAX = 33
 
 # New amateur generation per year
 NEW_AMATEURS_PER_DIVISION_PER_REGION = 3
@@ -592,11 +593,11 @@ def generate_amateur_attributes(
     """
     
     # Base attributes lower than pros
-    base_min = 35
-    base_max = 55
+    base_min = 30
+    base_max = 57
     
     # Younger fighters start lower but have more room to grow
-    age_modifier = max(0, (age - 18) * 2)  # +2 per year over 18
+    age_modifier = min(12, max(0, int((age - 18) * 1.5)))  # +1.5/yr, capped at +12
     
     # Generate base attributes
     attrs = {
@@ -607,13 +608,13 @@ def generate_amateur_attributes(
         "clinch_striking": random.randint(base_min, base_max) + age_modifier,
         "striking_defense": random.randint(base_min, base_max) + age_modifier,
         "takedown_defense": random.randint(base_min, base_max) + age_modifier,
-        "strength": random.randint(base_min + 5, base_max + 10),
-        "speed": random.randint(base_min + 5, base_max + 10),
-        "cardio": random.randint(base_min + 5, base_max + 10),
-        "chin": random.randint(base_min, base_max + 5),
-        "heart": random.randint(base_min, base_max + 10),
-        "fight_iq": random.randint(base_min - 5, base_max),  # Lower for amateurs
-        "composure": random.randint(base_min - 5, base_max),
+        "strength": random.randint(base_min + 5, base_max + 10) + age_modifier,
+        "speed": random.randint(base_min + 5, base_max + 10) + age_modifier,
+        "cardio": random.randint(base_min + 5, base_max + 10) + age_modifier,
+        "chin": random.randint(base_min, base_max + 5) + age_modifier,
+        "heart": random.randint(base_min, base_max + 10) + age_modifier,
+        "fight_iq": random.randint(base_min - 5, base_max) + age_modifier,  # Lower for amateurs
+        "composure": random.randint(base_min - 5, base_max) + age_modifier,
     }
     
     # Apply nationality-based style modifiers
@@ -644,7 +645,7 @@ def generate_amateur_attributes(
     
     # Clamp all values (amateurs capped at 75)
     for key in attrs:
-        attrs[key] = max(30, min(75, attrs[key]))
+        attrs[key] = max(28, min(72, attrs[key]))
     
     # Determine primary skill
     skill_attrs = {
@@ -1388,9 +1389,12 @@ class AmateurSystem:
         # Minimum requirements
         if fighter.total_fights < MIN_FIGHTS_FOR_ELIGIBILITY:
             return False, f"Need {MIN_FIGHTS_FOR_ELIGIBILITY}+ fights"
-        
+
         if fighter.age < MIN_AGE_FOR_PRO:
             return False, f"Must be {MIN_AGE_FOR_PRO}+"
+
+        if fighter.weeks_in_amateur < MIN_WEEKS_FOR_ELIGIBILITY:
+            return False, f"Need {MIN_WEEKS_FOR_ELIGIBILITY}+ weeks in circuit"
         
         # Prodigy rule
         if fighter.overall_rating >= PRODIGY_RATING_THRESHOLD:
