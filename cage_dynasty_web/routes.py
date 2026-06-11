@@ -2305,6 +2305,14 @@ def register_routes(app):
                 fotn_player_fight = fight
                 break
 
+        fotn_ai_fight = None
+        if not fotn_player_fight:
+            # Only show AI FOTN banner if player fight wasn't FOTN
+            for fight in recap.get('ai_fights', []):
+                if fight.get('is_fotn'):
+                    fotn_ai_fight = fight
+                    break
+
         # Ship YS1: year-end summary (fires every 52-week boundary)
         year_summary = None
         if bridge.week_number % 52 == 0 and bridge.week_number > 0:
@@ -2358,6 +2366,7 @@ def register_routes(app):
             news=week_news,
             notable=notable,
             fotn_player_fight=fotn_player_fight,
+            fotn_ai_fight=fotn_ai_fight,
             training_report=recap.get('training_report', {}),
             year_summary=year_summary,
             finances={
