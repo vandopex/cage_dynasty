@@ -2385,6 +2385,12 @@ def attempt_submission(
         sub_bonus = 0.20
     elif sub_diff >= 10:
         sub_bonus = 0.12
+    elif sub_diff <= -30:
+        sub_bonus = -0.30
+    elif sub_diff <= -20:
+        sub_bonus = -0.18
+    elif sub_diff <= -10:
+        sub_bonus = -0.08
     
     # PURE SUBMISSION SPECIALIST BONUS (92+) - massive advantage
     if attacker.submissions >= 92:
@@ -2403,34 +2409,35 @@ def attempt_submission(
     defense += defender.guard // 35
     
     # Lock-in chance - VERY HIGH because attempts are now rare
-    lock_in_chance = 0.65 + sub_bonus + (offense / (offense + defense + 1)) * 0.25
-    lock_in_chance = min(0.98, lock_in_chance)  # Cap at 98%
+    lock_in_chance = 0.30 + sub_bonus + (offense / (offense + defense + 1)) * 0.55
+    lock_in_chance = min(0.50, lock_in_chance)  # Cap at 50%
     locked_in = random.random() < lock_in_chance
     
     if not locked_in:
         return False, False, 0.0
     
-    # Start submission sequence - high progress for fast finish
+    # Start submission sequence - small starting progress so the race
+    # actually plays out over multiple ticks rather than instant finish
     fight_state.submission_active = True
     fight_state.submission_type = sub_type
     fight_state.submission_attacker_id = attacker.fighter_id
-    
-    # Starting progress - HIGH because attempts are rare
-    base_progress = offense * 1.2
-    
-    # PURE SUBMISSION SPECIALIST (92+) locks it in tighter
+
+    # Starting progress — low base leaves room for actual tick race
+    base_progress = offense * 0.15
+
+    # Specialist bonus — meaningful but not instant
     if attacker.submissions >= 92:
-        base_progress *= 1.5
+        base_progress *= 1.4
     elif attacker.submissions >= 88:
-        base_progress *= 1.25
-    
-    # Submission differential = faster finish
+        base_progress *= 1.2
+
+    # Submission differential — advantage, not auto-finish
     if sub_diff >= 30:
-        base_progress *= 2.5  # Near-instant tap
+        base_progress *= 1.6
     elif sub_diff >= 20:
-        base_progress *= 2.0
+        base_progress *= 1.25
     elif sub_diff >= 10:
-        base_progress *= 1.5
+        base_progress *= 1.2
     
     fight_state.submission_progress = base_progress
     fight_state.submission_escape_progress = 0.0
@@ -2472,14 +2479,14 @@ def process_submission_progress(
     offense = attacker.submissions * (attacker_state.stamina / 100)
     
     # PURE SUBMISSION SPECIALIST (92+) tightens MUCH faster
-    tighten_rate = 1.0 if attacker.submissions >= 92 else 0.75
-    fight_state.submission_progress += offense * tighten_rate
+    tighten_rate = 0.30 if attacker.submissions >= 92 else 0.20
+    fight_state.submission_progress += offense * tighten_rate * random.uniform(0.75, 1.25)
     
     # Defender fights escape - EXTREMELY HARD to escape
     # Uses guard (positional escape) + submissions (knowledge to counter)
     defense = ((defender.guard + defender.submissions) // 2) * (defender_state.stamina / 100)
     defense += defender.heart * 0.03  # REDUCED
-    fight_state.submission_escape_progress += defense * 0.10  # REDUCED from 0.15
+    fight_state.submission_escape_progress += defense * 0.38 * random.uniform(0.75, 1.25)
     
     # Stamina drain - submission is exhausting
     attacker_state.spend_stamina(3)
