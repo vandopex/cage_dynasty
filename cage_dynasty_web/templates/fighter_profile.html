@@ -92,7 +92,8 @@
     <div style="height:4px;background:linear-gradient(90deg,var(--gold-dark),var(--gold),var(--gold-dark));"></div>
     {% endif %}
 
-    <div style="display:grid;grid-template-columns:1fr auto;gap:0;">
+    <div style="display:grid;grid-template-columns:1fr auto;gap:0;
+                flex-wrap:wrap;">
 
         {# Left — identity #}
         <div style="padding:var(--spacing-xl);">
@@ -134,7 +135,7 @@
             </div>
 
             {# Name #}
-            <h1 style="font-family:var(--font-display);font-size:2.4rem;
+            <h1 style="font-family:var(--font-display);font-size:clamp(1.6rem,5vw,2.4rem);
                        color:var(--text-bright);margin:0 0 4px;line-height:1.1;">
                 {{ fighter.name }}
             </h1>
@@ -235,9 +236,11 @@
         </div>
 
         {# Right — OVR + condition + actions #}
-        <div style="min-width:160px;background:var(--bg-dark);padding:var(--spacing-xl);
-                    display:flex;flex-direction:column;align-items:center;justify-content:center;
-                    gap:var(--spacing-md);border-left:1px solid var(--border-color);">
+        <div style="min-width:140px;max-width:160px;background:var(--bg-dark);
+                    padding:var(--spacing-xl);
+                    display:flex;flex-direction:column;align-items:center;
+                    justify-content:center;gap:var(--spacing-md);
+                    border-left:1px solid var(--border-color);">
 
             {# OVR circle #}
             <div style="text-align:center;">
@@ -569,7 +572,14 @@
 {# ═══════════════════════════════════════════════════════════
    STATS — 2 column
 ══════════════════════════════════════════════════════════════ #}
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);">
+<div class="stats-grid" style="display:grid;grid-template-columns:1fr 1fr;
+            gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);">
+<style>
+@media(max-width:600px){
+  .stats-grid{grid-template-columns:1fr!important;}
+  .stat-bar-track{height:10px!important;}
+}
+</style>
 
     {# ── Left: Striking + Physical ── #}
     <div>
@@ -585,11 +595,11 @@
                 {% if value is not none %}
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
                     <span style="font-size:.72rem;color:var(--text-muted);width:90px;flex-shrink:0;">{{ name }}</span>
-                    <div style="flex:1;height:6px;background:rgba(255,255,255,.06);border-radius:3px;overflow:hidden;">
-                        <div style="width:{{ value }}%;height:100%;border-radius:3px;
+                    <div class="stat-bar-track" style="flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden;">
+                        <div style="width:{{ value }}%;height:100%;border-radius:5px;
                                     background:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}rgba(255,255,255,.2){% endif %};"></div>
                     </div>
-                    <span style="font-family:var(--font-display);font-size:.82rem;width:26px;text-align:right;flex-shrink:0;
+                    <span style="font-family:var(--font-display);font-size:.92rem;width:30px;text-align:right;flex-shrink:0;
                                  color:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}var(--text-muted){% endif %};">
                         {{ value }}
                     </span>
@@ -616,7 +626,11 @@
 ══════════════════════════════════════════════════════════════ #}
 {% if scouting or rivalries %}
 <div style="display:grid;grid-template-columns:{% if rivalries %}1fr 1fr{% else %}1fr{% endif %};
-            gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);">
+            gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);"
+     class="scout-rivals-grid">
+<style>
+@media(max-width:600px){.scout-rivals-grid{grid-template-columns:1fr!important;}}
+</style>
 
     {# Scouting report #}
     {% if scouting %}
