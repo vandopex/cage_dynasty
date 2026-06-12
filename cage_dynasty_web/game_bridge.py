@@ -7823,6 +7823,8 @@ class GameBridge:
                             "speed":             wf.speed,
                             "fight_iq":          wf.fight_iq,
                             "composure":         wf.composure,
+                            "top_control":       wf.top_control,
+                            "heart":             wf.heart,
                         },
                     )
                 tape = generate_tale_of_tape(
