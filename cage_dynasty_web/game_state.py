@@ -178,9 +178,10 @@ class CampRecord:
     reputation: int = 50
     
     # Location data
-    city: str = ""
-    country: str = ""
-    region: str = ""
+    location: str = ""   # single string e.g. "Las Vegas, NV"
+    city:     str = ""
+    country:  str = ""
+    region:   str = ""
     
     # Quick stats
     total_wins: int = 0
@@ -190,6 +191,8 @@ class CampRecord:
     @property
     def location_str(self) -> str:
         """Get formatted location string"""
+        if self.location:
+            return self.location
         if self.city and self.country:
             return f"{self.city}, {self.country}"
         return self.city or self.country or "Unknown"
@@ -203,6 +206,7 @@ class CampRecord:
             "fighter_count": self.fighter_count,
             "balance": self.balance,
             "reputation": self.reputation,
+            "location": self.location,
             "city": self.city,
             "country": self.country,
             "region": self.region,
@@ -210,13 +214,13 @@ class CampRecord:
             "total_losses": self.total_losses,
             "titles_held": self.titles_held,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "CampRecord":
         # Handle old saves without location data
         valid_fields = {
             "camp_id", "name", "is_player", "tier", "fighter_count",
-            "balance", "reputation", "city", "country", "region",
+            "balance", "reputation", "location", "city", "country", "region",
             "total_wins", "total_losses", "titles_held"
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}

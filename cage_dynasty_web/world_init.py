@@ -2571,6 +2571,7 @@ class WorldInitializer:
                 balance=camp.balance,
                 reputation=camp.reputation,
                 is_player=False,
+                location=camp.location,
             )
         elif hasattr(self.game_state, 'camps'):
             from core.game_state import CampRecord
@@ -2582,6 +2583,7 @@ class WorldInitializer:
                 reputation=camp.reputation,
                 is_player=False,
                 fighter_count=len(camp.fighter_ids),
+                location=camp.location,
             )
     
     def _add_fighter_to_state(self, fighter: GeneratedFighter) -> None:
