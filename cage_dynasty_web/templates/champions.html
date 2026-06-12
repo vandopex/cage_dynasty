@@ -46,18 +46,31 @@
 {% endif %}
 
 <!-- Division Stats -->
-<div class="grid grid-3 mb-lg">
-    <div class="stat-box">
-        <div class="stat-value gold">{{ total_changes }}</div>
-        <div class="stat-label">Title Changes</div>
+<div style="display:flex;gap:var(--spacing-md);margin-bottom:var(--spacing-lg);
+            flex-wrap:wrap;">
+    <div style="flex:1;min-width:80px;text-align:center;
+                background:var(--bg-card);border-radius:8px;
+                padding:var(--spacing-md);border:1px solid var(--border-color);">
+        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--gold);">
+            {{ total_changes }}</div>
+        <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                    letter-spacing:.08em;margin-top:2px;">Title Changes</div>
     </div>
-    <div class="stat-box">
-        <div class="stat-value">{{ most_defenses }}</div>
-        <div class="stat-label">Most Defenses (Single Reign)</div>
+    <div style="flex:1;min-width:80px;text-align:center;
+                background:var(--bg-card);border-radius:8px;
+                padding:var(--spacing-md);border:1px solid var(--border-color);">
+        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--text-bright);">
+            {{ most_defenses }}</div>
+        <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                    letter-spacing:.08em;margin-top:2px;">Most Defenses</div>
     </div>
-    <div class="stat-box">
-        <div class="stat-value">{{ reigns|length }}</div>
-        <div class="stat-label">Total Reigns</div>
+    <div style="flex:1;min-width:80px;text-align:center;
+                background:var(--bg-card);border-radius:8px;
+                padding:var(--spacing-md);border:1px solid var(--border-color);">
+        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--text-bright);">
+            {{ reigns|length }}</div>
+        <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                    letter-spacing:.08em;margin-top:2px;">Total Reigns</div>
     </div>
 </div>
 

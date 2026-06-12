@@ -67,145 +67,58 @@
     {% endfor %}
 </div>
 
-{% if not prospects_by_wc %}
-<div style="color:var(--text-muted);padding:var(--spacing-xl);text-align:center;">
-    No pro-ready prospects available right now.
-    Check back after the next tournament cycle.
+{% if amateur.all_prospects %}
+<div style="margin-bottom:var(--spacing-sm);">
+    <span style="font-size:.72rem;color:var(--text-muted);">
+        {{ amateur.all_prospects | length }} active fighters ·
+        {{ amateur.all_prospects | selectattr('is_eligible') | list | length }} pro-ready
+    </span>
+</div>
+<div style="display:flex;flex-direction:column;gap:var(--spacing-sm);">
+{% for f in amateur.all_prospects[:50] %}
+<div style="display:flex;align-items:center;gap:var(--spacing-md);
+            padding:var(--spacing-sm) var(--spacing-md);
+            background:var(--bg-card);border-radius:6px;
+            border:1px solid {% if f.is_eligible %}rgba(0,230,118,.2){% else %}var(--border-color){% endif %};">
+    <div style="flex:1;min-width:0;">
+        <div style="font-size:.85rem;color:var(--text-bright);font-family:var(--font-display);">
+            {{ f.name }}
+            {% if f.is_eligible %}
+            <span style="font-size:.6rem;color:var(--neon-green);margin-left:4px;">PRO-READY</span>
+            {% endif %}
+        </div>
+        <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">
+            {{ f.record }} · {{ f.weight_class }} · Age {{ f.age }} · {{ f.style }}
+        </div>
+        {% if not f.is_eligible %}
+        <div style="font-size:.62rem;color:var(--text-muted);margin-top:1px;">
+            {% if f.fights_needed > 0 %}{{ f.fights_needed }} fights needed · {% endif %}
+            {% if f.weeks_needed > 0 %}{{ f.weeks_needed }}w needed{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <div style="text-align:right;flex-shrink:0;">
+        <div style="font-family:var(--font-display);font-size:1rem;
+                    color:{% if f.overall >= 70 %}var(--gold){% elif f.overall >= 60 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+            {{ f.overall }}
+        </div>
+        <div style="font-size:.58rem;color:var(--text-muted);">{{ f.potential }}</div>
+    </div>
+    {% if f.is_eligible %}
+    <form action="{{ url_for('sign_amateur', amateur_id=f.id) }}" method="POST" style="margin:0;">
+        <button type="submit" class="btn btn-sm btn-outline"
+                style="border-color:var(--neon-green);color:var(--neon-green);">
+            Sign
+        </button>
+    </form>
+    {% endif %}
+</div>
+{% endfor %}
 </div>
 {% else %}
-
-{# Prospect cards — grouped by weight class #}
-{% for wc_group in prospects_by_wc %}
-{% if not wc_filter or wc_filter == wc_group.weight_class %}
-<div style="margin-bottom:var(--spacing-xl);">
-    <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.1em;
-                color:var(--text-muted);margin-bottom:var(--spacing-sm);">
-        {{ wc_group.weight_class }}
-        <span style="color:var(--text-secondary);">
-            · {{ wc_group.fighters|length }} available
-        </span>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
-                gap:var(--spacing-md);">
-    {% for f in wc_group.fighters %}
-    <div style="background:var(--bg-card);border:1px solid var(--border-color);
-                border-radius:8px;padding:var(--spacing-md);position:relative;">
-
-        {# Urgency badges #}
-        {% if f.potential_ceiling and f.potential_ceiling >= 90
-              and f.weeks_in_amateur and f.weeks_in_amateur >= 8 %}
-        <div style="position:absolute;top:8px;right:8px;font-size:.62rem;font-weight:700;
-                    background:rgba(255,100,0,.15);
-                    color:var(--accent-orange, #ff6400);
-                    border:1px solid var(--accent-orange, #ff6400);
-                    border-radius:3px;padding:2px 6px;">
-            🔥 High Demand
-        </div>
-        {% elif f.weeks_in_amateur and f.weeks_in_amateur >= 12 %}
-        <div style="position:absolute;top:8px;right:8px;font-size:.62rem;font-weight:700;
-                    background:rgba(255,180,0,.12);
-                    color:var(--warning, #f59e0b);
-                    border:1px solid var(--warning, #f59e0b);
-                    border-radius:3px;padding:2px 6px;">
-            ⚠️ May leave soon
-        </div>
-        {% endif %}
-
-        {# Name + record #}
-        <div style="font-family:var(--font-display);font-size:.95rem;
-                    color:var(--text-bright);margin-bottom:2px;">
-            {{ f.name }}
-        </div>
-        <div style="font-size:.75rem;color:var(--text-muted);
-                    margin-bottom:var(--spacing-sm);">
-            {{ f.wins }}-{{ f.losses }}
-            · {{ f.style or 'Unknown' }}
-            · {{ f.nationality or '' }}
-        </div>
-
-        {# OVR + Potential + Age #}
-        <div style="display:flex;gap:var(--spacing-md);margin-bottom:var(--spacing-sm);">
-            <div>
-                <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;">OVR</div>
-                <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);">
-                    {{ f.overall }}
-                </div>
-            </div>
-            <div>
-                <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;">Ceiling</div>
-                <div style="font-family:var(--font-display);font-size:1.1rem;
-                            color:{% if f.potential_ceiling and f.potential_ceiling >= 85 %}var(--neon-green)
-                                  {% elif f.potential_ceiling and f.potential_ceiling >= 75 %}var(--warning, #f59e0b)
-                                  {% else %}var(--text-muted){% endif %};">
-                    {{ f.potential_ceiling or f.potential }}
-                    <span style="font-size:.7rem;">{{ f.potential_grade or '' }}</span>
-                </div>
-            </div>
-            <div>
-                <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;">Age</div>
-                <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);">
-                    {{ f.age }}
-                </div>
-            </div>
-        </div>
-
-        {# Eligibility reason #}
-        {% if f.eligibility_reason %}
-        <div style="font-size:.7rem;color:var(--text-secondary);margin-bottom:var(--spacing-sm);">
-            📋 {{ f.eligibility_reason }}
-        </div>
-        {% endif %}
-
-        {# Regional rank #}
-        {% if f.regional_rank and f.regional_rank <= 3 %}
-        <div style="font-size:.7rem;margin-bottom:var(--spacing-sm);">
-            <span style="color:{% if f.regional_rank == 1 %}var(--gold){% else %}var(--text-secondary){% endif %};
-                         font-weight:600;">
-                {% if f.regional_rank == 1 %}🏆 Regional Champion
-                {% else %}#{{ f.regional_rank }} in region{% endif %}
-            </span>
-        </div>
-        {% endif %}
-
-        {# Traits #}
-        {% if f.traits %}
-        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--spacing-sm);">
-            {% for trait in f.traits[:3] %}
-            <span style="font-size:.62rem;padding:2px 6px;border-radius:3px;
-                         background:rgba(255,255,255,.06);color:var(--text-muted);
-                         border:1px solid var(--border-color);">
-                {{ trait }}
-            </span>
-            {% endfor %}
-        </div>
-        {% endif %}
-
-        {# Tournament credentials #}
-        {% if f.tournament_wins or f.tournament_finals %}
-        <div style="font-size:.7rem;color:var(--text-secondary);margin-bottom:var(--spacing-sm);">
-            {% if f.tournament_wins %}🏅 {{ f.tournament_wins }}× tournament winner{% endif %}
-            {% if f.tournament_finals %} · {{ f.tournament_finals }}× finalist{% endif %}
-        </div>
-        {% endif %}
-
-        {# Weeks in circuit #}
-        <div style="font-size:.65rem;color:var(--text-muted);margin-bottom:var(--spacing-md);">
-            ⏳ {{ f.weeks_in_amateur or 0 }}w in circuit
-        </div>
-
-        {# Sign button #}
-        <form action="{{ url_for('sign_amateur', amateur_id=f.id) }}" method="POST">
-            <button type="submit" class="btn btn-primary btn-sm btn-block"
-                    style="font-size:.78rem;">
-                Sign to Pro — ${{ (f.signing_cost or 5000)|int }}
-            </button>
-        </form>
-    </div>
-    {% endfor %}
-    </div>
+<div style="padding:var(--spacing-xl);text-align:center;color:var(--text-muted);">
+    No fighters in the amateur circuit yet.
 </div>
-{% endif %}
-{% endfor %}
 {% endif %}
 
 {% endif %}{# end tab scout #}

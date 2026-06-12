@@ -7809,11 +7809,20 @@ class GameBridge:
                         nationality=wf.country,
                         traits=wf.traits,
                         stats={
-                            "boxing": wf.boxing, "kicks": wf.kicks,
-                            "wrestling": wf.takedowns, "bjj": wf.submissions,
-                            "chin": wf.chin, "cardio": wf.cardio,
-                            "strength": wf.strength, "speed": wf.speed,
-                            "fight_iq": wf.fight_iq,
+                            "boxing":            wf.boxing,
+                            "kicks":             wf.kicks,
+                            "clinch":            wf.clinch_striking,
+                            "wrestling":         wf.takedowns,
+                            "bjj":               wf.submissions,
+                            "guard":             wf.guard,
+                            "td_defense":        wf.takedown_defense,
+                            "striking_def":      wf.striking_defense,
+                            "chin":              wf.chin,
+                            "cardio":            wf.cardio,
+                            "strength":          wf.strength,
+                            "speed":             wf.speed,
+                            "fight_iq":          wf.fight_iq,
+                            "composure":         wf.composure,
                         },
                     )
                 tape = generate_tale_of_tape(
@@ -14088,6 +14097,34 @@ class GameBridge:
             except Exception:
                 eligible[wc] = []
 
+        # All active amateurs for Scout tab — not just pro-ready
+        all_prospects = []
+        try:
+            for f in sys.amateurs.values():
+                if f.is_active and not f.turned_pro:
+                    all_prospects.append({
+                        "id":            f.fighter_id,
+                        "name":          f.name,
+                        "age":           f.age,
+                        "weight_class":  f.weight_class,
+                        "record":        f"{f.wins}-{f.losses}",
+                        "overall":       getattr(f, 'overall_rating', 0),
+                        "potential":     getattr(f, 'potential_grade', 'Average'),
+                        "style":         getattr(f, 'fighting_style', 'Balanced'),
+                        "is_eligible":   f.is_pro_eligible,
+                        "weeks_in_amateur": getattr(f, 'weeks_in_amateur', 0),
+                        "fights_needed": max(0, 8 - f.total_fights),
+                        "weeks_needed":  max(0, 26 - getattr(f, 'weeks_in_amateur', 0)),
+                    })
+            all_prospects.sort(key=lambda x: (
+                -x['is_eligible'],
+                x['potential'] == 'Elite' and -1 or
+                x['potential'] == 'High' and 0 or 1,
+                -x['overall']
+            ))
+        except Exception:
+            all_prospects = []
+
         # Regional rankings top 5 per division (sample weight classes)
         regional_rankings: Dict[str, List[Dict]] = {}
         for region in ["Americas", "Europe", "Asia", "Pacific"]:
@@ -14146,6 +14183,7 @@ class GameBridge:
         return {
             "available":         True,
             "eligible":          eligible,
+            "all_prospects":     all_prospects,
             "regional_rankings": regional_rankings,
             "recent_tourneys":   recent_tourneys,
             "week":              week,

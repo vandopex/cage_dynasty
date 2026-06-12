@@ -593,8 +593,10 @@
                             {% endif %}
                         {% endfor %}
                         {% if top_stat.name %}
-                        <span style="font-size:.72rem;color:var(--neon-green);">
-                            {{ top_stat.name | replace('_',' ') | title }} +{{ '%.1f'|format(top_stat.val) }} this camp
+                        <span style="font-size:.68rem;color:var(--neon-green);
+                                     display:block;margin-top:2px;">
+                            📈 {{ top_stat.name | replace('_',' ') | title }}
+                            +{{ '%.1f'|format(top_stat.val) }} this camp
                         </span>
                         {% else %}
                         <span style="font-size:.72rem;color:var(--text-muted);">
