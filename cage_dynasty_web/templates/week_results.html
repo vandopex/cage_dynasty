@@ -278,7 +278,7 @@
     {# ════ LEFT: Card results + Notable ════ #}
     <div>
 
-    {# ── DFC Card Results ── #}
+    {# ── Cage Dynasty Card Results ── #}
     {% if recap.ai_event %}
     {% set all_fights = recap.ai_event.fights if recap.ai_event.fights is defined else [] %}
     {% set slot_order  = ['main_event','co_main','main_card','prelim','early_prelim'] %}
@@ -288,7 +288,7 @@
                              'SUB':'var(--info)','DEC':'var(--text-muted)'} %}
     <div class="card mb-lg">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-            <h3>📋 DFC Card Results</h3>
+            <h3>📋 Cage Dynasty Card Results</h3>
             <span class="text-muted text-sm">{{ recap.ai_event.event_name }}</span>
         </div>
         <div style="padding:0;">

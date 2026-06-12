@@ -10707,7 +10707,7 @@ class GameBridge:
         Returns the event_name it was placed on.
         """
         if not self._game_state:
-            return fight.get("event_name", "DFC ?")
+            return fight.get("event_name", "Cage Dynasty ?")
 
         target_week = fight.get("week",
                        self._game_state.week_number + fight.get("weeks_until", 4))
@@ -10989,6 +10989,85 @@ class GameBridge:
                     # corner block.
                     new_lines.append("=== /CORNER ===")
         return new_lines
+
+    # Round-flavored variants for repeated corner advice. Keyed by the
+    # round the advice is heard BEFORE (i.e. round 2 variants are the
+    # ones swapped in for duplicates appearing after round 1 ends).
+    _CORNER_VARIANTS_BY_ROUND = {
+        2: [
+            "Good round. Keep the pressure — don't let him breathe.",
+            "You're ahead. Don't change what's working.",
+            "He's adjusting. Stay one step ahead.",
+            "Mid-fight now. This is where champions separate themselves.",
+        ],
+        3: [
+            "Last round. Leave everything in the cage.",
+            "Three minutes. Everything you've built — now.",
+            "He's tired. You're not. Finish this.",
+            "Championship rounds. This is what we trained for.",
+        ],
+        4: [
+            "Halfway through. Control the pace.",
+            "Your cardio is the weapon now. Keep working.",
+        ],
+        5: [
+            "Final round. Make it count.",
+            "You want this more than he does. Prove it.",
+        ],
+    }
+
+    def _dedupe_corner_advice_by_round(self, lines: List[str]) -> List[str]:
+        """Replace duplicate corner advice with round-specific variants so each
+        between-round corner sounds distinct. Parses the '=== CORNER ===' ...
+        '=== /CORNER ===' blocks emitted by _inject_corner_advice. Tracks
+        advice text seen in earlier rounds — if the same advice repeats in
+        round 2+, it's swapped for a round-flavored alternate keyed off the
+        most recent '[Round N: ...]' marker."""
+        import re as _re_dedupe
+        import random as _rng_dedupe
+
+        round_end_pattern = _re_dedupe.compile(r"^\[Round (\d+):", _re_dedupe.IGNORECASE)
+        out: List[str] = []
+        seen_advice: set = set()
+        last_ended_round = 0
+        in_corner = False
+
+        for line in lines:
+            stripped = line.strip()
+            m = round_end_pattern.match(stripped)
+            if m:
+                last_ended_round = int(m.group(1))
+
+            if stripped == "=== CORNER ===":
+                in_corner = True
+                out.append(line)
+                continue
+            if stripped == "=== /CORNER ===":
+                in_corner = False
+                out.append(line)
+                continue
+
+            if in_corner and ":" in line:
+                coach_part, _, advice_text = line.partition(":")
+                advice_norm = advice_text.strip()
+                coach_name = coach_part.strip()
+                # Advice given after round N ends is heard before round N+1 starts
+                target_round = last_ended_round + 1
+
+                if advice_norm and advice_norm in seen_advice and \
+                        target_round in self._CORNER_VARIANTS_BY_ROUND:
+                    variant = _rng_dedupe.choice(
+                        self._CORNER_VARIANTS_BY_ROUND[target_round]
+                    )
+                    out.append(f"{coach_name}: {variant}")
+                    continue
+
+                if advice_norm:
+                    seen_advice.add(advice_norm)
+
+            out.append(line)
+
+        return out
 
     def _run_real_engine(self, fight: Dict, fighter1, fighter2,
                           f1_name: str, f2_name: str) -> Optional[Dict]:
@@ -11398,6 +11477,10 @@ class GameBridge:
                     )
                 except Exception as _ke:
                     print(f"⚠️ Corner advice injection failed ({fight_id_key}): {_ke}")
+                try:
+                    lines = self._dedupe_corner_advice_by_round(lines)
+                except Exception as _ke:
+                    print(f"⚠️ Corner advice dedupe failed ({fight_id_key}): {_ke}")
 
             self._fight_commentary[fight_id_key] = lines
             print(f"✅ Commentary stored: {fight_id_key} ({len(lines)} lines)")
