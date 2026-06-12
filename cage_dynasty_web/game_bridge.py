@@ -6468,17 +6468,26 @@ class GameBridge:
                         "fighter_name": fight.get("winner_name", ""),
                         "opponent_id": lid, "opponent_name": fight.get("loser_name", ""),
                         "role": "winner", "method": fight.get("method", ""),
-                        "choices": self._WINNER_CHOICES, "event_name": event.get("event_name", "")})
+                        "choices": self._WINNER_CHOICES, "event_name": event.get("event_name", ""),
+                        "fight_summary": f"{'Win' if wid in player_ids else 'Loss'} vs {fight.get('loser_name','opponent')} ({fight.get('method','DEC')})"})
                     added = True
                 if lid in player_ids and not iv.get("loser_done"):
                     pending.append({"fight_id": fid, "fighter_id": lid,
                         "fighter_name": fight.get("loser_name", ""),
                         "opponent_id": wid, "opponent_name": fight.get("winner_name", ""),
                         "role": "loser", "method": fight.get("method", ""),
-                        "choices": self._LOSER_CHOICES, "event_name": event.get("event_name", "")})
+                        "choices": self._LOSER_CHOICES, "event_name": event.get("event_name", ""),
+                        "fight_summary": f"Loss vs {fight.get('winner_name','opponent')} ({fight.get('method','DEC')})"})
                     added = True
                 if added:
                     seen_fids.add(fid)
+
+        # Cap at 1 — only show the most recent pending interview.
+        # Older interviews expire naturally; players shouldn't face
+        # a backlog of stale post-fight obligations.
+        if pending:
+            pending = pending[:1]
+
         return pending
 
     def process_interview(self, fight_id: str, fighter_id: str,
