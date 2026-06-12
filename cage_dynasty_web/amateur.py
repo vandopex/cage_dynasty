@@ -597,7 +597,7 @@ def generate_amateur_attributes(
     base_max = 57
     
     # Younger fighters start lower but have more room to grow
-    age_modifier = min(12, max(0, int((age - 18) * 1.5)))  # +1.5/yr, capped at +12
+    age_modifier = min(14, max(0, int((age - 18) * 1.5)))  # +1.5/yr, capped at +14
     
     # Generate base attributes
     attrs = {

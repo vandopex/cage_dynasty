@@ -7040,12 +7040,7 @@ class GameBridge:
                     "guard": "guard", "striking": "striking",
                 }
                 _stat_display = _STAT_DISPLAY.get(decay.stat, decay.stat.replace("_", " "))
-                self._news_items.append({
-                    "headline": f"📉 {decay.fighter_name}'s {_stat_display} getting rusty "
-                                f"(-{decay.amount}) — get them in the gym!",
-                    "category": "training",
-                    "week":     week,
-                })
+                pass  # Decay surfaced on training page instead of news feed
 
             # Ship A: stitch maintenance boosts/decays onto each fighter's
             # current-week training history entry. _apply_weekly_training
@@ -7071,12 +7066,7 @@ class GameBridge:
             # Warnings — only show severe ones so feed isn't flooded
             for warn in warnings:
                 if warn.weeks_until_decay <= 1:
-                    self._news_items.append({
-                        "headline": f"⚠️ {warn.fighter_name}'s {warn.stat} "
-                                    f"will decay next week without training",
-                        "category": "training",
-                        "week":     week,
-                    })
+                    pass  # Decay warnings surfaced on training page instead
 
             # ── Terminal: maintenance summary ──────────────────────────
             if boosts or decays:
