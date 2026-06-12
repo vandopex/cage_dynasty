@@ -5336,15 +5336,18 @@ class GameBridge:
                                 min(100.0, current + effective), 2)
                         actual_gains[stat] = round(effective, 2)
 
-                fatigue = max(0, min(100,
-                    getattr(fighter, 'fatigue', 0) + fatigue_delta))
+                # Read current fatigue from _fighter_data (canonical source) —
+                # FighterRecord has no fatigue field post-Ship-#32 so getattr
+                # would always return 0, making fatigue effectively a per-week
+                # delta instead of accumulating across weeks.
+                _current_fatigue = float(
+                    self._game_state._fighter_data.get(fighter_id, {}).get('fatigue', 0)
+                )
+                fatigue = max(0, min(100, _current_fatigue + fatigue_delta))
+                if fighter_id in self._game_state._fighter_data:
+                    self._game_state._fighter_data[fighter_id]['fatigue'] = fatigue
                 if hasattr(fighter, 'fatigue'):
                     fighter.fatigue = fatigue
-                    # Sync fatigue to _fighter_data for UI reads
-                    if (self._game_state and fighter.fighter_id
-                            in self._game_state._fighter_data):
-                        self._game_state._fighter_data[
-                            fighter.fighter_id]['fatigue'] = fatigue
 
                 # Style-weighted OVR — see _compute_ovr for weight vectors.
                 fighter.overall_rating = self._compute_ovr(fighter)
