@@ -915,6 +915,25 @@ def register_routes(app):
             plan = bridge.get_training_plan(f.fighter_id)
             training_plans[f.fighter_id] = plan
 
+        # Decay risk per fighter — surfaces on training page
+        decay_risks = {}
+        try:
+            if (hasattr(bridge, '_maintenance_system') and
+                bridge._maintenance_system and
+                hasattr(bridge._maintenance_system, 'get_fighter_decay_risk')):
+                for f in fighters:
+                    risks = bridge._maintenance_system.get_fighter_decay_risk(
+                        f.fighter_id, bridge.week_number
+                    )
+                    # Only surface non-safe stats to keep the UI clean
+                    at_risk = {
+                        stat: info for stat, info in risks.items()
+                        if info.get('risk_level') not in ('Safe',)
+                    }
+                    decay_risks[f.fighter_id] = at_risk
+        except Exception:
+            decay_risks = {}
+
         return render_template('training.html',
             fighters=fighters,
             camp=camp,
@@ -923,6 +942,7 @@ def register_routes(app):
             training_plans=training_plans,
             training_groups=training_groups,
             intensity_options=intensity_options,
+            decay_risks=decay_risks,
             week=bridge.week_number,
         )
     
