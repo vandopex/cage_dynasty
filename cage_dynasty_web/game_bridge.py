@@ -1474,10 +1474,22 @@ class GameBridge:
             result = load_game(f"web_{slot}")
             if hasattr(result, 'game_state') and result.game_state:
                 self._game_state = result.game_state
-            elif hasattr(result, 'success') and not result.success:
-                return {"success": False, "error": "Could not load game world data"}
-        except Exception as e:
-            print(f"⚠️ CLI load failed: {e} — bridge-only load")
+            else:
+                print(f"  ⚠️ CLI load returned no game_state for slot {slot} — will restore from bridge JSON")
+        except Exception as _le:
+            print(f"  ⚠️ CLI load failed for slot {slot}: {_le} — will restore from bridge JSON")
+
+        # If CLI load didn't produce a game_state, create a minimal one
+        # so the WS1 bridge-JSON restore block can still run.
+        # All canonical data (fighters, camps, divisions, week) lives in
+        # the bridge JSON — the CLI world save is secondary.
+        if not self._game_state:
+            try:
+                from core.game_state import GameState
+                self._game_state = GameState()
+                print(f"  ℹ️ Created fresh GameState for bridge-JSON restore")
+            except Exception as _gse:
+                print(f"  ⚠️ Could not create GameState: {_gse}")
 
         # 2. Restore bridge state
         try:
@@ -1560,6 +1572,12 @@ class GameBridge:
         self._contracts               = data.get("contracts", {})
         self._yearly_awards           = data.get("yearly_awards", [])
         self._hof_inductees           = data.get("hof_inductees", [])
+
+        # WS1 restore diagnostic
+        _fighters_in_bridge = len(data.get("fighters", {}))
+        _fdata_in_bridge = len(data.get("fighter_data", {}))
+        print(f"  📦 WS1 restore: game_state={'present' if self._game_state else 'NONE'}, "
+              f"fighters_in_bridge={_fighters_in_bridge}, fdata_in_bridge={_fdata_in_bridge}")
 
         # Ship WS1: restore game_state fighters/camps/divisions from save
         if self._game_state:
