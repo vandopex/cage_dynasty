@@ -6065,7 +6065,21 @@ class GameBridge:
             quote     = random.choice(quotes)
 
             # Status line
-            focus_label = focus.replace("_", " ").title()
+            # Avoid "Sparring:Sparring" — use friendly display names
+            _FOCUS_DISPLAY = {
+                "sparring":          "General MMA",
+                "striking":          "Striking",
+                "grappling":         "Grappling",
+                "wrestling":         "Wrestling",
+                "bjj":               "BJJ",
+                "cardio":            "Cardio",
+                "strength":          "Strength",
+                "defense":           "Defense",
+                "striking_defense":  "Striking Defense",
+                "grappling_takedowns": "Grappling: Takedowns",
+                "grappling_submissions": "Grappling: Submissions",
+            }
+            focus_label = _FOCUS_DISPLAY.get(focus, focus.replace("_", " ").title())
             intensity_emoji = {
                 "REST": "😴", "LIGHT": "🚶", "MODERATE": "🏃",
                 "INTENSE": "🔥", "EXTREME": "⚡"

@@ -34,10 +34,12 @@
         <div style="display:flex;align-items:flex-start;gap:var(--spacing-md);
                     padding:var(--spacing-sm) var(--spacing-md);
                     border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
-            <span style="font-size:1.1rem;flex-shrink:0;">{{ r.icon if r.icon is defined else '📰' }}</span>
+            <span style="font-size:1.1rem;flex-shrink:0;">📰</span>
             <div>
-                <div style="font-size:.82rem;color:var(--text-bright);">{{ r.headline if r.headline is defined else r }}</div>
-                {% if r.outlet is defined %}
+                <div style="font-size:.82rem;color:var(--text-bright);">{{ r.take if r.take is defined else (r.headline if r.headline is defined else r) }}</div>
+                {% if r.name is defined %}
+                <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">{{ r.name }} ({{ r.handle }})</div>
+                {% elif r.outlet is defined %}
                 <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">{{ r.outlet }}</div>
                 {% endif %}
             </div>
