@@ -201,10 +201,20 @@ try:
     _simulate_narrated_fight_fn = _fem.simulate_narrated_fight
     _FighterAttributes          = _fem.FighterAttributes
     _NarratedFightResult        = _fem.NarratedFightResult
+    try:
+        _FightConfig = _fem.FightConfig if hasattr(_fem, 'FightConfig') else None
+    except Exception:
+        _FightConfig = None
+    try:
+        FI_DAMAGE_MULTIPLIER = _fem.FI_DAMAGE_MULTIPLIER if hasattr(_fem, 'FI_DAMAGE_MULTIPLIER') else 0.42
+    except Exception:
+        FI_DAMAGE_MULTIPLIER = 0.42
     FIGHT_ENGINE_AVAILABLE      = True
     print("✅ fight engine loaded from fight_integration")
 except Exception as _fe_e:
     print(f"⚠️ fight_integration not available: {_fe_e}")
+    _FightConfig = None
+    FI_DAMAGE_MULTIPLIER = 0.42
 if not FIGHT_ENGINE_AVAILABLE:
     print("⚠️ fight engine falling back to score-based simulation")
 
@@ -8384,7 +8394,18 @@ class GameBridge:
                     fa2  = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
                     _slot = fight.get("card_slot", "prelim")
                     _rnds = 5 if (fight.get("is_title_fight") or _slot in ("main_event","co_main")) else 3
-                    _eng = _simulate_narrated_fight_fn(fa1, fa2, rounds=_rnds)
+                    _fight_cfg = _FightConfig(
+                        scheduled_rounds=_rnds,
+                        standup_threshold=10,
+                        exchanges_per_round=55,
+                        submission_progress_to_finish=70.0,
+                        submission_escape_threshold=85.0,
+                        damage_multiplier=FI_DAMAGE_MULTIPLIER,
+                    ) if _FightConfig else None
+                    _eng = _simulate_narrated_fight_fn(
+                        fa1, fa2, rounds=_rnds,
+                        **({"config": _fight_cfg} if _fight_cfg else {})
+                    )
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw — skip winner pick
                         _is_draw_a = True
@@ -8716,7 +8737,18 @@ class GameBridge:
                     fa1 = self._make_fighter_attrs(f1, f1.name, f1.fighter_id)
                     fa2 = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
                     _rnds = 5 if is_title else 3
-                    _eng = _simulate_narrated_fight_fn(fa1, fa2, rounds=_rnds)
+                    _fight_cfg = _FightConfig(
+                        scheduled_rounds=_rnds,
+                        standup_threshold=10,
+                        exchanges_per_round=55,
+                        submission_progress_to_finish=70.0,
+                        submission_escape_threshold=85.0,
+                        damage_multiplier=FI_DAMAGE_MULTIPLIER,
+                    ) if _FightConfig else None
+                    _eng = _simulate_narrated_fight_fn(
+                        fa1, fa2, rounds=_rnds,
+                        **({"config": _fight_cfg} if _fight_cfg else {})
+                    )
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw
                         _is_draw_b = True
@@ -11186,6 +11218,106 @@ class GameBridge:
             out.append(line)
         return out
 
+    def _fix_back_control_commentary(self, lines: List[str]) -> List[str]:
+        """Fix two back-control commentary bugs:
+        1. Wrong fighter name — defender appears as the one landing punches
+        2. Repetitive lines — same back control lines cycling rapidly
+
+        Detects who has back control from position announcement lines,
+        then checks strike lines for name swap."""
+        import re as _re_bc
+        import random as _rng_bc
+
+        # Lines that announce who has back control
+        _BACK_CONTROL_ANNOUNCES = [
+            "has the back", "back control", "BACK MOUNT",
+            "hooks are in", "Back control for",
+        ]
+        # Strike lines that should only come from the controller
+        _CONTROLLER_STRIKE_PATTERNS = [
+            r"(.+?) lands short punches to the side of (.+?)'s head",
+            r"(.+?) digs in punches while controlling the back",
+            r"(.+?) punishes (.+?) from behind",
+            r"Short shots connect from (.+?) with the back taken",
+        ]
+
+        _BACK_CONTROL_VARIANTS = [
+            "Relentless back control from {controller}.",
+            "{controller} maintaining dominant position.",
+            "{defender} fighting the hooks from the bottom.",
+            "Back control still locked in for {controller}.",
+            "Tight control from {controller}.",
+        ]
+
+        out = []
+        controller = None  # who currently has back control
+        defender = None
+        seen_in_sequence = {}  # line -> count in current back control sequence
+        in_back_control = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            # Detect back control announcements
+            if any(phrase in stripped for phrase in _BACK_CONTROL_ANNOUNCES):
+                # Try to extract controller name from "Back control for X"
+                m = _re_bc.search(r"Back control for (.+?)!", stripped)
+                if m:
+                    controller = m.group(1).strip()
+                m2 = _re_bc.search(r"(.+?) has the back!", stripped)
+                if m2:
+                    controller = m2.group(1).strip()
+                m3 = _re_bc.search(r"(.+?) takes the back", stripped)
+                if m3:
+                    controller = m3.group(1).strip()
+                in_back_control = True
+                seen_in_sequence = {}
+                out.append(line)
+                continue
+
+            # Detect position change away from back control
+            if in_back_control and any(x in stripped for x in [
+                "stands back up", "scramble", "guard position",
+                "side control", "full mount", "half guard",
+                "stand up", "referee", "STANDING", "Round"
+            ]):
+                in_back_control = False
+                controller = None
+                defender = None
+                seen_in_sequence = {}
+
+            # Fix wrong names + deduplicate in back control sequence
+            if in_back_control and controller:
+                # Check for name swap bug
+                for pattern in _CONTROLLER_STRIKE_PATTERNS:
+                    m = _re_bc.search(pattern, stripped)
+                    if m and hasattr(m, 'group'):
+                        try:
+                            actor = m.group(1).strip()
+                            # If actor is NOT the controller, names are swapped
+                            if actor and controller and actor != controller:
+                                # Swap names in the line
+                                line = line.replace(actor, "___TEMP___")
+                                line = line.replace(controller, actor)
+                                line = line.replace("___TEMP___", controller)
+                                stripped = line.strip()
+                        except Exception:
+                            pass
+
+                # Deduplicate — replace 3rd+ occurrence of same line
+                key = stripped[:50]  # first 50 chars as key
+                seen_in_sequence[key] = seen_in_sequence.get(key, 0) + 1
+                if seen_in_sequence[key] >= 3 and controller:
+                    variant = _rng_bc.choice(_BACK_CONTROL_VARIANTS)
+                    line = variant.format(
+                        controller=controller,
+                        defender=defender or "opponent"
+                    )
+
+            out.append(line)
+
+        return out
+
     def _run_real_engine(self, fight: Dict, fighter1, fighter2,
                           f1_name: str, f2_name: str) -> Optional[Dict]:
         """
@@ -11301,6 +11433,14 @@ class GameBridge:
             except Exception:
                 pass
 
+        _fight_cfg = _FightConfig(
+            scheduled_rounds=total_rounds,
+            standup_threshold=10,
+            exchanges_per_round=55,
+            submission_progress_to_finish=70.0,
+            submission_escape_threshold=85.0,
+            damage_multiplier=FI_DAMAGE_MULTIPLIER,
+        ) if _FightConfig else None
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
             rounds        = total_rounds,
@@ -11308,6 +11448,7 @@ class GameBridge:
             is_main_event = is_main,
             starting_stamina_f1=_f1_stamina,
             starting_stamina_f2=_f2_stamina,
+            **({"config": _fight_cfg} if _fight_cfg else {})
         )
 
         # Translate engine result → our dict format
@@ -11602,6 +11743,10 @@ class GameBridge:
                     lines = self._enrich_round_summaries(lines)
                 except Exception as _ke:
                     print(f"⚠️  Round summary enrichment failed ({fight_id_key}): {_ke}")
+                try:
+                    lines = self._fix_back_control_commentary(lines)
+                except Exception as _ke:
+                    print(f"⚠️  Back control commentary fix failed ({fight_id_key}): {_ke}")
 
             self._fight_commentary[fight_id_key] = lines
             print(f"✅ Commentary stored: {fight_id_key} ({len(lines)} lines)")
