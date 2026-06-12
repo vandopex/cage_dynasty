@@ -14094,7 +14094,7 @@ class GameBridge:
             try:
                 rr = sys.rankings.get(region, {})
                 top = []
-                for wc, rank_obj in list(rr.items())[:3]:
+                for wc, rank_obj in list(rr.items()):
                     raw = getattr(rank_obj, 'rankings', [])
                     for i, entry in enumerate(raw[:5]):
                         # Rankings are (fighter_id, score) tuples
@@ -14113,7 +14113,8 @@ class GameBridge:
                                 "name":    f.name,
                                 "fighter_id": fid,    # for profile linking
                                 "record":  f"{f.wins}-{f.losses}",
-                                "wc":      wc,
+                                "wc":           wc,
+                                "weight_class": wc,
                                 "overall": getattr(f, 'overall_rating', 60),
                                 "eligible": f.is_pro_eligible,
                             })

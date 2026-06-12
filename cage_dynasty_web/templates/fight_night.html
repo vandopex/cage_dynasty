@@ -105,7 +105,12 @@
         {% set player_fid = fight.fighter1_id %}
 
         {% for slot in slot_order %}
-        {% set slot_fights = all_fights | selectattr('card_slot','equalto',slot) | list %}
+        {% set slot_fights = all_fights | selectattr('card_slot','defined') | list %}
+        {% set slot_fights = slot_fights | selectattr('card_slot') | list %}
+        {% set slot_fights = slot_fights | selectattr('card_slot','equalto',slot) | list %}
+        {% if not slot_fights %}
+        {% set slot_fights = all_fights | selectattr('card_slot','equalto',slot|upper) | list %}
+        {% endif %}
         {% if slot_fights %}
         <div style="padding:3px var(--spacing-md);background:var(--bg-dark);
                     border-bottom:1px solid var(--border-color);

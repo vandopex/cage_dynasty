@@ -239,13 +239,13 @@
                 {# Your bar — fills right to left #}
                 <div style="display:flex;align-items:center;gap:6px;justify-content:flex-end;">
                     <span style="font-family:var(--font-display);font-size:.78rem;
-                                 color:{% if v1 > v2 %}var(--neon-green){% else %}var(--text-muted){% endif %};">
+                                 color:{% if v1 > v2 %}var(--neon-green){% elif v1 == v2 %}var(--text-muted){% else %}var(--text-muted){% endif %};">
                         {{ v1 }}
                     </span>
                     <div style="width:70px;height:5px;background:rgba(255,255,255,.06);
                                 border-radius:3px;overflow:hidden;">
                         <div style="width:{{ v1 }}%;height:100%;border-radius:3px;float:right;
-                                    background:{% if v1 >= v2 %}var(--neon-green){% else %}rgba(255,255,255,.15){% endif %};"></div>
+                                    background:{% if v1 > v2 %}var(--neon-green){% elif v1 == v2 %}rgba(255,255,255,.25){% else %}rgba(255,255,255,.15){% endif %};"></div>
                     </div>
                 </div>
                 {# Stat name #}
@@ -256,7 +256,7 @@
                     <div style="width:70px;height:5px;background:rgba(255,255,255,.06);
                                 border-radius:3px;overflow:hidden;">
                         <div style="width:{{ v2 }}%;height:100%;border-radius:3px;
-                                    background:{% if v2 >= v1 %}var(--blood-red-light){% else %}rgba(255,255,255,.15){% endif %};"></div>
+                                    background:{% if v2 > v1 %}var(--blood-red-light){% elif v2 == v1 %}rgba(255,255,255,.25){% else %}rgba(255,255,255,.15){% endif %};"></div>
                     </div>
                     <span style="font-family:var(--font-display);font-size:.78rem;
                                  color:{% if v2 > v1 %}var(--blood-red-light){% else %}var(--text-muted){% endif %};">
