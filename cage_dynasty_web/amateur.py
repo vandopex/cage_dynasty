@@ -1190,6 +1190,71 @@ class AmateurSystem:
             "opponent": winner.name, "result": "L",
             "method": fight.method, "tournament": True,
         })
+
+        # Per-tournament-fight stat development. Higher-potential
+        # grades gain faster; winners get a 20% bonus. Stats live in
+        # the AmateurFighter.attributes dict — keys must match the
+        # amateur schema (wrestling/bjj, NOT takedowns/submissions).
+        import random as _rnd
+        _POTENTIAL_GAINS = {
+            "Elite":   (1.5, 0.5),
+            "High":    (1.0, 0.3),
+            "Average": (0.6, 0.2),
+            "Limited": (0.3, 0.1),
+        }
+        _STYLE_PRIMARY_AMATEUR = {
+            "BJJ Specialist":   "bjj",
+            "Submission Artist":"bjj",
+            "Wrestler":         "wrestling",
+            "Sambo":            "wrestling",
+            "Ground & Pound":   "wrestling",
+            "Muay Thai":        "kicks",
+            "Kickboxer":        "kicks",
+            "Striker":          "boxing",
+            "Orthodox Boxer":   "boxing",
+            "Clinch Fighter":   "clinch_striking",
+            "Counter Striker":  "striking_defense",
+            "Sprawl & Brawl":   "takedown_defense",
+            "Pressure Fighter": "cardio",
+            "Karate":           "fight_iq",
+            "Point Fighter":    "speed",
+            "Brawler":          "strength",
+        }
+        _AMATEUR_SECONDARY_POOL = [
+            "boxing", "kicks", "clinch_striking", "striking_defense",
+            "takedown_defense", "wrestling", "bjj",
+            "strength", "speed", "cardio", "chin", "heart",
+            "fight_iq", "composure"
+        ]
+        _AMATEUR_TRAINABLE = [
+            "boxing", "kicks", "wrestling", "bjj", "clinch_striking",
+            "striking_defense", "takedown_defense", "strength", "speed",
+            "cardio", "chin", "heart", "fight_iq", "composure"
+        ]
+
+        for participant, did_win in [(winner, True), (loser, False)]:
+            grade = getattr(participant, 'potential_grade', 'Average')
+            primary_gain, secondary_gain = _POTENTIAL_GAINS.get(grade, (0.6, 0.2))
+            if did_win:
+                primary_gain *= 1.2
+                secondary_gain *= 1.2
+
+            style = getattr(participant, 'fighting_style', 'Balanced')
+            primary_stat = _STYLE_PRIMARY_AMATEUR.get(style, 'boxing')
+            secondary_candidates = [s for s in _AMATEUR_SECONDARY_POOL
+                                    if s != primary_stat]
+            secondary_stat = _rnd.choice(secondary_candidates)
+
+            for stat, gain in [(primary_stat, primary_gain),
+                               (secondary_stat, secondary_gain)]:
+                current = participant.attributes.get(stat, 45)
+                participant.attributes[stat] = round(min(72.0, current + gain), 2)
+
+            # Recalculate OVR from attributes dict
+            vals = [participant.attributes.get(s, 0) for s in _AMATEUR_TRAINABLE
+                    if s in participant.attributes]
+            if vals:
+                participant.overall_rating = int(sum(vals) / len(vals))
     
     def _select_fotn(self, fights: List[TournamentFight]) -> Optional[TournamentFight]:
         """Select Fight of the Night from tournament fights"""
@@ -1605,9 +1670,14 @@ class AmateurSystem:
     
     def process_week(self, week: int) -> Dict[str, Any]:
         """Process a week in the amateur system"""
-        
+
         self.current_week = week
-        
+
+        # Tick weeks_in_amateur weekly — single source of truth
+        for fighter in self.amateurs.values():
+            if fighter.is_active and not fighter.turned_pro:
+                fighter.weeks_in_amateur += 1
+
         events = {
             "tournaments_run": [],
             "newly_eligible": [],
@@ -1635,7 +1705,6 @@ class AmateurSystem:
         for fighter in self.amateurs.values():
             if fighter.is_active:
                 fighter.age += 1
-                fighter.weeks_in_amateur += 52
     
     def _process_retirements(self) -> List[str]:
         """Process retirements based on age and record"""

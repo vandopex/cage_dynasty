@@ -7051,8 +7051,7 @@ class GameBridge:
         # Cadence + breadth lifted by the potential rework: every 2 weeks
         # (was 4), primary + secondary stat each pass (was primary only),
         # and the per-fighter potential ceiling now bounds growth.
-        if week % 2 == 0:
-            self._advance_ai_fighter_training(week)
+        self._advance_ai_fighter_training(week)
 
     def _advance_ai_fighter_training(self, week: int) -> None:
         """
