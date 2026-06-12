@@ -6486,7 +6486,7 @@ class GameBridge:
         # Older interviews expire naturally; players shouldn't face
         # a backlog of stale post-fight obligations.
         if pending:
-            pending = pending[:1]
+            pending = pending[-1:]
 
         return pending
 
