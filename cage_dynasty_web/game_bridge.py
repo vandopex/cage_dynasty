@@ -11098,6 +11098,79 @@ class GameBridge:
 
         return out
 
+    def _enrich_round_summaries(self, lines: List[str]) -> List[str]:
+        """Replace generic round summary lines with more varied descriptions.
+        The engine always outputs 'A grappling-heavy round' even when
+        striking dominated. We post-process to add variety."""
+        import re as _re_rnd
+        import random as _rng_rnd
+
+        _SUMMARY_PATTERN = _re_rnd.compile(
+            r'^\[Round (\d+): A grappling-heavy round (.*?)\]$',
+            _re_rnd.IGNORECASE
+        )
+        _STRIKING_PATTERN = _re_rnd.compile(
+            r'^\[Round (\d+): A striking-heavy round (.*?)\]$',
+            _re_rnd.IGNORECASE
+        )
+
+        # Varied templates keyed by outcome phrase
+        _GRAPPLING_VARIANTS = [
+            "A grappling clinic",
+            "A wrestling masterclass",
+            "Ground control dominated this round",
+            "The fight lived on the mat",
+            "A grappler's round",
+        ]
+        _STRIKING_VARIANTS = [
+            "A striking showcase",
+            "The fighters traded on the feet",
+            "A technical striking round",
+            "Stand-up warfare",
+            "Punches and kicks flew freely",
+        ]
+        _CLOSE_VARIANTS = [
+            "A competitive round",
+            "A closely contested round",
+            "Hard to score this one",
+            "Both fighters had their moments",
+            "A back-and-forth round",
+        ]
+
+        out = []
+        for line in lines:
+            m = _SUMMARY_PATTERN.match(line.strip())
+            if m:
+                rnd_num = m.group(1)
+                outcome = m.group(2)  # e.g. "controlled by Timur - clearly won by Timur"
+
+                # Pick variant based on outcome language
+                if "clearly won" in outcome:
+                    desc = _rng_rnd.choice(_GRAPPLING_VARIANTS)
+                elif "edged" in outcome:
+                    desc = _rng_rnd.choice(_CLOSE_VARIANTS)
+                else:
+                    desc = _rng_rnd.choice(_GRAPPLING_VARIANTS)
+
+                out.append(f"[Round {rnd_num}: {desc} — {outcome}]")
+                continue
+
+            m2 = _STRIKING_PATTERN.match(line.strip())
+            if m2:
+                rnd_num = m2.group(1)
+                outcome = m2.group(2)
+                if "clearly won" in outcome:
+                    desc = _rng_rnd.choice(_STRIKING_VARIANTS)
+                elif "edged" in outcome:
+                    desc = _rng_rnd.choice(_CLOSE_VARIANTS)
+                else:
+                    desc = _rng_rnd.choice(_STRIKING_VARIANTS)
+                out.append(f"[Round {rnd_num}: {desc} — {outcome}]")
+                continue
+
+            out.append(line)
+        return out
+
     def _run_real_engine(self, fight: Dict, fighter1, fighter2,
                           f1_name: str, f2_name: str) -> Optional[Dict]:
         """
@@ -11510,6 +11583,10 @@ class GameBridge:
                     lines = self._dedupe_corner_advice_by_round(lines)
                 except Exception as _ke:
                     print(f"⚠️ Corner advice dedupe failed ({fight_id_key}): {_ke}")
+                try:
+                    lines = self._enrich_round_summaries(lines)
+                except Exception as _ke:
+                    print(f"⚠️  Round summary enrichment failed ({fight_id_key}): {_ke}")
 
             self._fight_commentary[fight_id_key] = lines
             print(f"✅ Commentary stored: {fight_id_key} ({len(lines)} lines)")
