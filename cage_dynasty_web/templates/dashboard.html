@@ -274,18 +274,49 @@
                             </span>
                         </div>
                         {% else %}
-                        {# Condition bar #}
-                        <div style="display:flex;align-items:center;gap:6px;">
+                        {# Condition bar + label #}
+                        <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
                             <div style="flex:1;height:4px;background:rgba(255,255,255,.08);
                                         border-radius:2px;overflow:hidden;">
                                 <div style="width:{{ 100 - fighter.fatigue }}%;height:100%;
-                                            background:{{ fighter.condition_color if fighter.condition_color else 'var(--neon-green)' }};
+                                            background:{% if fighter.fatigue <= 20 %}var(--neon-green)
+                                                       {% elif fighter.fatigue <= 40 %}var(--neon-green)
+                                                       {% elif fighter.fatigue <= 60 %}var(--warning)
+                                                       {% elif fighter.fatigue <= 80 %}#ff8c00
+                                                       {% else %}var(--blood-red){% endif %};
                                             border-radius:2px;"></div>
                             </div>
-                            <span style="font-size:.65rem;color:var(--text-muted);white-space:nowrap;">
-                                {{ 100 - fighter.fatigue }}% condition
+                            <span style="font-size:.65rem;white-space:nowrap;
+                                         color:{% if fighter.fatigue <= 20 %}var(--neon-green)
+                                                {% elif fighter.fatigue <= 40 %}var(--neon-green)
+                                                {% elif fighter.fatigue <= 60 %}var(--warning)
+                                                {% elif fighter.fatigue <= 80 %}#ff8c00
+                                                {% else %}var(--blood-red){% endif %};">
+                                {% if fighter.fatigue <= 20 %}Fresh
+                                {% elif fighter.fatigue <= 40 %}Rested
+                                {% elif fighter.fatigue <= 60 %}Ready
+                                {% elif fighter.fatigue <= 80 %}Tired
+                                {% else %}Exhausted{% endif %}
                             </span>
                         </div>
+
+                        {# Stat alerts — only show critical gaps #}
+                        {% set alerts = [] %}
+                        {% if fighter.chin < 50 %}{% set _ = alerts.append('⚠️ Chin ' ~ fighter.chin) %}{% endif %}
+                        {% if fighter.cardio < 50 %}{% set _ = alerts.append('⚠️ Cardio ' ~ fighter.cardio) %}{% endif %}
+                        {% if fighter.injury_desc %}{% set _ = alerts.append('🚑 ' ~ fighter.injury_desc ~ ' (' ~ fighter.injury_weeks_out ~ 'w)') %}{% endif %}
+                        {% if alerts %}
+                        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;">
+                            {% for alert in alerts %}
+                            <span style="font-size:.58rem;padding:1px 5px;border-radius:3px;
+                                         background:rgba(220,38,38,.12);
+                                         color:var(--blood-red);
+                                         border:1px solid rgba(220,38,38,.25);">
+                                {{ alert }}
+                            </span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
                         {% endif %}
                     </div>
 
@@ -302,6 +333,29 @@
                 </div>
                 {% endfor %}
             </div>
+
+            {% if fighters %}
+            <div style="padding:var(--spacing-sm) var(--spacing-md);
+                        border-top:1px solid var(--border-color);
+                        display:flex;gap:var(--spacing-md);
+                        background:var(--bg-dark);">
+                {% set avg_fatigue = (fighters | sum(attribute='fatigue')) // (fighters | length) %}
+                <span style="font-size:.62rem;color:var(--text-muted);">
+                    Camp avg condition:
+                    <span style="color:{% if avg_fatigue <= 40 %}var(--neon-green)
+                                        {% elif avg_fatigue <= 60 %}var(--warning)
+                                        {% else %}var(--blood-red){% endif %};">
+                        {{ 100 - avg_fatigue }}%
+                    </span>
+                </span>
+                {% set injured = fighters | selectattr('injury_desc') | list %}
+                {% if injured %}
+                <span style="font-size:.62rem;color:var(--blood-red);">
+                    🚑 {{ injured | length }} injured
+                </span>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
 
         {# ── Training History (last 4 weeks per fighter) ── Ship A #}
