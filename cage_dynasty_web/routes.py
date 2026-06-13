@@ -1886,23 +1886,27 @@ def register_routes(app):
         if isinstance(data, dict):
             data['all_prospects'] = prospects
 
-        # Build graduates list — player fighters who came from amateur circuit
-        # Identified by fighter_id starting with "amateur_"
+        # Build graduates list from authoritative registry
         graduates = []
         try:
-            for f in bridge.get_player_fighters():
-                if f.fighter_id.startswith('amateur_'):
-                    graduates.append({
-                        'name':          f.name,
-                        'fighter_id':    f.fighter_id,
-                        'record':        f.record_str,
-                        'overall':       f.overall_rating,
-                        'ovr_at_signing':f.ovr_at_signing,
-                        'weight_class':  f.weight_class,
-                        'style':         f.fighting_style,
-                        'wins':          f.wins,
-                        'losses':        f.losses,
-                    })
+            for g in bridge.get_amateur_graduates():
+                fid = g.get('fighter_id', '')
+                fdata = {}
+                fighter = None
+                if bridge._game_state:
+                    fighter = bridge._game_state.get_fighter(fid)
+                    fdata = bridge._game_state._fighter_data.get(fid, {})
+                graduates.append({
+                    'name':           g.get('fighter_name', ''),
+                    'fighter_id':     fid,
+                    'record':         f"{g.get('pro_wins',0)}-{g.get('pro_losses',0)}",
+                    'overall':        getattr(fighter, 'overall_rating', 0) if fighter else 0,
+                    'ovr_at_signing': int(fdata.get('ovr_at_signing', 0)),
+                    'weight_class':   g.get('weight_class', ''),
+                    'style':          fdata.get('style', ''),
+                    'wins':           g.get('pro_wins', 0),
+                    'losses':         g.get('pro_losses', 0),
+                })
         except Exception:
             graduates = []
 
