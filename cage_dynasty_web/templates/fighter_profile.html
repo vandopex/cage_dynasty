@@ -700,6 +700,123 @@
 {% endif %}
 
 {# ═══════════════════════════════════════════════════════════
+   CAREER DEVELOPMENT
+══════════════════════════════════════════════════════════════ #}
+{% if fighter.fights_total > 0 %}
+<div class="card mb-lg">
+    <div class="card-header">
+        <h3>📈 Career Development</h3>
+    </div>
+    <div style="padding:var(--spacing-lg);">
+
+        {# OVR growth row #}
+        {% set ovr_at_signing = fighter.ovr_at_signing if fighter.ovr_at_signing is defined and fighter.ovr_at_signing > 0 else 0 %}
+        {% set ovr_growth = fighter.overall_rating - ovr_at_signing if ovr_at_signing > 0 else 0 %}
+        <div style="display:flex;gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);
+                    flex-wrap:wrap;">
+            <div style="text-align:center;flex:1;min-width:60px;">
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:var(--text-muted);">
+                    {{ ovr_at_signing if ovr_at_signing > 0 else '—' }}
+                </div>
+                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
+                            letter-spacing:.08em;margin-top:2px;">At Signing</div>
+            </div>
+            <div style="text-align:center;flex:1;min-width:60px;">
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:{% if ovr_growth >= 10 %}var(--neon-green){% elif ovr_growth >= 5 %}var(--warning){% else %}var(--text-muted){% endif %};">
+                    {% if ovr_growth > 0 %}+{{ ovr_growth }}{% else %}—{% endif %}
+                </div>
+                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
+                            letter-spacing:.08em;margin-top:2px;">Growth</div>
+            </div>
+            <div style="text-align:center;flex:1;min-width:60px;">
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:var(--text-bright);">
+                    {{ fighter.overall_rating }}
+                </div>
+                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
+                            letter-spacing:.08em;margin-top:2px;">Current</div>
+            </div>
+            <div style="text-align:center;flex:1;min-width:60px;">
+                <div style="font-family:var(--font-display);font-size:1.4rem;
+                            color:var(--gold);">
+                    {{ fighter.potential if fighter.potential is defined else '?' }}
+                </div>
+                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
+                            letter-spacing:.08em;margin-top:2px;">Ceiling</div>
+            </div>
+        </div>
+
+        {# Top stats — show the 3 highest rated stats with labels #}
+        {% set stat_list = [
+            ('Boxing', fighter.boxing),
+            ('Kicks', fighter.kicks),
+            ('Clinch', fighter.clinch_striking),
+            ('Str Defense', fighter.striking_defense),
+            ('Takedowns', fighter.takedowns),
+            ('TD Defense', fighter.takedown_defense),
+            ('Top Control', fighter.top_control),
+            ('Submissions', fighter.submissions),
+            ('Guard', fighter.guard),
+            ('Strength', fighter.strength),
+            ('Speed', fighter.speed),
+            ('Cardio', fighter.cardio),
+            ('Chin', fighter.chin),
+            ('Heart', fighter.heart),
+            ('Fight IQ', fighter.fight_iq),
+        ] %}
+        {% set top_stats = stat_list | sort(attribute=1, reverse=true) %}
+        <div style="margin-bottom:var(--spacing-sm);">
+            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:var(--text-muted);margin-bottom:var(--spacing-sm);">
+                Elite Stats
+            </div>
+            <div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;">
+            {% for stat_name, stat_val in top_stats[:5] %}
+            {% if stat_val >= 75 %}
+            <div style="text-align:center;padding:var(--spacing-sm) var(--spacing-md);
+                        background:var(--bg-dark);border-radius:6px;
+                        border:1px solid {% if stat_val >= 90 %}var(--gold){% elif stat_val >= 80 %}rgba(0,230,118,.3){% else %}var(--border-color){% endif %};">
+                <div style="font-family:var(--font-display);font-size:1rem;
+                            color:{% if stat_val >= 90 %}var(--gold){% elif stat_val >= 80 %}var(--neon-green){% else %}var(--text-bright){% endif %};">
+                    {{ stat_val }}
+                </div>
+                <div style="font-size:.55rem;color:var(--text-muted);margin-top:1px;">
+                    {{ stat_name }}
+                </div>
+            </div>
+            {% endif %}
+            {% endfor %}
+            </div>
+        </div>
+
+        {# Career phase narrative #}
+        <div style="font-size:.72rem;color:var(--text-muted);border-top:1px solid var(--border-color);
+                    padding-top:var(--spacing-sm);margin-top:var(--spacing-sm);">
+            {% if fighter.age < 24 %}
+                Young prospect with {{ fighter.fights_total }} pro fight{{ 's' if fighter.fights_total != 1 else '' }}.
+                {% if ovr_growth > 0 %}Already improved {{ ovr_growth }} OVR points since signing.{% endif %}
+            {% elif fighter.age < 28 %}
+                Rising fighter entering their prime years.
+                {{ fighter.fights_total }} pro fights in the books.
+            {% elif fighter.age < 32 %}
+                In their prime at {{ fighter.age }}.
+                {{ fighter.fights_total }} fights of experience.
+                {% if ovr_growth > 5 %}Grew {{ ovr_growth }} OVR points under your management.{% endif %}
+            {% elif fighter.age < 35 %}
+                Veteran with {{ fighter.fights_total }} pro fights.
+                Experience is the weapon now.
+            {% else %}
+                Late career fighter. {{ fighter.fights_total }} fights. Every one counts.
+            {% endif %}
+        </div>
+
+    </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════
    FIGHT HISTORY
 ══════════════════════════════════════════════════════════════ #}
 <div class="card mb-lg">

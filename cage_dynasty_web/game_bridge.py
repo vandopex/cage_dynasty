@@ -598,6 +598,8 @@ class WebFighter:
     record_str: str
     overall_rating: int
     potential: int
+    fights_total: int
+    ovr_at_signing: int
     popularity: int
     ranking: Optional[int]
     is_champion: bool
@@ -4903,6 +4905,8 @@ class GameBridge:
             record_str=fighter.record,
             overall_rating=ovr,
             potential=int(fdata.get("potential", ovr + 8)),
+            fights_total=int(fighter.wins + fighter.losses + getattr(fighter, 'draws', 0)),
+            ovr_at_signing=int(fdata.get('ovr_at_signing', 0)),
             popularity=fighter.popularity,
             ranking=ranking,
             is_champion=fighter.is_champion,
@@ -14111,6 +14115,12 @@ class GameBridge:
         self._game_state._sign_fighter_to_camp(fighter_id, self._game_state.player_camp_id)
         self._camp_balance -= signing_cost
 
+        # Store signing OVR for career development summary
+        if fighter_id not in self._game_state._fighter_data:
+            self._game_state._fighter_data[fighter_id] = {}
+        self._game_state._fighter_data[fighter_id]['ovr_at_signing'] = fighter.overall_rating
+        self._game_state._fighter_data[fighter_id]['week_signed'] = self._game_state.week_number
+
         # Create contract record
         self._contracts[fighter_id] = {
             "fighter_id":       fighter_id,
@@ -14418,6 +14428,12 @@ class GameBridge:
                 }
                 self._game_state.free_agents.discard(fid)
                 self._game_state._sign_fighter_to_camp(fid, self._game_state.player_camp_id)
+
+                # Store signing OVR for career development summary
+                if fid not in self._game_state._fighter_data:
+                    self._game_state._fighter_data[fid] = {}
+                self._game_state._fighter_data[fid]['ovr_at_signing'] = int(getattr(amateur, 'overall_rating', 0))
+                self._game_state._fighter_data[fid]['week_signed'] = self._game_state.week_number
 
             self._camp_balance -= signing_cost
 
