@@ -918,6 +918,8 @@ class GameBridge:
         self._coaching_staff: List[Dict[str, Any]] = []
         self._head_coach_id: Optional[str] = None
         self._coach_market: List[Dict[str, Any]] = []
+        # Equipment system — { camp_id: { equipment_type: tier } }
+        self._camp_equipment: Dict[str, Dict[str, str]] = {}
         self._coach_market_week: int = 0
 
         # Per-fighter weekly training plans — {fighter_id: {focus, intensity}}
@@ -1413,6 +1415,7 @@ class GameBridge:
             "coaching_staff":           self._coaching_staff,
             "head_coach_id":            self._head_coach_id,
             "coach_market":             self._coach_market,
+            "camp_equipment":           self._camp_equipment,
             "coach_market_week":        self._coach_market_week,
             "scheduled_fights":         [clean_fight(f) for f in self._scheduled_fights],
             "ai_deferred_bookings":     [clean_fight(f) for f in self._ai_deferred_bookings],
@@ -1525,6 +1528,7 @@ class GameBridge:
         self._coaching_staff          = data.get("coaching_staff", [])
         self._head_coach_id           = data.get("head_coach_id", None)
         self._coach_market            = data.get("coach_market", [])
+        self._camp_equipment          = data.get("camp_equipment", {})
         self._coach_market_week       = data.get("coach_market_week", 0)
         # Legacy save migration: if old save has a populated coach contract
         # but no coaching_staff entry, mirror it into the staff list so
@@ -3716,6 +3720,13 @@ class GameBridge:
                 "next_efficiency":   EFFICIENCY.get(next_tier, 1.0),
             })
 
+        # Add equipment data
+        try:
+            eq_data = self.get_camp_equipment("player")
+            info["equipment"] = eq_data
+        except Exception:
+            info["equipment"] = {}
+
         return info
 
     def upgrade_facility(self) -> Dict[str, Any]:
@@ -3763,6 +3774,125 @@ class GameBridge:
             "cost": cost,
             "message": f"Upgraded to {info['next_tier_display']}!",
         }
+
+    def get_camp_equipment(self, camp_id: str = "player") -> Dict[str, Any]:
+        """Return current equipment for a camp with metadata."""
+        _id = self._game_state.player_camp_id if camp_id == "player" and self._game_state else camp_id
+        equipment = self._camp_equipment.get(_id, {})
+        player_camp = self.get_player_camp()
+        facility_tier = str(getattr(player_camp, 'tier', 'GARAGE')).upper() if player_camp else 'GARAGE'
+        slots_total = self._EQUIPMENT_SLOTS.get(facility_tier, 2)
+        slots_used  = len(equipment)
+        slots_free  = max(0, slots_total - slots_used)
+        allowed_eq_tiers = self._EQUIPMENT_TIER_GATES.get(facility_tier, ["BASIC"])
+
+        result = {}
+        for eq_type, meta in self._EQUIPMENT_TYPES.items():
+            current_tier = equipment.get(eq_type)
+            upgrades = []
+            for eq_tier, tdata in self._EQUIPMENT_TIERS.items():
+                if eq_tier not in allowed_eq_tiers:
+                    continue
+                if current_tier == eq_tier:
+                    continue
+                tier_order = ["BASIC","PRO","ELITE"]
+                if current_tier and tier_order.index(eq_tier) <= tier_order.index(current_tier):
+                    continue
+                can_afford = self._camp_balance >= tdata["cost"]
+                has_slot = slots_free > 0 or current_tier is not None
+                upgrades.append({
+                    "tier":       eq_tier,
+                    "cost":       tdata["cost"],
+                    "gain_bonus": tdata["gain_bonus"],
+                    "decay_bonus":tdata["decay_bonus"],
+                    "can_afford": can_afford,
+                    "has_slot":   has_slot,
+                    "can_buy":    can_afford and has_slot,
+                })
+            result[eq_type] = {
+                **meta,
+                "eq_type":     eq_type,
+                "current_tier":current_tier,
+                "upgrades":    upgrades,
+            }
+
+        return {
+            "equipment":    result,
+            "slots_total":  slots_total,
+            "slots_used":   slots_used,
+            "slots_free":   slots_free,
+            "facility_tier":facility_tier,
+            "allowed_tiers":allowed_eq_tiers,
+        }
+
+    def buy_equipment(self, eq_type: str, eq_tier: str) -> Dict[str, Any]:
+        """Purchase or upgrade a piece of equipment."""
+        if not self._game_state:
+            return {"success": False, "error": "No game loaded"}
+        if eq_type not in self._EQUIPMENT_TYPES:
+            return {"success": False, "error": "Unknown equipment type"}
+        if eq_tier not in self._EQUIPMENT_TIERS:
+            return {"success": False, "error": "Unknown equipment tier"}
+
+        player_camp = self.get_player_camp()
+        facility_tier = str(getattr(player_camp, 'tier', 'GARAGE')).upper() if player_camp else 'GARAGE'
+        allowed = self._EQUIPMENT_TIER_GATES.get(facility_tier, ["BASIC"])
+        if eq_tier not in allowed:
+            return {"success": False, "error": f"Upgrade your facility to purchase {eq_tier} equipment"}
+
+        camp_id = self._game_state.player_camp_id
+        equipment = self._camp_equipment.get(camp_id, {})
+
+        slots_total = self._EQUIPMENT_SLOTS.get(facility_tier, 2)
+        existing_tier = equipment.get(eq_type)
+        if not existing_tier and len(equipment) >= slots_total:
+            return {"success": False, "error": f"No equipment slots available. Upgrade your facility to unlock more slots."}
+
+        tier_order = ["BASIC","PRO","ELITE"]
+        if existing_tier and tier_order.index(eq_tier) <= tier_order.index(existing_tier):
+            return {"success": False, "error": f"Already have {existing_tier} {eq_type.replace('_',' ')}"}
+
+        cost = self._EQUIPMENT_TIERS[eq_tier]["cost"]
+        if self._camp_balance < cost:
+            return {"success": False, "error": f"Need ${cost:,}, have ${self._camp_balance:,}"}
+
+        self._camp_balance -= cost
+        if camp_id not in self._camp_equipment:
+            self._camp_equipment[camp_id] = {}
+        self._camp_equipment[camp_id][eq_type] = eq_tier
+
+        eq_name = self._EQUIPMENT_TYPES[eq_type]["name"]
+        self._news_items.insert(0, {
+            "headline": f"🏗️ {eq_tier.title()} {eq_name} installed at your facility!",
+            "category": "facility",
+            "week":     self._game_state.week_number,
+        })
+        self._clear_cache()
+        return {"success": True, "message": f"Purchased {eq_tier} {eq_name} for ${cost:,}"}
+
+    def get_equipment_gain_bonus(self, camp_id: str, domain: str) -> float:
+        """Return the gain multiplier from equipment for a given domain. 1.0 = no bonus."""
+        equipment = self._camp_equipment.get(camp_id, {})
+        best_bonus = 0.0
+        for eq_type, meta in self._EQUIPMENT_TYPES.items():
+            if meta["domain"] != domain:
+                continue
+            tier = equipment.get(eq_type)
+            if tier:
+                best_bonus = max(best_bonus, self._EQUIPMENT_TIERS[tier]["gain_bonus"])
+        return 1.0 + best_bonus
+
+    def get_equipment_decay_reduction(self, camp_id: str, domain: str) -> float:
+        """Return decay reduction multiplier from equipment. 1.0 = no reduction."""
+        equipment = self._camp_equipment.get(camp_id, {})
+        best_bonus = 0.0
+        for eq_type, meta in self._EQUIPMENT_TYPES.items():
+            if meta["domain"] != domain:
+                continue
+            tier = equipment.get(eq_type)
+            if tier:
+                best_bonus = max(best_bonus, self._EQUIPMENT_TIERS[tier]["decay_bonus"])
+        return 1.0 - best_bonus
 
     def get_player_camp(self) -> Optional[WebCamp]:
         """Get the player's camp"""
@@ -5047,6 +5177,74 @@ class GameBridge:
         "ELITE":    100,
     }
 
+    # Equipment system constants
+    _EQUIPMENT_TYPES = {
+        "heavy_bags":       {"name": "Heavy Bags",      "icon": "🥊",
+                             "domain": "striking",
+                             "desc": "Boxing, kicks, clinch striking"},
+        "wrestling_mats":   {"name": "Wrestling Mats",  "icon": "🤼",
+                             "domain": "wrestling",
+                             "desc": "Takedowns, top control, TD defense"},
+        "submission_mats":  {"name": "Submission Mats", "icon": "🥋",
+                             "domain": "bjj",
+                             "desc": "BJJ, submissions, guard"},
+        "weight_room":      {"name": "Weight Room",     "icon": "💪",
+                             "domain": "physical",
+                             "desc": "Strength, speed, cardio"},
+        "recovery_tank":    {"name": "Recovery Tank",   "icon": "🛁",
+                             "domain": "recovery",
+                             "desc": "Reduces fatigue accumulation"},
+        "cage":             {"name": "Octagon/Cage",    "icon": "🔷",
+                             "domain": "mental",
+                             "desc": "Fight IQ, composure, heart"},
+    }
+
+    _EQUIPMENT_TIERS = {
+        "BASIC": {
+            "cost":        15_000,
+            "gain_bonus":  0.05,
+            "decay_bonus": 0.0,
+            "passive":     None,
+        },
+        "PRO": {
+            "cost":        40_000,
+            "gain_bonus":  0.10,
+            "decay_bonus": 0.20,
+            "passive":     None,
+        },
+        "ELITE": {
+            "cost":        100_000,
+            "gain_bonus":  0.15,
+            "decay_bonus": 0.40,
+            "passive":     "elite_passive",
+        },
+    }
+
+    _EQUIPMENT_SLOTS = {
+        "GARAGE":   2,
+        "LOCAL":    4,
+        "REGIONAL": 6,
+        "NATIONAL": 8,
+        "ELITE":    99,
+    }
+
+    _EQUIPMENT_TIER_GATES = {
+        "GARAGE":   ["BASIC"],
+        "LOCAL":    ["BASIC", "PRO"],
+        "REGIONAL": ["BASIC", "PRO", "ELITE"],
+        "NATIONAL": ["BASIC", "PRO", "ELITE"],
+        "ELITE":    ["BASIC", "PRO", "ELITE"],
+    }
+
+    _EQUIPMENT_DOMAIN_STATS = {
+        "striking":  ["boxing", "kicks", "clinch_striking", "striking_defense"],
+        "wrestling": ["takedowns", "top_control", "takedown_defense"],
+        "bjj":       ["submissions", "guard"],
+        "physical":  ["strength", "speed", "cardio"],
+        "recovery":  ["recovery", "chin"],
+        "mental":    ["fight_iq", "composure", "heart"],
+    }
+
     # OVR4 — per-style stat weights for the OVR average. A Wrestler's
     # OVR weights takedowns/td_defense/top_control higher than boxing.
     # Weights >1 mean "this stat matters more for this style"; <1 means
@@ -5362,6 +5560,32 @@ class GameBridge:
                         fighter_potential=_fp, stat_name=stat
                     )
                     effective *= _affinity.get(stat, 1.0)
+                    # Equipment gain bonus — multiply by domain bonus from player camp equipment
+                    try:
+                        if self._game_state:
+                            _camp_id = self._game_state.player_camp_id
+                            _FOCUS_TO_DOMAIN = {
+                                "boxing":           "striking",
+                                "kicks":            "striking",
+                                "clinch_striking":  "striking",
+                                "striking_defense": "striking",
+                                "muay_thai":        "striking",
+                                "wrestling":        "wrestling",
+                                "top_control":      "wrestling",
+                                "takedown_defense": "wrestling",
+                                "bjj":              "bjj",
+                                "submissions":      "bjj",
+                                "cardio":           "physical",
+                                "strength":         "physical",
+                                "fight_iq":         "mental",
+                                "sparring":         "mental",
+                            }
+                            _domain = _FOCUS_TO_DOMAIN.get(focus, "")
+                            if _domain:
+                                _eq_bonus = self.get_equipment_gain_bonus(_camp_id, _domain)
+                                effective = effective * _eq_bonus
+                    except Exception:
+                        pass
                     if effective > 0.01:
                         if fighter_id in self._game_state._fighter_data:
                             self._game_state._fighter_data[fighter_id][stat] = round(

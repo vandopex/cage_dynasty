@@ -2585,7 +2585,40 @@ class WorldInitializer:
                 fighter_count=len(camp.fighter_ids),
                 location=camp.location,
             )
-    
+
+        # Generate equipment for AI camp based on tier
+        try:
+            import random as _rng_eq
+            camp_tier = str(getattr(camp, 'tier', 'GARAGE')).upper()
+            _eq_slots = {"GARAGE":2,"LOCAL":4,"REGIONAL":6,"NATIONAL":8,"ELITE":99}
+            _eq_types = ["heavy_bags","wrestling_mats","submission_mats",
+                         "weight_room","recovery_tank","cage"]
+            _allowed_tiers = {
+                "GARAGE":   ["BASIC"],
+                "LOCAL":    ["BASIC","PRO"],
+                "REGIONAL": ["BASIC","PRO","ELITE"],
+                "NATIONAL": ["BASIC","PRO","ELITE"],
+                "ELITE":    ["BASIC","PRO","ELITE"],
+            }
+            slots = _eq_slots.get(camp_tier, 2)
+            allowed = _allowed_tiers.get(camp_tier, ["BASIC"])
+            chosen_types = _rng_eq.sample(_eq_types, min(slots, len(_eq_types)))
+            camp_eq = {}
+            for et in chosen_types:
+                if "ELITE" in allowed and _rng_eq.random() < 0.4:
+                    camp_eq[et] = "ELITE"
+                elif "PRO" in allowed and _rng_eq.random() < 0.6:
+                    camp_eq[et] = "PRO"
+                else:
+                    camp_eq[et] = "BASIC"
+            if hasattr(self, '_bridge') and self._bridge:
+                _cid = camp.camp_id
+                if not hasattr(self._bridge, '_camp_equipment'):
+                    self._bridge._camp_equipment = {}
+                self._bridge._camp_equipment[_cid] = camp_eq
+        except Exception:
+            pass
+
     def _add_fighter_to_state(self, fighter: GeneratedFighter) -> None:
         """Add a generated fighter to game state with popularity and history"""
 

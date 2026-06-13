@@ -170,4 +170,33 @@
         </div>
     </div>
 </div>
+
+{% if camp_equipment %}
+<div class="card mt-lg">
+    <div class="card-header"><h3>⚙️ Facility Equipment</h3></div>
+    <div style="padding:0;">
+    {% set eq_icons = {'heavy_bags':'🥊','wrestling_mats':'🤼','submission_mats':'🥋',
+                       'weight_room':'💪','recovery_tank':'🛁','cage':'🔷'} %}
+    {% set eq_names = {'heavy_bags':'Heavy Bags','wrestling_mats':'Wrestling Mats',
+                       'submission_mats':'Submission Mats','weight_room':'Weight Room',
+                       'recovery_tank':'Recovery Tank','cage':'Octagon/Cage'} %}
+    {% for eq_type, eq_tier in camp_equipment.items() %}
+    <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                padding:var(--spacing-sm) var(--spacing-md);
+                border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+        <span style="font-size:1.2rem;">{{ eq_icons.get(eq_type,'⚙️') }}</span>
+        <span style="flex:1;font-size:.82rem;color:var(--text-bright);">
+            {{ eq_names.get(eq_type, eq_type.replace('_',' ').title()) }}
+        </span>
+        <span style="font-size:.65rem;padding:2px 8px;border-radius:3px;
+                     background:{% if eq_tier == 'ELITE' %}rgba(255,193,7,.2){% elif eq_tier == 'PRO' %}rgba(0,230,118,.15){% else %}rgba(255,255,255,.08){% endif %};
+                     color:{% if eq_tier == 'ELITE' %}var(--gold){% elif eq_tier == 'PRO' %}var(--neon-green){% else %}var(--text-muted){% endif %};
+                     border:1px solid {% if eq_tier == 'ELITE' %}rgba(255,193,7,.4){% elif eq_tier == 'PRO' %}rgba(0,230,118,.3){% else %}var(--border-color){% endif %};">
+            {{ eq_tier }}
+        </span>
+    </div>
+    {% endfor %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}

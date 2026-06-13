@@ -1196,6 +1196,7 @@ def register_routes(app):
             arch_name=arch_name,
             arch_emoji=arch_data.get("emoji", "🏟️"),
             arch_desc=arch_data.get("desc", ""),
+            camp_equipment=bridge._camp_equipment.get(camp_id, {}),
             week=bridge.week_number,
         )
     
@@ -2038,6 +2039,19 @@ def register_routes(app):
             flash(result.get('message', 'Facility upgraded!'), 'success')
         else:
             flash(result.get('error', 'Upgrade failed.'), 'error')
+        return redirect(url_for('facility'))
+
+    @app.route('/facility/equipment/buy', methods=['POST'])
+    def buy_equipment():
+        """Purchase or upgrade a piece of equipment."""
+        bridge = get_bridge()
+        eq_type = request.form.get('eq_type', '')
+        eq_tier = request.form.get('eq_tier', '')
+        result = bridge.buy_equipment(eq_type, eq_tier)
+        if result.get('success'):
+            flash(result.get('message', 'Equipment purchased!'), 'success')
+        else:
+            flash(result.get('error', 'Could not purchase equipment.'), 'error')
         return redirect(url_for('facility'))
 
     @app.route('/facility')

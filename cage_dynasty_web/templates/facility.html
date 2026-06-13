@@ -194,4 +194,125 @@
         </div>
     </div>
 </div>
+
+{% if facility and facility.equipment %}
+{% set eq_data = facility.equipment %}
+
+{# ── Equipment Section ── #}
+<div class="card mt-lg">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <h3>⚙️ Equipment</h3>
+        <span style="font-size:.75rem;color:var(--text-muted);">
+            {{ eq_data.slots_used }}/{{ eq_data.slots_total }} slots used
+            · {{ eq_data.slots_free }} available
+        </span>
+    </div>
+
+    {# Slots visual #}
+    <div style="padding:var(--spacing-md) var(--spacing-lg);
+                border-bottom:1px solid var(--border-color);
+                display:flex;gap:6px;align-items:center;">
+        {% for i in range(eq_data.slots_total) %}
+        <div style="width:24px;height:8px;border-radius:3px;
+                    background:{% if i < eq_data.slots_used %}var(--neon-green){% else %}rgba(255,255,255,.1){% endif %};
+                    border:1px solid {% if i < eq_data.slots_used %}var(--neon-green){% else %}var(--border-color){% endif %};"></div>
+        {% endfor %}
+        {% if eq_data.slots_total >= 99 %}
+        <span style="font-size:.65rem;color:var(--neon-green);">Unlimited</span>
+        {% endif %}
+        <span style="font-size:.62rem;color:var(--text-muted);margin-left:4px;">
+            equipment slots
+        </span>
+    </div>
+
+    <div style="padding:0;">
+    {% for eq_type, eq in eq_data.equipment.items() %}
+    <div style="display:flex;align-items:center;gap:var(--spacing-md);
+                padding:var(--spacing-md) var(--spacing-lg);
+                border-bottom:1px solid var(--border-color);">
+
+        {# Icon + name #}
+        <div style="flex-shrink:0;font-size:1.5rem;width:36px;text-align:center;">
+            {{ eq.icon }}
+        </div>
+        <div style="flex:1;min-width:0;">
+            <div style="font-family:var(--font-display);font-size:.88rem;
+                        color:var(--text-bright);margin-bottom:2px;">
+                {{ eq.name }}
+                {% if eq.current_tier %}
+                <span style="font-size:.62rem;padding:2px 6px;border-radius:3px;margin-left:6px;
+                             background:{% if eq.current_tier == 'ELITE' %}rgba(255,193,7,.2){% elif eq.current_tier == 'PRO' %}rgba(0,230,118,.15){% else %}rgba(255,255,255,.08){% endif %};
+                             color:{% if eq.current_tier == 'ELITE' %}var(--gold){% elif eq.current_tier == 'PRO' %}var(--neon-green){% else %}var(--text-muted){% endif %};
+                             border:1px solid {% if eq.current_tier == 'ELITE' %}rgba(255,193,7,.4){% elif eq.current_tier == 'PRO' %}rgba(0,230,118,.3){% else %}var(--border-color){% endif %};">
+                    {{ eq.current_tier }}
+                </span>
+                {% endif %}
+            </div>
+            <div style="font-size:.65rem;color:var(--text-muted);">{{ eq.desc }}</div>
+            {% if eq.current_tier %}
+            {% set tier_data = {'BASIC':{'gain':5,'decay':0},'PRO':{'gain':10,'decay':20},'ELITE':{'gain':15,'decay':40}} %}
+            {% set td = tier_data.get(eq.current_tier, {}) %}
+            <div style="font-size:.62rem;color:var(--neon-green);margin-top:2px;">
+                +{{ td.get('gain',0) }}% gains in domain
+                {% if td.get('decay',0) > 0 %} · {{ td.get('decay',0) }}% slower decay{% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {# Buy/upgrade buttons #}
+        <div style="flex-shrink:0;display:flex;gap:var(--spacing-sm);">
+            {% if not eq.upgrades %}
+            {% if eq.current_tier == 'ELITE' %}
+            <span style="font-size:.65rem;color:var(--gold);padding:6px 10px;">✓ ELITE</span>
+            {% elif not eq.current_tier %}
+            <span style="font-size:.65rem;color:var(--text-muted);padding:6px 10px;">
+                {% if eq_data.slots_free == 0 %}No slots{% else %}—{% endif %}
+            </span>
+            {% endif %}
+            {% endif %}
+            {% for upgrade in eq.upgrades %}
+            <form action="{{ url_for('buy_equipment') }}" method="POST" style="margin:0;">
+                <input type="hidden" name="eq_type" value="{{ eq_type }}">
+                <input type="hidden" name="eq_tier" value="{{ upgrade.tier }}">
+                <button type="submit"
+                        {% if not upgrade.can_buy %}disabled{% endif %}
+                        style="font-size:.65rem;padding:6px 12px;border-radius:4px;
+                               background:{% if upgrade.can_buy %}{% if upgrade.tier == 'ELITE' %}rgba(255,193,7,.2){% elif upgrade.tier == 'PRO' %}rgba(0,230,118,.15){% else %}rgba(255,255,255,.08){% endif %}{% else %}rgba(255,255,255,.04){% endif %};
+                               color:{% if upgrade.can_buy %}{% if upgrade.tier == 'ELITE' %}var(--gold){% elif upgrade.tier == 'PRO' %}var(--neon-green){% else %}var(--text-bright){% endif %}{% else %}var(--text-muted){% endif %};
+                               border:1px solid {% if upgrade.can_buy %}{% if upgrade.tier == 'ELITE' %}rgba(255,193,7,.4){% elif upgrade.tier == 'PRO' %}rgba(0,230,118,.3){% else %}var(--border-color){% endif %}{% else %}var(--border-color){% endif %};
+                               cursor:{% if upgrade.can_buy %}pointer{% else %}not-allowed{% endif %};">
+                    {% if eq.current_tier %}⬆{% else %}+{% endif %}
+                    {{ upgrade.tier }} ${{ "{:,}".format(upgrade.cost) }}
+                </button>
+            </form>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+    </div>
+
+    {# Tier gate notice #}
+    {% if eq_data.facility_tier in ['GARAGE','LOCAL'] %}
+    <div style="padding:var(--spacing-md) var(--spacing-lg);
+                background:rgba(255,255,255,.02);
+                border-top:1px solid var(--border-color);
+                font-size:.65rem;color:var(--text-muted);">
+        {% if eq_data.facility_tier == 'GARAGE' %}
+        🔒 Upgrade to Local to unlock Pro equipment · Regional unlocks Elite
+        {% else %}
+        🔒 Upgrade to Regional to unlock Elite equipment
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{# ── AI Camp Equipment Reference ── #}
+<div class="card mt-lg">
+    <div class="card-header"><h3>🏟️ World Facilities</h3></div>
+    <div style="padding:var(--spacing-md);font-size:.72rem;color:var(--text-muted);">
+        Visit camp profiles to see their equipment setups.
+    </div>
+</div>
+
+{% endif %}
 {% endblock %}
