@@ -141,5 +141,16 @@
 {{ record_table("Most Fights","⚔️", records.most_fights,"fights") }}
 </div>
 
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
+            margin-top:var(--spacing-lg);">
+    <div>
+        {{ record_table("Most Sig. Strikes", "💥", records.get('most_strikes',[]), "strikes") }}
+        {{ record_table("Most Sub Attempts", "🥋", records.get('most_sub_attempts',[]), "attempts") }}
+    </div>
+    <div>
+        {{ record_table("Most Takedowns", "🤼", records.get('most_takedowns',[]), "TDs") }}
+    </div>
+</div>
+
 {% endif %}
 {% endblock %}

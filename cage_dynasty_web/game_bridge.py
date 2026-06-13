@@ -8410,6 +8410,21 @@ class GameBridge:
                         fa1, fa2, rounds=_rnds,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
+                    try:
+                        if _eng and hasattr(_eng, 'fighter1_stats'):
+                            _wk = self._game_state.week_number if self._game_state else 0
+                            for _fid, _stats in [(fa1.fighter_id, _eng.fighter1_stats),
+                                                  (fa2.fighter_id, _eng.fighter2_stats)]:
+                                self._accumulate_career_stats(
+                                    _fid,
+                                    strikes=sum(int(s.get('sig_strikes_landed', 0)) for s in _stats),
+                                    takedowns=sum(int(s.get('td_landed', 0)) for s in _stats),
+                                    sub_attempts=sum(int(s.get('sub_att', 0)) for s in _stats),
+                                    control_time=sum(float(s.get('control_time', 0.0)) for s in _stats),
+                                    week=_wk,
+                                )
+                    except Exception as _cse:
+                        print(f"⚠️ Career stat accumulation failed: {_cse}")
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw — skip winner pick
                         _is_draw_a = True
@@ -8753,6 +8768,21 @@ class GameBridge:
                         fa1, fa2, rounds=_rnds,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
+                    try:
+                        if _eng and hasattr(_eng, 'fighter1_stats'):
+                            _wk = self._game_state.week_number if self._game_state else 0
+                            for _fid, _stats in [(fa1.fighter_id, _eng.fighter1_stats),
+                                                  (fa2.fighter_id, _eng.fighter2_stats)]:
+                                self._accumulate_career_stats(
+                                    _fid,
+                                    strikes=sum(int(s.get('sig_strikes_landed', 0)) for s in _stats),
+                                    takedowns=sum(int(s.get('td_landed', 0)) for s in _stats),
+                                    sub_attempts=sum(int(s.get('sub_att', 0)) for s in _stats),
+                                    control_time=sum(float(s.get('control_time', 0.0)) for s in _stats),
+                                    week=_wk,
+                                )
+                    except Exception as _cse:
+                        print(f"⚠️ Career stat accumulation failed: {_cse}")
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw
                         _is_draw_b = True
@@ -9290,6 +9320,21 @@ class GameBridge:
         by_maxstreak= sorted(active, key=lambda f: max_streak(f), reverse=True)
         by_total    = sorted(active, key=lambda f: f.wins + f.losses, reverse=True)
 
+        # Career fight-stat helpers
+        def career_strikes(f):
+            return int(self._game_state._fighter_data.get(
+                f.fighter_id, {}).get('career_strikes', 0))
+        def career_td(f):
+            return int(self._game_state._fighter_data.get(
+                f.fighter_id, {}).get('career_takedowns', 0))
+        def career_sub_att(f):
+            return int(self._game_state._fighter_data.get(
+                f.fighter_id, {}).get('career_sub_attempts', 0))
+
+        by_strikes = sorted(active, key=career_strikes, reverse=True)
+        by_td      = sorted(active, key=career_td, reverse=True)
+        by_sub_att = sorted(active, key=career_sub_att, reverse=True)
+
         def row(f, extra=""):
             wf = web(f)
             return {"fighter": wf, "value": extra}
@@ -9301,10 +9346,67 @@ class GameBridge:
             "active_streak":  [{"fighter": web(f), "value": streak(f)}    for f in by_streak[:5] if streak(f) > 0],
             "longest_streak": [{"fighter": web(f), "value": max_streak(f)} for f in by_maxstreak[:5] if max_streak(f) > 0],
             "most_fights":    [{"fighter": web(f), "value": f.wins+f.losses} for f in by_total[:5]],
+            "most_strikes":   [{"fighter": web(f), "value": career_strikes(f)}
+                               for f in by_strikes[:5] if career_strikes(f) > 0],
+            "most_takedowns": [{"fighter": web(f), "value": career_td(f)}
+                               for f in by_td[:5] if career_td(f) > 0],
+            "most_sub_attempts": [{"fighter": web(f), "value": career_sub_att(f)}
+                                  for f in by_sub_att[:5] if career_sub_att(f) > 0],
             "hof_inductees":  sorted(self._hof_inductees,
                                      key=lambda h: h["prestige_score"], reverse=True),
             "title_records":  self._get_title_records(),
         }
+
+    def _accumulate_career_stats(self, fighter_id: str,
+                                  strikes: int, takedowns: int,
+                                  sub_attempts: int, control_time: float,
+                                  week: int) -> None:
+        """Add per-fight stats to career totals in _fighter_data.
+        Fires milestone news when thresholds are crossed."""
+        if not self._game_state or fighter_id not in self._game_state._fighter_data:
+            return
+
+        fdata = self._game_state._fighter_data[fighter_id]
+
+        # Accumulate
+        prev_strikes  = int(fdata.get('career_strikes', 0))
+        prev_td       = int(fdata.get('career_takedowns', 0))
+        prev_sub_att  = int(fdata.get('career_sub_attempts', 0))
+        prev_ctrl     = float(fdata.get('career_control_time', 0.0))
+
+        new_strikes   = prev_strikes + strikes
+        new_td        = prev_td + takedowns
+        new_sub_att   = prev_sub_att + sub_attempts
+        new_ctrl      = prev_ctrl + control_time
+
+        fdata['career_strikes']       = new_strikes
+        fdata['career_takedowns']     = new_td
+        fdata['career_sub_attempts']  = new_sub_att
+        fdata['career_control_time']  = round(new_ctrl, 1)
+
+        # Get fighter name for news
+        fighter = self._game_state.get_fighter(fighter_id)
+        name = getattr(fighter, 'name', 'Fighter') if fighter else 'Fighter'
+
+        # Milestone news — strike thresholds
+        _STRIKE_MILESTONES = [100, 250, 500, 1000, 2000]
+        for threshold in _STRIKE_MILESTONES:
+            if prev_strikes < threshold <= new_strikes:
+                self._news_items.insert(0, {
+                    "headline": f"💥 {name} lands their {threshold}th career significant strike!",
+                    "category": "record",
+                    "week": week,
+                })
+
+        # Milestone news — takedown thresholds
+        _TD_MILESTONES = [25, 50, 100, 200]
+        for threshold in _TD_MILESTONES:
+            if prev_td < threshold <= new_td:
+                self._news_items.insert(0, {
+                    "headline": f"🤼 {name} completes their {threshold}th career takedown!",
+                    "category": "record",
+                    "week": week,
+                })
 
     def _get_title_records(self) -> Dict[str, Any]:
         """Ship HOF1: aggregate title-related records across champions."""
@@ -11454,6 +11556,21 @@ class GameBridge:
             starting_stamina_f2=_f2_stamina,
             **({"config": _fight_cfg} if _fight_cfg else {})
         )
+        try:
+            if eng_result and hasattr(eng_result, 'fighter1_stats'):
+                _wk = self._game_state.week_number if self._game_state else 0
+                for _fid, _stats in [(fa1.fighter_id, eng_result.fighter1_stats),
+                                      (fa2.fighter_id, eng_result.fighter2_stats)]:
+                    self._accumulate_career_stats(
+                        _fid,
+                        strikes=sum(int(s.get('sig_strikes_landed', 0)) for s in _stats),
+                        takedowns=sum(int(s.get('td_landed', 0)) for s in _stats),
+                        sub_attempts=sum(int(s.get('sub_att', 0)) for s in _stats),
+                        control_time=sum(float(s.get('control_time', 0.0)) for s in _stats),
+                        week=_wk,
+                    )
+        except Exception as _cse:
+            print(f"⚠️ Career stat accumulation failed: {_cse}")
 
         # Translate engine result → our dict format
         import random as _rnd2
