@@ -967,9 +967,14 @@ def get_available_submissions(
 def get_available_grappling_actions(
     position: Position,
     is_top: bool,
-    fighter_attrs: FighterAttributes
+    fighter_attrs: FighterAttributes,
+    fight_state: Optional['FightState'] = None,
 ) -> List[GrapplingAction]:
-    """Get grappling actions available from current position."""
+    """Get grappling actions available from current position.
+
+    `fight_state` is optional — when provided, allows position_duration
+    gates on actions like ENTER_TRUCK (stops back_mount ↔ truck cycling).
+    """
     actions = []
     my_style_hint = detect_fighter_style(fighter_attrs)
 
@@ -1050,7 +1055,11 @@ def get_available_grappling_actions(
                 GrapplingAction.ENTER_TRUCK,
             ])
         elif position == Position.BACK_MOUNT:
-            if fighter_attrs.submissions >= 65:
+            # Gate ENTER_TRUCK: only available in the first 3 ticks of
+            # back mount. After that, forcing fighter to commit to strikes
+            # or sub attempts instead of cycling BACK_MOUNT ↔ TRUCK.
+            _bm_duration = getattr(fight_state, 'position_duration', 0) if fight_state else 0
+            if fighter_attrs.submissions >= 65 and _bm_duration < 3:
                 actions.append(GrapplingAction.ENTER_TRUCK)
         elif position == Position.SPRAWL:
             actions.extend([
@@ -1269,7 +1278,7 @@ def select_action(
     # Get available actions
     strikes = get_available_strikes(position, is_top)
     submissions = get_available_submissions(position, is_top, fighter_attrs)
-    grappling = get_available_grappling_actions(position, is_top, fighter_attrs)
+    grappling = get_available_grappling_actions(position, is_top, fighter_attrs, fight_state)
     
     # Position secured check for submissions - must control position longer before sub attempts
     # In real MMA, fighters work position for a while before going for subs.
