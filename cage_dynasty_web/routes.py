@@ -1850,7 +1850,7 @@ def register_routes(app):
 
     @app.route('/amateur-circuit')
     def amateur_circuit():
-        """Amateur circuit overview — rankings, tournaments, eligible prospects."""
+        """Amateur circuit — scout prospects, rankings, graduates."""
         bridge = get_bridge()
         if not bridge.game_started:
             return redirect(url_for('new_game'))
@@ -1859,29 +1859,68 @@ def register_routes(app):
         except Exception:
             data = {"available": False}
 
-        # Ship A1: tabs, graduates, weight-class filter
+        # Tab + filter + sort from URL params
         active_tab = request.args.get('tab', 'scout')
         wc_filter  = request.args.get('wc', '')
+        sort_by    = request.args.get('sort', 'potential')
+
+        # Sort all_prospects
+        prospects = data.get('all_prospects', []) if isinstance(data, dict) else []
+        if sort_by == 'ovr':
+            prospects = sorted(prospects, key=lambda x: -x.get('overall', 0))
+        elif sort_by == 'record':
+            prospects = sorted(prospects, key=lambda x: (
+                -(x.get('wins', 0) + x.get('losses', 0)),
+                -x.get('wins', 0)
+            ))
+        elif sort_by == 'age':
+            prospects = sorted(prospects, key=lambda x: x.get('age', 99))
+        elif sort_by == 'time':
+            prospects = sorted(prospects, key=lambda x: -x.get('weeks_in_amateur', 0))
+        else:  # potential (default)
+            _grade_order = {'Elite': 0, 'High': 1, 'Average': 2, 'Limited': 3}
+            prospects = sorted(prospects, key=lambda x: (
+                _grade_order.get(x.get('potential', 'Average'), 2),
+                -x.get('overall', 0)
+            ))
+        if isinstance(data, dict):
+            data['all_prospects'] = prospects
+
+        # Build graduates list — player fighters who came from amateur circuit
+        # Identified by fighter_id starting with "amateur_"
+        graduates = []
         try:
-            graduates = bridge.get_amateur_graduates()
+            for f in bridge.get_player_fighters():
+                if f.fighter_id.startswith('amateur_'):
+                    graduates.append({
+                        'name':          f.name,
+                        'fighter_id':    f.fighter_id,
+                        'record':        f.record_str,
+                        'overall':       f.overall_rating,
+                        'ovr_at_signing':f.ovr_at_signing,
+                        'weight_class':  f.weight_class,
+                        'style':         f.fighting_style,
+                        'wins':          f.wins,
+                        'losses':        f.losses,
+                    })
         except Exception:
             graduates = []
-        # Build prospects_by_wc from the bridge's eligible dict
-        # (keyed by weight class) so the template can group cards.
-        _eligible = data.get('eligible', {}) if isinstance(data, dict) else {}
-        prospects_by_wc = [
-            {"weight_class": wc, "fighters": fighters}
-            for wc, fighters in _eligible.items()
-            if fighters
+
+        # Weight classes for filter pills
+        weight_classes = [
+            'Strawweight','Flyweight','Bantamweight','Featherweight',
+            'Lightweight','Welterweight','Middleweight',
+            'Light Heavyweight','Heavyweight'
         ]
 
         return render_template('amateur.html',
             week=bridge.week_number,
-            data=data,
-            graduates=graduates,
+            amateur=data,
             active_tab=active_tab,
             wc_filter=wc_filter,
-            prospects_by_wc=prospects_by_wc,
+            sort_by=sort_by,
+            graduates=graduates,
+            weight_classes=weight_classes,
         )
 
     @app.route('/amateur/sign/<amateur_id>', methods=['POST'])
