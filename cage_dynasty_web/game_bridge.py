@@ -1066,7 +1066,7 @@ class GameBridge:
             print("Populating world with AI camps and fighters...")
             try:
                 from world_init import initialize_world as _world_init_func
-                _initializer = _world_init_func(self._game_state, history_years=2.5)
+                _initializer = _world_init_func(self._game_state, history_years=2.5, bridge=self)
                 # Ship #29: capture BeltHistory off the initializer before it
                 # goes out of scope. Holds the sim'd champion lineages (reigns,
                 # defenses, won_from / lost_to / vacate events) for later

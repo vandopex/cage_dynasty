@@ -2189,16 +2189,19 @@ class WorldInitializer:
     This is the main entry point for world generation.
     """
     
-    def __init__(self, game_state, starting_year: int = 2025, history_weeks: int = 120):
+    def __init__(self, game_state, starting_year: int = 2025, history_weeks: int = 120, bridge=None):
         """
         Initialize the world initializer.
-        
+
         Args:
             game_state: The GameState object to populate
             starting_year: Year the game starts
             history_weeks: Weeks of history to simulate (120 = ~2.3 years)
+            bridge: Optional GameBridge handle (for surfacing sim-time
+                state like AI camp equipment back to the bridge).
         """
         self.game_state = game_state
+        self._bridge = bridge
         self.starting_year = starting_year
         self.history_weeks = history_weeks
         
@@ -2807,22 +2810,25 @@ class WorldInitializer:
 # CONVENIENCE FUNCTION
 # ============================================================================
 
-def initialize_world(game_state, history_years: float = 2.5) -> WorldInitializer:
+def initialize_world(game_state, history_years: float = 2.5, bridge=None) -> WorldInitializer:
     """
     Convenience function to initialize the game world.
-    
+
     Args:
         game_state: The GameState to populate
         history_years: Years of history to simulate (default 2.5)
-        
+        bridge: Optional GameBridge handle (threaded into WorldInitializer
+            so sim-time state like AI camp equipment can be surfaced back).
+
     Returns:
         The WorldInitializer instance (for inspection if needed)
     """
     history_weeks = int(history_years * 52)
-    
+
     initializer = WorldInitializer(
         game_state=game_state,
-        history_weeks=history_weeks
+        history_weeks=history_weeks,
+        bridge=bridge,
     )
     
     initializer.initialize_world()
