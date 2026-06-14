@@ -656,6 +656,10 @@ class WebFighter:
     # Chin durability tracking (Ship #44)
     ko_losses_received: int   = 0
     chin_perm_erosion:  float = 0.0
+    # Signature technique (Ship #48)
+    signature_technique: str = ""
+    signature_category:  str = ""
+    signature_count:     int = 0
     # Career FOTN awards — incremented when fighter is part of FOTN selection.
     career_fotn_awards: int = 0
     # Body frame relative to weight class (1=very small, 10=very large).
@@ -4633,6 +4637,9 @@ class GameBridge:
             ko_losses=getattr(f, 'ko_losses', 0) or 0,
             ko_losses_received=int(fdata.get('ko_losses_received', 0)),
             chin_perm_erosion=float(fdata.get('chin_permanent_erosion', 0.0)),
+            signature_technique=str(fdata.get('signature_technique', '')),
+            signature_category=str(fdata.get('signature_category', '')),
+            signature_count=int(fdata.get('signature_count', 0)),
             sub_losses=getattr(f, 'sub_losses', 0) or 0,
             career_fotn_awards=getattr(f, 'career_fotn_awards', 0) or 0,
             record_str=f.record_str,
@@ -8693,6 +8700,7 @@ class GameBridge:
                         fa1, fa2, rounds=_rnds,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
+                    _eng_sub_type = getattr(_eng, 'sub_type', '') or ''
                     try:
                         if _eng and hasattr(_eng, 'fighter1_stats'):
                             _wk = self._game_state.week_number if self._game_state else 0
@@ -8716,6 +8724,16 @@ class GameBridge:
                                 self._game_state.week_number if self._game_state else 0)
                     except Exception as _ce:
                         print(f"⚠️  Chin erosion failed: {_ce}")
+                    try:
+                        if _eng.winner_id and _eng.method:
+                            self._accumulate_technique_stats(
+                                _eng.winner_id, _eng.method,
+                                _eng_sub_type,
+                                True,
+                                self._game_state.week_number if self._game_state else 0
+                            )
+                    except Exception as _te:
+                        print(f"⚠️  Technique accumulation failed: {_te}")
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw — skip winner pick
                         _is_draw_a = True
@@ -9059,6 +9077,7 @@ class GameBridge:
                         fa1, fa2, rounds=_rnds,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
+                    _eng_sub_type = getattr(_eng, 'sub_type', '') or ''
                     try:
                         if _eng and hasattr(_eng, 'fighter1_stats'):
                             _wk = self._game_state.week_number if self._game_state else 0
@@ -9082,6 +9101,16 @@ class GameBridge:
                                 self._game_state.week_number if self._game_state else 0)
                     except Exception as _ce:
                         print(f"⚠️  Chin erosion failed: {_ce}")
+                    try:
+                        if _eng.winner_id and _eng.method:
+                            self._accumulate_technique_stats(
+                                _eng.winner_id, _eng.method,
+                                _eng_sub_type,
+                                True,
+                                self._game_state.week_number if self._game_state else 0
+                            )
+                    except Exception as _te:
+                        print(f"⚠️  Technique accumulation failed: {_te}")
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw
                         _is_draw_b = True
@@ -9769,6 +9798,79 @@ class GameBridge:
         })
 
         self._clear_cache()
+
+    def _accumulate_technique_stats(self, fighter_id: str,
+                                     method: str, sub_type: str,
+                                     is_win: bool, week: int) -> None:
+        """Track technique usage for signature technique system.
+        Only counts wins — we care about what finishes fights."""
+        if not self._game_state or not is_win:
+            return
+        fdata = self._game_state._fighter_data.get(fighter_id, {})
+        if not fdata:
+            return
+        method_up = str(method).upper()
+        if 'KO' in method_up or 'TKO' in method_up:
+            fdata['sig_ko_wins'] = int(fdata.get('sig_ko_wins', 0)) + 1
+        if 'SUB' in method_up or 'SUBMISSION' in method_up:
+            fdata['sig_sub_wins'] = int(fdata.get('sig_sub_wins', 0)) + 1
+            if sub_type:
+                _key = f"sig_sub_{sub_type.lower().replace(' ','_').replace('-','_')}"
+                fdata[_key] = int(fdata.get(_key, 0)) + 1
+        self._evaluate_signature(fighter_id, fdata, week)
+
+    def _evaluate_signature(self, fighter_id: str,
+                             fdata: Dict, week: int) -> None:
+        """Check if fighter has earned a signature technique."""
+        if fdata.get('signature_technique'):
+            return
+        fighter = self._game_state.get_fighter(fighter_id)
+        if not fighter:
+            return
+        name = getattr(fighter, 'name', 'Fighter')
+        _SUB_TECHNIQUES = {
+            'rear_naked_choke':  'Rear Naked Choke',
+            'armbar':            'Armbar',
+            'triangle_choke':    'Triangle Choke',
+            'guillotine':        'Guillotine Choke',
+            'heel_hook':         'Heel Hook',
+            'anaconda_choke':    'Anaconda Choke',
+            'kimura':            'Kimura',
+            'darce_choke':       "D'Arce Choke",
+        }
+        for key, display in _SUB_TECHNIQUES.items():
+            count = int(fdata.get(f'sig_sub_{key}', 0))
+            if count >= 5:
+                fdata['signature_technique'] = display
+                fdata['signature_category'] = 'submission'
+                fdata['signature_count'] = count
+                self._news_items.insert(0, {
+                    "headline": f"🥋 {name} has become known for the {display} — {count} career finishes with this technique!",
+                    "category": "record",
+                    "week": week,
+                })
+                return
+        ko_wins = int(fdata.get('sig_ko_wins', 0))
+        if ko_wins >= 8:
+            fdata['signature_technique'] = 'Knockout Artist'
+            fdata['signature_category'] = 'striking'
+            fdata['signature_count'] = ko_wins
+            self._news_items.insert(0, {
+                "headline": f"💥 {name} earns the reputation of Knockout Artist — {ko_wins} KO/TKO wins!",
+                "category": "record",
+                "week": week,
+            })
+            return
+        sub_wins = int(fdata.get('sig_sub_wins', 0))
+        if sub_wins >= 8:
+            fdata['signature_technique'] = 'Submission Specialist'
+            fdata['signature_category'] = 'submission'
+            fdata['signature_count'] = sub_wins
+            self._news_items.insert(0, {
+                "headline": f"🥋 {name} is a certified Submission Specialist — {sub_wins} submission wins!",
+                "category": "record",
+                "week": week,
+            })
 
     def _get_title_records(self) -> Dict[str, Any]:
         """Ship HOF1: aggregate title-related records across champions."""
@@ -11918,6 +12020,7 @@ class GameBridge:
             starting_stamina_f2=_f2_stamina,
             **({"config": _fight_cfg} if _fight_cfg else {})
         )
+        _eng_sub_type = getattr(eng_result, 'sub_type', '') or ''
         try:
             if eng_result and hasattr(eng_result, 'fighter1_stats'):
                 _wk = self._game_state.week_number if self._game_state else 0
@@ -11941,6 +12044,16 @@ class GameBridge:
                     self._game_state.week_number if self._game_state else 0)
         except Exception as _ce:
             print(f"⚠️  Chin erosion failed: {_ce}")
+        try:
+            if eng_result.winner_id and eng_result.method:
+                self._accumulate_technique_stats(
+                    eng_result.winner_id, eng_result.method,
+                    _eng_sub_type,
+                    True,
+                    self._game_state.week_number if self._game_state else 0
+                )
+        except Exception as _te:
+            print(f"⚠️  Technique accumulation failed: {_te}")
 
         # Translate engine result → our dict format
         import random as _rnd2

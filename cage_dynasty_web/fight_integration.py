@@ -140,7 +140,8 @@ class NarratedFightResult:
     loser_id: Optional[str]
     loser_name: str
     method: str
-    
+    sub_type: str = ""      # Submission type e.g. "rear_naked_choke", "" for non-subs
+
     # Timing
     finish_round: Optional[int] = None
     finish_time: Optional[str] = None
@@ -833,7 +834,7 @@ class NarratedFightSimulator:
             
             if finished:
                 self._log_finish(attacker.fighter_id, f"Submission ({submission.value})", exchange_num)
-                return (attacker.fighter_id, "Submission")
+                return (attacker.fighter_id, "Submission", submission.value)
         else:
             # Failed to lock in
             self.commentary.log_event(
@@ -864,7 +865,7 @@ class NarratedFightSimulator:
         if finished:
             sub_name = self.fight_state.submission_type.value
             self._log_finish(attacker_id, f"Submission ({sub_name})", exchange_num)
-            return (attacker_id, "Submission")
+            return (attacker_id, "Submission", sub_name)
         
         if escaped:
             self.fight_state.submission_active = False
@@ -1048,13 +1049,14 @@ class NarratedFightSimulator:
             result = self._simulate_round()
             
             if result:
-                winner_id, method = result
-                return self._build_finish_result(winner_id, method)
+                winner_id, method, *_sub_extra = result
+                _sub_type_str = _sub_extra[0] if _sub_extra else ""
+                return self._build_finish_result(winner_id, method, _sub_type_str)
         
         # Decision
         return self._build_decision_result()
     
-    def _build_finish_result(self, winner_id: str, method: str) -> NarratedFightResult:
+    def _build_finish_result(self, winner_id: str, method: str, sub_type: str = "") -> NarratedFightResult:
         """Build result for a finish"""
         winner, winner_state = self._get_fighter_and_state(winner_id)
         loser, loser_state = self._get_opponent_and_state(winner_id)
@@ -1093,6 +1095,7 @@ class NarratedFightSimulator:
             loser_id=loser.fighter_id,
             loser_name=loser.name,
             method=method,
+            sub_type=sub_type,
             finish_round=self.finish_round,
             finish_time=time_str,
             total_rounds=self.current_round,
