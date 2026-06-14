@@ -91,7 +91,19 @@
         </div>
         <div style="display:flex;align-items:center;gap:var(--spacing-md);">
             <div style="width:120px;">
-                <div style="font-size:.62rem;color:var(--text-muted);margin-bottom:2px;">Condition {{ 100 - fighter.fatigue }}%</div>
+                {% set _rec = fighter.recovery or 50 %}
+                {% set _age = fighter.age or 25 %}
+                {% if _rec >= 85 and _age < 26 %}{% set _rec_label = "Elite" %}{% set _rec_color = "var(--neon-green)" %}
+                {% elif _rec >= 70 %}{% set _rec_label = "Fast" %}{% set _rec_color = "var(--neon-green)" %}
+                {% elif _rec >= 50 %}{% set _rec_label = "Average" %}{% set _rec_color = "var(--text-muted)" %}
+                {% elif _rec >= 35 %}{% set _rec_label = "Slow" %}{% set _rec_color = "var(--warning)" %}
+                {% else %}{% set _rec_label = "Poor" %}{% set _rec_color = "var(--blood-red)" %}
+                {% endif %}
+                <div style="font-size:.62rem;color:var(--text-muted);margin-bottom:2px;"
+                     title="Recovery speed: {{ _rec_label }} — affected by Recovery stat ({{ _rec }}) and age ({{ _age }}). REST intensity recovers more fatigue for younger fighters with high recovery.">
+                    Condition {{ 100 - fighter.fatigue }}%
+                    <span style="color:{{ _rec_color }};margin-left:4px;">· {{ _rec_label }} recovery</span>
+                </div>
                 <div style="height:5px;background:rgba(255,255,255,.08);border-radius:3px;overflow:hidden;">
                     <div style="width:{{ 100 - fighter.fatigue }}%;height:100%;border-radius:3px;
                                 background:{% if fighter.fatigue < 40 %}var(--neon-green){% elif fighter.fatigue < 70 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
