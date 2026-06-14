@@ -4710,9 +4710,8 @@ class GameBridge:
             signature_category=str(fdata.get('signature_category', '')),
             signature_count=int(fdata.get('signature_count', 0)),
             fight_camp_active=any(
-                (sf.get('fighter1_id') == f.fighter_id
-                 or sf.get('fighter2_id') == f.fighter_id)
-                and sf.get('fight_id') in self._fight_camps
+                sf.get('fighter1_id') == f.fighter_id
+                or sf.get('fighter2_id') == f.fighter_id
                 for sf in self._scheduled_fights
             ),
             career_phase=(
