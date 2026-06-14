@@ -7631,15 +7631,102 @@ class GameBridge:
                 focus_attr = _STYLE_FOCUS.get(style, 'fight_iq')
                 secondary_attr = _STYLE_SECONDARY.get(style, 'composure')
 
-                # Age modifier: young fighters improve faster
-                if age < 24:
-                    base_gain = 0.8
-                elif age < 28:
-                    base_gain = 0.5
-                elif age < 33:
-                    base_gain = 0.3
+                # ── Intensity decision ──────────────────────────────
+                # Uses coach quality, career phase, and stat headroom
+                # to pick the right training intensity for this fighter
+                # this week. Mirrors real camp management logic.
+
+                _coach_rating = int(getattr(camp, 'head_coach_rating', 50))
+                _current_focus = float(getattr(fighter, focus_attr, 60))
+                _headroom = max(0, tier_cap - _current_focus)
+                _career_phase = (
+                    "veteran"   if age >= 37 else
+                    "declining" if age >= 31 else
+                    "prime"     if age >= 26 else
+                    "rising"
+                )
+
+                if _career_phase == "rising":
+                    _base_intensity = "INTENSE"
+                elif _career_phase == "prime":
+                    _base_intensity = "INTENSE" if _headroom > 10 else "MODERATE"
+                elif _career_phase == "declining":
+                    _base_intensity = "MODERATE" if _headroom > 8 else "LIGHT"
+                else:  # veteran
+                    _base_intensity = "LIGHT"
+
+                import random as _rnd_int
+                _roll = _rnd_int.random()
+                if _coach_rating >= 80:
+                    if _roll < 0.75:
+                        _chosen_intensity = _base_intensity
+                    else:
+                        _step_up = {"LIGHT":"MODERATE","MODERATE":"INTENSE","INTENSE":"INTENSE","EXTREME":"INTENSE"}
+                        _chosen_intensity = _step_up.get(_base_intensity, _base_intensity)
+                        if _career_phase in ("declining","veteran"):
+                            _chosen_intensity = _base_intensity
+                elif _coach_rating >= 55:
+                    if _roll < 0.60:
+                        _chosen_intensity = _base_intensity
+                    elif _roll < 0.85:
+                        _step_up = {"LIGHT":"MODERATE","MODERATE":"INTENSE","INTENSE":"INTENSE","EXTREME":"INTENSE"}
+                        _chosen_intensity = _step_up.get(_base_intensity, _base_intensity)
+                    else:
+                        _step_down = {"INTENSE":"MODERATE","MODERATE":"LIGHT","LIGHT":"LIGHT","EXTREME":"INTENSE"}
+                        _chosen_intensity = _step_down.get(_base_intensity, _base_intensity)
                 else:
-                    base_gain = 0.1  # Veterans plateau
+                    if _roll < 0.40:
+                        _chosen_intensity = _base_intensity
+                    elif _roll < 0.75:
+                        _step_up = {"LIGHT":"MODERATE","MODERATE":"INTENSE","INTENSE":"INTENSE","EXTREME":"INTENSE"}
+                        _chosen_intensity = _step_up.get(_base_intensity, _base_intensity)
+                    else:
+                        _step_down = {"INTENSE":"MODERATE","MODERATE":"LIGHT","LIGHT":"LIGHT","EXTREME":"INTENSE"}
+                        _chosen_intensity = _step_down.get(_base_intensity, _base_intensity)
+
+                if _headroom <= 3:
+                    _chosen_intensity = "LIGHT"
+                elif _headroom <= 6 and _chosen_intensity == "INTENSE":
+                    _chosen_intensity = "MODERATE"
+
+                _INTENSITY_GAIN_MAP = {
+                    "LIGHT": 0.15, "MODERATE": 0.35,
+                    "INTENSE": 0.60, "EXTREME": 0.85,
+                }
+                _intensity_gain_mult = _INTENSITY_GAIN_MAP.get(_chosen_intensity, 0.35)
+
+                if age < 24:
+                    _age_mult = 1.4
+                elif age < 28:
+                    _age_mult = 1.1
+                elif age < 33:
+                    _age_mult = 0.8
+                elif age < 37:
+                    _age_mult = 0.5
+                else:
+                    _age_mult = 0.2
+
+                gain = _intensity_gain_mult * _age_mult
+                base_gain = gain  # compat with for-loop below
+
+                # Fatigue cost from chosen training intensity.
+                # NOTE: the fatigue management block above already wrote
+                # _new_ai_fatigue for the management-level intensity
+                # (LIGHT/MODERATE/INTENSE/EXTREME each add their own delta).
+                # This block adds the chosen-intensity training cost on top,
+                # so a fighter training INTENSE accumulates fatigue faster
+                # than a fighter the management block put on LIGHT.
+                _intensity_fatigue = {
+                    "LIGHT": 1, "MODERATE": 3,
+                    "INTENSE": 6, "EXTREME": 10,
+                }.get(_chosen_intensity, 3)
+                _current_fdata = self._game_state._fighter_data.get(fid, {})
+                _cur_fat = int(_current_fdata.get('fatigue', 0))
+                if _ai_intensity != 'REST':
+                    _train_fat = min(100, _cur_fat + _intensity_fatigue)
+                    _current_fdata['fatigue'] = _train_fat
+                    if hasattr(fighter, 'fatigue'):
+                        fighter.fatigue = _train_fat
 
                 # Per-fighter potential bounds growth alongside tier cap.
                 ovr_now = getattr(fighter, 'overall_rating', 60)
