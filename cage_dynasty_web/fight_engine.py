@@ -1329,7 +1329,7 @@ def select_action(
     # Subs should be RARE but DANGEROUS - now more accessible
     strike_weight = 120  # High strike bias everywhere
     sub_weight = 0      # START AT ZERO - only add when conditions are right
-    grapple_weight = 10  # REDUCED from 15 - less grappling, more striking
+    grapple_weight = 18  # Raised from 10 — grapplers initiate more frequently
     
     # Block submissions if position not secured
     if not position_secured:
