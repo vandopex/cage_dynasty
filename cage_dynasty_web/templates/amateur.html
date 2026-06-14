@@ -165,15 +165,16 @@
             </span>
             {% endif %}
         </div>
-        <div style="font-size:.68rem;color:var(--text-muted);margin-bottom:4px;">
+        <div style="font-size:.68rem;color:var(--text-muted);margin-bottom:4px;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
             {{ f.style }} · {{ f.weight_class }} · Age {{ f.age }}
         </div>
         {# Record + weeks in circuit #}
-        <div style="display:flex;align-items:center;gap:var(--spacing-md);font-size:.65rem;
-                    color:var(--text-muted);">
+        <div style="display:flex;align-items:center;gap:4px;font-size:.65rem;
+                    color:var(--text-muted);flex-wrap:wrap;">
             <span>{{ f.record }}</span>
             <span>·</span>
-            <span>{{ f.weeks_in_amateur or 0 }}w in circuit</span>
+            <span>{{ f.weeks_in_amateur or 0 }}w</span>
             {% if not f.is_eligible %}
             <span>·</span>
             <span style="color:var(--warning);">
