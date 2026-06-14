@@ -4247,18 +4247,40 @@ class GameBridge:
         if not offer:
             return {"success": False, "error": "Offer not found"}
 
-        # Block if either fighter is injured
+        # Injury validation — block only if fighter won't be cleared
+        # by fight week. Allows booking future fights during recovery.
         if INJURY_AVAILABLE and self._injury_system:
-            _pfid = offer.get("fighter_id", "")
-            _ofid = offer.get("opponent_id", "")
-            if _pfid and not self._injury_system.is_cleared_to_fight(_pfid):
-                return {"success": False,
-                        "error": f"{offer.get('fighter_name','Your fighter')} "
-                                 f"is injured and cannot fight."}
-            if _ofid and not self._injury_system.is_cleared_to_fight(_ofid):
-                return {"success": False,
-                        "error": f"{offer.get('opponent_name','Opponent')} "
-                                 f"is injured and unavailable."}
+            _fight_week = (self._game_state.week_number if self._game_state else 0) + offer.get("weeks_away", 4)
+            for _chk_id, _chk_name in [
+                (offer.get("fighter_id",""),  offer.get("fighter_name","Your fighter")),
+                (offer.get("opponent_id",""), offer.get("opponent_name","Opponent")),
+            ]:
+                if not _chk_id:
+                    continue
+                if self._injury_system.is_cleared_to_fight(_chk_id):
+                    continue  # healthy — no issue
+                # Fighter is currently injured — check if they'll heal in time
+                _return_week = 0
+                try:
+                    _injuries = (self._injury_system.get_active_injuries(_chk_id)
+                                 if hasattr(self._injury_system, 'get_active_injuries')
+                                 else [])
+                    for _inj in (_injuries or []):
+                        _rw = (getattr(_inj, 'return_week', None)
+                               or getattr(_inj, 'expected_return', None)
+                               or 0)
+                        _return_week = max(_return_week, int(_rw or 0))
+                except Exception:
+                    _return_week = 0
+                if _return_week > _fight_week:
+                    # Won't heal in time — block
+                    return {
+                        "success": False,
+                        "error": (f"{_chk_name} won't be cleared until Week {_return_week}. "
+                                  f"This fight is scheduled for Week {_fight_week}. "
+                                  f"Choose a fight at least {_return_week - (self._game_state.week_number if self._game_state else 0)} weeks out."),
+                    }
+                # else: will heal before fight week — allow the booking
 
         # Schedule the fight
         fight = {
