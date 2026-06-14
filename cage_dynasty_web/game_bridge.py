@@ -1212,6 +1212,19 @@ class GameBridge:
                     self._coaching_staff = [_entry]
                     self._head_coach_id = _cid
 
+            # Coach development fields (new saves only — legacy reads use .get())
+            if 'experience' not in self._coach:
+                self._coach['experience'] = 0
+            if 'age' not in self._coach:
+                import random as _cr
+                self._coach['age'] = _cr.randint(35, 52)
+            if 'potential' not in self._coach:
+                _r = self._coach.get('rating', 60)
+                if _r >= 80:   self._coach['potential'] = 'Elite'
+                elif _r >= 68: self._coach['potential'] = 'High'
+                elif _r >= 55: self._coach['potential'] = 'Average'
+                else:          self._coach['potential'] = 'Limited'
+
             # Store camp location for display
             self._camp_location = camp_location or "Las Vegas, NV"
 
@@ -1532,6 +1545,19 @@ class GameBridge:
         self._total_purses_earned     = data.get("total_purses_earned", 0)
         self._coach                   = data.get("coach", {})
         self._coach_contract          = data.get("coach_contract", {})
+
+        # Backfill coach development fields for legacy saves
+        if 'experience' not in self._coach:
+            self._coach['experience'] = 0
+        if 'age' not in self._coach:
+            import random as _clr
+            self._coach['age'] = _clr.randint(35, 52)
+        if 'potential' not in self._coach:
+            _cr = self._coach.get('rating', 60)
+            if _cr >= 80:   self._coach['potential'] = 'Elite'
+            elif _cr >= 68: self._coach['potential'] = 'High'
+            elif _cr >= 55: self._coach['potential'] = 'Average'
+            else:           self._coach['potential'] = 'Limited'
 
         # Ship MC1a foundation — additive multi-coach state restore.
         # Reads still hit _coach/_coach_contract above; staff is populated
@@ -3193,6 +3219,69 @@ class GameBridge:
             print(f"  🎓 [EXPERIENCE] {fighter.name}: "
                   + ", ".join(f"{s}{'+' if v>0 else ''}{v:.1f}"
                               for s, v in changed.items()))
+
+        # ── Coach XP accumulation ──────────────────────────
+        try:
+            _xp_points = 2 if won else 1
+            _fighter_obj = self._game_state.get_fighter(fighter_id)
+            _camp_id = getattr(_fighter_obj, 'camp_id', None) if _fighter_obj else None
+
+            _POT_CEIL = {
+                'Elite': 95, 'High': 90, 'Average': 80, 'Limited': 70
+            }
+            _XP_PER_POINT = 10
+
+            if _camp_id == self._game_state.player_camp_id:
+                _pot  = self._coach.get('potential', 'Average')
+                _ceil = _POT_CEIL.get(_pot, 80)
+                _cur_rating = int(self._coach.get('rating', 60))
+                if _cur_rating < _ceil:
+                    _xp = int(self._coach.get('experience', 0)) + _xp_points
+                    self._coach['experience'] = _xp
+                    if _xp % _XP_PER_POINT == 0:
+                        _new_rating = min(_ceil, _cur_rating + 1)
+                        self._coach['rating'] = _new_rating
+                        if _new_rating > _cur_rating:
+                            _cname = self._coach.get('name', 'Your coach')
+                            self._news_items.insert(0, {
+                                "headline": (f"📈 {_cname} is developing as a coach. "
+                                             f"Rating now {_new_rating}."),
+                                "category": "training",
+                                "week": self._game_state.week_number if self._game_state else 0,
+                            })
+            else:
+                if not _camp_id or not hasattr(self, '_coach_system'):
+                    return
+                _camp_coach_ids = getattr(
+                    self._coach_system, '_camp_coaches', {}
+                ).get(_camp_id, [])
+                if not _camp_coach_ids:
+                    return
+                _head_coach_id = _camp_coach_ids[0]
+                _coach_obj = self._coach_system._coaches.get(_head_coach_id)
+                if not _coach_obj:
+                    return
+                if not hasattr(_coach_obj, 'experience'):
+                    _coach_obj.experience = 0
+                if not hasattr(_coach_obj, 'potential'):
+                    _ov = getattr(_coach_obj, 'overall', 60)
+                    if _ov >= 80:   _coach_obj.potential = 'Elite'
+                    elif _ov >= 68: _coach_obj.potential = 'High'
+                    elif _ov >= 55: _coach_obj.potential = 'Average'
+                    else:           _coach_obj.potential = 'Limited'
+                _pot  = _coach_obj.potential
+                _ceil = _POT_CEIL.get(_pot, 80)
+                _cur  = int(getattr(_coach_obj, 'overall', 60))
+                if _cur < _ceil:
+                    _coach_obj.experience = int(_coach_obj.experience) + _xp_points
+                    if _coach_obj.experience % _XP_PER_POINT == 0:
+                        _new = min(_ceil, _cur + 1)
+                        _coach_obj.overall = _new
+                        _camp_obj = self._game_state.camps.get(_camp_id)
+                        if _camp_obj:
+                            _camp_obj.head_coach_rating = _new
+        except Exception as _cxpe:
+            print(f"⚠️  Coach XP failed: {_cxpe}")
 
     def _simulate_fight(self, fight: Dict) -> Dict:
         """Simulate a fight and return enriched result dict."""
@@ -7514,6 +7603,13 @@ class GameBridge:
         # and the per-fighter potential ceiling now bounds growth.
         self._advance_ai_fighter_training(week)
 
+        # Annual coach career events (drift, retirement, poaching)
+        if week % 52 == 0 and week > 0:
+            try:
+                self._advance_coach_careers(week)
+            except Exception as _cce:
+                print(f"⚠️  Coach career tick failed: {_cce}")
+
     def _advance_ai_fighter_training(self, week: int) -> None:
         """
         Apply passive training gains to all AI fighters every 2 weeks.
@@ -7844,6 +7940,151 @@ class GameBridge:
                 sample = _airand.sample(ai_fighters, min(4, len(ai_fighters)))
                 s = " | ".join(f"{f.name[:10]}:{f.overall_rating}" for f in sample)
                 print(f"  🌍 [AI DEV week {week}] Sample OVRs → {s}")
+
+    def _advance_coach_careers(self, week: int) -> None:
+        """Annual coach career events — drift, retirement, poaching.
+        Runs every 52 weeks to prevent all coaches converging upward."""
+        if not self._game_state:
+            return
+        import random as _cc_rnd
+
+        _POT_CEIL = {'Elite': 95, 'High': 90, 'Average': 80, 'Limited': 70}
+        _DRIFT_CHANCE = {'Elite': 0.10, 'High': 0.15, 'Average': 0.20, 'Limited': 0.25}
+
+        try:
+            _pot   = self._coach.get('potential', 'Average')
+            _ceil  = _POT_CEIL.get(_pot, 80)
+            _rating = int(self._coach.get('rating', 60))
+            _age    = int(self._coach.get('age', 45))
+            _cname  = self._coach.get('name', 'Your coach')
+
+            self._coach['age'] = _age + 1
+            _age += 1
+
+            _drift_chance = _DRIFT_CHANCE.get(_pot, 0.20)
+            if _cc_rnd.random() < _drift_chance and _rating > 40:
+                self._coach['rating'] = _rating - 1
+                self._news_items.insert(0, {
+                    "headline": (f"📉 {_cname} showing signs of staleness. "
+                                 f"Rating slipped to {_rating - 1}."),
+                    "category": "training",
+                    "week": week,
+                })
+
+            _ret_chance = max(0, (_age - 55) * 0.05)
+            if _cc_rnd.random() < _ret_chance:
+                self._news_items.insert(0, {
+                    "headline": (f"👋 {_cname} has announced their retirement from coaching. "
+                                 f"A new coach will need to be found."),
+                    "category": "contract",
+                    "week": week,
+                })
+                _new_age = _cc_rnd.randint(32, 44)
+                _new_rating = _cc_rnd.randint(45, 62)
+                _new_pot = _cc_rnd.choice(['Average', 'Average', 'High', 'Limited'])
+                self._coach['name'] = self._generate_coach_name()
+                self._coach['rating'] = _new_rating
+                self._coach['age'] = _new_age
+                self._coach['potential'] = _new_pot
+                self._coach['experience'] = 0
+                self._news_items.insert(0, {
+                    "headline": (f"✍️  {self._coach['name']} hired as new head coach. "
+                                 f"Young and hungry at {_new_rating} rating."),
+                    "category": "contract",
+                    "week": week,
+                })
+
+            elif _rating >= 75 and _cc_rnd.random() < 0.08:
+                self._news_items.insert(0, {
+                    "headline": (f"👀 {_cname} reportedly fielding interest from "
+                                 f"higher-level camps. Consider extending their contract."),
+                    "category": "contract",
+                    "week": week,
+                })
+        except Exception as _pce:
+            print(f"⚠️  Player coach career tick failed: {_pce}")
+
+        try:
+            if not hasattr(self, '_coach_system'):
+                return
+            for _cid, _coach_obj in list(
+                    getattr(self._coach_system, '_coaches', {}).items()):
+                try:
+                    _pot   = getattr(_coach_obj, 'potential', 'Average')
+                    _rating = int(getattr(_coach_obj, 'overall', 60))
+                    _age    = int(getattr(_coach_obj, 'age', 45))
+                    _cname  = getattr(_coach_obj, 'name', 'Coach')
+                    _camp_id = getattr(_coach_obj, 'camp_id', None)
+
+                    if hasattr(_coach_obj, 'age'):
+                        _coach_obj.age = _age + 1
+                    _age += 1
+
+                    _drift_chance = _DRIFT_CHANCE.get(_pot, 0.20)
+                    if _cc_rnd.random() < _drift_chance and _rating > 40:
+                        _coach_obj.overall = _rating - 1
+                        if _camp_id:
+                            _camp_obj = self._game_state.camps.get(_camp_id)
+                            if _camp_obj:
+                                _camp_obj.head_coach_rating = _rating - 1
+
+                    _ret_chance = max(0, (_age - 55) * 0.05)
+                    if _cc_rnd.random() < _ret_chance:
+                        _camp_name = ''
+                        if _camp_id:
+                            _camp_obj = self._game_state.camps.get(_camp_id)
+                            _camp_name = getattr(_camp_obj, 'name', '') if _camp_obj else ''
+                        self._news_items.insert(0, {
+                            "headline": (f"👋 {_cname} retires from coaching at {_camp_name}. "
+                                         f"Camp will need new leadership."),
+                            "category": "contract",
+                            "week": week,
+                        })
+                        _new_rating = _cc_rnd.randint(45, 65)
+                        _new_age    = _cc_rnd.randint(32, 44)
+                        _new_pot    = _cc_rnd.choice(
+                            ['Average','Average','High','Limited','Limited'])
+                        _coach_obj.overall  = _new_rating
+                        _coach_obj.potential = _new_pot
+                        if hasattr(_coach_obj, 'age'):
+                            _coach_obj.age = _new_age
+                        _coach_obj.experience = 0
+                        if _camp_id:
+                            _camp_obj = self._game_state.camps.get(_camp_id)
+                            if _camp_obj:
+                                _camp_obj.head_coach_rating = _new_rating
+
+                    elif _rating >= 78 and _cc_rnd.random() < 0.06:
+                        _camp_name = ''
+                        if _camp_id:
+                            _camp_obj = self._game_state.camps.get(_camp_id)
+                            _camp_name = getattr(_camp_obj, 'name', '') if _camp_obj else ''
+                        self._news_items.insert(0, {
+                            "headline": (f"👀 {_cname} of {_camp_name} attracting interest "
+                                         f"from rival camps. A rising coaching talent."),
+                            "category": "training",
+                            "week": week,
+                        })
+                except Exception:
+                    continue
+        except Exception as _ace:
+            print(f"⚠️  AI coach career tick failed: {_ace}")
+
+    def _generate_coach_name(self) -> str:
+        """Generate a random coach name for replacements."""
+        import random as _gnr
+        _first = _gnr.choice([
+            "Marcus","Diego","Andre","Luis","James","Carlos","Mike",
+            "Tony","Steve","Ray","Eddie","Dan","John","Pat","Gary",
+            "Kevin","Brian","Chris","Rick","Joe","Frank","Dave","Tom"
+        ])
+        _last = _gnr.choice([
+            "Silva","Garcia","Johnson","Rivera","Martinez","Santos",
+            "Williams","Brown","Jones","Davis","Miller","Wilson",
+            "Taylor","Anderson","Thomas","Jackson","White","Harris",
+            "Martin","Thompson","Moore","Lewis","Walker","Hall"
+        ])
+        return f"{_first} {_last}"
 
     _WATCH_CATEGORIES = [
         ("SIGN_TARGET","📝","Sign Target"),("OPPONENT","⚔️","Opponent"),
