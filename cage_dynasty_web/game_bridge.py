@@ -8881,8 +8881,22 @@ class GameBridge:
                         submission_escape_threshold=85.0,
                         damage_multiplier=0.24,
                     ) if _FightConfig else None
+                    # Wire fatigue → starting stamina for AI fights
+                    # Mirrors the player fight path — fatigue now matters
+                    # universally, not just for the player.
+                    try:
+                        _f1_fat = int(self._game_state._fighter_data.get(
+                            f1.fighter_id, {}).get('fatigue', 0))
+                        _f2_fat = int(self._game_state._fighter_data.get(
+                            f2.fighter_id, {}).get('fatigue', 0))
+                        _f1_stam = get_starting_stamina(_f1_fat)
+                        _f2_stam = get_starting_stamina(_f2_fat)
+                    except Exception:
+                        _f1_stam = _f2_stam = 100.0
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
+                        starting_stamina_f1=_f1_stam,
+                        starting_stamina_f2=_f2_stam,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page
@@ -9274,8 +9288,22 @@ class GameBridge:
                         submission_escape_threshold=85.0,
                         damage_multiplier=0.24,
                     ) if _FightConfig else None
+                    # Wire fatigue → starting stamina for AI fights
+                    # Mirrors the player fight path — fatigue now matters
+                    # universally, not just for the player.
+                    try:
+                        _f1_fat = int(self._game_state._fighter_data.get(
+                            f1.fighter_id, {}).get('fatigue', 0))
+                        _f2_fat = int(self._game_state._fighter_data.get(
+                            f2.fighter_id, {}).get('fatigue', 0))
+                        _f1_stam = get_starting_stamina(_f1_fat)
+                        _f2_stam = get_starting_stamina(_f2_fat)
+                    except Exception:
+                        _f1_stam = _f2_stam = 100.0
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
+                        starting_stamina_f1=_f1_stam,
+                        starting_stamina_f2=_f2_stam,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page

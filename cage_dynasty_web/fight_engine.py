@@ -3274,9 +3274,17 @@ def simulate_fight(
     # Calculate starting stamina based on fatigue
     # Fatigued fighters start with reduced stamina
     def get_starting_stamina(fatigue: int) -> float:
-        """Calculate starting stamina from fatigue level."""
+        """Calculate starting stamina from fatigue level.
+
+        Rewards smart camp management — coming in at peak condition
+        gives a small but meaningful starting stamina bonus.
+        The engine uses stamina as a multiplier on action effectiveness,
+        so starting at 103 vs 100 matters in close fights.
+        """
         fatigue = max(0, min(100, fatigue))
-        if fatigue <= 20:
+        if fatigue <= 10:
+            return 103.0  # Peak condition — perfect taper
+        elif fatigue <= 20:
             return 100.0  # Fresh
         elif fatigue <= 40:
             return 95.0   # Rested
