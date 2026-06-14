@@ -1836,7 +1836,7 @@ def calculate_strike_success(
     offense *= variance
     
     # Base success chance
-    success_chance = 0.3 + (offense / (offense + defense + 1)) * 0.5
+    success_chance = 0.20 + (offense / (offense + defense + 1)) * 0.5
     success_chance = max(0.15, min(0.85, success_chance))
     
     # UPSET VARIANCE: Underdogs can land lucky shots
@@ -2419,7 +2419,10 @@ def attempt_submission(
     
     # Lock-in chance - VERY HIGH because attempts are now rare
     lock_in_chance = 0.30 + sub_bonus + (offense / (offense + defense + 1)) * 0.55
-    lock_in_chance = min(0.70, lock_in_chance)  # Cap at 70%
+    # Skill-gated cap: specialists access higher ceiling.
+    # 60 subs = 0.50 cap, 80 subs = 0.70 cap, scales linearly.
+    _sub_cap = min(0.70, 0.50 + max(0, attacker.submissions - 60) * 0.010)
+    lock_in_chance = min(_sub_cap, lock_in_chance)
     locked_in = random.random() < lock_in_chance
     
     if not locked_in:
