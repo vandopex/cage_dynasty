@@ -7426,8 +7426,61 @@ class GameBridge:
         for fighter, ret_age in retiring:
             fighter.is_active = False
             record = f"{fighter.wins}-{fighter.losses}"
+            _titles = getattr(fighter, 'titles_held', 0) or 0
+            _ko_wins = getattr(fighter, 'ko_wins', 0) or 0
+            _sub_wins = getattr(fighter, 'sub_wins', 0) or 0
+            _best_streak = getattr(
+                fighter, 'best_win_streak',
+                getattr(fighter, 'win_streak', 0)) or 0
+            _sig = ''
+            try:
+                _fdata_ret = self._game_state._fighter_data.get(
+                    fighter.fighter_id, {})
+                _sig = _fdata_ret.get('signature_technique', '')
+            except Exception:
+                pass
+
+            _highlights = []
+            if _titles > 0:
+                _highlights.append(f"{_titles}x champion")
+            if _best_streak >= 6:
+                _highlights.append(f"{_best_streak}-fight win streak")
+            if _ko_wins >= 5:
+                _highlights.append(f"{_ko_wins} KO wins")
+            elif _sub_wins >= 5:
+                _highlights.append(f"{_sub_wins} submission wins")
+            if _sig:
+                _highlights.append(f"known for the {_sig}")
+
+            _highlight_str = (
+                " · ".join(_highlights)
+                if _highlights else "a respected career"
+            )
+
+            _rival_note = ""
+            try:
+                _player_fids = [
+                    pf.fighter_id
+                    for pf in self.get_player_fighters()
+                ]
+                for _pfid in _player_fids:
+                    _rivalry = self._get_rivalry_between(
+                        fighter.fighter_id, _pfid)
+                    if _rivalry and getattr(_rivalry, 'stage', 0) >= 5:
+                        _pf = self._game_state.get_fighter(_pfid)
+                        if _pf:
+                            _rival_note = (
+                                f" Their rivalry with {_pf.name} "
+                                f"will be remembered.")
+                        break
+            except Exception:
+                pass
+
             self._news_items.insert(0, {
-                "headline": f"🥊 {fighter.name} ({record}) retires at age {ret_age}",
+                "headline": (
+                    f"🥊 {fighter.name} retires at {ret_age} "
+                    f"({record}) — {_highlight_str}.{_rival_note}"
+                ),
                 "category": "retirement",
                 "week": week,
             })
@@ -7935,13 +7988,30 @@ class GameBridge:
                             f"😬 {_fighter_name} grinding through intense camp at {getattr(fighter, 'age', '?')} years old. Camp staff under scrutiny.",
                         ])
 
-                    elif (_ovr_now % 5 == 0
-                            and _ovr_now >= 65
-                            and _tn_rnd.random() < 0.40):
-                        _news_headline = _tn_rnd.choice([
-                            f"📈 {_fighter_name} reaching new heights at {_camp_name}. The {_ovr_now} OVR mark crossed.",
-                            f"⭐ {_fighter_name} continues to develop at {_camp_name}. Looking like a serious prospect.",
-                        ]) if _career_phase in ("rising", "prime") else None
+                    elif (_ovr_now in (70, 80, 90, 99)
+                            and _tn_rnd.random() < 0.60):
+                        _milestone_copy = {
+                            70: [
+                                f"📈 {_fighter_name} crosses 70 OVR at {_camp_name}. Legitimate pro contender.",
+                                f"⭐ {_fighter_name} is developing into a real threat at {_camp_name}.",
+                            ],
+                            80: [
+                                f"🔥 {_fighter_name} reaches 80 OVR. {_camp_name} has a dangerous fighter on their hands.",
+                                f"⚡ {_fighter_name} at 80 OVR — top-level talent emerging from {_camp_name}.",
+                            ],
+                            90: [
+                                f"👑 {_fighter_name} has reached elite status. 90 OVR at {_camp_name}.",
+                                f"🏆 {_fighter_name} — 90 OVR. One of the best in the world.",
+                            ],
+                            99: [
+                                f"🐐 {_fighter_name} reaches 99 OVR. An all-time great at {_camp_name}.",
+                                f"💎 {_fighter_name} — 99 OVR. Generational talent.",
+                            ],
+                        }
+                        _news_headline = _tn_rnd.choice(
+                            _milestone_copy.get(_ovr_now,
+                                [f"📈 {_fighter_name} reaching new heights at {_camp_name}."])
+                        )
 
                     if _news_headline:
                         self._news_items.insert(0, {
@@ -9564,13 +9634,34 @@ class GameBridge:
                             _hl = (f"🏆 {_ftr.name} ({_ftr.weight_class} Champion) suffers "
                                    f"{_inj.description} — out {_inj.recovery_weeks} weeks. "
                                    f"Title defense delayed.")
+                            self._news_items.append({
+                                "headline": _hl,
+                                "category": "injury", "week": week,
+                            })
                         else:
-                            _hl = (f"🤕 {_ftr.name} injured at {event_name}: "
-                                   f"{_inj.description} — {_inj.recovery_weeks}w recovery")
-                        self._news_items.append({
-                            "headline": _hl,
-                            "category": "injury", "week": week,
-                        })
+                            _ftr_rank = self._get_fighter_rank(_ftr) if hasattr(
+                                self, '_get_fighter_rank') else None
+                            _is_player_fighter = (
+                                getattr(_ftr, 'camp_id', None) ==
+                                self._game_state.player_camp_id
+                            )
+                            _rank_val = int(_ftr_rank) if _ftr_rank else 999
+                            if _is_player_fighter or _rank_val <= 15:
+                                _sev = _inj.severity_name if hasattr(_inj, 'severity_name') else ''
+                                _sev_emoji = {
+                                    'Minor': '🩹', 'Moderate': '🤕',
+                                    'Severe': '🚨', 'Career-threatening': '💔',
+                                }.get(_sev, '🤕')
+                                self._news_items.append({
+                                    "headline": (
+                                        f"{_sev_emoji} {_ftr.name} suffers {_inj.description} "
+                                        f"at {event_name} — {_inj.recovery_weeks}w recovery."
+                                        + (f" Ranked #{_ftr_rank} in {getattr(_ftr,'weight_class','')}."
+                                           if _rank_val <= 15 else "")
+                                    ),
+                                    "category": "injury",
+                                    "week": week,
+                                })
                         self._maybe_queue_champion_injury_decision(_ftr, _inj)
 
             for ftr, res, opp in [(winner,"W",loser),(loser,"L",winner)]:
@@ -10708,13 +10799,69 @@ class GameBridge:
     # =========================================================================
 
     def _fire_streak_news(self, fighter, week: int) -> None:
-        """Fire a streak milestone news item."""
+        """Fire streak milestone news — win streaks, losing streaks,
+        and undefeated milestones."""
+        import random as _sr
         ws = getattr(fighter, 'win_streak', 0)
-        if ws in (3, 5, 7, 10):
+        ls = getattr(fighter, 'lose_streak', 0)
+        total_losses = getattr(fighter, 'losses', 0)
+        total_fights = (getattr(fighter, 'wins', 0) +
+                        total_losses +
+                        getattr(fighter, 'draws', 0))
+        name = fighter.name
+
+        if ws in (6, 8, 10, 12) or (ws >= 15 and ws % 5 == 0):
+            _headlines = {
+                6:  [f"🔥 {name} has won 6 in a row. A name to watch.",
+                     f"📈 {name} building momentum — 6-fight win streak."],
+                8:  [f"⚡ {name} on an 8-fight tear. Division is taking notice.",
+                     f"🔥 {name} won't be stopped — 8 straight wins."],
+                10: [f"🏆 {name} reaches 10 consecutive wins. Dominant.",
+                     f"👑 10-fight win streak for {name}. A force in the division."],
+                12: [f"🔥 {name} — 12 fights, 12 wins. Unstoppable run.",
+                     f"⚡ {name} with 12 straight. Title conversation heating up."],
+            }
+            headline = _sr.choice(
+                _headlines.get(ws,
+                    [f"🔥 {name} extends win streak to {ws}. Historic run."])
+            )
             self._news_items.insert(0, {
-                "headline": f"🔥 {fighter.name} is on a {ws}-fight win streak!",
+                "headline": headline,
                 "category": "streak",
-                "week":     week,
+                "week": week,
+            })
+
+        elif total_losses == 0 and ws >= 6:
+            if ws in (6, 10) or (ws >= 15 and ws % 5 == 0):
+                _u_headlines = [
+                    f"⭐ {name} remains undefeated at {ws}-0. "
+                    f"One of the division's most intriguing prospects.",
+                    f"🛡️ {name} — still perfect. {ws} fights, zero losses.",
+                    f"👁️ {name} undefeated through {ws} pro fights. "
+                    f"The division is watching.",
+                ]
+                self._news_items.insert(0, {
+                    "headline": _sr.choice(_u_headlines),
+                    "category": "streak",
+                    "week": week,
+                })
+
+        if ls in (3, 5) or (ls >= 6 and ls % 3 == 0):
+            _l_headlines = {
+                3: [f"😟 {name} drops third straight. Camp making adjustments.",
+                    f"⚠️ {name} on a 3-fight skid. Division concerns growing."],
+                5: [f"🚨 {name} has lost 5 in a row. Career at a crossroads.",
+                    f"😬 {name} — 5 straight losses. Retirement questions emerging."],
+            }
+            headline = _sr.choice(
+                _l_headlines.get(ls,
+                    [f"🚨 {name} extends losing streak to {ls}. "
+                     f"Serious questions about their future."])
+            )
+            self._news_items.insert(0, {
+                "headline": headline,
+                "category": "streak",
+                "week": week,
             })
 
     def _fire_record_news(self, fighter, week: int) -> None:
