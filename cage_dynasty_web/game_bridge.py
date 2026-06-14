@@ -8799,7 +8799,7 @@ class GameBridge:
                         exchanges_per_round=55,
                         submission_progress_to_finish=70.0,
                         submission_escape_threshold=85.0,
-                        damage_multiplier=FI_DAMAGE_MULTIPLIER,
+                        damage_multiplier=0.24,
                     ) if _FightConfig else None
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
@@ -9176,7 +9176,7 @@ class GameBridge:
                         exchanges_per_round=55,
                         submission_progress_to_finish=70.0,
                         submission_escape_threshold=85.0,
-                        damage_multiplier=FI_DAMAGE_MULTIPLIER,
+                        damage_multiplier=0.24,
                     ) if _FightConfig else None
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
@@ -12200,7 +12200,7 @@ class GameBridge:
             exchanges_per_round=55,
             submission_progress_to_finish=70.0,
             submission_escape_threshold=85.0,
-            damage_multiplier=FI_DAMAGE_MULTIPLIER,
+            damage_multiplier=0.24,
         ) if _FightConfig else None
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
