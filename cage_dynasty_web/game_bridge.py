@@ -7764,6 +7764,76 @@ class GameBridge:
                     except Exception as _ae:
                         print(f"⚠️  AI age decline failed for {fid}: {_ae}")
 
+                # ── Training news — ambient world storytelling ──────
+                # Fires rarely (probability-gated) so the news feed
+                # stays meaningful rather than flooding with training
+                # updates every week. Only emits for notable events:
+                # prospect grinding hard, veteran resting, coach
+                # pushing a fighter, or a genuine OVR milestone.
+                try:
+                    import random as _tn_rnd
+                    _fighter_name = getattr(fighter, 'name', '')
+                    _camp_name = getattr(camp, 'name', '')
+                    _coach_name = getattr(camp, 'head_coach_name',
+                                          getattr(camp, 'name', 'their coaching staff'))
+                    _ovr_now = fighter.overall_rating
+
+                    _news_headline = None
+                    _news_category = "training"
+
+                    if (_chosen_intensity == "INTENSE"
+                            and _career_phase == "rising"
+                            and _tn_rnd.random() < 0.08):
+                        _news_headline = _tn_rnd.choice([
+                            f"🏋️ {_fighter_name} putting in serious work at {_camp_name} — prospect looks sharp.",
+                            f"💪 {_fighter_name} grinding through an intense training block. One to watch.",
+                            f"🔥 {_camp_name} running {_fighter_name} hard in camp. The young prospect is responding well.",
+                        ])
+
+                    elif (_chosen_intensity == "INTENSE"
+                            and _career_phase == "prime"
+                            and _coach_rating >= 80
+                            and _tn_rnd.random() < 0.06):
+                        _news_headline = _tn_rnd.choice([
+                            f"⚡ {_fighter_name} in an elite training block at {_camp_name}. Camp sources say he looks dangerous.",
+                            f"🏆 {_camp_name} pushing {_fighter_name} hard ahead of a big run. High expectations.",
+                        ])
+
+                    elif (_chosen_intensity in ("LIGHT", "REST")
+                            and _career_phase in ("declining", "veteran")
+                            and _tn_rnd.random() < 0.10):
+                        _news_headline = _tn_rnd.choice([
+                            f"😴 {_fighter_name} taking a lighter week at {_camp_name}. Veterans train smart.",
+                            f"🧊 {_fighter_name} in recovery mode. {_camp_name} managing their veteran carefully.",
+                            f"⏸️ {_fighter_name} stepping back from intense training. Body maintenance at this stage of a career.",
+                        ])
+
+                    elif (_chosen_intensity == "INTENSE"
+                            and _career_phase in ("declining", "veteran")
+                            and _coach_rating < 55
+                            and _tn_rnd.random() < 0.12):
+                        _news_headline = _tn_rnd.choice([
+                            f"⚠️ {_fighter_name} being pushed hard despite age concerns. Questions about {_camp_name}'s approach.",
+                            f"😬 {_fighter_name} grinding through intense camp at {getattr(fighter, 'age', '?')} years old. Camp staff under scrutiny.",
+                        ])
+
+                    elif (_ovr_now % 5 == 0
+                            and _ovr_now >= 65
+                            and _tn_rnd.random() < 0.40):
+                        _news_headline = _tn_rnd.choice([
+                            f"📈 {_fighter_name} reaching new heights at {_camp_name}. The {_ovr_now} OVR mark crossed.",
+                            f"⭐ {_fighter_name} continues to develop at {_camp_name}. Looking like a serious prospect.",
+                        ]) if _career_phase in ("rising", "prime") else None
+
+                    if _news_headline:
+                        self._news_items.insert(0, {
+                            "headline": _news_headline,
+                            "category": "training",
+                            "week":     week,
+                        })
+                except Exception as _tne:
+                    pass
+
         # Sample output to show AI is developing
         if self._game_state:
             import random as _airand
