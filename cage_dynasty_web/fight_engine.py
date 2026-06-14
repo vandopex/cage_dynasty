@@ -2421,7 +2421,7 @@ def attempt_submission(
     lock_in_chance = 0.30 + sub_bonus + (offense / (offense + defense + 1)) * 0.55
     # Skill-gated cap: specialists access higher ceiling.
     # 60 subs = 0.50 cap, 80 subs = 0.70 cap, scales linearly.
-    _sub_cap = min(0.70, 0.50 + max(0, attacker.submissions - 60) * 0.010)
+    _sub_cap = min(0.70, 0.50 + max(0, attacker.submissions - 75) * 0.013)
     lock_in_chance = min(_sub_cap, lock_in_chance)
     locked_in = random.random() < lock_in_chance
     
@@ -2730,7 +2730,18 @@ def simulate_exchange(
                     damage *= 0.85  # Additional 15% reduction
                 elif sub_threat >= 20:
                     damage *= 0.92  # Additional 8% reduction
-            
+
+            # GnP bonus from dominant positions — compensates for the
+            # global strike base drop (0.3→0.20) which incidentally
+            # suppressed ground-and-pound finish rates.
+            _DOMINANT_GNP = {
+                Position.BACK_MOUNT, Position.MOUNT,
+                Position.SIDE_CONTROL_TOP, Position.CRUCIFIX_TOP,
+                Position.NORTH_SOUTH_TOP,
+            }
+            if fight_state.position in _DOMINANT_GNP:
+                damage *= 1.35
+
             # Apply config damage multiplier (compensates for increased exchanges)
             damage *= config.damage_multiplier
             
