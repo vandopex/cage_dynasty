@@ -132,7 +132,7 @@
 {# Potential grade color #}
 {% set pot = f.potential or 'Average' %}
 {% set pot_color = 'var(--gold)' if pot == 'Elite' else ('var(--neon-green)' if pot == 'High' else ('var(--info)' if pot == 'Average' else 'var(--text-muted)')) %}
-{% set pot_grade = 'A+' if pot == 'Elite' else ('A' if pot == 'High' else ('B' if pot == 'Average' else 'C')) %}
+{% set pot_grade = 'A+' if pot == 'Elite' else ('A' if pot == 'High' else ('B+' if pot == 'Average' else 'B')) %}
 
 <div style="display:flex;align-items:stretch;gap:0;
             background:var(--bg-card);border-radius:8px;overflow:hidden;
