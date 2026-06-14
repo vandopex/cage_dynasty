@@ -5625,13 +5625,35 @@ class GameBridge:
         actual_gains: Dict[str, float] = {}
 
         # Fatigue update fires for ALL intensities including REST.
-        # Must live OUTSIDE the raw_gain > 0 gate — REST has raw_gain=0,
-        # so any block inside that gate skips entirely on REST weeks
-        # and fatigue never recovers.
+        # REST recovery is modified by recovery stat and age —
+        # elite recovery + youth = fast bounce-back,
+        # poor recovery + age = slow grind.
         if self._game_state and fighter_id in self._game_state._fighter_data:
             _fdata_fat = self._game_state._fighter_data[fighter_id]
             _current_fatigue = int(_fdata_fat.get('fatigue', 0))
-            _new_fatigue = max(0, min(100, _current_fatigue + fatigue_delta))
+            _applied_delta = fatigue_delta
+            if intensity_up == 'REST':
+                _ftr_fat = self._game_state.get_fighter(fighter_id)
+                _rec_stat = int(_fdata_fat.get('recovery',
+                    getattr(_ftr_fat, 'recovery', 50) if _ftr_fat else 50))
+                _age_val  = int(getattr(_ftr_fat, 'age', 25) if _ftr_fat else 25)
+                if _rec_stat >= 85:
+                    _applied_delta = -20
+                elif _rec_stat >= 70:
+                    _applied_delta = -17
+                elif _rec_stat >= 50:
+                    _applied_delta = -15
+                elif _rec_stat >= 35:
+                    _applied_delta = -12
+                else:
+                    _applied_delta = -10
+                if _age_val < 26:
+                    _applied_delta -= 2
+                elif _age_val >= 37:
+                    _applied_delta += 3
+                elif _age_val >= 31:
+                    _applied_delta += 2
+            _new_fatigue = max(0, min(100, _current_fatigue + _applied_delta))
             _fdata_fat['fatigue'] = _new_fatigue
             _ftr_sync = self._game_state.get_fighter(fighter_id)
             if _ftr_sync and hasattr(_ftr_sync, 'fatigue'):

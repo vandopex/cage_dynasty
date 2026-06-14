@@ -1720,12 +1720,13 @@ def register_routes(app):
             },
         ]
 
-        # Fight camp intensity — NO REST (that's for off-weeks, not fight prep)
+        # Fight camp intensity — REST recovers fatigue (stat/age-modified)
         intensity_options = [
-            ("LIGHT",    "Light",    "50% gains",  "+2 fatigue, no injury risk",   "blue"),
-            ("MODERATE", "Moderate", "100% gains", "+5 fatigue, 1% injury risk",   "yellow"),
-            ("INTENSE",  "Intense",  "150% gains", "+10 fatigue, 3% injury risk",  "orange"),
-            ("EXTREME",  "Extreme",  "200% gains", "+18 fatigue, 8% injury risk",  "red"),
+            ("REST",     "Rest",     "Recovery only", "No training gains. Fighter recovers fatigue.", "var(--info)"),
+            ("LIGHT",    "Light",    "50% gains",     "+2 fatigue, no injury risk",                   "blue"),
+            ("MODERATE", "Moderate", "100% gains",    "+5 fatigue, 1% injury risk",                   "yellow"),
+            ("INTENSE",  "Intense",  "150% gains",    "+10 fatigue, 3% injury risk",                  "orange"),
+            ("EXTREME",  "Extreme",  "200% gains",    "+18 fatigue, 8% injury risk",                  "red"),
         ]
 
         # Fighter current condition

@@ -11,9 +11,10 @@
     <div style="font-size:.75rem;color:var(--text-muted);line-height:1.5;">
         Fight camp <strong style="color:var(--gold);">overrides weekly training</strong>
         for {{ data.player.name }} until fight night. Your other fighters continue
-        their normal training. To rest during camp, set intensity to
-        <strong style="color:var(--text-bright);">Light</strong> here — REST is not
-        available during fight camp.
+        their normal training. Need to recover? Set intensity to
+        <strong style="color:var(--text-bright);">Rest</strong> — no training gains
+        that week, but your fighter enters fight night fresher. Recovery speed depends
+        on your fighter's recovery stat and age.
     </div>
 </div>
 
@@ -420,7 +421,7 @@
         </div>
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
                     padding:var(--spacing-md);">
-            {% set iicons = {'LIGHT':'🚶','MODERATE':'🏃','INTENSE':'🔥','EXTREME':'⚡'} %}
+            {% set iicons = {'REST':'😴','LIGHT':'🚶','MODERATE':'🏃','INTENSE':'🔥','EXTREME':'⚡'} %}
             {# Realistic intensity cap: taper near fight night #}
             {% set weeks_out = data.weeks_until or data.fight.weeks_until or 4 %}
             {% set max_intensity = 'EXTREME' if weeks_out >= 4 else 'INTENSE' if weeks_out >= 3 else 'MODERATE' if weeks_out >= 2 else 'LIGHT' %}
