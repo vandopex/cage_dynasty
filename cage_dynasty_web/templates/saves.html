@@ -2,8 +2,18 @@
 {% block title %}Save / Load{% endblock %}
 {% block content %}
 
-<div class="page-header">
-    <h1 class="page-title">💾 Save / Load Game</h1>
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--spacing-md);">
+    <h1 class="page-title" style="margin:0;">💾 Save / Load Game</h1>
+    <a href="{{ url_for('export_universe') }}"
+       style="display:inline-flex;align-items:center;gap:6px;
+              padding:8px 16px;border-radius:6px;
+              background:rgba(0,230,118,.08);
+              border:1px solid rgba(0,230,118,.25);
+              color:var(--neon-green);text-decoration:none;
+              font-size:.78rem;font-family:var(--font-display);"
+       title="Download a JSON snapshot of your universe — upload to Claude for a narrative breakdown">
+        📊 Export Universe
+    </a>
 </div>
 
 {# Manual slots (slot1-3) #}

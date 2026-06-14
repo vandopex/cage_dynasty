@@ -7577,6 +7577,57 @@ class GameBridge:
                     continue
 
                 age = getattr(fighter, 'age', 28)
+
+                # AI fatigue management — rest when tired,
+                # taper before fights, train normally otherwise
+                _ai_fatigue = int(
+                    self._game_state._fighter_data.get(fid, {}).get('fatigue', 0)
+                )
+                _ai_weeks_to_fight = None
+                for _sf in self._scheduled_fights:
+                    if (_sf.get('fighter1_id') == fid or
+                            _sf.get('fighter2_id') == fid):
+                        _wtu = _sf.get('weeks_until', 99)
+                        if _ai_weeks_to_fight is None or _wtu < _ai_weeks_to_fight:
+                            _ai_weeks_to_fight = _wtu
+
+                if _ai_fatigue > 70:
+                    _ai_intensity = 'REST'
+                elif _ai_fatigue > 50 and _ai_weeks_to_fight is not None and _ai_weeks_to_fight <= 2:
+                    _ai_intensity = 'LIGHT'
+                elif _ai_weeks_to_fight is not None and _ai_weeks_to_fight <= 1:
+                    _ai_intensity = 'LIGHT'
+                else:
+                    _ai_intensity = 'MODERATE'
+
+                _ai_fatigue_delta = {
+                    'REST': -15, 'LIGHT': 2, 'MODERATE': 5,
+                    'INTENSE': 10, 'EXTREME': 18,
+                }.get(_ai_intensity, 5)
+
+                if _ai_intensity == 'REST':
+                    _rec = int(self._game_state._fighter_data.get(
+                        fid, {}).get('recovery',
+                        getattr(fighter, 'recovery', 50)))
+                    if _rec >= 85:   _ai_fatigue_delta = -20
+                    elif _rec >= 70: _ai_fatigue_delta = -17
+                    elif _rec >= 50: _ai_fatigue_delta = -15
+                    elif _rec >= 35: _ai_fatigue_delta = -12
+                    else:            _ai_fatigue_delta = -10
+                    _ai_age = getattr(fighter, 'age', 25)
+                    if _ai_age < 26:   _ai_fatigue_delta -= 2
+                    elif _ai_age >= 37: _ai_fatigue_delta += 3
+                    elif _ai_age >= 31: _ai_fatigue_delta += 2
+
+                _new_ai_fatigue = max(0, min(100, _ai_fatigue + _ai_fatigue_delta))
+                if fid in self._game_state._fighter_data:
+                    self._game_state._fighter_data[fid]['fatigue'] = _new_ai_fatigue
+                if hasattr(fighter, 'fatigue'):
+                    fighter.fatigue = _new_ai_fatigue
+
+                if _ai_intensity == 'REST':
+                    continue
+
                 style = getattr(fighter, 'fighting_style', 'Orthodox Boxer')
                 focus_attr = _STYLE_FOCUS.get(style, 'fight_iq')
                 secondary_attr = _STYLE_SECONDARY.get(style, 'composure')
@@ -10178,6 +10229,117 @@ class GameBridge:
                 "category": "record",
                 "week":     week,
             })
+
+    def get_universe_export(self) -> Dict[str, Any]:
+        """Generate a curated universe snapshot for external analysis.
+        Structured like a sports almanac — readable by Claude or any
+        analyst wanting a narrative breakdown of the world state."""
+        if not self._game_state:
+            return {"error": "No game loaded"}
+
+        week = self._game_state.week_number
+
+        player_camp = self.get_player_camp()
+        player_fighters = self.get_player_fighters()
+        camp_snapshot = {
+            "name":    getattr(player_camp, 'name', ''),
+            "tier":    getattr(player_camp, 'tier', ''),
+            "week":    week,
+            "balance": getattr(player_camp, 'balance', 0),
+            "fighters": [
+                {
+                    "name":      f.name,
+                    "record":    f.record_str,
+                    "weight_class": f.weight_class,
+                    "overall":   f.overall_rating,
+                    "style":     f.fighting_style,
+                    "age":       f.age,
+                    "career_phase": f.career_phase,
+                    "condition": 100 - f.fatigue,
+                    "signature": f.signature_technique or None,
+                    "ranking":   f.ranking,
+                    "upcoming_fight": next(
+                        ({"opponent": sf.get("fighter2_name" if sf.get("fighter1_id") == f.fighter_id else "fighter1_name"),
+                          "weeks_out": sf.get("weeks_until"),
+                          "event": sf.get("event_name")}
+                         for sf in self._scheduled_fights
+                         if sf.get("fighter1_id") == f.fighter_id
+                         or sf.get("fighter2_id") == f.fighter_id),
+                        None
+                    ),
+                }
+                for f in player_fighters
+            ],
+        }
+
+        weight_classes = [
+            "Strawweight","Flyweight","Bantamweight","Featherweight",
+            "Lightweight","Welterweight","Middleweight",
+            "Light Heavyweight","Heavyweight",
+        ]
+        champions = {}
+        for wc in weight_classes:
+            champ_id = self._game_state.champions.get(wc)
+            if champ_id:
+                champ = self._game_state.get_fighter(champ_id)
+                if champ:
+                    champions[wc] = {
+                        "name":   champ.name,
+                        "record": champ.record_str,
+                        "style":  champ.fighting_style,
+                        "age":    champ.age,
+                        "career_phase": getattr(champ, 'career_phase', ''),
+                    }
+
+        rankings = {}
+        for wc in weight_classes:
+            div = self.get_division_rankings(wc)
+            if div:
+                rankings[wc] = [
+                    {"rank": i+1, "name": f.name, "record": f.record_str,
+                     "age": f.age, "style": f.fighting_style,
+                     "career_phase": f.career_phase}
+                    for i, f in enumerate(div[:5])
+                ]
+
+        news = self.get_news_feed(limit=20)
+        news_lines = [n.headline for n in news if hasattr(n, 'headline')]
+
+        recent_events = []
+        for ev in list(reversed(self._completed_events))[:5]:
+            fights = []
+            for f in ev.get('fights', []):
+                fights.append(
+                    f"{f.get('winner_name','?')} def. "
+                    f"{f.get('loser_name','?')} "
+                    f"({f.get('method','?')} R{f.get('round_finished','?')})"
+                )
+            recent_events.append({
+                "event": ev.get('event_name', ''),
+                "week":  ev.get('week', 0),
+                "fights": fights,
+            })
+
+        try:
+            rb = self.get_record_book()
+            records = {
+                "most_wins":     rb.get("most_wins", {}).get("name"),
+                "most_ko_wins":  rb.get("most_ko_wins", {}).get("name"),
+                "most_sub_wins": rb.get("most_sub_wins", {}).get("name"),
+                "longest_streak": rb.get("longest_streak", {}).get("name"),
+            }
+        except Exception:
+            records = {}
+
+        return {
+            "exported_at": f"Week {week}",
+            "player_camp": camp_snapshot,
+            "champions":   champions,
+            "rankings":    rankings,
+            "recent_news": news_lines,
+            "recent_events": recent_events,
+            "record_highlights": records,
+        }
 
     # =========================================================================
     # COACH 3-STAT SYSTEM

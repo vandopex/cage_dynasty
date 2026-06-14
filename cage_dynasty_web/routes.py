@@ -2165,6 +2165,26 @@ def register_routes(app):
             saves=saves,
         )
 
+    @app.route('/export/universe')
+    def export_universe():
+        """Download universe snapshot JSON for external analysis."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            flash("No game loaded.", "error")
+            return redirect(url_for('saves_menu'))
+        import json
+        data = bridge.get_universe_export()
+        from flask import Response
+        json_str = json.dumps(data, indent=2, default=str)
+        return Response(
+            json_str,
+            mimetype='application/json',
+            headers={
+                'Content-Disposition':
+                    f'attachment; filename=cage_dynasty_week{bridge._game_state.week_number}.json'
+            }
+        )
+
     @app.route('/saves/save/<slot>', methods=['POST'])
     def save_game_slot(slot):
         bridge = get_bridge()
