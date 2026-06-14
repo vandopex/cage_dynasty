@@ -653,6 +653,9 @@ class WebFighter:
     # populated from FighterRecord.ko_losses / sub_losses if present).
     ko_losses:        int  = 0
     sub_losses:       int  = 0
+    # Chin durability tracking (Ship #44)
+    ko_losses_received: int   = 0
+    chin_perm_erosion:  float = 0.0
     # Career FOTN awards — incremented when fighter is part of FOTN selection.
     career_fotn_awards: int = 0
     # Body frame relative to weight class (1=very small, 10=very large).
@@ -4628,6 +4631,8 @@ class GameBridge:
             ko_wins=f.ko_wins,
             sub_wins=f.sub_wins,
             ko_losses=getattr(f, 'ko_losses', 0) or 0,
+            ko_losses_received=int(fdata.get('ko_losses_received', 0)),
+            chin_perm_erosion=float(fdata.get('chin_permanent_erosion', 0.0)),
             sub_losses=getattr(f, 'sub_losses', 0) or 0,
             career_fotn_awards=getattr(f, 'career_fotn_awards', 0) or 0,
             record_str=f.record_str,
@@ -5588,8 +5593,19 @@ class GameBridge:
                         pass
                     if effective > 0.01:
                         if fighter_id in self._game_state._fighter_data:
-                            self._game_state._fighter_data[fighter_id][stat] = round(
-                                min(100.0, current + effective), 2)
+                            _fdata_ref = self._game_state._fighter_data[fighter_id]
+                            _new_val = round(min(100.0, current + effective), 2)
+                            # Chin permanent erosion cap — facility soft ceil drops
+                            # by permanent erosion amount; chin cannot train above it.
+                            if stat == 'chin':
+                                _perm_erosion = float(_fdata_ref.get(
+                                    'chin_permanent_erosion', 0.0))
+                                if _perm_erosion > 0:
+                                    _chin_ceil = min(100.0,
+                                        self._TIER_SOFT_CEIL.get(
+                                            camp_tier.upper(), 65) - _perm_erosion)
+                                    _new_val = min(_new_val, _chin_ceil)
+                            _fdata_ref[stat] = _new_val
                         actual_gains[stat] = round(effective, 2)
 
                 # Read current fatigue from _fighter_data (canonical source) —
@@ -8649,6 +8665,14 @@ class GameBridge:
                                 )
                     except Exception as _cse:
                         print(f"⚠️ Career stat accumulation failed: {_cse}")
+                    try:
+                        _loser_id = _eng.loser_id
+                        _method   = _eng.method
+                        if _loser_id and _method:
+                            self._apply_chin_erosion(_loser_id, _method,
+                                self._game_state.week_number if self._game_state else 0)
+                    except Exception as _ce:
+                        print(f"⚠️  Chin erosion failed: {_ce}")
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw — skip winner pick
                         _is_draw_a = True
@@ -9007,6 +9031,14 @@ class GameBridge:
                                 )
                     except Exception as _cse:
                         print(f"⚠️ Career stat accumulation failed: {_cse}")
+                    try:
+                        _loser_id = _eng.loser_id
+                        _method   = _eng.method
+                        if _loser_id and _method:
+                            self._apply_chin_erosion(_loser_id, _method,
+                                self._game_state.week_number if self._game_state else 0)
+                    except Exception as _ce:
+                        print(f"⚠️  Chin erosion failed: {_ce}")
                     if _eng.winner_id is None:
                         # Ship DR2: engine returned a draw
                         _is_draw_b = True
@@ -9631,6 +9663,69 @@ class GameBridge:
                     "category": "record",
                     "week": week,
                 })
+
+    def _apply_chin_erosion(self, fighter_id: str, method: str, week: int) -> None:
+        """Apply chin erosion after a KO/TKO loss.
+
+        First 2 KO losses: recoverable stat decrease (-2, -3).
+        3rd+ KO losses: additional permanent -1 per loss on top of recoverable hit.
+        Permanent erosion is tracked separately and subtracted from any chin gains
+        during training — the fighter's ceiling drops, not just their current value.
+        Only applies to KO and TKO finishes — not decisions or submissions.
+        """
+        if not self._game_state:
+            return
+
+        method_upper = str(method).upper()
+        if not any(m in method_upper for m in ['KO', 'TKO']):
+            return
+
+        fdata = self._game_state._fighter_data.get(fighter_id, {})
+        if not fdata:
+            return
+
+        fighter = self._game_state.get_fighter(fighter_id)
+        if not fighter:
+            return
+
+        ko_losses = int(fdata.get('ko_losses_received', 0))
+        ko_losses += 1
+        fdata['ko_losses_received'] = ko_losses
+
+        if ko_losses == 1:
+            erosion = 2
+        elif ko_losses == 2:
+            erosion = 3
+        else:
+            erosion = 4
+
+        current_chin = float(fdata.get('chin', getattr(fighter, 'chin', 50)))
+        new_chin = max(20.0, current_chin - erosion)
+        fdata['chin'] = round(new_chin, 1)
+
+        if hasattr(fighter, 'chin'):
+            fighter.chin = new_chin
+
+        if ko_losses >= 3:
+            perm = float(fdata.get('chin_permanent_erosion', 0.0))
+            perm += 1.0
+            fdata['chin_permanent_erosion'] = round(perm, 1)
+
+        name = getattr(fighter, 'name', 'Fighter')
+        if ko_losses == 1:
+            headline = f"🩹 {name} takes their first KO loss — chin durability affected."
+        elif ko_losses == 2:
+            headline = f"⚠️ {name} suffers a second KO loss. Chin durability is a concern."
+        else:
+            headline = f"🚨 {name} knocked out for the {ko_losses}{'rd' if ko_losses==3 else 'th'} time. Serious durability questions."
+
+        self._news_items.insert(0, {
+            "headline": headline,
+            "category": "injury",
+            "week": week,
+        })
+
+        self._clear_cache()
 
     def _get_title_records(self) -> Dict[str, Any]:
         """Ship HOF1: aggregate title-related records across champions."""
@@ -11795,6 +11890,14 @@ class GameBridge:
                     )
         except Exception as _cse:
             print(f"⚠️ Career stat accumulation failed: {_cse}")
+        try:
+            _loser_id = eng_result.loser_id
+            _method   = eng_result.method
+            if _loser_id and _method:
+                self._apply_chin_erosion(_loser_id, _method,
+                    self._game_state.week_number if self._game_state else 0)
+        except Exception as _ce:
+            print(f"⚠️  Chin erosion failed: {_ce}")
 
         # Translate engine result → our dict format
         import random as _rnd2

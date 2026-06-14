@@ -593,7 +593,8 @@
             <div style="padding:var(--spacing-sm) var(--spacing-md);">
                 {% for name, value in pairs %}
                 {% if value is not none %}
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"
+                     {% if name == 'Chin' %}title="Chin durability — affected by KO losses.{% if fighter.ko_losses_received > 0 %} {{ fighter.ko_losses_received }} KO loss{{ 'es' if fighter.ko_losses_received != 1 else '' }} on record.{% endif %}"{% endif %}>
                     <span style="font-size:.72rem;color:var(--text-muted);width:90px;flex-shrink:0;">{{ name }}</span>
                     <div class="stat-bar-track" style="flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden;">
                         <div style="width:{{ value }}%;height:100%;border-radius:5px;
@@ -603,6 +604,10 @@
                                  color:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}var(--text-muted){% endif %};">
                         {{ value }}
                     </span>
+                    {% if name == 'Chin' and fighter.ko_losses_received >= 3 and fighter.chin_perm_erosion > 0 %}
+                    <span title="Permanent chin damage from repeated KO losses — training cannot fully restore this"
+                          style="font-size:.6rem;color:var(--blood-red);margin-left:3px;">⚠</span>
+                    {% endif %}
                 </div>
                 {% endif %}
                 {% endfor %}
