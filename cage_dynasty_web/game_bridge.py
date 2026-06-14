@@ -1735,6 +1735,49 @@ class GameBridge:
         meta = data.get("meta", {})
         print(f"✅ Game loaded from slot '{slot}' (Week {meta.get('week', '?')})")
 
+        # ── Ship #48 backfill: scan pre-existing fight_history ──
+        try:
+            if self._game_state and self._game_state.fighters:
+                _bf_count = 0
+                for _bf_fid, _bf_ftr in self._game_state.fighters.items():
+                    _fdata = self._game_state._fighter_data.get(_bf_fid)
+                    if _fdata is None:
+                        continue
+                    if 'sig_backfill_done' in _fdata:
+                        continue
+                    _history = getattr(_bf_ftr, 'fight_history', []) or []
+                    _ko_wins = 0
+                    _sub_wins = 0
+                    for _entry in _history:
+                        if not isinstance(_entry, dict):
+                            continue
+                        if _entry.get('result') != 'W':
+                            continue
+                        _m = str(_entry.get('method', '')).upper()
+                        if 'KO' in _m or 'TKO' in _m:
+                            _ko_wins += 1
+                        elif 'SUB' in _m:
+                            _sub_wins += 1
+                    if _fdata.get('sig_ko_wins', 0) == 0 and _ko_wins > 0:
+                        _fdata['sig_ko_wins'] = _ko_wins
+                    if _fdata.get('sig_sub_wins', 0) == 0 and _sub_wins > 0:
+                        _fdata['sig_sub_wins'] = _sub_wins
+                    _fdata['sig_backfill_done'] = True
+                    # Evaluate signature — suppress news during backfill
+                    try:
+                        _pre_news_len = len(self._news_items)
+                        self._evaluate_signature(_bf_fid, _fdata,
+                            self._game_state.week_number if self._game_state else 0)
+                        # Remove any news items added during backfill
+                        if len(self._news_items) > _pre_news_len:
+                            self._news_items = self._news_items[:_pre_news_len]
+                    except Exception:
+                        pass
+                    _bf_count += 1
+                print(f"✅ Ship #48 backfill: {_bf_count} fighters scanned")
+        except Exception as _bfe:
+            print(f"⚠️  Ship #48 backfill failed: {_bfe}")
+
         return {"success": True, "meta": meta}
 
     def get_web_saves(self) -> List[Dict[str, Any]]:
