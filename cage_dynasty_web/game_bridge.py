@@ -1008,6 +1008,10 @@ class GameBridge:
         except ImportError:
             self._belt_history = None
 
+        # Captured from WorldInitializer after world-gen (see PART 2 below).
+        # None until rich world-gen runs; remains None for mock/legacy paths.
+        self._coach_system: Optional[Any] = None
+
         # Ship C: DFC event numbering offset. World-gen produces N events
         # (DFC 1 - DFC N); the player career should start at DFC N+1, not
         # DFC 1. Captured from game_state.next_event_number after world-gen
@@ -1077,6 +1081,14 @@ class GameBridge:
                 _captured_bh = _initializer.get_belt_history()
                 if _captured_bh is not None:
                     self._belt_history = _captured_bh
+                try:
+                    _captured_cs = _initializer.get_coach_system()
+                    if _captured_cs is not None:
+                        self._coach_system = _captured_cs
+                        print(f"✅ CoachSystem captured: "
+                              f"{len(getattr(_captured_cs,'_coaches',{}))} coaches")
+                except Exception as _cse:
+                    print(f"⚠️  CoachSystem capture failed: {_cse}")
                 # Ship C: capture next-event-number from world-gen so player
                 # career events continue from DFC N+1 (where N = sim event
                 # count) instead of colliding at DFC 1. Read directly from
@@ -1463,6 +1475,7 @@ class GameBridge:
             "injury_system":            self._injury_system.to_dict() if self._injury_system else {},
             "rivalry_system":           get_rivalry_system().to_dict() if RIVALRY_AVAILABLE else {},
             "belt_history":             self._belt_history.to_dict() if self._belt_history else {},
+            "coach_system":             self._serialize_coach_system(),
             "dfc_event_offset":         self._dfc_event_offset,
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
@@ -1693,6 +1706,11 @@ class GameBridge:
                 self._belt_history = _BH_load.from_dict(data["belt_history"])
             except Exception as _bhe:
                 print(f"⚠️ Could not restore belt history: {_bhe}")
+        if "coach_system" in data and data["coach_system"]:
+            try:
+                self._deserialize_coach_system(data["coach_system"])
+            except Exception as _cle:
+                print(f"⚠️  CoachSystem load failed: {_cle}")
         # Ship C: restore DFC event-numbering offset. Backward compat:
         # legacy saves without the key default to 0 (no offset, original
         # labels preserved).
@@ -3250,36 +3268,40 @@ class GameBridge:
                                 "week": self._game_state.week_number if self._game_state else 0,
                             })
             else:
-                if not _camp_id or not hasattr(self, '_coach_system'):
+                if not _camp_id or not self._coach_system:
                     return
-                _camp_coach_ids = getattr(
-                    self._coach_system, '_camp_coaches', {}
-                ).get(_camp_id, [])
-                if not _camp_coach_ids:
-                    return
-                _head_coach_id = _camp_coach_ids[0]
-                _coach_obj = self._coach_system._coaches.get(_head_coach_id)
-                if not _coach_obj:
-                    return
-                if not hasattr(_coach_obj, 'experience'):
-                    _coach_obj.experience = 0
-                if not hasattr(_coach_obj, 'potential'):
-                    _ov = getattr(_coach_obj, 'overall', 60)
-                    if _ov >= 80:   _coach_obj.potential = 'Elite'
-                    elif _ov >= 68: _coach_obj.potential = 'High'
-                    elif _ov >= 55: _coach_obj.potential = 'Average'
-                    else:           _coach_obj.potential = 'Limited'
-                _pot  = _coach_obj.potential
-                _ceil = _POT_CEIL.get(_pot, 80)
-                _cur  = int(getattr(_coach_obj, 'overall', 60))
-                if _cur < _ceil:
-                    _coach_obj.experience = int(_coach_obj.experience) + _xp_points
-                    if _coach_obj.experience % _XP_PER_POINT == 0:
-                        _new = min(_ceil, _cur + 1)
-                        _coach_obj.overall = _new
+                try:
+                    _camp_coach_ids = getattr(
+                        self._coach_system, '_camp_coaches', {}
+                    ).get(_camp_id, [])
+                    if not _camp_coach_ids:
+                        return
+                    _head_coach_id = _camp_coach_ids[0]
+                    _coach_obj = getattr(
+                        self._coach_system, '_coaches', {}
+                    ).get(_head_coach_id)
+                    if not _coach_obj or not hasattr(_coach_obj, 'add_xp'):
+                        return
+                    _improved = _coach_obj.add_xp(_xp_points)
+                    if _improved:
                         _camp_obj = self._game_state.camps.get(_camp_id)
                         if _camp_obj:
-                            _camp_obj.head_coach_rating = _new
+                            _camp_obj.head_coach_rating = (
+                                _coach_obj.overall_rating)
+                            _camp_name = getattr(_camp_obj, 'name', '')
+                            _cname = getattr(_coach_obj, 'name', 'Coach')
+                            self._news_items.insert(0, {
+                                "headline": (
+                                    f"📈 {_cname} growing as a coach at "
+                                    f"{_camp_name}. "
+                                    f"Rating now "
+                                    f"{_coach_obj.overall_rating}."),
+                                "category": "training",
+                                "week": (self._game_state.week_number
+                                         if self._game_state else 0),
+                            })
+                except Exception as _cxpe2:
+                    print(f"⚠️  AI coach XP failed: {_cxpe2}")
         except Exception as _cxpe:
             print(f"⚠️  Coach XP failed: {_cxpe}")
 
@@ -8011,7 +8033,7 @@ class GameBridge:
                     getattr(self._coach_system, '_coaches', {}).items()):
                 try:
                     _pot   = getattr(_coach_obj, 'potential', 'Average')
-                    _rating = int(getattr(_coach_obj, 'overall', 60))
+                    _rating = int(getattr(_coach_obj, 'overall_rating', 60))
                     _age    = int(getattr(_coach_obj, 'age', 45))
                     _cname  = getattr(_coach_obj, 'name', 'Coach')
                     _camp_id = getattr(_coach_obj, 'camp_id', None)
@@ -8022,11 +8044,16 @@ class GameBridge:
 
                     _drift_chance = _DRIFT_CHANCE.get(_pot, 0.20)
                     if _cc_rnd.random() < _drift_chance and _rating > 40:
-                        _coach_obj.overall = _rating - 1
+                        _primary = getattr(_coach_obj, 'primary_skill',
+                                           'striking')
+                        _cur_skill = int(getattr(_coach_obj, _primary, 50))
+                        if _cur_skill > 40:
+                            setattr(_coach_obj, _primary, _cur_skill - 1)
                         if _camp_id:
                             _camp_obj = self._game_state.camps.get(_camp_id)
                             if _camp_obj:
-                                _camp_obj.head_coach_rating = _rating - 1
+                                _camp_obj.head_coach_rating = (
+                                    _coach_obj.overall_rating)
 
                     _ret_chance = max(0, (_age - 55) * 0.05)
                     if _cc_rnd.random() < _ret_chance:
@@ -8044,15 +8071,19 @@ class GameBridge:
                         _new_age    = _cc_rnd.randint(32, 44)
                         _new_pot    = _cc_rnd.choice(
                             ['Average','Average','High','Limited','Limited'])
-                        _coach_obj.overall  = _new_rating
+                        for _sk in ('striking', 'wrestling', 'jiu_jitsu',
+                                    'conditioning', 'strength'):
+                            if hasattr(_coach_obj, _sk):
+                                setattr(_coach_obj, _sk, _new_rating)
                         _coach_obj.potential = _new_pot
                         if hasattr(_coach_obj, 'age'):
                             _coach_obj.age = _new_age
-                        _coach_obj.experience = 0
+                        _coach_obj.experience_xp = 0
                         if _camp_id:
                             _camp_obj = self._game_state.camps.get(_camp_id)
                             if _camp_obj:
-                                _camp_obj.head_coach_rating = _new_rating
+                                _camp_obj.head_coach_rating = (
+                                    _coach_obj.overall_rating)
 
                     elif _rating >= 78 and _cc_rnd.random() < 0.06:
                         _camp_name = ''
@@ -8069,6 +8100,47 @@ class GameBridge:
                     continue
         except Exception as _ace:
             print(f"⚠️  AI coach career tick failed: {_ace}")
+
+    def _serialize_coach_system(self) -> Dict[str, Any]:
+        """Serialize CoachSystem to JSON-safe dict."""
+        if not self._coach_system:
+            return {}
+        try:
+            coaches_data = {}
+            for cid, coach in getattr(
+                    self._coach_system, '_coaches', {}).items():
+                if hasattr(coach, 'to_dict'):
+                    coaches_data[cid] = coach.to_dict()
+            camp_coaches = dict(
+                getattr(self._coach_system, '_camp_coaches', {}))
+            return {
+                "coaches": coaches_data,
+                "camp_coaches": {k: list(v) for k, v in camp_coaches.items()},
+            }
+        except Exception as _se:
+            print(f"⚠️  CoachSystem serialize failed: {_se}")
+            return {}
+
+    def _deserialize_coach_system(self, data: Dict[str, Any]) -> None:
+        """Restore CoachSystem from saved dict."""
+        if not data:
+            return
+        try:
+            from systems.coaches import CoachSystem, Coach
+            cs = CoachSystem()
+            for cid, cdata in data.get("coaches", {}).items():
+                try:
+                    coach = Coach.from_dict(cdata)
+                    cs._coaches[cid] = coach
+                except Exception:
+                    continue
+            for camp_id, coach_ids in data.get(
+                    "camp_coaches", {}).items():
+                cs._camp_coaches[camp_id] = list(coach_ids)
+            self._coach_system = cs
+            print(f"✅ CoachSystem restored: {len(cs._coaches)} coaches")
+        except Exception as _de:
+            print(f"⚠️  CoachSystem deserialize failed: {_de}")
 
     def _generate_coach_name(self) -> str:
         """Generate a random coach name for replacements."""
