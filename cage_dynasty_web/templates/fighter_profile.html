@@ -67,12 +67,13 @@
 {% set style_tagline = _style_entry.tagline %}
 {% set style_accent  = style_family_color.get(style_family, "var(--text-muted)") %}
 
-{# ── Career phase ── #}
-{% if fighter.age < 24 %}{% set phase = "Prospect" %}{% set phase_color = "var(--neon-green)" %}
-{% elif fighter.age < 27 %}{% set phase = "Rising" %}{% set phase_color = "var(--info)" %}
-{% elif fighter.age < 31 %}{% set phase = "Prime" %}{% set phase_color = "var(--gold)" %}
-{% elif fighter.age < 34 %}{% set phase = "Veteran" %}{% set phase_color = "var(--warning)" %}
-{% else %}{% set phase = "Late Career" %}{% set phase_color = "var(--text-muted)" %}{% endif %}
+{# ── Career phase (Ship #43, decline-aligned bands from backend) ── #}
+{% set phase = fighter.career_phase or "Prime" %}
+{% set phase_color =
+    "var(--info)"    if phase == "Rising"    else
+    "var(--gold)"    if phase == "Prime"     else
+    "var(--warning)" if phase == "Declining" else
+    "var(--text-muted)" %}
 
 {# ── Record breakdown ── #}
 {% set wins = fighter.wins %}

@@ -660,6 +660,8 @@ class WebFighter:
     signature_technique: str = ""
     signature_category:  str = ""
     signature_count:     int = 0
+    # Career phase (Ship #43) — decline-aligned bands
+    career_phase:        str = ""
     # Career FOTN awards — incremented when fighter is part of FOTN selection.
     career_fotn_awards: int = 0
     # Body frame relative to weight class (1=very small, 10=very large).
@@ -4705,6 +4707,12 @@ class GameBridge:
             signature_technique=str(fdata.get('signature_technique', '')),
             signature_category=str(fdata.get('signature_category', '')),
             signature_count=int(fdata.get('signature_count', 0)),
+            career_phase=(
+                "Rising"    if f.age < 26 else
+                "Prime"     if f.age <= 30 else
+                "Declining" if f.age <= 36 else
+                "Veteran"
+            ),
             sub_losses=getattr(f, 'sub_losses', 0) or 0,
             career_fotn_awards=getattr(f, 'career_fotn_awards', 0) or 0,
             record_str=f.record_str,
@@ -5254,6 +5262,17 @@ class GameBridge:
         "ELITE":    100,
     }
 
+    # Prime/decline curve constants (Ship #43)
+    _DECLINE_PHYSICAL_STATS = ["speed", "strength", "cardio", "chin", "recovery"]
+    _DECLINE_TECHNIQUE_STATS = ["kicks", "boxing", "takedowns", "submissions"]
+    _PRIME_START   = 26
+    _DECLINE_START = 31
+    _DECLINE_RATE = {
+        "early":  {"age_min": 31, "age_max": 33, "amount": 0.10, "physical": 2, "technique": 0},
+        "mid":    {"age_min": 34, "age_max": 36, "amount": 0.15, "physical": 3, "technique": 1},
+        "late":   {"age_min": 37, "age_max": 99, "amount": 0.20, "physical": 3, "technique": 2},
+    }
+
     # Equipment system constants
     _EQUIPMENT_TYPES = {
         "heavy_bags":       {"name": "Heavy Bags",      "icon": "🥊",
@@ -5692,6 +5711,19 @@ class GameBridge:
                     self._game_state._fighter_data[fighter_id]['fatigue'] = fatigue
                 if hasattr(fighter, 'fatigue'):
                     fighter.fatigue = fatigue
+
+                # Age decline — applies weekly for fighters 31+
+                _fighter_age = getattr(fighter, 'age', 0) if fighter else 0
+                if _fighter_age >= 31:
+                    try:
+                        _decline_losses = self._apply_age_decline(
+                            fighter_id, _fighter_age, camp_tier, intensity
+                        )
+                        if _decline_losses:
+                            for _ds, _dv in _decline_losses.items():
+                                actual_gains[f"{_ds} (age)"] = -_dv
+                    except Exception as _ae:
+                        print(f"⚠️  Age decline failed: {_ae}")
 
                 # Style-weighted OVR — see _compute_ovr for weight vectors.
                 fighter.overall_rating = self._compute_ovr(fighter)
@@ -7556,6 +7588,14 @@ class GameBridge:
 
                 # Style-weighted OVR — see _compute_ovr for weight vectors.
                 fighter.overall_rating = self._compute_ovr(fighter)
+
+                # Age decline — applies weekly for AI fighters 31+
+                if age >= 31:
+                    try:
+                        self._apply_age_decline(fid, age, tier, "MODERATE")
+                        fighter.overall_rating = self._compute_ovr(fighter)
+                    except Exception as _ae:
+                        print(f"⚠️  AI age decline failed for {fid}: {_ae}")
 
         # Sample output to show AI is developing
         if self._game_state:
@@ -9863,6 +9903,92 @@ class GameBridge:
         })
 
         self._clear_cache()
+
+    def _apply_age_decline(self, fighter_id: str, age: int,
+                            camp_tier: str, intensity: str) -> Dict[str, float]:
+        """Apply passive age-based stat decline for fighters in decline phase.
+
+        Fires weekly for fighters 31+. Physical stats decline first,
+        technique stats decline later. REST intensity and equipment
+        slow the decline. Fight IQ and heart never decline.
+        Returns dict of {stat: amount_lost} for display."""
+        if age < self._DECLINE_START:
+            return {}
+        if not self._game_state:
+            return {}
+        fdata = self._game_state._fighter_data.get(fighter_id, {})
+        if not fdata:
+            return {}
+
+        tier_data = None
+        for tier_name, td in self._DECLINE_RATE.items():
+            if td["age_min"] <= age <= td["age_max"]:
+                tier_data = td
+                break
+        if not tier_data:
+            return {}
+
+        import random as _rng_dc
+
+        base = tier_data["amount"]
+
+        intensity_up = str(intensity).upper()
+        if intensity_up == "REST":
+            base *= 0.5
+        elif intensity_up == "LIGHT":
+            base *= 0.75
+
+        try:
+            if self._game_state:
+                _camp_id = self._game_state.player_camp_id
+                _eq_reduction = self.get_equipment_decay_reduction(_camp_id, "recovery")
+                base *= _eq_reduction
+        except Exception:
+            pass
+
+        _TIER_DECLINE_MOD = {
+            "GARAGE": 1.0, "LOCAL": 0.95, "REGIONAL": 0.90,
+            "NATIONAL": 0.85, "ELITE": 0.80,
+        }
+        base *= _TIER_DECLINE_MOD.get(camp_tier.upper(), 1.0)
+
+        if base <= 0:
+            return {}
+
+        declines = {}
+
+        n_physical = tier_data["physical"]
+        _phys_pool = [s for s in self._DECLINE_PHYSICAL_STATS
+                      if s in fdata and float(fdata.get(s, 0)) > 30]
+        if _phys_pool:
+            chosen = _rng_dc.sample(_phys_pool, min(n_physical, len(_phys_pool)))
+            for stat in chosen:
+                current = float(fdata.get(stat, 50))
+                new_val = max(25.0, round(current - base, 2))
+                fdata[stat] = new_val
+                fighter = self._game_state.get_fighter(fighter_id)
+                if fighter and hasattr(fighter, stat):
+                    setattr(fighter, stat, new_val)
+                if current != new_val:
+                    declines[stat] = round(current - new_val, 2)
+
+        n_technique = tier_data["technique"]
+        if n_technique > 0:
+            _tech_pool = [s for s in self._DECLINE_TECHNIQUE_STATS
+                          if s in fdata and float(fdata.get(s, 0)) > 30]
+            if _tech_pool:
+                chosen = _rng_dc.sample(_tech_pool, min(n_technique, len(_tech_pool)))
+                for stat in chosen:
+                    current = float(fdata.get(stat, 50))
+                    new_val = max(25.0, round(current - base, 2))
+                    fdata[stat] = new_val
+                    fighter = self._game_state.get_fighter(fighter_id)
+                    if fighter and hasattr(fighter, stat):
+                        setattr(fighter, stat, new_val)
+                    if current != new_val:
+                        declines[stat] = round(current - new_val, 2)
+
+        return declines
 
     def _accumulate_technique_stats(self, fighter_id: str,
                                      method: str, sub_type: str,
