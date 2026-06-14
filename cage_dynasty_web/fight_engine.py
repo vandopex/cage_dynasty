@@ -1289,7 +1289,7 @@ def select_action(
         Position.SIDE_CONTROL_TOP, Position.CRUCIFIX_TOP, Position.NORTH_SOUTH_TOP,
     }
     if position in _DOMINANT_CLUSTER_POSITIONS:
-        position_secured = fight_state.dominant_control_duration >= 5
+        position_secured = fight_state.dominant_control_duration >= 3
     else:
         position_secured = fight_state.position_duration >= 5
     
