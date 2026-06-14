@@ -5616,6 +5616,19 @@ class GameBridge:
 
         actual_gains: Dict[str, float] = {}
 
+        # Fatigue update fires for ALL intensities including REST.
+        # Must live OUTSIDE the raw_gain > 0 gate — REST has raw_gain=0,
+        # so any block inside that gate skips entirely on REST weeks
+        # and fatigue never recovers.
+        if self._game_state and fighter_id in self._game_state._fighter_data:
+            _fdata_fat = self._game_state._fighter_data[fighter_id]
+            _current_fatigue = int(_fdata_fat.get('fatigue', 0))
+            _new_fatigue = max(0, min(100, _current_fatigue + fatigue_delta))
+            _fdata_fat['fatigue'] = _new_fatigue
+            _ftr_sync = self._game_state.get_fighter(fighter_id)
+            if _ftr_sync and hasattr(_ftr_sync, 'fatigue'):
+                _ftr_sync.fatigue = _new_fatigue
+
         if self._game_state and raw_gain > 0:
             fighter = self._game_state.get_fighter(fighter_id)
             # Per-fighter potential ceiling — read from _fighter_data once.
@@ -5698,19 +5711,6 @@ class GameBridge:
                                     _new_val = min(_new_val, _chin_ceil)
                             _fdata_ref[stat] = _new_val
                         actual_gains[stat] = round(effective, 2)
-
-                # Read current fatigue from _fighter_data (canonical source) —
-                # FighterRecord has no fatigue field post-Ship-#32 so getattr
-                # would always return 0, making fatigue effectively a per-week
-                # delta instead of accumulating across weeks.
-                _current_fatigue = float(
-                    self._game_state._fighter_data.get(fighter_id, {}).get('fatigue', 0)
-                )
-                fatigue = max(0, min(100, _current_fatigue + fatigue_delta))
-                if fighter_id in self._game_state._fighter_data:
-                    self._game_state._fighter_data[fighter_id]['fatigue'] = fatigue
-                if hasattr(fighter, 'fatigue'):
-                    fighter.fatigue = fatigue
 
                 # Age decline — applies weekly for fighters 31+
                 _fighter_age = getattr(fighter, 'age', 0) if fighter else 0
