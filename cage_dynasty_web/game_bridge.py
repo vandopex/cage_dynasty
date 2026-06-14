@@ -8805,6 +8805,22 @@ class GameBridge:
                         fa1, fa2, rounds=_rnds,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
+                    # Store commentary for watch_fight page
+                    try:
+                        _ai_fight_id = fight.get("fight_id",
+                            f"fight_{f1.fighter_id}_{f2.fighter_id}")
+                        if _ai_fight_id and _ai_fight_id not in self._fight_commentary:
+                            _ai_lines = []
+                            if hasattr(_eng, 'full_commentary') and _eng.full_commentary:
+                                _ai_lines = [l for l in _eng.full_commentary.split('\n') if l.strip()]
+                            if _ai_lines:
+                                try:
+                                    _ai_lines = self._enrich_round_summaries(_ai_lines)
+                                except Exception:
+                                    pass
+                                self._fight_commentary[_ai_fight_id] = _ai_lines
+                    except Exception as _ce:
+                        print(f"⚠️ AI commentary store failed: {_ce}")
                     _eng_sub_type = getattr(_eng, 'sub_type', '') or ''
                     try:
                         if _eng and hasattr(_eng, 'fighter1_stats'):
@@ -9182,6 +9198,22 @@ class GameBridge:
                         fa1, fa2, rounds=_rnds,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
+                    # Store commentary for watch_fight page
+                    try:
+                        _ai_fight_id = fight.get("fight_id",
+                            f"fight_{f1.fighter_id}_{f2.fighter_id}")
+                        if _ai_fight_id and _ai_fight_id not in self._fight_commentary:
+                            _ai_lines = []
+                            if hasattr(_eng, 'full_commentary') and _eng.full_commentary:
+                                _ai_lines = [l for l in _eng.full_commentary.split('\n') if l.strip()]
+                            if _ai_lines:
+                                try:
+                                    _ai_lines = self._enrich_round_summaries(_ai_lines)
+                                except Exception:
+                                    pass
+                                self._fight_commentary[_ai_fight_id] = _ai_lines
+                    except Exception as _ce:
+                        print(f"⚠️ AI commentary store failed: {_ce}")
                     _eng_sub_type = getattr(_eng, 'sub_type', '') or ''
                     try:
                         if _eng and hasattr(_eng, 'fighter1_stats'):
