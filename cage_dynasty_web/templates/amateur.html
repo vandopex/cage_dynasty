@@ -37,14 +37,14 @@
                     letter-spacing:.08em;margin-top:2px;">Pro-Ready</div>
     </div>
     <div class="card" style="padding:var(--spacing-md);text-align:center;">
-        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--gold);">
+        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--neon-green);">
             {{ (amateur.recent_tourneys or [])|length }}
         </div>
         <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;
                     letter-spacing:.08em;margin-top:2px;">Tournaments</div>
     </div>
     <div class="card" style="padding:var(--spacing-md);text-align:center;">
-        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--info);">
+        <div style="font-family:var(--font-display);font-size:1.6rem;color:var(--neon-green);">
             {{ graduates|length }}
         </div>
         <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;
@@ -145,9 +145,17 @@
     {# Main content #}
     <div style="flex:1;padding:var(--spacing-md);min-width:0;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+            {% if f.id %}
+            <a href="{{ url_for('fighter_profile', fighter_id=f.id) }}"
+               style="font-family:var(--font-display);font-size:.9rem;color:var(--neon-green);
+                      text-decoration:none;">
+                {{ f.name }}
+            </a>
+            {% else %}
             <span style="font-family:var(--font-display);font-size:.9rem;color:var(--text-bright);">
                 {{ f.name }}
             </span>
+            {% endif %}
             {% if f.is_eligible %}
             <span style="font-size:.55rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
                          padding:2px 6px;border-radius:3px;
@@ -263,7 +271,7 @@
         <div style="padding:var(--spacing-md);
                     border-right:{% if loop.index is odd %}1px solid var(--border-color){% else %}none{% endif %};
                     border-bottom:1px solid var(--border-color);">
-            <div style="font-size:.65rem;color:var(--gold);text-transform:uppercase;
+            <div style="font-size:.65rem;color:var(--neon-green);text-transform:uppercase;
                         letter-spacing:.1em;margin-bottom:var(--spacing-sm);
                         font-family:var(--font-display);">{{ region }}</div>
             {% for f in fighters[:5] %}

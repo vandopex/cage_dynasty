@@ -2,9 +2,20 @@
 {% block title %}Facility{% endblock %}
 {% block content %}
 
-<div class="page-header">
-    <h1 class="page-title">🏗️ Facility</h1>
-    <div class="page-subtitle">Upgrade your training facility</div>
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:var(--spacing-sm);">
+    <div>
+        <h1 class="page-title">🏗️ Facility</h1>
+        <div class="page-subtitle">Upgrade your training facility</div>
+    </div>
+    {% if facility and facility.balance is defined %}
+    <div style="text-align:right;">
+        <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--neon-green);">
+            ${{ "{:,}".format(facility.balance) }}
+        </div>
+        <div style="font-size:.6rem;color:var(--text-muted);text-transform:uppercase;
+                    letter-spacing:.08em;">Available</div>
+    </div>
+    {% endif %}
 </div>
 
 {# ── Coaching Staff panel — Ship MC1b #}
