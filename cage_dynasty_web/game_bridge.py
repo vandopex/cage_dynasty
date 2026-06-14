@@ -7273,9 +7273,49 @@ class GameBridge:
                         "week":     week,
                     })
 
+            # Stat → equipment domain map (for player camp decay reduction)
+            _DECAY_STAT_TO_DOMAIN = {
+                "boxing":           "striking",
+                "kicks":            "striking",
+                "clinch_striking":  "striking",
+                "clinch":           "striking",
+                "striking_defense": "striking",
+                "takedowns":        "wrestling",
+                "top_control":      "wrestling",
+                "takedown_defense": "wrestling",
+                "submissions":      "bjj",
+                "guard":            "bjj",
+                "strength":         "physical",
+                "speed":            "physical",
+                "cardio":           "physical",
+                "recovery":         "recovery",
+                "chin":             "recovery",
+                "fight_iq":         "mental",
+                "composure":        "mental",
+                "heart":            "mental",
+            }
+            import random as _rnd_eq_decay
+            # Track decays absorbed by equipment so we skip them in
+            # the training-history stitching pass too.
+            _absorbed_decays = set()
+
             # Apply decays to real fighters
             for decay in decays:
                 ftr = self._game_state.get_fighter(decay.fighter_id)
+                # Equipment decay reduction for player camp fighters
+                try:
+                    if (ftr and self._game_state
+                        and getattr(ftr, 'camp_id', None) == self._game_state.player_camp_id):
+                        _domain = _DECAY_STAT_TO_DOMAIN.get(decay.stat, "")
+                        if _domain:
+                            _reduction = self.get_equipment_decay_reduction(
+                                self._game_state.player_camp_id, _domain)
+                            # _reduction is 0.6-1.0 (e.g. 0.8 = 20% less decay)
+                            if _reduction < 1.0 and _rnd_eq_decay.random() > _reduction:
+                                _absorbed_decays.add((decay.fighter_id, decay.stat))
+                                continue
+                except Exception:
+                    pass
                 if ftr and hasattr(ftr, decay.stat):
                     current = getattr(ftr, decay.stat, 50)
                     setattr(ftr, decay.stat, max(1, current - decay.amount))
@@ -7311,6 +7351,9 @@ class GameBridge:
                         latest["coach_boosts"][boost.stat] = current + float(boost.amount)
             for decay in decays:
                 fid = decay.fighter_id
+                # Skip decays absorbed by equipment — don't show ghost pills.
+                if (fid, decay.stat) in _absorbed_decays:
+                    continue
                 if fid in self._training_history and self._training_history[fid]:
                     latest = self._training_history[fid][-1]
                     if latest.get("week") == week:
