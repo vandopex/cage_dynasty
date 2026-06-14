@@ -1837,7 +1837,7 @@ def calculate_strike_success(
     
     # Base success chance
     success_chance = 0.3 + (offense / (offense + defense + 1)) * 0.5
-    success_chance = max(0.25, min(0.85, success_chance))
+    success_chance = max(0.15, min(0.85, success_chance))
     
     # UPSET VARIANCE: Underdogs can land lucky shots
     # Anyone can get caught in MMA - Serra vs GSP, etc.
@@ -2419,7 +2419,7 @@ def attempt_submission(
     
     # Lock-in chance - VERY HIGH because attempts are now rare
     lock_in_chance = 0.30 + sub_bonus + (offense / (offense + defense + 1)) * 0.55
-    lock_in_chance = min(0.50, lock_in_chance)  # Cap at 50%
+    lock_in_chance = min(0.70, lock_in_chance)  # Cap at 70%
     locked_in = random.random() < lock_in_chance
     
     if not locked_in:
