@@ -3,6 +3,20 @@
 
 {% block content %}
 
+<div style="background:rgba(255,215,0,.06);border:1px solid rgba(255,215,0,.15);
+            border-radius:6px;padding:var(--spacing-sm) var(--spacing-md);
+            margin-bottom:var(--spacing-md);
+            display:flex;align-items:center;gap:10px;">
+    <span style="font-size:.9rem;flex-shrink:0;">🏕️</span>
+    <div style="font-size:.75rem;color:var(--text-muted);line-height:1.5;">
+        Fight camp <strong style="color:var(--gold);">overrides weekly training</strong>
+        for {{ data.player.name }} until fight night. Your other fighters continue
+        their normal training. To rest during camp, set intensity to
+        <strong style="color:var(--text-bright);">Light</strong> here — REST is not
+        available during fight camp.
+    </div>
+</div>
+
 {# ── Fight info header ── #}
 <div style="text-align:center;padding:var(--spacing-xl) 0 var(--spacing-lg);">
     <div style="font-size:.72rem;letter-spacing:.2em;color:var(--text-muted);

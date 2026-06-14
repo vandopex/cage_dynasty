@@ -668,6 +668,8 @@ class WebFighter:
     # Drives cut severity in the engine and division-move alerts.
     body_frame:            int = 5
     natural_weight_class:  str = ""
+    # True if this fighter has a scheduled fight with an active fight camp
+    fight_camp_active:     bool = False
 
 
 @dataclass
@@ -4707,6 +4709,12 @@ class GameBridge:
             signature_technique=str(fdata.get('signature_technique', '')),
             signature_category=str(fdata.get('signature_category', '')),
             signature_count=int(fdata.get('signature_count', 0)),
+            fight_camp_active=any(
+                (sf.get('fighter1_id') == f.fighter_id
+                 or sf.get('fighter2_id') == f.fighter_id)
+                and sf.get('fight_id') in self._fight_camps
+                for sf in self._scheduled_fights
+            ),
             career_phase=(
                 "Rising"    if f.age < 26 else
                 "Prime"     if f.age <= 30 else
