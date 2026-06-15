@@ -449,6 +449,46 @@
           id="queue-form-{{ fighter.fighter_id }}"
           style="margin-top:var(--spacing-sm);">
 
+        {# Style template loader #}
+        <div style="margin-bottom:var(--spacing-md);">
+            <div style="font-size:.65rem;color:var(--text-muted);
+                        margin-bottom:6px;">
+                Load a template for
+                <span style="color:var(--info);">
+                    {{ fighter.fighting_style }}</span>:
+            </div>
+            <button type="button"
+                    onclick="loadStyleTemplate(
+                        '{{ fighter.fighter_id }}',
+                        '{{ fighter.fighting_style }}',
+                        {{ fighter.boxing }},
+                        {{ fighter.kicks }},
+                        {{ fighter.clinch_striking }},
+                        {{ fighter.striking_defense }},
+                        {{ fighter.takedowns }},
+                        {{ fighter.takedown_defense }},
+                        {{ fighter.top_control }},
+                        {{ fighter.submissions }},
+                        {{ fighter.guard }},
+                        {{ fighter.strength }},
+                        {{ fighter.speed }},
+                        {{ fighter.cardio }},
+                        {{ fighter.chin }},
+                        {{ fighter.recovery }},
+                        {{ fighter.fight_iq }},
+                        {{ fighter.composure }},
+                        {{ fighter.heart }},
+                        '{{ fighter.career_phase }}'
+                    )"
+                    style="font-size:.68rem;padding:4px 12px;
+                           background:rgba(255,165,0,.08);
+                           border:1px solid rgba(255,165,0,.25);
+                           color:var(--gold);border-radius:4px;
+                           cursor:pointer;">
+                ✨ Load {{ fighter.fighting_style }} Template
+            </button>
+        </div>
+
         <div style="margin-bottom:var(--spacing-sm);">
             <label style="font-size:.65rem;color:var(--text-muted);
                           display:block;margin-bottom:4px;">
@@ -653,6 +693,288 @@ function addQueueRow(fighterId) {
                       text-align:center;">
     `;
     container.appendChild(row);
+}
+
+function loadStyleTemplate(fighterId, style,
+    boxing, kicks, clinch, strDef, takedowns, tdDef,
+    topCtrl, subs, guard, strength, speed, cardio,
+    chin, recovery, fightIq, composure, heart, careerPhase) {
+
+    function goal(cur, styleMin) {
+        const t = Math.max(cur + 15, styleMin);
+        return Math.min(95, t);
+    }
+
+    const intensity = (careerPhase === 'Declining' || careerPhase === 'Veteran')
+        ? 'MODERATE' : 'INTENSE';
+
+    const templates = {
+        'Orthodox Boxer':   {
+            queue: [
+                {focus:'boxing',           target: goal(boxing, 82)},
+                {focus:'striking_defense', target: goal(strDef, 72)},
+                {focus:'cardio',           target: goal(cardio, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {boxing:65, striking_defense:55, cardio:60,
+                     chin:55, fight_iq:55},
+        },
+        'Kickboxer': {
+            queue: [
+                {focus:'kicks',            target: goal(kicks, 82)},
+                {focus:'boxing',           target: goal(boxing, 72)},
+                {focus:'striking_defense', target: goal(strDef, 68)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {kicks:65, boxing:60, striking_defense:55, cardio:60},
+        },
+        'Muay Thai': {
+            queue: [
+                {focus:'kicks',            target: goal(kicks, 80)},
+                {focus:'clinch_striking',  target: goal(clinch, 78)},
+                {focus:'striking_defense', target: goal(strDef, 68)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {kicks:65, clinch_striking:60, chin:60, cardio:60},
+        },
+        'Pressure Fighter': {
+            queue: [
+                {focus:'boxing',           target: goal(boxing, 80)},
+                {focus:'cardio',           target: goal(cardio, 78)},
+                {focus:'chin',             target: goal(chin, 72)},
+                {focus:'clinch_striking',  target: goal(clinch, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {boxing:65, cardio:65, chin:60, clinch_striking:55},
+        },
+        'Counter Striker': {
+            queue: [
+                {focus:'striking_defense', target: goal(strDef, 85)},
+                {focus:'fight_iq',         target: goal(fightIq, 80)},
+                {focus:'boxing',           target: goal(boxing, 72)},
+                {focus:'speed',            target: goal(speed, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {striking_defense:70, fight_iq:65, boxing:55,
+                     composure:60},
+        },
+        'Point Fighter': {
+            queue: [
+                {focus:'fight_iq',         target: goal(fightIq, 85)},
+                {focus:'speed',            target: goal(speed, 78)},
+                {focus:'striking_defense', target: goal(strDef, 75)},
+                {focus:'boxing',           target: goal(boxing, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {fight_iq:68, speed:62, striking_defense:60,
+                     composure:60},
+        },
+        'Karate': {
+            queue: [
+                {focus:'striking_defense', target: goal(strDef, 82)},
+                {focus:'kicks',            target: goal(kicks, 78)},
+                {focus:'speed',            target: goal(speed, 72)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {striking_defense:65, kicks:60, speed:60,
+                     fight_iq:55},
+        },
+        'Wrestler': {
+            queue: [
+                {focus:'takedowns',        target: goal(takedowns, 88)},
+                {focus:'top_control',      target: goal(topCtrl, 80)},
+                {focus:'takedown_defense', target: goal(tdDef, 75)},
+                {focus:'strength',         target: goal(strength, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {takedowns:68, top_control:60, takedown_defense:60,
+                     strength:58, cardio:58},
+        },
+        'BJJ Specialist': {
+            queue: [
+                {focus:'submissions',      target: goal(subs, 90)},
+                {focus:'guard',            target: goal(guard, 82)},
+                {focus:'takedowns',        target: goal(takedowns, 72)},
+                {focus:'top_control',      target: goal(topCtrl, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {submissions:70, guard:65, takedowns:55,
+                     top_control:55},
+        },
+        'Sambo': {
+            queue: [
+                {focus:'takedowns',        target: goal(takedowns, 85)},
+                {focus:'submissions',      target: goal(subs, 78)},
+                {focus:'top_control',      target: goal(topCtrl, 72)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {takedowns:65, submissions:60, top_control:58,
+                     strength:58},
+        },
+        'Judo': {
+            queue: [
+                {focus:'takedowns',        target: goal(takedowns, 85)},
+                {focus:'top_control',      target: goal(topCtrl, 75)},
+                {focus:'strength',         target: goal(strength, 72)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {takedowns:65, top_control:60, strength:60,
+                     chin:55},
+        },
+        'Ground & Pound': {
+            queue: [
+                {focus:'takedowns',        target: goal(takedowns, 85)},
+                {focus:'top_control',      target: goal(topCtrl, 82)},
+                {focus:'boxing',           target: goal(boxing, 75)},
+                {focus:'strength',         target: goal(strength, 72)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {takedowns:65, top_control:62, boxing:58,
+                     strength:58, cardio:58},
+        },
+        'Sprawl & Brawl': {
+            queue: [
+                {focus:'takedown_defense', target: goal(tdDef, 85)},
+                {focus:'boxing',           target: goal(boxing, 80)},
+                {focus:'chin',             target: goal(chin, 72)},
+                {focus:'cardio',           target: goal(cardio, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {takedown_defense:68, boxing:62, chin:60,
+                     cardio:60},
+        },
+        'Clinch Fighter': {
+            queue: [
+                {focus:'clinch_striking',  target: goal(clinch, 85)},
+                {focus:'top_control',      target: goal(topCtrl, 78)},
+                {focus:'takedowns',        target: goal(takedowns, 72)},
+                {focus:'strength',         target: goal(strength, 68)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {clinch_striking:65, top_control:60, takedowns:55,
+                     strength:58},
+        },
+        'Brawler': {
+            queue: [
+                {focus:'strength',         target: goal(strength, 85)},
+                {focus:'chin',             target: goal(chin, 80)},
+                {focus:'boxing',           target: goal(boxing, 75)},
+                {focus:'cardio',           target: goal(cardio, 68)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {strength:65, chin:65, boxing:58, cardio:55},
+        },
+        'Hybrid': {
+            queue: [
+                {focus:'fight_iq',         target: goal(fightIq, 82)},
+                {focus:'boxing',           target: goal(boxing, 75)},
+                {focus:'takedowns',        target: goal(takedowns, 72)},
+                {focus:'cardio',           target: goal(cardio, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {fight_iq:62, boxing:58, takedowns:55, cardio:58},
+        },
+    };
+
+    const tmpl = templates[style];
+    if (!tmpl) {
+        alert('No template found for style: ' + style);
+        return;
+    }
+
+    const intSelect = document.querySelector(
+        `#queue-form-${fighterId} [name="queue_intensity"]`);
+    if (intSelect) intSelect.value = intensity;
+
+    const container = document.getElementById('queue-goals-' + fighterId);
+    if (!container) return;
+    container.innerHTML = '';
+
+    const statOptions = [
+        ['boxing','Boxing'],['kicks','Kicks'],
+        ['clinch_striking','Clinch Striking'],
+        ['striking_defense','Striking Defense'],
+        ['takedowns','Takedowns'],['takedown_defense','Takedown Defense'],
+        ['top_control','Top Control'],['submissions','Submissions'],
+        ['guard','Guard'],['strength','Strength'],['speed','Speed'],
+        ['cardio','Cardio'],['chin','Chin'],['recovery','Recovery'],
+        ['fight_iq','Fight IQ'],['composure','Composure'],['heart','Heart'],
+    ];
+
+    tmpl.queue.forEach((goal, idx) => {
+        const row = document.createElement('div');
+        row.className = 'queue-row';
+        row.style.cssText = 'display:flex;align-items:center;'
+            + 'gap:6px;margin-bottom:4px;';
+
+        if (goal.focus === 'maintain') {
+            row.innerHTML = `
+                <span style="font-size:.6rem;color:var(--text-muted);
+                             width:16px;text-align:center;">${idx+1}</span>
+                <span style="font-size:.72rem;color:var(--neon-green);
+                             flex:1;padding:3px 6px;">
+                    🔄 Maintain (floor protection active)
+                </span>
+                <input type="hidden" name="queue_focus_${idx}"
+                       value="maintain">
+                <input type="hidden" name="queue_target_${idx}" value="0">
+            `;
+        } else {
+            let opts = '<option value="">— pick focus —</option>'
+                + statOptions.map(([v, l]) =>
+                    `<option value="${v}"${v === goal.focus
+                        ? ' selected' : ''}>${l}</option>`
+                ).join('');
+            row.innerHTML = `
+                <span style="font-size:.6rem;color:var(--text-muted);
+                             width:16px;text-align:center;">${idx+1}</span>
+                <select name="queue_focus_${idx}"
+                        style="font-size:.68rem;padding:3px 6px;
+                               background:var(--surface-2);
+                               border:1px solid rgba(255,255,255,.12);
+                               border-radius:4px;color:var(--text-bright);
+                               flex:1;">${opts}</select>
+                <span style="font-size:.65rem;color:var(--text-muted);">
+                    →</span>
+                <input type="number" name="queue_target_${idx}"
+                       value="${goal.target}" min="1" max="99"
+                       style="width:48px;padding:3px 4px;font-size:.68rem;
+                              background:var(--surface-2);
+                              border:1px solid rgba(255,255,255,.12);
+                              border-radius:4px;color:var(--text-bright);
+                              text-align:center;">
+            `;
+        }
+        container.appendChild(row);
+    });
+
+    const floorForm = document.querySelector(
+        `form[action*="set_floors/${fighterId}"]`);
+    if (floorForm) {
+        floorForm.querySelectorAll('input[name^="floor_"]').forEach(inp => {
+            inp.value = 0;
+            inp.style.borderColor = 'rgba(255,255,255,.08)';
+        });
+        Object.entries(tmpl.floors).forEach(([stat, val]) => {
+            const inp = floorForm.querySelector(
+                `input[name="floor_${stat}"]`);
+            if (inp) {
+                inp.value = val;
+                inp.style.borderColor = 'rgba(99,179,237,.4)';
+            }
+        });
+    }
+
+    const btn = event.currentTarget;
+    const orig = btn.textContent;
+    btn.textContent = '✅ Template loaded';
+    btn.style.borderColor = 'rgba(0,230,118,.4)';
+    btn.style.color = 'var(--neon-green)';
+    setTimeout(() => {
+        btn.textContent = orig;
+        btn.style.borderColor = 'rgba(255,165,0,.25)';
+        btn.style.color = 'var(--gold)';
+    }, 2000);
 }
 
 function adjFloor(btn, delta) {
