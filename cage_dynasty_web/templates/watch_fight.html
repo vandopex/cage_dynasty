@@ -134,23 +134,106 @@
     <div style="padding:var(--spacing-md);font-family:'Courier New',monospace;font-size:1rem;
                 line-height:1.8;color:var(--text-secondary);">
         {% for line in round.lines %}
-        {% set first_char = line[0] if line else '' %}
-        {# Highlight key moments #}
-        {% if 'KNOCKED DOWN' in line or 'KNOCKDOWN' in line or 'KO!' in line %}
-        <div style="color:var(--blood-red);font-weight:700;padding:2px 0;">{{ line }}</div>
-        {% elif 'TAPS OUT' in line or 'SUBMISSION' in line or 'taps' in line.lower() %}
-        <div style="color:var(--info);font-weight:700;padding:2px 0;">{{ line }}</div>
-        {% elif 'TKO' in line and 'STOPPED' in line %}
-        <div style="color:var(--blood-red);font-weight:700;padding:2px 0;">{{ line }}</div>
+
+        {# ── TIER 1: Fight-ending moments ── #}
+        {% if 'TAP! TAP! TAP!' in line or 'IT\'S OVER' in line or 'STOP THE FIGHT' in line
+              or 'LIGHTS OUT' in line or 'THE FINAL BLOW' in line or 'AND THAT\'S THE ONE' in line
+              or 'KILL SHOT' in line or 'Excellent stoppage' in line %}
+        <div style="color:var(--blood-red);font-weight:700;font-size:.88rem;
+                    padding:4px 8px;margin:3px 0;
+                    background:rgba(211,47,47,.12);
+                    border-left:3px solid var(--blood-red);
+                    border-radius:0 4px 4px 0;letter-spacing:.02em;">{{ line }}</div>
+
+        {# ── TIER 2: Submission finish/lock ── #}
+        {% elif 'TAP' in line or 'taps' in line.lower()
+                or ('locked in' in line.lower() and 'TIGHT' in line)
+                or 'It\'s over' in line %}
+        <div style="color:var(--info);font-weight:700;font-size:.88rem;
+                    padding:4px 8px;margin:3px 0;
+                    background:rgba(33,150,243,.12);
+                    border-left:3px solid var(--info);
+                    border-radius:0 4px 4px 0;">{{ line }}</div>
+
+        {# ── TIER 3: Knockdown / rocked ── #}
+        {% elif 'KNOCKED DOWN' in line or 'KNOCKDOWN' in line or 'KO!' in line
+                or 'WOBBLES' in line or 'POUNCES' in line
+                or 'is in DEEP' in line
+                or 'WOBBLE' in line %}
+        <div style="color:var(--blood-red);font-weight:700;font-size:.86rem;
+                    padding:3px 8px;margin:2px 0;
+                    background:rgba(211,47,47,.09);
+                    border-left:3px solid var(--blood-red-light);
+                    border-radius:0 4px 4px 0;">{{ line }}</div>
+
+        {# ── TIER 4: Position changes — takedowns ── #}
+        {% elif 'takedown' in line.lower() or 'dumps' in line.lower()
+                or 'gets the fight to the ground' in line.lower()
+                or 'BEAUTIFUL double-leg' in line or 'PERFECT level change' in line
+                or 'single leg' in line.lower() or 'TEXTBOOK takedown' in line
+                or 'completes the' in line.lower() %}
+        <div style="color:#4fc3f7;font-weight:600;font-size:.82rem;
+                    padding:3px 8px;margin:2px 0;
+                    background:rgba(79,195,247,.08);
+                    border-left:3px solid #4fc3f7;
+                    border-radius:0 4px 4px 0;">🤼 {{ line }}</div>
+
+        {# ── TIER 5: Dominant position secured ── #}
+        {% elif 'BACK MOUNT' in line or 'Back control' in line
+                or 'back! Hooks are in' in line
+                or 'MOUNT' in line and 'BIG trouble' in line
+                or 'TRUCK POSITION' in line or 'truck position' in line
+                or 'full mount' in line.lower()
+                or 'takes the back' in line.lower() %}
+        <div style="color:#ffb74d;font-weight:600;font-size:.82rem;
+                    padding:3px 8px;margin:2px 0;
+                    background:rgba(255,183,77,.08);
+                    border-left:3px solid #ffb74d;
+                    border-radius:0 4px 4px 0;">📍 {{ line }}</div>
+
+        {# ── TIER 6: Submission attempts ── #}
+        {% elif 'going for' in line.lower() or 'LOCKED IN' in line
+                or 'locked up a DEEP' in line or 'secures the' in line.lower()
+                or 'transitions to a' in line.lower()
+                or 'attempt' in line.lower() and ('Choke' in line or 'Lock' in line
+                    or 'Bar' in line or 'Triangle' in line or 'Slicer' in line) %}
+        <div style="color:#81c784;font-weight:500;font-size:.81rem;
+                    padding:2px 8px;margin:1px 0;
+                    background:rgba(129,199,132,.07);
+                    border-left:2px solid #81c784;
+                    border-radius:0 4px 4px 0;">🔒 {{ line }}</div>
+
+        {# ── TIER 7: Round headers and summaries ── #}
         {% elif line.startswith('===') or line.startswith('---') %}
         <div style="color:var(--text-muted);border-top:1px solid var(--border-color);
-                    margin:var(--spacing-sm) 0;padding-top:var(--spacing-sm);">{{ line }}</div>
-        {% elif 'Round' in line and ':' in line %}
-        <div style="color:var(--gold);font-weight:600;margin-top:var(--spacing-sm);">{{ line }}</div>
-        {% elif line.startswith('►') or line.startswith('>') %}
-        <div style="color:var(--text-bright);padding:1px 0;">{{ line }}</div>
+                    margin:var(--spacing-sm) 0;padding-top:var(--spacing-sm);
+                    font-size:.75rem;letter-spacing:.04em;">{{ line }}</div>
+
+        {% elif line.startswith('[Round') or (line.startswith('[') and ':' in line) %}
+        <div style="color:var(--gold);font-weight:600;margin-top:var(--spacing-sm);
+                    font-size:.8rem;padding:2px 0;">{{ line }}</div>
+
+        {# ── TIER 8: Corner advice ── #}
+        {% elif line.startswith('💼') or 'In the Corner' in line %}
+        <div style="color:var(--gold);font-style:italic;font-size:.78rem;
+                    padding:4px 8px;margin:4px 0;
+                    background:rgba(255,215,0,.06);
+                    border-left:2px solid rgba(255,215,0,.3);
+                    border-radius:0 4px 4px 0;">{{ line }}</div>
+
+        {# ── TIER 9: Hype / finish-building lines ── #}
+        {% elif 'IS IN TROUBLE' in line or 'POURING IT ON' in line
+                or 'THE KILL' in line or 'LEGS ARE GONE' in line
+                or 'FINISH is NEAR' in line or 'UNLOADS' in line
+                or 'ALL OVER' in line or 'SERIOUS trouble' in line
+                or 'SURVIVING' in line or 'championship-level' in line.lower() %}
+        <div style="color:var(--text-bright);font-weight:600;font-size:.83rem;
+                    padding:2px 4px;margin:1px 0;">{{ line }}</div>
+
+        {# ── DEFAULT: regular action lines ── #}
         {% else %}
-        <div style="padding:1px 0;">{{ line }}</div>
+        <div style="padding:1px 0;color:var(--text-secondary);font-size:.8rem;">{{ line }}</div>
+
         {% endif %}
         {% endfor %}
     </div>
