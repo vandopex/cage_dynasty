@@ -10134,7 +10134,7 @@ class GameBridge:
             _is_draw_b = False
             if FIGHT_ENGINE_AVAILABLE:
                 try:
-                    # Use real engine — no commentary stored for AI fights
+                    # Use real engine — commentary stored for watch page
                     fa1 = self._make_fighter_attrs(f1, f1.name, f1.fighter_id)
                     fa2 = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
                     _rnds = 5 if is_title else 3
