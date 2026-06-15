@@ -6428,6 +6428,51 @@ class GameBridge:
                         "_protecting_stat": _auto_maintenance_stat,
                     }
 
+            # ── Auto-rest safety gate ──────────────────────
+            # Override training if fighter is too fatigued.
+            # Acts as final layer over fight_plan/queue/auto-maintenance.
+            # Player notified via 📰 training-category news headline.
+            _fdata_ar = self._game_state._fighter_data.get(fid, {})
+            _fatigue_ar = int(_fdata_ar.get('fatigue', 0))
+            _upcoming_week = next(
+                (sf.get('week', 99) for sf in self._scheduled_fights
+                 if sf.get('fighter1_id') == fid or sf.get('fighter2_id') == fid),
+                None
+            )
+            _weeks_to_fight = (
+                _upcoming_week - self._game_state.week_number
+                if _upcoming_week is not None else 99
+            )
+            _auto_rest_reason = None
+
+            if _fatigue_ar >= 80:
+                _auto_rest_reason = (
+                    f"Auto-rest: fatigue critical ({_fatigue_ar}%)")
+                active_plan["focus"] = 'sparring'
+                active_plan["intensity"] = 'REST'
+            elif _fatigue_ar >= 75 and active_plan["intensity"] in ('INTENSE', 'EXTREME'):
+                _auto_rest_reason = (
+                    f"Auto-adjusted: fatigue {_fatigue_ar}% "
+                    f"— dropped to MODERATE")
+                active_plan["intensity"] = 'MODERATE'
+            elif _fatigue_ar >= 65 and active_plan["intensity"] == 'EXTREME':
+                _auto_rest_reason = (
+                    f"Auto-adjusted: fatigue {_fatigue_ar}% "
+                    f"— dropped EXTREME → INTENSE")
+                active_plan["intensity"] = 'INTENSE'
+            elif _weeks_to_fight <= 2 and _fatigue_ar >= 50:
+                _auto_rest_reason = (
+                    f"Auto-adjusted: fight in {_weeks_to_fight}w "
+                    f"— protecting condition")
+                active_plan["intensity"] = 'LIGHT'
+
+            if _auto_rest_reason:
+                self._news_items.insert(0, {
+                    "headline": f"⚡ {fighter.name}: {_auto_rest_reason}",
+                    "category": "training",
+                    "week": self._game_state.week_number,
+                })
+
             # Snapshot OVR before
             real_fighter = self._game_state.get_fighter(fid)
             ovr_before = getattr(real_fighter, 'overall_rating', 0) if real_fighter else 0

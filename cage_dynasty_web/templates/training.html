@@ -121,6 +121,26 @@
                     <div style="width:{{ 100 - fighter.fatigue }}%;height:100%;border-radius:3px;
                                 background:{% if fighter.fatigue < 40 %}var(--neon-green){% elif fighter.fatigue < 70 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
                 </div>
+                {# ── Auto-rest status indicator ── #}
+                {% if fighter.fatigue >= 80 %}
+                <div style="margin-top:4px;font-size:.62rem;font-weight:700;
+                            color:var(--blood-red);
+                            padding:3px 6px;border-radius:3px;
+                            background:rgba(220,38,38,.12);
+                            border-left:2px solid var(--blood-red);
+                            text-align:right;letter-spacing:.02em;">
+                    🔴 Critical fatigue — AUTO-REST ACTIVE this week
+                </div>
+                {% elif fighter.fatigue > 65 %}
+                <div style="margin-top:4px;font-size:.62rem;font-weight:600;
+                            color:var(--warning);
+                            padding:3px 6px;border-radius:3px;
+                            background:rgba(245,158,11,.08);
+                            border-left:2px solid var(--warning);
+                            text-align:right;letter-spacing:.02em;">
+                    ⚠️ High fatigue — auto-rest may trigger this week
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -321,51 +341,64 @@
             <div style="display:flex;align-items:center;gap:3px;">
                 <label style="font-size:.6rem;color:var(--text-muted);
                               width:52px;flex-shrink:0;">{{ stat_label }}</label>
-                <span style="font-size:.6rem;color:var(--text-bright);
-                             width:20px;text-align:right;flex-shrink:0;">
+                {# Current stat value — primary visual emphasis #}
+                <span style="font-size:.78rem;color:var(--text-bright);
+                             font-weight:700;
+                             width:24px;text-align:right;flex-shrink:0;
+                             font-family:var(--font-display);">
                     {{ _cur_val }}</span>
                 <button type="button"
                         onclick="adjFloor(this,-5)"
-                        style="width:18px;height:18px;font-size:.6rem;
-                               background:rgba(255,255,255,.06);
-                               border:1px solid rgba(255,255,255,.12);
-                               border-radius:3px;cursor:pointer;
-                               color:var(--text-muted);line-height:1;
+                        style="width:14px;height:14px;font-size:.55rem;
+                               background:rgba(255,255,255,.03);
+                               border:1px solid rgba(255,255,255,.08);
+                               border-radius:2px;cursor:pointer;
+                               color:rgba(255,255,255,.5);line-height:1;
                                padding:0;flex-shrink:0;">-</button>
                 <input type="number" name="floor_{{ stat_key }}"
                        id="floor-{{ fighter.fighter_id }}-{{ stat_key }}"
                        value="{{ _floor_val }}"
                        min="0" max="99" placeholder="0"
-                       style="width:32px;padding:2px 2px;font-size:.62rem;
+                       style="width:28px;padding:1px 2px;font-size:.55rem;
                               background:var(--surface-2);
-                              border:1px solid {% if _floor_val > 0 %}rgba(99,179,237,.4){% else %}rgba(255,255,255,.08){% endif %};
-                              border-radius:3px;color:var(--text-bright);
+                              border:1px solid {% if _floor_val > 0 %}rgba(99,179,237,.4){% else %}rgba(255,255,255,.06){% endif %};
+                              border-radius:2px;color:rgba(255,255,255,.75);
                               text-align:center;flex-shrink:0;"
                        title="Floor for {{ stat_label }}">
                 <button type="button"
                         onclick="adjFloor(this,5)"
-                        style="width:18px;height:18px;font-size:.6rem;
-                               background:rgba(255,255,255,.06);
-                               border:1px solid rgba(255,255,255,.12);
-                               border-radius:3px;cursor:pointer;
-                               color:var(--text-muted);line-height:1;
+                        style="width:14px;height:14px;font-size:.55rem;
+                               background:rgba(255,255,255,.03);
+                               border:1px solid rgba(255,255,255,.08);
+                               border-radius:2px;cursor:pointer;
+                               color:rgba(255,255,255,.5);line-height:1;
                                padding:0;flex-shrink:0;">+</button>
             </div>
         {% endfor %}
         </div>
 
-        {# Preset chips for quick floor setting #}
-        <div style="margin-bottom:var(--spacing-sm);">
-            <span style="font-size:.58rem;color:var(--text-muted);
-                         margin-right:6px;">Quick set all floors to:</span>
+        {# Preset chips — prominent quick-set #}
+        <div style="margin:var(--spacing-sm) 0;
+                    padding:6px 8px;
+                    background:rgba(99,179,237,.04);
+                    border-radius:4px;
+                    border:1px solid rgba(99,179,237,.12);
+                    display:flex;align-items:center;
+                    flex-wrap:wrap;gap:5px;">
+            <span style="font-size:.65rem;color:var(--info);
+                         font-weight:600;letter-spacing:.04em;
+                         margin-right:4px;">Set all floors:</span>
             {% for preset in [0, 60, 65, 70, 75, 80] %}
             <button type="button"
                     onclick="setAllFloors(this.closest('form'), {{ preset }})"
-                    style="font-size:.6rem;padding:2px 6px;margin-right:3px;
-                           background:rgba(255,255,255,.04);
-                           border:1px solid rgba(255,255,255,.12);
+                    onmouseover="this.style.borderColor='var(--info)';this.style.color='var(--info)';"
+                    onmouseout="this.style.borderColor='{% if preset == 0 %}rgba(255,255,255,.12){% else %}rgba(99,179,237,.25){% endif %}';this.style.color='{% if preset == 0 %}var(--text-muted){% else %}var(--text-bright){% endif %}';"
+                    style="font-size:.68rem;padding:3px 10px;
+                           background:{% if preset == 0 %}rgba(255,255,255,.04){% else %}rgba(99,179,237,.08){% endif %};
+                           border:1px solid {% if preset == 0 %}rgba(255,255,255,.12){% else %}rgba(99,179,237,.25){% endif %};
                            color:{% if preset == 0 %}var(--text-muted){% else %}var(--text-bright){% endif %};
-                           border-radius:3px;cursor:pointer;">
+                           border-radius:3px;cursor:pointer;
+                           font-weight:600;transition:all .15s;">
                 {% if preset == 0 %}Clear{% else %}{{ preset }}{% endif %}
             </button>
             {% endfor %}
@@ -408,6 +441,58 @@
     </summary>
 
     {% if fighter.training_queue_active %}
+    {# Current goal — prominent banner with progress bar #}
+    {% set _qi_p = fighter.training_queue_index %}
+    {% set _qq_p = fighter.training_queue %}
+    {% if _qi_p < _qq_p|length %}
+        {% set _cur_goal = _qq_p[_qi_p] %}
+        {% set _gfocus = _cur_goal.focus %}
+        {% if _gfocus != 'maintain' %}
+            {% set _gtarget = _cur_goal.target %}
+            {% set _gcurval = fighter|attr(_gfocus) if _gfocus in [
+                'boxing','kicks','clinch_striking','striking_defense',
+                'takedowns','takedown_defense','top_control','submissions',
+                'guard','strength','speed','cardio','chin','recovery',
+                'fight_iq','composure','heart'
+            ] else 0 %}
+            {% set _gpct = (_gcurval * 100 // _gtarget) if _gtarget > 0 else 0 %}
+            {% set _gpct = _gpct if _gpct <= 100 else 100 %}
+            <div style="margin:var(--spacing-sm) 0;padding:8px 10px;
+                        background:rgba(0,230,118,.06);
+                        border-left:3px solid var(--neon-green);
+                        border-radius:0 5px 5px 0;">
+                <div style="display:flex;justify-content:space-between;
+                            align-items:baseline;font-size:.78rem;
+                            margin-bottom:5px;">
+                    <span style="color:var(--text-bright);font-weight:700;">
+                        ▶ Currently training:
+                        <span style="color:var(--neon-green);">{{ _gfocus | replace('_',' ') | title }}</span>
+                        → <span style="color:var(--neon-green);">{{ _gtarget }}</span>
+                    </span>
+                    <span style="font-size:.7rem;color:var(--text-muted);
+                                 font-family:var(--font-display);">
+                        {{ _gcurval }} / {{ _gtarget }}
+                    </span>
+                </div>
+                <div style="height:4px;background:rgba(255,255,255,.06);
+                            border-radius:2px;overflow:hidden;">
+                    <div style="width:{{ _gpct }}%;height:100%;
+                                background:var(--neon-green);
+                                border-radius:2px;
+                                transition:width .3s;"></div>
+                </div>
+            </div>
+        {% else %}
+            <div style="margin:var(--spacing-sm) 0;padding:8px 10px;
+                        background:rgba(0,230,118,.06);
+                        border-left:3px solid var(--neon-green);
+                        border-radius:0 5px 5px 0;
+                        font-size:.78rem;color:var(--text-bright);
+                        font-weight:600;">
+                🔄 Maintain mode — floor protection active
+            </div>
+        {% endif %}
+    {% endif %}
     <div style="padding:var(--spacing-sm) 0;margin-bottom:var(--spacing-sm);">
         {% for _goal in fighter.training_queue %}
         {% set _gi = loop.index0 %}
@@ -588,9 +673,9 @@
                 padding:var(--spacing-sm) var(--spacing-md);
                 background:rgba(220,38,38,.06);border-radius:6px;
                 border-left:3px solid rgba(220,38,38,.3);">
-        <div style="font-size:.62rem;text-transform:uppercase;letter-spacing:.08em;
+        <div style="font-size:.7rem;font-weight:600;
                     color:var(--blood-red);margin-bottom:var(--spacing-sm);">
-            📉 Stat Decay
+            ⚠️ Stats currently decaying — consider raising floors
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;">
         {% for stat, info in risks.items() %}
