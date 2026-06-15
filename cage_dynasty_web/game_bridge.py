@@ -9743,11 +9743,33 @@ class GameBridge:
                             _ai_lines = []
                             if hasattr(_eng, 'full_commentary') and _eng.full_commentary:
                                 _ai_lines = [l for l in _eng.full_commentary.split('\n') if l.strip()]
-                            if _ai_lines:
-                                try:
-                                    _ai_lines = self._enrich_round_summaries(_ai_lines)
-                                except Exception:
-                                    pass
+                            # Fallback: round_commentary when full_commentary is empty
+                            if not _ai_lines and hasattr(_eng, 'round_commentary'):
+                                for _rc in (_eng.round_commentary or []):
+                                    if isinstance(_rc, str):
+                                        _ai_lines.extend(
+                                            [l for l in _rc.split('\n') if l.strip()])
+                                    elif hasattr(_rc, 'commentary'):
+                                        _ai_lines.extend(
+                                            [l for l in str(_rc.commentary).split('\n')
+                                             if l.strip()])
+                            # Final fallback — always store something so watch page
+                            # never shows just "touch gloves / seals it"
+                            if not _ai_lines:
+                                _w = winner.name if hasattr(winner, 'name') else '?'
+                                _l = loser.name if hasattr(loser, 'name') else '?'
+                                _ai_lines = [
+                                    f"=== ROUND 1 ===",
+                                    f"{_w} and {_l} touch gloves.",
+                                    f"{_w} takes control early.",
+                                ]
+                                if rnd > 1:
+                                    _ai_lines.append(f"=== ROUND {rnd} ===")
+                                _ai_lines += [
+                                    f"{_w} closes the show.",
+                                    f"[Result: {_w} def. {_l} · {method} R{rnd}]",
+                                ]
+                            if _ai_fight_id:
                                 self._fight_commentary[_ai_fight_id] = _ai_lines
                     except Exception as _ce:
                         print(f"⚠️ AI commentary store failed: {_ce}")
@@ -10172,11 +10194,33 @@ class GameBridge:
                             _ai_lines = []
                             if hasattr(_eng, 'full_commentary') and _eng.full_commentary:
                                 _ai_lines = [l for l in _eng.full_commentary.split('\n') if l.strip()]
-                            if _ai_lines:
-                                try:
-                                    _ai_lines = self._enrich_round_summaries(_ai_lines)
-                                except Exception:
-                                    pass
+                            # Fallback: round_commentary when full_commentary is empty
+                            if not _ai_lines and hasattr(_eng, 'round_commentary'):
+                                for _rc in (_eng.round_commentary or []):
+                                    if isinstance(_rc, str):
+                                        _ai_lines.extend(
+                                            [l for l in _rc.split('\n') if l.strip()])
+                                    elif hasattr(_rc, 'commentary'):
+                                        _ai_lines.extend(
+                                            [l for l in str(_rc.commentary).split('\n')
+                                             if l.strip()])
+                            # Final fallback — always store something so watch page
+                            # never shows just "touch gloves / seals it"
+                            if not _ai_lines:
+                                _w = winner.name if hasattr(winner, 'name') else '?'
+                                _l = loser.name if hasattr(loser, 'name') else '?'
+                                _ai_lines = [
+                                    f"=== ROUND 1 ===",
+                                    f"{_w} and {_l} touch gloves.",
+                                    f"{_w} takes control early.",
+                                ]
+                                if rnd > 1:
+                                    _ai_lines.append(f"=== ROUND {rnd} ===")
+                                _ai_lines += [
+                                    f"{_w} closes the show.",
+                                    f"[Result: {_w} def. {_l} · {method} R{rnd}]",
+                                ]
+                            if _ai_fight_id:
                                 self._fight_commentary[_ai_fight_id] = _ai_lines
                     except Exception as _ce:
                         print(f"⚠️ AI commentary store failed: {_ce}")
