@@ -84,9 +84,22 @@
                          background:rgba(255,215,0,.15);
                          border:1px solid rgba(255,215,0,.3);
                          color:var(--gold);"
-                  title="This fighter is in fight camp — camp focus and intensity are active this week instead of these settings.">
-                🏕️ In Fight Camp
+                  title="Fight camp is active — these training settings are IGNORED this week. Change intensity on the Fight Camp page instead.">
+                🏕️ Fight Camp Active
             </span>
+            {% if fighter.upcoming_fight_id %}
+            <a href="{{ url_for('fight_camp', fight_id=fighter.upcoming_fight_id) }}"
+               style="display:inline-flex;align-items:center;gap:3px;
+                      margin-left:6px;font-size:.6rem;font-weight:700;
+                      text-transform:uppercase;letter-spacing:.08em;
+                      padding:2px 6px;border-radius:3px;
+                      background:rgba(255,215,0,.08);
+                      border:1px solid rgba(255,215,0,.25);
+                      color:var(--gold);text-decoration:none;"
+               title="Go to fight camp page to change intensity, focus, or gameplan">
+                ✏️ Edit Camp
+            </a>
+            {% endif %}
             {% endif %}
         </div>
         <div style="display:flex;align-items:center;gap:var(--spacing-md);">
@@ -111,6 +124,23 @@
             </div>
         </div>
     </div>
+    {% if fighter.fight_camp_active %}
+    <div style="margin:0 var(--spacing-md) var(--spacing-sm);
+                background:rgba(255,165,0,.08);
+                border:1px solid rgba(255,165,0,.2);
+                border-radius:5px;padding:8px 10px;
+                font-size:.72rem;color:var(--warning);
+                display:flex;align-items:center;gap:8px;">
+        ⚠️ <span>Fight camp is active — <strong>these settings are overridden</strong>
+        this week. To change intensity or focus,
+        {% if fighter.upcoming_fight_id %}
+        <a href="{{ url_for('fight_camp', fight_id=fighter.upcoming_fight_id) }}"
+           style="color:var(--gold);text-decoration:underline;">
+           go to your fight camp page</a>.
+        {% else %}use the fight camp page.{% endif %}
+        </span>
+    </div>
+    {% endif %}
     <form action="{{ url_for('set_training') }}" method="POST">
         <input type="hidden" name="fighter_id" value="{{ fighter.fighter_id }}">
         <div style="padding:var(--spacing-md);display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">

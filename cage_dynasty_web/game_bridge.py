@@ -670,6 +670,8 @@ class WebFighter:
     natural_weight_class:  str = ""
     # True if this fighter has a scheduled fight with an active fight camp
     fight_camp_active:     bool = False
+    # fight_id of their next scheduled fight (empty if none)
+    upcoming_fight_id:     str = ""
     # Per-stat decay floors (Ship: decay floors) — {stat_name: floor_value}
     stat_floors:           Dict[str, int] = field(default_factory=dict)
 
@@ -4826,6 +4828,13 @@ class GameBridge:
                 sf.get('fighter1_id') == f.fighter_id
                 or sf.get('fighter2_id') == f.fighter_id
                 for sf in self._scheduled_fights
+            ),
+            upcoming_fight_id=next(
+                (sf.get('fight_id', '')
+                 for sf in self._scheduled_fights
+                 if sf.get('fighter1_id') == f.fighter_id
+                 or sf.get('fighter2_id') == f.fighter_id),
+                ''
             ),
             stat_floors=self._fighter_training_plans.get(
                 f.fighter_id, {}).get('floors', {}),

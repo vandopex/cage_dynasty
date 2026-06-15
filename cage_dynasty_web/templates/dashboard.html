@@ -246,6 +246,17 @@
                             {% elif fighter.ranking %}
                             <span class="badge badge-ranked" style="font-size:.6rem;">#{{ fighter.ranking }}</span>
                             {% endif %}
+                            {% if fighter.fight_camp_active and fighter.upcoming_fight_id %}
+                            <span onclick="event.stopPropagation(); event.preventDefault(); window.location.href='{{ url_for('fight_camp', fight_id=fighter.upcoming_fight_id) }}';"
+                                  style="display:inline-flex;align-items:center;gap:4px;
+                                         font-size:.6rem;padding:2px 8px;border-radius:4px;
+                                         background:rgba(255,215,0,.08);
+                                         border:1px solid rgba(255,215,0,.25);
+                                         color:var(--gold);cursor:pointer;"
+                                  title="Adjust fight camp intensity, focus, and gameplan">
+                                🏕️ Edit Camp
+                            </span>
+                            {% endif %}
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:.75rem;
                                     color:var(--text-muted);margin-bottom:4px;">
