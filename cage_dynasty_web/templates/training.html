@@ -151,7 +151,7 @@
             ('Composure', 'composure',         'var(--gold)'),
             ('Heart',     'heart',             'var(--gold)'),
         ] %}
-        {% set _sv = attribute(fighter, stat_key) %}
+        {% set _sv = fighter|attr(stat_key) %}
         {% set _floor_v = fighter.stat_floors.get(stat_key, 0) %}
         <div style="display:flex;justify-content:space-between;
                     align-items:center;padding:2px 0;">
@@ -315,7 +315,7 @@
         <div style="display:grid;grid-template-columns:repeat(3,1fr);
                     gap:4px 8px;margin-bottom:var(--spacing-sm);">
         {% for stat_key, stat_label in _floor_stats %}
-            {% set _cur_val = attribute(fighter, stat_key) %}
+            {% set _cur_val = fighter|attr(stat_key) %}
             {% set _floor_val = fighter.stat_floors.get(stat_key, 0)
                                 if fighter.stat_floors is defined else 0 %}
             <div style="display:flex;align-items:center;gap:3px;">
