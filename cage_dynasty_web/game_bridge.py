@@ -9868,6 +9868,16 @@ class GameBridge:
                 elif roll < 0.63: method, rnd = "SUB", random.randint(1,3)
                 else:             method, rnd = "DEC", 3
 
+            # Finish time — from engine if available, generated otherwise.
+            # Engine returns "M:SS" finish_time; fallback paths don't have _eng.
+            _finish_time = ''
+            try:
+                _finish_time = (getattr(_eng, 'finish_time', '') or '')
+            except NameError:
+                pass
+            if not _finish_time:
+                _finish_time = "5:00" if method == "DEC" else f"{random.randint(0,4)}:{random.randint(0,59):02d}"
+
             # Ship DR2: draw short-circuit. Increment draws on both fighters,
             # build a draw-shape result dict, append, and skip the rest of the
             # per-fight loop body (record mutations, fight history, rankings,
@@ -9887,6 +9897,7 @@ class GameBridge:
                     "loser_name":        "",
                     "method":            "Draw",
                     "round_finished":    rnd,
+                    "time":              _finish_time,
                     "weight_class":      fight["weight_class"],
                     "event_name":        event_name,
                     "is_title_fight":    fight.get("is_title_fight", False),
@@ -10024,6 +10035,7 @@ class GameBridge:
                 "loser_name":       loser.name,
                 "method":           method,
                 "round_finished":   rnd,
+                "time":             _finish_time,
                 "weight_class":     fight["weight_class"],
                 "event_name":       event_name,
                 "is_title_fight":   fight.get("is_title_fight", False),
@@ -10328,6 +10340,15 @@ class GameBridge:
                 elif roll < 0.63: method, rnd = "SUB", random.randint(1,3)
                 else:             method, rnd = "DEC", 3
 
+            # Finish time — from engine if available, generated otherwise.
+            _finish_time = ''
+            try:
+                _finish_time = (getattr(_eng, 'finish_time', '') or '')
+            except NameError:
+                pass
+            if not _finish_time:
+                _finish_time = "5:00" if method == "DEC" else f"{random.randint(0,4)}:{random.randint(0,59):02d}"
+
             # Ship DR2: draw short-circuit — see site A comment for rationale.
             if _is_draw_b:
                 f1.draws = getattr(f1, 'draws', 0) + 1
@@ -10344,6 +10365,7 @@ class GameBridge:
                     "loser_name":        "",
                     "method":            "Draw",
                     "round_finished":    rnd,
+                    "time":              _finish_time,
                     "weight_class":      wc,
                     "event_name":        event_name,
                     "is_title_fight":    False,
@@ -10409,6 +10431,7 @@ class GameBridge:
                 "loser_name":       loser.name,
                 "method":           method,
                 "round_finished":   rnd,
+                "time":             _finish_time,
                 "weight_class":     wc,
                 "event_name":       event_name,
                 "is_title_fight":   False,
