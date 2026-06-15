@@ -6177,15 +6177,18 @@ class GameBridge:
                             getattr(_real_ftr, _fstat, 99) if _real_ftr else 99)
                     )
                     if _cur_val <= _ffloor + 3:
-                        for _gname, _gdata in self._TRAINING_GROUPS.items():
-                            for _ename, _eattrs in _gdata.get("emphases", {}).items():
-                                if _fstat in _eattrs:
+                        _best_focus = None
+                        _best_weight = 0.0
+                        for _gname2, _gdata2 in self._TRAINING_GROUPS.items():
+                            for _ename2, _eattrs2 in _gdata2.get(
+                                    "emphases", {}).items():
+                                _w = _eattrs2.get(_fstat, 0.0)
+                                if _w > _best_weight:
+                                    _best_weight = _w
+                                    _best_focus = f"{_gname2}:{_ename2}"
                                     _auto_maintenance_stat = _fstat
-                                    _auto_maintenance_focus = f"{_gname}:{_ename}"
-                                    break
-                            if _auto_maintenance_focus:
-                                break
-                        if _auto_maintenance_focus:
+                        if _best_focus:
+                            _auto_maintenance_focus = _best_focus
                             break
 
                 if _auto_maintenance_focus:
