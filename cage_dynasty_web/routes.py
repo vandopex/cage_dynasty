@@ -968,6 +968,53 @@ def register_routes(app):
         flash(f"Stat floors saved.", "success")
         return redirect(url_for('training'))
 
+    @app.route('/training/set_queue/<fighter_id>', methods=['POST'])
+    def set_training_queue(fighter_id):
+        """Save a training goal queue for a fighter."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return jsonify({"error": "No game loaded"}), 400
+
+        intensity = request.form.get('queue_intensity', 'MODERATE').upper()
+
+        queue = []
+        i = 0
+        while True:
+            focus = request.form.get(f'queue_focus_{i}', '').strip()
+            if not focus:
+                break
+            target_str = request.form.get(f'queue_target_{i}', '0').strip()
+            try:
+                target = int(target_str) if target_str else 0
+            except ValueError:
+                target = 0
+            if focus == 'maintain':
+                queue.append({"focus": "maintain", "target": 0})
+                break
+            if focus and target > 0:
+                queue.append({"focus": focus, "target": target})
+            i += 1
+            if i > 10:
+                break
+
+        if queue:
+            bridge.set_training_queue(fighter_id, queue, intensity)
+            flash("Training queue saved — goals will advance automatically.", "success")
+        else:
+            flash("No valid goals — queue not saved.", "error")
+
+        return redirect(url_for('training'))
+
+    @app.route('/training/clear_queue/<fighter_id>', methods=['POST'])
+    def clear_training_queue(fighter_id):
+        """Clear training queue and return to manual mode."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return redirect(url_for('training'))
+        bridge.clear_training_queue(fighter_id)
+        flash("Training queue cleared — back to manual mode.", "success")
+        return redirect(url_for('training'))
+
     @app.route('/training/set', methods=['POST'])
     def set_training():
         """Store a fighter's weekly training plan — applied automatically each advance_week."""

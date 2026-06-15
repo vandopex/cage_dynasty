@@ -300,6 +300,167 @@
     </form>
     </details>
 
+    <details style="margin:0 var(--spacing-md) var(--spacing-md);"
+             {% if fighter.training_queue_active %}open{% endif %}>
+    <summary style="cursor:pointer;font-size:.72rem;
+                    color:var(--text-muted);
+                    letter-spacing:.08em;text-transform:uppercase;
+                    padding:4px 0;list-style:none;">
+        🎯 Training Queue
+        {% if fighter.training_queue_active %}
+        <span style="margin-left:6px;font-size:.65rem;
+                     color:var(--neon-green);font-weight:700;
+                     text-transform:none;letter-spacing:0;">
+            ● Active
+            {% set _qi = fighter.training_queue_index %}
+            {% set _qq = fighter.training_queue %}
+            {% if _qi < _qq|length %}
+            — {{ _qq[_qi].focus | replace('_',' ') | title }}
+            {% if _qq[_qi].target %}→ {{ _qq[_qi].target }}{% endif %}
+            {% endif %}
+        </span>
+        {% else %}
+        <span style="font-size:.65rem;color:var(--text-muted);
+                     font-weight:400;text-transform:none;letter-spacing:0;">
+            — set goals, train automatically</span>
+        {% endif %}
+    </summary>
+
+    {% if fighter.training_queue_active %}
+    <div style="padding:var(--spacing-sm) 0;margin-bottom:var(--spacing-sm);">
+        {% for _goal in fighter.training_queue %}
+        {% set _gi = loop.index0 %}
+        {% set _done = _gi < fighter.training_queue_index %}
+        {% set _current = _gi == fighter.training_queue_index %}
+        <div style="display:flex;align-items:center;gap:8px;
+                    padding:3px 0;font-size:.72rem;
+                    opacity:{% if _done %}0.4{% else %}1{% endif %};">
+            <span style="width:16px;text-align:center;">
+                {% if _done %}✅{% elif _current %}▶{% else %}○{% endif %}
+            </span>
+            <span style="color:{% if _current %}var(--text-bright){% elif _done %}var(--text-muted){% else %}var(--text-muted){% endif %};">
+                {% if _goal.focus == 'maintain' %}
+                    🔄 Maintain (floor protection active)
+                {% else %}
+                    {{ _goal.focus | replace('_',' ') | title }}
+                    → {{ _goal.target }}
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+    </div>
+    <form method="POST"
+          action="{{ url_for('clear_training_queue',
+                             fighter_id=fighter.fighter_id) }}">
+        <button type="submit"
+                style="font-size:.65rem;padding:3px 8px;
+                       background:rgba(255,100,100,.08);
+                       border:1px solid rgba(255,100,100,.2);
+                       color:var(--blood-red);border-radius:4px;
+                       cursor:pointer;">
+            ✕ Clear Queue
+        </button>
+    </form>
+    {% else %}
+    <form method="POST"
+          action="{{ url_for('set_training_queue',
+                             fighter_id=fighter.fighter_id) }}"
+          id="queue-form-{{ fighter.fighter_id }}"
+          style="margin-top:var(--spacing-sm);">
+
+        <div style="margin-bottom:var(--spacing-sm);">
+            <label style="font-size:.65rem;color:var(--text-muted);
+                          display:block;margin-bottom:4px;">
+                Training Intensity (all goals)
+            </label>
+            <select name="queue_intensity"
+                    style="font-size:.72rem;padding:4px 8px;
+                           background:var(--surface-2);
+                           border:1px solid rgba(255,255,255,.12);
+                           border-radius:4px;color:var(--text-bright);">
+                {% for ikey in ['LIGHT','MODERATE','INTENSE','EXTREME'] %}
+                <option value="{{ ikey }}"
+                    {% if ikey == 'INTENSE' %}selected{% endif %}>
+                    {{ ikey | title }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div id="queue-goals-{{ fighter.fighter_id }}"
+             style="margin-bottom:var(--spacing-sm);">
+            <div class="queue-row" style="display:flex;align-items:center;
+                         gap:6px;margin-bottom:4px;">
+                <span style="font-size:.6rem;color:var(--text-muted);
+                             width:16px;text-align:center;">1</span>
+                <select name="queue_focus_0"
+                        style="font-size:.68rem;padding:3px 6px;
+                               background:var(--surface-2);
+                               border:1px solid rgba(255,255,255,.12);
+                               border-radius:4px;color:var(--text-bright);
+                               flex:1;">
+                    <option value="">— pick focus —</option>
+                    {% for sk, sl in [
+                        ('boxing','Boxing'),('kicks','Kicks'),
+                        ('clinch_striking','Clinch Striking'),
+                        ('striking_defense','Striking Defense'),
+                        ('takedowns','Takedowns'),
+                        ('takedown_defense','Takedown Defense'),
+                        ('top_control','Top Control'),
+                        ('submissions','Submissions'),('guard','Guard'),
+                        ('strength','Strength'),('speed','Speed'),
+                        ('cardio','Cardio'),('chin','Chin'),
+                        ('recovery','Recovery'),('fight_iq','Fight IQ'),
+                        ('composure','Composure'),('heart','Heart'),
+                    ] %}
+                    <option value="{{ sk }}">{{ sl }}</option>
+                    {% endfor %}
+                </select>
+                <span style="font-size:.65rem;color:var(--text-muted);">→</span>
+                <input type="number" name="queue_target_0"
+                       min="1" max="99" placeholder="target"
+                       style="width:48px;padding:3px 4px;font-size:.68rem;
+                              background:var(--surface-2);
+                              border:1px solid rgba(255,255,255,.12);
+                              border-radius:4px;color:var(--text-bright);
+                              text-align:center;">
+            </div>
+        </div>
+
+        <div style="display:flex;gap:8px;align-items:center;
+                    margin-bottom:var(--spacing-sm);">
+            <button type="button"
+                    onclick="addQueueRow('{{ fighter.fighter_id }}')"
+                    style="font-size:.65rem;padding:3px 8px;
+                           background:rgba(255,255,255,.04);
+                           border:1px solid rgba(255,255,255,.12);
+                           color:var(--text-muted);border-radius:4px;
+                           cursor:pointer;">
+                + Add Goal
+            </button>
+            <button type="button"
+                    onclick="addMaintainRow('{{ fighter.fighter_id }}')"
+                    style="font-size:.65rem;padding:3px 8px;
+                           background:rgba(0,230,118,.04);
+                           border:1px solid rgba(0,230,118,.15);
+                           color:var(--neon-green);border-radius:4px;
+                           cursor:pointer;">
+                + Maintain
+            </button>
+        </div>
+
+        <button type="submit"
+                style="font-size:.68rem;padding:4px 12px;
+                       background:rgba(99,179,237,.08);
+                       border:1px solid rgba(99,179,237,.25);
+                       color:var(--info);border-radius:4px;
+                       cursor:pointer;">
+            ▶ Start Queue
+        </button>
+    </form>
+    {% endif %}
+    </details>
+
     {% if decay_risks and decay_risks.get(fighter.fighter_id) %}
     {% set risks = decay_risks[fighter.fighter_id] %}
     <div style="margin:0 var(--spacing-md) var(--spacing-md);
@@ -367,6 +528,70 @@ function pickEmphasis(el) {
     const grp = panel.dataset.group;
     const emp = el.dataset.emphasis;
     picker.querySelector('[data-role="focus-input"]').value = grp + ':' + emp;
+}
+</script>
+
+<script>
+function addQueueRow(fighterId) {
+    const container = document.getElementById('queue-goals-' + fighterId);
+    const rows = container.querySelectorAll('.queue-row');
+    const idx = rows.length;
+    const statOptions = [
+        ['boxing','Boxing'],['kicks','Kicks'],
+        ['clinch_striking','Clinch Striking'],
+        ['striking_defense','Striking Defense'],
+        ['takedowns','Takedowns'],['takedown_defense','Takedown Defense'],
+        ['top_control','Top Control'],['submissions','Submissions'],
+        ['guard','Guard'],['strength','Strength'],['speed','Speed'],
+        ['cardio','Cardio'],['chin','Chin'],['recovery','Recovery'],
+        ['fight_iq','Fight IQ'],['composure','Composure'],['heart','Heart'],
+    ];
+    let opts = '<option value="">— pick focus —</option>' +
+        statOptions.map(([v,l]) =>
+            `<option value="${v}">${l}</option>`).join('');
+    const row = document.createElement('div');
+    row.className = 'queue-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    row.innerHTML = `
+        <span style="font-size:.6rem;color:var(--text-muted);
+                     width:16px;text-align:center;">${idx+1}</span>
+        <select name="queue_focus_${idx}"
+                style="font-size:.68rem;padding:3px 6px;
+                       background:var(--surface-2);
+                       border:1px solid rgba(255,255,255,.12);
+                       border-radius:4px;color:var(--text-bright);flex:1;">
+            ${opts}
+        </select>
+        <span style="font-size:.65rem;color:var(--text-muted);">→</span>
+        <input type="number" name="queue_target_${idx}"
+               min="1" max="99" placeholder="target"
+               style="width:48px;padding:3px 4px;font-size:.68rem;
+                      background:var(--surface-2);
+                      border:1px solid rgba(255,255,255,.12);
+                      border-radius:4px;color:var(--text-bright);
+                      text-align:center;">
+    `;
+    container.appendChild(row);
+}
+
+function addMaintainRow(fighterId) {
+    const container = document.getElementById('queue-goals-' + fighterId);
+    const rows = container.querySelectorAll('.queue-row');
+    const idx = rows.length;
+    const row = document.createElement('div');
+    row.className = 'queue-row';
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
+    row.innerHTML = `
+        <span style="font-size:.6rem;color:var(--text-muted);
+                     width:16px;text-align:center;">${idx+1}</span>
+        <span style="font-size:.72rem;color:var(--neon-green);flex:1;
+                     padding:3px 6px;">
+            🔄 Maintain (floor protection active)
+        </span>
+        <input type="hidden" name="queue_focus_${idx}" value="maintain">
+        <input type="hidden" name="queue_target_${idx}" value="0">
+    `;
+    container.appendChild(row);
 }
 </script>
 

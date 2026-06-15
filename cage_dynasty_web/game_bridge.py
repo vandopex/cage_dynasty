@@ -674,6 +674,11 @@ class WebFighter:
     upcoming_fight_id:     str = ""
     # Per-stat decay floors (Ship: decay floors) — {stat_name: floor_value}
     stat_floors:           Dict[str, int] = field(default_factory=dict)
+    # Training queue state (Tier 2)
+    training_queue:        List[Dict[str, Any]] = field(default_factory=list)
+    training_queue_index:  int = 0
+    training_queue_intensity: str = "MODERATE"
+    training_queue_active: bool = False
 
 
 @dataclass
@@ -4838,6 +4843,15 @@ class GameBridge:
             ),
             stat_floors=self._fighter_training_plans.get(
                 f.fighter_id, {}).get('floors', {}),
+            training_queue=self._fighter_training_plans.get(
+                f.fighter_id, {}).get('queue', []),
+            training_queue_index=int(self._fighter_training_plans.get(
+                f.fighter_id, {}).get('queue_index', 0)),
+            training_queue_intensity=self._fighter_training_plans.get(
+                f.fighter_id, {}).get('queue_intensity', 'MODERATE'),
+            training_queue_active=bool(
+                self._fighter_training_plans.get(
+                    f.fighter_id, {}).get('queue', [])),
             career_phase=(
                 "Rising"    if f.age < 26 else
                 "Prime"     if f.age <= 30 else
@@ -6049,6 +6063,42 @@ class GameBridge:
         plan = self._fighter_training_plans.get(fighter_id, {})
         return plan.get('floors', {})
 
+    def set_training_queue(self, fighter_id: str,
+                           queue: List[Dict[str, Any]],
+                           intensity: str) -> None:
+        """Set a training goal queue for a fighter.
+
+        Queue is a list of goal dicts:
+          {"focus": "boxing", "target": 85}   — train until stat hits target
+          {"focus": "maintain", "target": 0}  — activate floor maintenance forever
+
+        intensity applies to all goal-chasing steps.
+        Maintain step always uses LIGHT.
+        """
+        if fighter_id not in self._fighter_training_plans:
+            self._fighter_training_plans[fighter_id] = {
+                "focus": "sparring", "intensity": "MODERATE"
+            }
+        self._fighter_training_plans[fighter_id]['queue'] = queue
+        self._fighter_training_plans[fighter_id]['queue_intensity'] = intensity
+        self._fighter_training_plans[fighter_id]['queue_index'] = 0
+
+    def get_training_queue(self, fighter_id: str) -> Dict[str, Any]:
+        """Get current queue state for a fighter."""
+        plan = self._fighter_training_plans.get(fighter_id, {})
+        return {
+            "queue":          plan.get('queue', []),
+            "queue_intensity": plan.get('queue_intensity', 'MODERATE'),
+            "queue_index":    plan.get('queue_index', 0),
+        }
+
+    def clear_training_queue(self, fighter_id: str) -> None:
+        """Clear the training queue — returns to manual mode."""
+        plan = self._fighter_training_plans.get(fighter_id, {})
+        plan.pop('queue', None)
+        plan.pop('queue_intensity', None)
+        plan.pop('queue_index', None)
+
     def _record_training_week(self,
                               fighter_id: str,
                               week: int,
@@ -6158,6 +6208,92 @@ class GameBridge:
                     break
 
             active_plan = fight_plan or plan or {"focus": "sparring", "intensity": "MODERATE"}
+
+            # ── Training Queue (Tier 2) ─────────────────────
+            # If fighter has an active queue, advance toward
+            # the current goal. When goal is hit, pop to next.
+            # "maintain" goal activates floor system permanently.
+            _queue_overrode = False
+            if not fight_plan and plan:
+                _queue = plan.get('queue', [])
+                _q_idx = int(plan.get('queue_index', 0))
+                _q_intensity = plan.get('queue_intensity', 'MODERATE')
+
+                if _queue and _q_idx < len(_queue):
+                    _goal = _queue[_q_idx]
+                    _goal_focus = _goal.get('focus', 'sparring')
+                    _goal_target = int(_goal.get('target', 0))
+
+                    if _goal_focus == 'maintain':
+                        active_plan = {
+                            "focus": "SPARRING:sparring",
+                            "intensity": "LIGHT",
+                            "_queue_mode": "maintain",
+                        }
+                        _queue_overrode = True
+
+                    else:
+                        _real_ftr2 = self._game_state.get_fighter(fid)
+                        _fdata2 = self._game_state._fighter_data.get(fid, {})
+
+                        _focus_resolved = self._FOCUS_LEGACY_MAP.get(
+                            _goal_focus.lower(), ('SPARRING', 'sparring'))
+                        _grp_r, _emp_r = _focus_resolved
+                        _primary_stat = _goal_focus
+                        try:
+                            _eattrs_r = (self._TRAINING_GROUPS
+                                .get(_grp_r, {})
+                                .get('emphases', {})
+                                .get(_emp_r, {}))
+                            if _eattrs_r:
+                                _primary_stat = max(
+                                    _eattrs_r, key=lambda k: _eattrs_r[k])
+                        except Exception:
+                            pass
+
+                        _cur_stat_val = float(
+                            _fdata2.get(_primary_stat,
+                                getattr(_real_ftr2, _primary_stat, 0)
+                                if _real_ftr2 else 0)
+                        )
+
+                        if _goal_target > 0 and _cur_stat_val >= _goal_target:
+                            plan['queue_index'] = _q_idx + 1
+                            _q_idx += 1
+                            _fname2 = getattr(
+                                self._game_state.get_fighter(fid),
+                                'name', '') if self._game_state else ''
+                            self._news_items.insert(0, {
+                                "headline": (
+                                    f"🎯 {_fname2} hit their training goal — "
+                                    f"{_primary_stat.replace('_',' ').title()} "
+                                    f"reached {_goal_target}. "
+                                    f"Moving to next goal."),
+                                "category": "training",
+                                "week": self._game_state.week_number
+                                    if self._game_state else 0,
+                            })
+                            if _q_idx < len(_queue):
+                                _goal = _queue[_q_idx]
+                                _goal_focus = _goal.get('focus', 'sparring')
+                                _goal_target = int(_goal.get('target', 0))
+
+                        if _q_idx < len(_queue):
+                            if _goal_focus == 'maintain':
+                                active_plan = {
+                                    "focus": "SPARRING:sparring",
+                                    "intensity": "LIGHT",
+                                    "_queue_mode": "maintain",
+                                }
+                            else:
+                                active_plan = {
+                                    "focus": _goal_focus,
+                                    "intensity": _q_intensity,
+                                    "_queue_mode": "goal",
+                                    "_queue_goal": _goal_target,
+                                    "_queue_stat": _primary_stat,
+                                }
+                            _queue_overrode = True
 
             # Auto-maintenance intercept — if any floored stat is
             # approaching its floor (within 3 points) and we're not
