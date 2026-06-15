@@ -2645,6 +2645,77 @@ def register_routes(app):
         # Get commentary lines
         commentary = bridge.get_fight_commentary(fight_id)
 
+        # ── Commentary deduplication ─────────────────────
+        # The commentary module can fire the same template
+        # multiple times per round (e.g. "Back control for X!
+        # This is DANGEROUS!" appearing 6-8 times).
+        # Strategy: within a round block, cap any identical
+        # line to max 2 appearances. Exception: finish lines
+        # and round headers are never suppressed.
+        _FINISH_KEYWORDS = {
+            'TAP', 'STOP THE FIGHT', 'LIGHTS OUT', 'KO!',
+            'KNOCKED DOWN', "AND THAT'S THE ONE",
+            'THE FINAL BLOW', 'KILL SHOT', 'WOBBLES',
+            'IS IN TROUBLE', 'HERE COMES THE FINISH',
+            'POURING IT ON', 'UNLOADS', 'ALL OVER',
+            'FINISH', 'stoppage', 'Excellent stoppage',
+        }
+        _MAX_REPEAT = 2
+
+        def _dedup_commentary(lines):
+            """Cap identical lines at _MAX_REPEAT within each
+            round block. Round headers reset counts. Finish
+            lines never suppressed."""
+            result = []
+            counts = {}
+            for line in lines:
+                stripped = line.strip()
+                if not stripped:
+                    result.append(line)
+                    continue
+                if (stripped.startswith('===')
+                        or stripped.lower().startswith('round ')
+                        or stripped.startswith('[Round')):
+                    counts = {}
+                    result.append(line)
+                    continue
+                is_key = any(kw in stripped
+                             for kw in _FINISH_KEYWORDS)
+                if is_key:
+                    result.append(line)
+                    continue
+                count = counts.get(stripped, 0)
+                if count < _MAX_REPEAT:
+                    result.append(line)
+                    counts[stripped] = count + 1
+            return result
+
+        commentary = _dedup_commentary(commentary)
+
+        # ── Position-cluster collapse ────────────────────
+        # Same dominant-position info often fires from two
+        # templates back-to-back. Drop the second.
+        _POSITION_KEYWORDS = [
+            'BACK MOUNT', 'Back control', 'TRUCK POSITION',
+            'truck position', 'full mount', 'MOUNT',
+            'takes the back', 'Hooks are in',
+        ]
+        def _collapse_position_clusters(lines):
+            result = []
+            prev_pos = None
+            for line in lines:
+                line_pos = next(
+                    (kw for kw in _POSITION_KEYWORDS if kw in line),
+                    None
+                )
+                if line_pos and line_pos == prev_pos:
+                    continue
+                prev_pos = line_pos if line_pos else None
+                result.append(line)
+            return result
+
+        commentary = _collapse_position_clusters(commentary)
+
         # Parse commentary into rounds. Ship K1: use the engine's
         # `[Round N: <summary>]` bracketed end-of-round line as the
         # round boundary — round-start lines from the engine are
