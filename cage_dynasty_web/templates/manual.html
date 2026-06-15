@@ -1,0 +1,329 @@
+{% extends "base.html" %}
+{% block title %}Game Manual{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1 class="page-title">📖 Game Manual</h1>
+    <div class="page-subtitle">How Cage Dynasty works</div>
+</div>
+
+{# ── Quick nav ───────────────────────────────────────────── #}
+<div class="card mb-lg" style="padding:var(--spacing-lg);">
+    <div style="font-size:.7rem;text-transform:uppercase;
+                letter-spacing:.1em;color:var(--text-muted);
+                margin-bottom:var(--spacing-sm);">Jump to</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+        {% for anchor, label in [
+            ('fights','Winning Fights'),
+            ('building','Building a Fighter'),
+            ('training','Training & Development'),
+            ('camp','Running Your Camp'),
+            ('rankings','Rankings & Titles'),
+            ('amateur','Amateur Circuit'),
+            ('interface','Reading the Interface'),
+        ] %}
+        <a href="#{{ anchor }}"
+           style="font-size:.75rem;padding:4px 10px;
+                  background:rgba(255,255,255,.04);
+                  border:1px solid var(--border-color);
+                  border-radius:4px;color:var(--text-muted);
+                  text-decoration:none;
+                  transition:color .15s,border-color .15s;"
+           onmouseover="this.style.color='var(--neon-green)';this.style.borderColor='var(--neon-green)';"
+           onmouseout="this.style.color='var(--text-muted)';this.style.borderColor='var(--border-color)';">
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+{# ─────────────────────────────────────────────────────────
+   Reusable styles defined once via Jinja set
+   ───────────────────────────────────────────────────────── #}
+{% set h2_style = "font-family:var(--font-display);
+    font-size:1.1rem;color:var(--neon-green);
+    border-bottom:1px solid var(--border-color);
+    padding-bottom:var(--spacing-sm);
+    margin-bottom:var(--spacing-md);" %}
+{% set body_style = "font-size:.85rem;color:var(--text-secondary);
+    line-height:1.7;margin-bottom:var(--spacing-md);" %}
+{% set bullet_row_style = "padding:6px 12px;margin-bottom:4px;
+    border-left:2px solid var(--border-color);
+    background:rgba(255,255,255,.02);
+    font-size:.85rem;color:var(--text-secondary);
+    line-height:1.6;" %}
+
+{# ── SECTION 1: Winning Fights ────────────────────────────── #}
+<div class="card mb-lg" id="fights" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">⚔️ Winning Fights</h2>
+
+    <div style="{{ body_style }}">
+        Fights are decided by the attributes of both fighters plus the
+        circumstances of the matchup. A boxer with elite
+        <strong style="color:var(--text-bright);">boxing</strong> skill
+        will usually outperform one with average skill — but style
+        matchups matter too.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Strikers</strong>
+        are dangerous on the feet.
+        <strong style="color:var(--text-bright);">Wrestlers</strong>
+        can take the fight to the ground and neutralize striking.
+        <strong style="color:var(--text-bright);">BJJ specialists</strong>
+        hunt for submissions once the fight is on the mat.
+    </div>
+
+    <div style="font-size:.78rem;color:var(--text-muted);
+                text-transform:uppercase;letter-spacing:.06em;
+                margin:var(--spacing-md) 0 var(--spacing-sm);">
+        Key stats that drive fight outcomes
+    </div>
+
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">Striking</strong> —
+        Boxing, Kicks, Clinch Striking decide how much damage you deal
+        standing up.
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">Defense</strong> —
+        Striking Defense, Takedown Defense determine how much you
+        absorb.
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">Grappling</strong> —
+        Takedowns gets you to the ground, Top Control keeps you there,
+        Submissions finishes from dominant position.
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">Physical</strong> —
+        Cardio matters in late rounds; tired fighters make mistakes
+        and get finished. Chin determines how well you absorb big
+        shots. Strength affects grappling leverage.
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">Mental</strong> —
+        Fight IQ and Composure affect decision-making under pressure.
+        Heart determines whether a fighter survives adversity or
+        quits.
+    </div>
+
+    <div style="{{ body_style }} margin-top:var(--spacing-md);">
+        Finishes happen when a fighter takes too much damage
+        (<strong style="color:var(--text-bright);">KO/TKO</strong>),
+        gets caught in a submission they can't escape
+        (<strong style="color:var(--text-bright);">SUB</strong>),
+        or can't continue due to accumulated punishment.
+        <strong style="color:var(--text-bright);">Decisions</strong>
+        go to judges who score each round independently.
+    </div>
+</div>
+
+{# ── SECTION 2: Building a Fighter ────────────────────────── #}
+<div class="card mb-lg" id="building" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">🥊 Building a Fighter</h2>
+
+    <div style="{{ body_style }}">
+        Every fighter has a
+        <strong style="color:var(--text-bright);">potential ceiling</strong>
+        — the maximum level they can reach with perfect training. Some
+        fighters are high-ceiling prospects who need years to develop.
+        Others are ready now but won't get much better.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Overall Rating
+        (OVR)</strong> is a summary number for display only. It does
+        not directly affect fights — the individual attribute values
+        do.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Facilities</strong>
+        limit how high your fighters can develop. A GARAGE tier camp
+        can only develop fighters to a certain point. Upgrading your
+        facility raises that ceiling.
+    </div>
+</div>
+
+{# ── SECTION 3: Training & Development ────────────────────── #}
+<div class="card mb-lg" id="training" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">💪 Training & Development</h2>
+
+    <div style="{{ body_style }}">
+        Each week you set a
+        <strong style="color:var(--text-bright);">focus</strong>
+        (what to train) and an
+        <strong style="color:var(--text-bright);">intensity</strong>
+        (how hard). Higher intensity produces bigger gains but
+        increases fatigue. Training the same stat repeatedly is more
+        efficient than switching constantly.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Decay:</strong>
+        stats you aren't training will slowly decay over time. Set
+        <strong style="color:var(--text-bright);">decay floors</strong>
+        to protect minimums — once a stat hits its floor, the system
+        auto-trains it to prevent further decay.
+    </div>
+
+    <div style="{{ body_style }}">
+        The
+        <strong style="color:var(--text-bright);">Training Queue</strong>
+        lets you set multi-week goals and walk away. Set Boxing → 82,
+        then Kicks → 78, then Maintain. The system executes
+        automatically week by week.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Style Templates</strong>
+        load a full training plan designed for your fighter's
+        fighting style with one click.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Auto-rest:</strong>
+        if your fighter's fatigue gets too high, the system will
+        automatically reduce intensity or force rest to protect their
+        condition. You'll see this on the news feed.
+    </div>
+</div>
+
+{# ── SECTION 4: Running Your Camp ─────────────────────────── #}
+<div class="card mb-lg" id="camp" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">🏗️ Running Your Camp</h2>
+
+    <div style="{{ body_style }}">
+        Your
+        <strong style="color:var(--text-bright);">camp balance</strong>
+        is your income minus expenses.
+        <strong style="color:var(--text-bright);">Purses</strong>
+        come from fights — the better the slot on the card, the more
+        you earn. Main events pay more than prelims.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Coaches</strong>
+        improve your training gains. A higher-rated coach with a
+        specialty matching your training focus produces better
+        results.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Fight of the Night</strong>
+        bonuses ($50,000 each) are awarded to the fighters in the
+        most exciting fight on the card. These are meaningful income
+        early on.
+    </div>
+
+    <div style="{{ body_style }}">
+        Watch your
+        <strong style="color:var(--text-bright);">runway</strong>
+        — weeks of expenses covered by your current balance. If you
+        run out of money, you can't operate your camp.
+    </div>
+</div>
+
+{# ── SECTION 5: Rankings & Titles ─────────────────────────── #}
+<div class="card mb-lg" id="rankings" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">🏆 Rankings & Titles</h2>
+
+    <div style="{{ body_style }}">
+        Beat ranked opponents to enter and climb the
+        <strong style="color:var(--text-bright);">rankings</strong>.
+        Win streaks help. Losing drops you. Being ranked
+        <strong style="color:var(--text-bright);">#1 or #2</strong>
+        makes you a title contender — a title fight offer will come.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Champions</strong>
+        defend their title against the top contender. Losing a title
+        fight costs you the belt and drops your ranking. The
+        champion's record matters — long reign champions become
+        legends.
+    </div>
+</div>
+
+{# ── SECTION 6: Amateur Circuit ───────────────────────────── #}
+<div class="card mb-lg" id="amateur" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">🥋 Amateur Circuit</h2>
+
+    <div style="{{ body_style }}">
+        The amateur circuit runs independently. Fighters develop,
+        compete, and some emerge as
+        <strong style="color:var(--text-bright);">prospects worth signing</strong>.
+    </div>
+
+    <div style="{{ body_style }}">
+        Browse the
+        <strong style="color:var(--text-bright);">Amateur Circuit</strong>
+        page to find prospects. Better prospects have higher
+        potential ceilings and stronger amateur records. Signing them
+        costs nothing but they need time to develop before they're
+        ready to compete professionally.
+    </div>
+</div>
+
+{# ── SECTION 7: Reading the Interface ─────────────────────── #}
+<div class="card mb-lg" id="interface" style="padding:var(--spacing-lg);">
+    <h2 style="{{ h2_style }}">👁️ Reading the Interface</h2>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">Rankings:</strong>
+        the number next to a fighter's name (#3, #7) is their
+        division ranking. Unranked fighters haven't beaten anyone
+        ranked yet.
+    </div>
+
+    <div style="font-size:.78rem;color:var(--text-muted);
+                text-transform:uppercase;letter-spacing:.06em;
+                margin:var(--spacing-md) 0 var(--spacing-sm);">
+        Method abbreviations
+    </div>
+
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">KO</strong> —
+        knockout
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">TKO</strong> —
+        technical knockout (stopped by ref / corner / doctor)
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">SUB</strong> —
+        submission
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">DEC</strong> —
+        decision (went to judges)
+    </div>
+    <div style="{{ bullet_row_style }}">
+        <strong style="color:var(--text-bright);">SPLIT DEC</strong>
+        — one judge scored it differently
+    </div>
+
+    <div style="{{ body_style }} margin-top:var(--spacing-md);">
+        <strong style="color:var(--text-bright);">News feed:</strong>
+        stories about fights, injuries, retirements, and notable
+        performances across all divisions. The game world is always
+        active — other organizations are running events, fighters
+        are developing, champions are defending.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">FOTN</strong> =
+        Fight of the Night. Automatically awarded to the most
+        exciting fight on each card.
+    </div>
+
+    <div style="{{ body_style }}">
+        <strong style="color:var(--text-bright);">OVR</strong> =
+        Overall Rating. A display number that summarizes a fighter's
+        attribute total. Useful for quick comparisons but not used
+        by the fight engine directly.
+    </div>
+</div>
+
+{% endblock %}

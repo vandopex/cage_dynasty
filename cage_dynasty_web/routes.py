@@ -2224,6 +2224,11 @@ def register_routes(app):
             slot_context=slot_context,
         )
 
+    @app.route('/manual')
+    def manual():
+        """Game manual — how to play."""
+        return render_template('manual.html')
+
     @app.route('/saves')
     def saves_menu():
         """Save / load game."""
