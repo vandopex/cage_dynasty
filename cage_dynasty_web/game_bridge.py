@@ -9837,9 +9837,9 @@ class GameBridge:
                         # Engine returns "Submission (xxx)" — normalise to SUB
                         if _raw.startswith("Submission"):
                             method = "SUB"
-                        elif _raw in ("KO",):
+                        elif _raw.startswith("KO"):
                             method = "KO"
-                        elif _raw in ("TKO",):
+                        elif _raw.startswith("TKO"):
                             method = "TKO"
                         elif "Decision" in _raw or _raw == "DEC":
                             method = "DEC"
@@ -10302,9 +10302,9 @@ class GameBridge:
                         _raw   = _eng.method or "DEC"
                         if _raw.startswith("Submission"):
                             method = "SUB"
-                        elif _raw in ("KO",):
+                        elif _raw.startswith("KO"):
                             method = "KO"
-                        elif _raw in ("TKO",):
+                        elif _raw.startswith("TKO"):
                             method = "TKO"
                         else:
                             method = "DEC"
