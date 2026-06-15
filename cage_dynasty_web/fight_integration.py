@@ -1246,27 +1246,22 @@ def simulate_narrated_fight(
     is_main_event: bool = False,
     starting_stamina_f1: float = 100.0,
     starting_stamina_f2: float = 100.0,
+    config: 'FightConfig' = None,
 ) -> NarratedFightResult:
     """
     Simulate a fight with full commentary.
-    
-    Args:
-        fighter1: First fighter
-        fighter2: Second fighter  
-        rounds: Number of rounds (3 or 5)
-        is_title_fight: Whether this is a title fight
-        is_main_event: Whether this is a main event
-        
-    Returns:
-        NarratedFightResult with complete stats and narrative
+    If config is provided, use it directly (preserves bridge
+    per-fight tuning — damage_multiplier, thresholds, etc).
+    Otherwise build config from fight type flags.
     """
-    if is_title_fight:
-        config = FightConfig.championship_fight()
-    elif is_main_event:
-        config = FightConfig.main_event()
-    else:
-        config = FightConfig.standard_fight()
-    
+    if config is None:
+        if is_title_fight:
+            config = FightConfig.championship_fight()
+        elif is_main_event:
+            config = FightConfig.main_event()
+        else:
+            config = FightConfig.standard_fight()
+
     if rounds == 5:
         config.scheduled_rounds = 5
     
