@@ -1335,7 +1335,7 @@ def select_action(
     # Subs should be RARE but DANGEROUS - now more accessible
     strike_weight = 120  # High strike bias everywhere
     sub_weight = 0      # START AT ZERO - only add when conditions are right
-    grapple_weight = 18  # Raised from 10 — grapplers initiate more frequently
+    grapple_weight = 13  # Reduced from 18 — style weights now bias grapplers further
     
     # Block submissions if position not secured
     if not position_secured:
@@ -1622,10 +1622,44 @@ def select_action(
                         sub_weight += 30
     
     # Fight state adjustments - removed desperate sub boost
-    
+
     if fighter_state.momentum > 70:
         strike_weight += 10
-    
+
+    # ── Style action bias ────────────────────────────────
+    # Multiply base weights by fighter style preferences.
+    # Grapplers get more submission/grapple; strikers more striking.
+    # Inlined here to avoid circular import from fight_integration.
+    _STYLE_WEIGHTS = {
+        "ORTHODOX_BOXER":    {"strike":1.4,"grapple":0.7,"submission":0.3},
+        "KICKBOXER":         {"strike":1.4,"grapple":0.7,"submission":0.3},
+        "MUAY_THAI":         {"strike":1.3,"grapple":0.9,"submission":0.4},
+        "PRESSURE_FIGHTER":  {"strike":1.2,"grapple":1.0,"submission":0.4},
+        "COUNTER_STRIKER":   {"strike":1.3,"grapple":0.8,"submission":0.3},
+        "POINT_FIGHTER":     {"strike":1.4,"grapple":0.6,"submission":0.2},
+        "KARATE":            {"strike":1.3,"grapple":0.7,"submission":0.3},
+        "WRESTLER":          {"strike":0.8,"grapple":1.4,"submission":0.9},
+        "BJJ_SPECIALIST":    {"strike":0.6,"grapple":1.2,"submission":2.0},
+        "SAMBO":             {"strike":0.9,"grapple":1.3,"submission":1.4},
+        "JUDO":              {"strike":0.8,"grapple":1.5,"submission":0.9},
+        "GROUND_AND_POUND":  {"strike":1.0,"grapple":1.4,"submission":0.6},
+        "SPRAWL_AND_BRAWL":  {"strike":1.3,"grapple":0.7,"submission":0.4},
+        "CLINCH_FIGHTER":    {"strike":1.0,"grapple":1.3,"submission":0.7},
+        "BRAWLER":           {"strike":1.3,"grapple":0.8,"submission":0.4},
+        "HYBRID":            {"strike":1.0,"grapple":1.0,"submission":0.8},
+        "STRIKER":           {"strike":1.4,"grapple":0.7,"submission":0.3},
+        "BALANCED":          {"strike":1.0,"grapple":1.0,"submission":1.0},
+    }
+    _style_key = ""
+    _fs = getattr(fighter_attrs, 'fighting_style', None)
+    if _fs is not None:
+        _style_key = getattr(_fs, 'name', '') or str(_fs)
+    _sw = _STYLE_WEIGHTS.get(_style_key.upper(),
+        {"strike":1.0,"grapple":1.0,"submission":1.0})
+    strike_weight = int(strike_weight * _sw["strike"])
+    grapple_weight = int(grapple_weight * _sw["grapple"])
+    sub_weight = int(sub_weight * _sw["submission"])
+
     # Stamina factor
     stamina_factor = fighter_state.stamina / 100
     strike_weight = int(strike_weight * stamina_factor)

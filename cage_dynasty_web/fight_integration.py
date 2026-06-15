@@ -88,13 +88,33 @@ def get_position_control(position: Position) -> str:
     return "neutral"
 
 def get_style_action_weights(style) -> Dict[str, float]:
-    """Get action weights based on fighting style."""
-    # Default weights
-    return {
-        "strike": 1.0,
-        "grapple": 1.0,
-        "submission": 1.0,
+    """Action weight multipliers by fighting style.
+    Applied on top of base select_action weights.
+    Grapplers get more submission/grapple; strikers more striking.
+    Mirrors the inline dict in fight_engine.select_action."""
+    weights = {
+        "ORTHODOX_BOXER":    {"strike":1.4,"grapple":0.7,"submission":0.3},
+        "KICKBOXER":         {"strike":1.4,"grapple":0.7,"submission":0.3},
+        "MUAY_THAI":         {"strike":1.3,"grapple":0.9,"submission":0.4},
+        "PRESSURE_FIGHTER":  {"strike":1.2,"grapple":1.0,"submission":0.4},
+        "COUNTER_STRIKER":   {"strike":1.3,"grapple":0.8,"submission":0.3},
+        "POINT_FIGHTER":     {"strike":1.4,"grapple":0.6,"submission":0.2},
+        "KARATE":            {"strike":1.3,"grapple":0.7,"submission":0.3},
+        "WRESTLER":          {"strike":0.8,"grapple":1.4,"submission":0.9},
+        "BJJ_SPECIALIST":    {"strike":0.6,"grapple":1.2,"submission":2.0},
+        "SAMBO":             {"strike":0.9,"grapple":1.3,"submission":1.4},
+        "JUDO":              {"strike":0.8,"grapple":1.5,"submission":0.9},
+        "GROUND_AND_POUND":  {"strike":1.0,"grapple":1.4,"submission":0.6},
+        "SPRAWL_AND_BRAWL":  {"strike":1.3,"grapple":0.7,"submission":0.4},
+        "CLINCH_FIGHTER":    {"strike":1.0,"grapple":1.3,"submission":0.7},
+        "BRAWLER":           {"strike":1.3,"grapple":0.8,"submission":0.4},
+        "HYBRID":            {"strike":1.0,"grapple":1.0,"submission":0.8},
+        "STRIKER":           {"strike":1.4,"grapple":0.7,"submission":0.3},
+        "BALANCED":          {"strike":1.0,"grapple":1.0,"submission":1.0},
     }
+    s = getattr(style, 'name', '') or str(style)
+    return weights.get(s.upper(),
+        {"strike":1.0,"grapple":1.0,"submission":1.0})
 
 # Event logging types
 class FightEventType(Enum):
@@ -556,7 +576,69 @@ class NarratedFightSimulator:
             caused_knockdown, is_finish = defender_state.apply_damage(
                 damage, target_area
             )
-            
+
+            # ── Leg kick TKO — accumulated leg damage ──────
+            if (not is_finish and target_area == "legs"
+                    and defender_state.damage.is_compromised_legs):
+                _leg_tko_chance = min(0.15,
+                    (defender_state.damage.leg_kicks_absorbed - 6) * 0.02)
+                if defender_state.stamina < 50:
+                    _leg_tko_chance *= 1.4
+                if random.random() < _leg_tko_chance:
+                    is_finish = True
+                    method = "TKO (Leg Kicks)"
+                    self._log_finish(attacker.fighter_id,
+                                     method, exchange_num)
+                    return (attacker.fighter_id, method)
+
+            # ── Referee stoppage — unanswered shots while rocked ──
+            if (not is_finish
+                    and defender_state.is_rocked
+                    and target_area == "head"):
+                if not hasattr(defender_state, '_rocked_shots'):
+                    defender_state._rocked_shots = 0
+                defender_state._rocked_shots += 1
+                _ref_chance = min(0.35,
+                    defender_state._rocked_shots * 0.08)
+                _ref_chance *= max(0.4,
+                    1 - (defender.fight_iq / 250)
+                      - (defender.heart / 350))
+                if random.random() < _ref_chance:
+                    method = "TKO (Referee Stoppage)"
+                    self._log_finish(attacker.fighter_id,
+                                     method, exchange_num)
+                    return (attacker.fighter_id, method)
+
+            # ── Rocked fighter in standup — grappler exploits ──
+            if (not is_finish
+                    and defender_state.is_rocked
+                    and target_area == "head"
+                    and self.fight_state.position in STANDING_POSITIONS):
+                # Scenario A: wrestler shoots
+                if attacker.takedowns >= 68:
+                    _shoot = min(0.18,
+                        (attacker.takedowns - 60) * 0.006)
+                    _shoot *= max(0.8,
+                        1 + (attacker.takedowns
+                             - defender.takedown_defense) / 150)
+                    if random.random() < _shoot:
+                        self.fight_state.position = (
+                            Position.BACK_MOUNT
+                            if random.random() < 0.55
+                            else Position.MOUNT
+                        )
+                        self.fight_state.top_fighter_id = (
+                            attacker.fighter_id)
+                # Scenario B: submission specialist takes back
+                elif (attacker.submissions >= 65
+                        and getattr(defender_state, '_rocked_shots', 0) >= 2):
+                    _back = min(0.12,
+                        (attacker.submissions - 60) * 0.004)
+                    if random.random() < _back:
+                        self.fight_state.position = Position.STANDING_BACK
+                        self.fight_state.top_fighter_id = (
+                            attacker.fighter_id)
+
             # === V7 FLASH KO SYSTEM ===
             # Big head shots can cause sudden KOs even without accumulating damage
             if (not is_finish and target_area == "head" and 
@@ -658,12 +740,28 @@ class NarratedFightSimulator:
 
             # Check for finish
             if is_finish:
-                # KO = health reached 0 (knockdown OR flash KO)
-                # TKO = referee stoppage (GnP or standing TKO system)
+                # Named specialty finishes — specific strike logged
+                # so records and commentary surface the exact KO type
+                _sv = strike.value if hasattr(strike, 'value') else str(strike)
+                _specialty_map = {
+                    "flying_knee":        "KO (Flying Knee)",
+                    "wheel_kick":         "KO (Wheel Kick)",
+                    "elbow_spinning":     "KO (Spinning Elbow)",
+                    "head_kick":          "KO (Head Kick)",
+                    "knee_head":          "KO (Knee)",
+                    "spinning_back_kick": "KO (Spinning Back Kick)",
+                    "superman_punch":     "KO (Superman Punch)",
+                    "body_kick":          "TKO (Body Shot)",
+                    "knee_body":          "TKO (Body Shot)",
+                    "front_kick":         "TKO (Body Shot)",
+                }
                 if defender_state.health <= 0:
-                    method = "KO"
+                    method = _specialty_map.get(_sv, "KO")
                 else:
-                    method = "TKO"
+                    if target_area == "body":
+                        method = _specialty_map.get(_sv, "TKO (Body Shot)")
+                    else:
+                        method = "TKO"
                 self._log_finish(attacker.fighter_id, method, exchange_num)
                 return (attacker.fighter_id, method)
             
@@ -1009,6 +1107,54 @@ class NarratedFightSimulator:
                         self.fight_state.top_fighter_id = None
                         self.fight_state.ground_inactivity = 0
         
+        # ── Between-round stoppages ──────────────────────
+        # Doctor, corner, cut stoppages. Rare by design.
+        # Only fires if another round remains.
+        if self.current_round < self.config.scheduled_rounds:
+            for _ftr, _ftr_state, _opp in [
+                (self.fighter1, self.fighter1_state, self.fighter2),
+                (self.fighter2, self.fighter2_state, self.fighter1),
+            ]:
+                _stop = None
+
+                # Cut stoppage
+                if _ftr_state.damage.cuts >= 3:
+                    _cc = min(0.35,
+                        (_ftr_state.damage.cuts - 2) * 0.08)
+                    _cc *= max(0.4, 1 - (_ftr.heart / 200))
+                    if random.random() < _cc:
+                        _stop = "TKO (Doctor Stoppage - Cuts)"
+
+                # Doctor stoppage
+                if (not _stop
+                        and _ftr_state.health < 28
+                        and _ftr_state.damage.head > 55):
+                    _dc = min(0.14,
+                        (55 - _ftr_state.health) * 0.003)
+                    _dc *= max(0.5, 1 - (_ftr.heart / 250))
+                    if getattr(_ftr_state, 'chin_compromised', False):
+                        _dc *= 1.35
+                    if random.random() < _dc:
+                        _stop = "TKO (Doctor Stoppage)"
+
+                # Corner stoppage (round 2+, 2+ knockdowns)
+                if (not _stop
+                        and self.current_round >= 2
+                        and _ftr_state.health < 22
+                        and getattr(_ftr_state, 'knockdowns_total', 0) >= 2):
+                    _corn = min(0.18,
+                        (getattr(_ftr_state, 'knockdowns_total', 0) - 1)
+                        * 0.06)
+                    _corn *= max(0.3, 1 - (_ftr.heart / 300))
+                    if random.random() < _corn:
+                        _stop = "TKO (Corner Stoppage)"
+
+                if _stop:
+                    self._log_finish(
+                        _opp.fighter_id, _stop,
+                        self.config.exchanges_per_round)
+                    return (_opp.fighter_id, _stop)
+
         # Score the round
         # NOTE: knockdowns_this_round tracks knockdowns SUFFERED, but score_round
         # expects knockdowns INFLICTED. So we swap: f2's suffered = f1's inflicted
