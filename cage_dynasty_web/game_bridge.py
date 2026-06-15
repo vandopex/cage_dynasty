@@ -9,7 +9,7 @@ a specific data format) and the real game engine classes.
 import sys
 import os
 from typing import Dict, List, Optional, Any, Set
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 # Add the cage_dynasty directory to path so we can import game modules
 GAME_PATH = os.path.join(os.path.dirname(__file__), '..', 'cage_dynasty')
@@ -670,6 +670,8 @@ class WebFighter:
     natural_weight_class:  str = ""
     # True if this fighter has a scheduled fight with an active fight camp
     fight_camp_active:     bool = False
+    # Per-stat decay floors (Ship: decay floors) — {stat_name: floor_value}
+    stat_floors:           Dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -4825,6 +4827,8 @@ class GameBridge:
                 or sf.get('fighter2_id') == f.fighter_id
                 for sf in self._scheduled_fights
             ),
+            stat_floors=self._fighter_training_plans.get(
+                f.fighter_id, {}).get('floors', {}),
             career_phase=(
                 "Rising"    if f.age < 26 else
                 "Prime"     if f.age <= 30 else
@@ -6016,6 +6020,26 @@ class GameBridge:
             "intensity": "MODERATE",
         })
 
+    def set_stat_floors(self, fighter_id: str,
+                        floors: Dict[str, int]) -> None:
+        """Set per-stat decay floors for a fighter.
+        Floors are stored alongside the training plan and persist
+        across sessions. A floor of 0 means no floor (free decay)."""
+        if fighter_id not in self._fighter_training_plans:
+            self._fighter_training_plans[fighter_id] = {
+                "focus": "sparring", "intensity": "MODERATE"
+            }
+        self._fighter_training_plans[fighter_id]['floors'] = {
+            stat: int(val)
+            for stat, val in floors.items()
+            if int(val) > 0
+        }
+
+    def get_stat_floors(self, fighter_id: str) -> Dict[str, int]:
+        """Get per-stat decay floors for a fighter."""
+        plan = self._fighter_training_plans.get(fighter_id, {})
+        return plan.get('floors', {})
+
     def _record_training_week(self,
                               fighter_id: str,
                               week: int,
@@ -6125,6 +6149,43 @@ class GameBridge:
                     break
 
             active_plan = fight_plan or plan or {"focus": "sparring", "intensity": "MODERATE"}
+
+            # Auto-maintenance intercept — if any floored stat is
+            # approaching its floor (within 3 points) and we're not
+            # already in fight camp, override with a LIGHT maintenance
+            # week targeting that stat. Resumes normal plan next week.
+            _auto_maintenance_stat = None
+            _auto_maintenance_focus = None
+            if not fight_plan:
+                _floors = (plan or {}).get('floors', {})
+                _real_ftr = self._game_state.get_fighter(fid)
+                for _fstat, _ffloor in _floors.items():
+                    if _ffloor <= 0:
+                        continue
+                    _cur_val = float(
+                        self._game_state._fighter_data.get(
+                            fid, {}).get(_fstat,
+                            getattr(_real_ftr, _fstat, 99) if _real_ftr else 99)
+                    )
+                    if _cur_val <= _ffloor + 3:
+                        for _gname, _gdata in self._TRAINING_GROUPS.items():
+                            for _ename, _eattrs in _gdata.get("emphases", {}).items():
+                                if _fstat in _eattrs:
+                                    _auto_maintenance_stat = _fstat
+                                    _auto_maintenance_focus = f"{_gname}:{_ename}"
+                                    break
+                            if _auto_maintenance_focus:
+                                break
+                        if _auto_maintenance_focus:
+                            break
+
+                if _auto_maintenance_focus:
+                    active_plan = {
+                        "focus": _auto_maintenance_focus,
+                        "intensity": "LIGHT",
+                        "_auto_maintain": True,
+                        "_protecting_stat": _auto_maintenance_stat,
+                    }
 
             # Snapshot OVR before
             real_fighter = self._game_state.get_fighter(fid)
@@ -6313,6 +6374,8 @@ class GameBridge:
                 "ovr_delta":     ovr_after - ovr_before,
                 "is_fight_camp": bool(fight_plan),
                 "capped_stats":  result.get("capped_stats", []),
+                "auto_maintained":      active_plan.get("_auto_maintain", False),
+                "auto_maintained_stat": active_plan.get("_protecting_stat", ""),
             }
 
             # Ship A: append this week's entry to rolling 4-week history.
@@ -7615,7 +7678,19 @@ class GameBridge:
                     pass
                 if ftr and hasattr(ftr, decay.stat):
                     current = getattr(ftr, decay.stat, 50)
-                    setattr(ftr, decay.stat, max(1, current - decay.amount))
+                    _floors = self._fighter_training_plans.get(
+                        decay.fighter_id, {}).get('floors', {})
+                    _floor = _floors.get(decay.stat, 0)
+                    if _floor > 0 and current <= _floor:
+                        _absorbed_decays.add((decay.fighter_id, decay.stat))
+                        continue
+                    _new_val = max(1, current - decay.amount)
+                    if _floor > 0:
+                        _new_val = max(_floor, _new_val)
+                    setattr(ftr, decay.stat, _new_val)
+                    if decay.fighter_id in self._game_state._fighter_data:
+                        self._game_state._fighter_data[
+                            decay.fighter_id][decay.stat] = _new_val
                 _STAT_DISPLAY = {
                     "accuracy": "striking accuracy", "wrestling": "takedown game",
                     "td_defense": "takedown defense", "clinch": "clinch work",

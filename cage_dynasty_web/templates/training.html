@@ -216,6 +216,60 @@
         </div>
     </form>
 
+    <details style="margin:0 var(--spacing-md) var(--spacing-md);">
+    <summary style="cursor:pointer;font-size:.72rem;color:var(--text-muted);
+                    letter-spacing:.08em;text-transform:uppercase;
+                    padding:4px 0;list-style:none;">
+        ⚙️ Decay Floors <span style="font-size:.65rem;color:var(--text-muted);
+        font-weight:400;text-transform:none;letter-spacing:0;">
+        — set a minimum value; decay stops here</span>
+    </summary>
+    <form method="POST"
+          action="{{ url_for('set_stat_floors', fighter_id=fighter.fighter_id) }}"
+          style="margin-top:var(--spacing-sm);">
+        {% set _floor_stats = [
+            ('boxing','Boxing'),('kicks','Kicks'),
+            ('clinch_striking','Clinch'),('striking_defense','Str. Def'),
+            ('takedowns','Takedowns'),('takedown_defense','TD Def'),
+            ('top_control','Top Ctrl'),('submissions','Subs'),('guard','Guard'),
+            ('strength','Strength'),('speed','Speed'),('cardio','Cardio'),
+            ('chin','Chin'),('recovery','Recovery'),
+            ('fight_iq','Fight IQ'),('composure','Composure'),('heart','Heart'),
+        ] %}
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);
+                    gap:4px 8px;margin-bottom:var(--spacing-sm);">
+        {% for stat_key, stat_label in _floor_stats %}
+            {% set _cur_val = fighter[stat_key] if fighter[stat_key] is defined
+                              else attribute(fighter, stat_key) %}
+            {% set _floor_val = fighter.stat_floors.get(stat_key, 0)
+                                if fighter.stat_floors is defined else 0 %}
+            <div style="display:flex;align-items:center;gap:4px;">
+                <label style="font-size:.62rem;color:var(--text-muted);
+                              width:58px;flex-shrink:0;">{{ stat_label }}</label>
+                <span style="font-size:.62rem;color:var(--text-bright);
+                             width:22px;text-align:right;">{{ _cur_val }}</span>
+                <input type="number" name="floor_{{ stat_key }}"
+                       value="{{ _floor_val }}"
+                       min="0" max="99" placeholder="0"
+                       style="width:36px;padding:2px 4px;font-size:.62rem;
+                              background:var(--surface-2);
+                              border:1px solid {% if _floor_val > 0 %}rgba(99,179,237,.4){% else %}rgba(255,255,255,.08){% endif %};
+                              border-radius:3px;color:var(--text-bright);
+                              text-align:center;"
+                       title="Floor for {{ stat_label }} — decay stops at this value">
+            </div>
+        {% endfor %}
+        </div>
+        <button type="submit"
+                style="font-size:.68rem;padding:4px 10px;
+                       background:rgba(99,179,237,.08);
+                       border:1px solid rgba(99,179,237,.25);
+                       color:var(--info);border-radius:4px;cursor:pointer;">
+            Save Floors
+        </button>
+    </form>
+    </details>
+
     {% if decay_risks and decay_risks.get(fighter.fighter_id) %}
     {% set risks = decay_risks[fighter.fighter_id] %}
     <div style="margin:0 var(--spacing-md) var(--spacing-md);

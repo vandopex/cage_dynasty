@@ -946,6 +946,28 @@ def register_routes(app):
             week=bridge.week_number,
         )
     
+    @app.route('/training/set_floors/<fighter_id>', methods=['POST'])
+    def set_stat_floors(fighter_id):
+        """Save per-stat decay floors for a fighter."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return jsonify({"error": "No game loaded"}), 400
+        floors = {}
+        for stat in [
+            'boxing','kicks','clinch_striking','striking_defense',
+            'takedowns','takedown_defense','top_control','submissions',
+            'guard','strength','speed','cardio','chin','recovery',
+            'fight_iq','composure','heart',
+        ]:
+            val = request.form.get(f'floor_{stat}', '0').strip()
+            try:
+                floors[stat] = int(val) if val else 0
+            except ValueError:
+                floors[stat] = 0
+        bridge.set_stat_floors(fighter_id, floors)
+        flash(f"Stat floors saved.", "success")
+        return redirect(url_for('training'))
+
     @app.route('/training/set', methods=['POST'])
     def set_training():
         """Store a fighter's weekly training plan — applied automatically each advance_week."""
