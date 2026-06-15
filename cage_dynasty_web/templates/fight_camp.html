@@ -31,10 +31,10 @@
 
 {# ── Fighter vs Fighter ── #}
 <div class="card mb-lg">
-    <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:var(--spacing-lg);
-                padding:var(--spacing-lg);align-items:center;">
-
-        {# Player #}
+    {# Names + records header #}
+    <div style="display:grid;grid-template-columns:1fr auto 1fr;
+                gap:var(--spacing-lg);padding:var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
+                align-items:start;">
         <div style="text-align:right;">
             <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--text-bright);">
                 {{ data.player.name }}
@@ -43,8 +43,8 @@
                 {{ data.player.record_str }}
                 {% if data.player.ranking %} · #{{ data.player.ranking }}{% else %} · Unranked{% endif %}
             </div>
-            <div style="font-size:.75rem;color:var(--info);margin-top:2px;">{{ data.player.fighting_style }}</div>
-
+            <div style="font-size:.75rem;color:var(--info);margin-top:2px;">
+                {{ data.player.fighting_style }}</div>
             {# Condition bar #}
             <div style="margin-top:var(--spacing-sm);">
                 {% set _rec = data.player.recovery or 50 %}
@@ -56,9 +56,9 @@
                 {% else %}{% set _rec_label = "Poor" %}{% set _rec_color = "var(--blood-red)" %}
                 {% endif %}
                 <div style="font-size:.65rem;color:var(--text-muted);margin-bottom:3px;text-align:right;"
-                     title="Recovery speed: {{ _rec_label }} — Recovery stat {{ _rec }}, Age {{ _age }}. REST recovers more fatigue for younger fighters with high recovery.">
+                     title="Recovery: {{ _rec_label }}">
                     Condition: {{ condition_pct }}%
-                    <span style="color:{{ _rec_color }};margin-left:4px;">· {{ _rec_label }} recovery</span>
+                    <span style="color:{{ _rec_color }};margin-left:4px;">· {{ _rec_label }}</span>
                     {% if fatigue > 60 %}<span style="color:var(--warning);"> ⚠️ Tired</span>
                     {% elif fatigue > 80 %}<span style="color:var(--blood-red);"> 🔴 Exhausted</span>{% endif %}
                 </div>
@@ -67,35 +67,14 @@
                                 background:{% if condition_pct > 70 %}var(--neon-green){% elif condition_pct > 40 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
                 </div>
             </div>
-
-            {# Key stats #}
-            <div style="display:flex;gap:var(--spacing-sm);justify-content:flex-end;
-                        margin-top:var(--spacing-md);flex-wrap:wrap;">
-                {% for label, val in [
-                    ('Boxing', data.player.boxing),
-                    ('Kicks', data.player.kicks),
-                    ('Wrestling', data.player.takedowns),
-                    ('BJJ', data.player.submissions),
-                    ('Chin', data.player.chin),
-                    ('Cardio', data.player.cardio),
-                ] %}
-                <div style="text-align:center;background:var(--bg-dark);border-radius:4px;
-                            padding:4px 8px;min-width:44px;">
-                    <div style="font-family:var(--font-display);font-size:.95rem;color:var(--info);">{{ val or '—' }}</div>
-                    <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">{{ label }}</div>
-                </div>
-                {% endfor %}
-            </div>
         </div>
 
-        {# VS #}
-        <div style="text-align:center;">
+        <div style="text-align:center;padding-top:8px;">
             <div style="font-family:var(--font-display);font-size:1.8rem;color:var(--blood-red);">VS</div>
             <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
                         color:var(--text-muted);margin-top:4px;">{{ data.fight.weight_class }}</div>
         </div>
 
-        {# Opponent #}
         <div style="text-align:left;">
             <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--text-bright);">
                 {{ data.opponent.name }}
@@ -104,25 +83,123 @@
                 {{ data.opponent.record_str }}
                 {% if data.opponent.ranking %} · #{{ data.opponent.ranking }}{% else %} · Unranked{% endif %}
             </div>
-            <div style="font-size:.75rem;color:var(--blood-red-light);margin-top:2px;">{{ data.opponent.fighting_style }}</div>
-
-            <div style="display:flex;gap:var(--spacing-sm);margin-top:var(--spacing-md);flex-wrap:wrap;">
-                {% for label, val in [
-                    ('Boxing', data.opponent.boxing),
-                    ('Kicks', data.opponent.kicks),
-                    ('Wrestling', data.opponent.takedowns),
-                    ('BJJ', data.opponent.submissions),
-                    ('Chin', data.opponent.chin),
-                    ('Cardio', data.opponent.cardio),
-                ] %}
-                <div style="text-align:center;background:var(--bg-dark);border-radius:4px;
-                            padding:4px 8px;min-width:44px;">
-                    <div style="font-family:var(--font-display);font-size:.95rem;color:var(--blood-red-light);">{{ val or '—' }}</div>
-                    <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;">{{ label }}</div>
-                </div>
-                {% endfor %}
-            </div>
+            <div style="font-size:.75rem;color:var(--blood-red-light);margin-top:2px;">
+                {{ data.opponent.fighting_style }}</div>
         </div>
+    </div>
+
+    {# Full stat comparison table #}
+    <div style="padding:0 var(--spacing-lg) var(--spacing-lg);">
+
+        {# Advantages summary strip — adv: -1=player, 1=opponent, 0=even #}
+        {% if data.tale_of_tape %}
+        {% set tot = data.tale_of_tape %}
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;
+                    margin-bottom:var(--spacing-md);">
+            {% for cat, adv in [
+                ('Striking',    tot.striking_adv),
+                ('Grappling',   tot.grappling_adv),
+                ('Physical',    tot.physical_adv),
+                ('Experience',  tot.experience_adv),
+            ] %}
+            <div style="text-align:center;padding:6px 4px;border-radius:5px;
+                        background:{% if adv == -1 %}rgba(99,179,237,.12){% elif adv == 1 %}rgba(220,50,50,.12){% else %}rgba(255,255,255,.04){% endif %};
+                        border:1px solid {% if adv == -1 %}rgba(99,179,237,.3){% elif adv == 1 %}rgba(220,50,50,.3){% else %}rgba(255,255,255,.08){% endif %};">
+                <div style="font-size:.58rem;text-transform:uppercase;
+                            letter-spacing:.08em;color:var(--text-muted);
+                            margin-bottom:2px;">{{ cat }}</div>
+                <div style="font-size:.72rem;font-weight:700;
+                            color:{% if adv == -1 %}var(--info){% elif adv == 1 %}var(--blood-red-light){% else %}var(--text-muted){% endif %};">
+                    {% if adv == -1 %}YOU
+                    {% elif adv == 1 %}THEM
+                    {% else %}EVEN{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {# Stat rows — grouped #}
+        {% for group_label, group_color, stat_rows in [
+            ('Striking', 'var(--info)', [
+                ('Boxing',           data.player.boxing,           data.opponent.boxing),
+                ('Kicks',            data.player.kicks,            data.opponent.kicks),
+                ('Clinch',           data.player.clinch_striking,  data.opponent.clinch_striking),
+                ('Str. Defense',     data.player.striking_defense, data.opponent.striking_defense),
+            ]),
+            ('Grappling', 'var(--neon-green)', [
+                ('Takedowns',        data.player.takedowns,        data.opponent.takedowns),
+                ('TD Defense',       data.player.takedown_defense, data.opponent.takedown_defense),
+                ('Top Control',      data.player.top_control,      data.opponent.top_control),
+                ('Submissions',      data.player.submissions,      data.opponent.submissions),
+                ('Guard',            data.player.guard,            data.opponent.guard),
+            ]),
+            ('Physical', 'var(--warning)', [
+                ('Strength',         data.player.strength,         data.opponent.strength),
+                ('Speed',            data.player.speed,            data.opponent.speed),
+                ('Cardio',           data.player.cardio,           data.opponent.cardio),
+                ('Chin',             data.player.chin,             data.opponent.chin),
+                ('Recovery',         data.player.recovery,         data.opponent.recovery),
+            ]),
+            ('Mental', 'var(--gold)', [
+                ('Fight IQ',         data.player.fight_iq,         data.opponent.fight_iq),
+                ('Composure',        data.player.composure,        data.opponent.composure),
+                ('Heart',            data.player.heart,            data.opponent.heart),
+            ]),
+        ] %}
+        <div style="margin-bottom:var(--spacing-sm);">
+            <div style="font-size:.58rem;text-transform:uppercase;letter-spacing:.1em;
+                        color:{{ group_color }};margin-bottom:4px;">{{ group_label }}</div>
+            {% for stat_label, p_val, o_val in stat_rows %}
+            {% set p_v = p_val or 0 %}
+            {% set o_v = o_val or 0 %}
+            {% set _diff = p_v - o_v %}
+            <div style="display:grid;grid-template-columns:1fr 80px 1fr;
+                        gap:4px;align-items:center;margin-bottom:3px;">
+                {# Player value #}
+                <div style="text-align:right;">
+                    <span style="font-size:.75rem;font-weight:700;
+                                 color:{% if _diff > 4 %}var(--neon-green){% elif _diff < -4 %}var(--blood-red-light){% else %}var(--text-bright){% endif %};">
+                        {{ p_v }}
+                    </span>
+                    {% if _diff > 4 %}
+                    <span style="font-size:.6rem;color:var(--neon-green);margin-left:2px;">
+                        +{{ _diff }}</span>
+                    {% endif %}
+                </div>
+                {# Stat label + bar #}
+                <div style="text-align:center;">
+                    <div style="font-size:.6rem;color:var(--text-muted);margin-bottom:2px;">
+                        {{ stat_label }}</div>
+                    <div style="height:3px;background:rgba(255,255,255,.06);
+                                border-radius:2px;overflow:hidden;position:relative;">
+                        {# Player bar from center-left #}
+                        <div style="position:absolute;right:50%;
+                                    width:{{ [p_v / 2, 50] | min }}%;height:100%;
+                                    background:{% if _diff > 4 %}var(--neon-green){% elif _diff < -4 %}var(--warning){% else %}var(--info){% endif %};
+                                    border-radius:2px 0 0 2px;"></div>
+                        {# Opponent bar from center-right #}
+                        <div style="position:absolute;left:50%;
+                                    width:{{ [o_v / 2, 50] | min }}%;height:100%;
+                                    background:{% if _diff < -4 %}var(--blood-red){% elif _diff > 4 %}var(--warning){% else %}rgba(220,50,50,.6){% endif %};
+                                    border-radius:0 2px 2px 0;"></div>
+                    </div>
+                </div>
+                {# Opponent value #}
+                <div style="text-align:left;">
+                    {% if _diff < -4 %}
+                    <span style="font-size:.6rem;color:var(--blood-red-light);margin-right:2px;">
+                        {{ _diff }}</span>
+                    {% endif %}
+                    <span style="font-size:.75rem;font-weight:700;
+                                 color:{% if _diff < -4 %}var(--blood-red-light){% elif _diff > 4 %}var(--neon-green){% else %}var(--text-bright){% endif %};">
+                        {{ o_v }}
+                    </span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
     </div>
 </div>
 

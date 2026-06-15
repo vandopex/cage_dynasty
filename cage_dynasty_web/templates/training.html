@@ -124,6 +124,52 @@
             </div>
         </div>
     </div>
+    {# ── Stat overview — visible while setting floors/queue ── #}
+    <div style="padding:var(--spacing-sm) var(--spacing-md);
+                border-bottom:1px solid rgba(255,255,255,.06);">
+        <div style="font-size:.58rem;text-transform:uppercase;
+                    letter-spacing:.1em;color:var(--text-muted);
+                    margin-bottom:6px;">Current Stats</div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);
+                    gap:3px 8px;">
+        {% for label, stat_key, color in [
+            ('Boxing',    'boxing',            'var(--info)'),
+            ('Kicks',     'kicks',             'var(--info)'),
+            ('Clinch',    'clinch_striking',   'var(--info)'),
+            ('Str Def',   'striking_defense',  'var(--info)'),
+            ('Takedowns', 'takedowns',         'var(--neon-green)'),
+            ('TD Def',    'takedown_defense',  'var(--neon-green)'),
+            ('Top Ctrl',  'top_control',       'var(--neon-green)'),
+            ('Subs',      'submissions',       'var(--neon-green)'),
+            ('Guard',     'guard',             'var(--neon-green)'),
+            ('Strength',  'strength',          'var(--warning)'),
+            ('Speed',     'speed',             'var(--warning)'),
+            ('Cardio',    'cardio',            'var(--warning)'),
+            ('Chin',      'chin',              'var(--warning)'),
+            ('Recovery',  'recovery',          'var(--warning)'),
+            ('Fight IQ',  'fight_iq',          'var(--gold)'),
+            ('Composure', 'composure',         'var(--gold)'),
+            ('Heart',     'heart',             'var(--gold)'),
+        ] %}
+        {% set _sv = attribute(fighter, stat_key) %}
+        {% set _floor_v = fighter.stat_floors.get(stat_key, 0) %}
+        <div style="display:flex;justify-content:space-between;
+                    align-items:center;padding:2px 0;">
+            <span style="font-size:.6rem;color:var(--text-muted);">
+                {{ label }}</span>
+            <span style="font-size:.68rem;font-weight:700;
+                         color:{{ color }};">
+                {{ _sv }}
+                {% if _floor_v %}
+                <span style="font-size:.55rem;color:rgba(99,179,237,.6);"
+                      title="Floor set at {{ _floor_v }}">▸{{ _floor_v }}</span>
+                {% endif %}
+            </span>
+        </div>
+        {% endfor %}
+        </div>
+    </div>
+
     {% if fighter.fight_camp_active %}
     <div style="margin:0 var(--spacing-md) var(--spacing-sm);
                 background:rgba(255,165,0,.08);
@@ -269,27 +315,62 @@
         <div style="display:grid;grid-template-columns:repeat(3,1fr);
                     gap:4px 8px;margin-bottom:var(--spacing-sm);">
         {% for stat_key, stat_label in _floor_stats %}
-            {% set _cur_val = fighter[stat_key] if fighter[stat_key] is defined
-                              else attribute(fighter, stat_key) %}
+            {% set _cur_val = attribute(fighter, stat_key) %}
             {% set _floor_val = fighter.stat_floors.get(stat_key, 0)
                                 if fighter.stat_floors is defined else 0 %}
-            <div style="display:flex;align-items:center;gap:4px;">
-                <label style="font-size:.62rem;color:var(--text-muted);
-                              width:58px;flex-shrink:0;">{{ stat_label }}</label>
-                <span style="font-size:.62rem;color:var(--text-bright);
-                             width:22px;text-align:right;">{{ _cur_val }}</span>
+            <div style="display:flex;align-items:center;gap:3px;">
+                <label style="font-size:.6rem;color:var(--text-muted);
+                              width:52px;flex-shrink:0;">{{ stat_label }}</label>
+                <span style="font-size:.6rem;color:var(--text-bright);
+                             width:20px;text-align:right;flex-shrink:0;">
+                    {{ _cur_val }}</span>
+                <button type="button"
+                        onclick="adjFloor(this,-5)"
+                        style="width:18px;height:18px;font-size:.6rem;
+                               background:rgba(255,255,255,.06);
+                               border:1px solid rgba(255,255,255,.12);
+                               border-radius:3px;cursor:pointer;
+                               color:var(--text-muted);line-height:1;
+                               padding:0;flex-shrink:0;">-</button>
                 <input type="number" name="floor_{{ stat_key }}"
+                       id="floor-{{ fighter.fighter_id }}-{{ stat_key }}"
                        value="{{ _floor_val }}"
                        min="0" max="99" placeholder="0"
-                       style="width:36px;padding:2px 4px;font-size:.62rem;
+                       style="width:32px;padding:2px 2px;font-size:.62rem;
                               background:var(--surface-2);
                               border:1px solid {% if _floor_val > 0 %}rgba(99,179,237,.4){% else %}rgba(255,255,255,.08){% endif %};
                               border-radius:3px;color:var(--text-bright);
-                              text-align:center;"
-                       title="Floor for {{ stat_label }} — decay stops at this value">
+                              text-align:center;flex-shrink:0;"
+                       title="Floor for {{ stat_label }}">
+                <button type="button"
+                        onclick="adjFloor(this,5)"
+                        style="width:18px;height:18px;font-size:.6rem;
+                               background:rgba(255,255,255,.06);
+                               border:1px solid rgba(255,255,255,.12);
+                               border-radius:3px;cursor:pointer;
+                               color:var(--text-muted);line-height:1;
+                               padding:0;flex-shrink:0;">+</button>
             </div>
         {% endfor %}
         </div>
+
+        {# Preset chips for quick floor setting #}
+        <div style="margin-bottom:var(--spacing-sm);">
+            <span style="font-size:.58rem;color:var(--text-muted);
+                         margin-right:6px;">Quick set all floors to:</span>
+            {% for preset in [0, 60, 65, 70, 75, 80] %}
+            <button type="button"
+                    onclick="setAllFloors(this.closest('form'), {{ preset }})"
+                    style="font-size:.6rem;padding:2px 6px;margin-right:3px;
+                           background:rgba(255,255,255,.04);
+                           border:1px solid rgba(255,255,255,.12);
+                           color:{% if preset == 0 %}var(--text-muted){% else %}var(--text-bright){% endif %};
+                           border-radius:3px;cursor:pointer;">
+                {% if preset == 0 %}Clear{% else %}{{ preset }}{% endif %}
+            </button>
+            {% endfor %}
+        </div>
+
         <button type="submit"
                 style="font-size:.68rem;padding:4px 10px;
                        background:rgba(99,179,237,.08);
@@ -572,6 +653,24 @@ function addQueueRow(fighterId) {
                       text-align:center;">
     `;
     container.appendChild(row);
+}
+
+function adjFloor(btn, delta) {
+    const input = btn.parentElement.querySelector('input[type="number"]');
+    if (!input) return;
+    const cur = parseInt(input.value) || 0;
+    const next = Math.max(0, Math.min(99, cur + delta));
+    input.value = next;
+    input.style.borderColor = next > 0
+        ? 'rgba(99,179,237,.4)' : 'rgba(255,255,255,.08)';
+}
+
+function setAllFloors(form, val) {
+    form.querySelectorAll('input[name^="floor_"]').forEach(inp => {
+        inp.value = val;
+        inp.style.borderColor = val > 0
+            ? 'rgba(99,179,237,.4)' : 'rgba(255,255,255,.08)';
+    });
 }
 
 function addMaintainRow(fighterId) {
