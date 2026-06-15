@@ -1250,9 +1250,25 @@ class GameBridge:
             self._camp_location = camp_location or "Las Vegas, NV"
 
             self.game_started = True
+
+            # Pre-generate amateur circuit history so fighters
+            # have records at week 1 — not everyone 0-0
+            try:
+                _am_sys = self._get_amateur_system()
+                if _am_sys:
+                    _PRE_GEN_WEEKS = 10
+                    for _aw in range(1, _PRE_GEN_WEEKS + 1):
+                        try:
+                            _am_sys.process_week(_aw)
+                        except Exception:
+                            pass
+                    print(f"✅ Amateur pre-gen: {_PRE_GEN_WEEKS} weeks simulated")
+            except Exception as _ape:
+                print(f"⚠️  Amateur pre-gen failed: {_ape}")
+
             self._clear_cache()
             return True
-            
+
         except Exception as e:
             print(f"Error starting new game: {e}")
             import traceback
