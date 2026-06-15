@@ -502,6 +502,12 @@ class FighterState:
         
         if self.health <= 0:
             is_finish = True
+        elif target == "body" and self.damage.body >= 65:
+            # Accumulated body damage — liver shot TKO
+            # Fighter can't continue from cumulative body punishment
+            _body_tko_chance = min(0.40, (self.damage.body - 65) * 0.04)
+            if random.random() < _body_tko_chance:
+                is_finish = True
         elif target == "head" and amount >= 12:
             if random.random() < amount * 0.01:
                 is_knockdown = True
@@ -2708,6 +2714,8 @@ def simulate_exchange(
         round_stats[attacker.fighter_id].significant_strikes_attempted += 1
         
         if landed:
+            # Cache strike key once for downstream use (leg TKO, cut tracking, named finishes)
+            _st_val = strike.value if hasattr(strike, 'value') else str(strike)
             damage, target = calculate_strike_damage(
                 attacker, defender, strike, attacker_state, defender_state, was_counter
             )
@@ -2746,7 +2754,40 @@ def simulate_exchange(
             damage *= config.damage_multiplier
             
             is_knockdown, is_finish = defender_state.apply_damage(damage, target)
-            
+
+            # ── Leg kick TKO ──────────────────────────────
+            # Once legs are severely compromised, each additional
+            # leg strike risks a TKO — fighter can't stand/move.
+            if (not is_finish and target == "legs"
+                    and defender_state.damage.is_compromised_legs):
+                _leg_tko_chance = min(0.15,
+                    (defender_state.damage.leg_kicks_absorbed - 6) * 0.02)
+                if defender_state.stamina < 50:
+                    _leg_tko_chance *= 1.4
+                if random.random() < _leg_tko_chance:
+                    is_finish = True
+                    finish_type = "TKO (Leg Kicks)"
+                    log_event(
+                        event_type="finish",
+                        actor=attacker,
+                        target=defender,
+                        action=finish_type,
+                        is_finish=True,
+                        extra={"finish_type": finish_type}
+                    )
+                    return (attacker.fighter_id, finish_type)
+
+            # ── Cut accumulation from elbows ─────────────
+            _elbow_types = {
+                "elbow_horizontal", "elbow_vertical",
+                "elbow_spinning", "elbow_upward",
+                "gnp_elbow", "clinch_elbow"
+            }
+            if _st_val in _elbow_types and target == "head":
+                _cut_chance = 0.25 + (attacker.strength / 400)
+                if random.random() < _cut_chance:
+                    defender_state.damage.cuts += 1
+
             # FLASH KO MECHANIC: anyone can catch their opponent with
             # a clean head shot. Power/boxing fighters more likely;
             # already-hurt defenders much more vulnerable.
@@ -2788,17 +2829,103 @@ def simulate_exchange(
             )
             
             if is_finish:
-                finish_type = "KO" if target == "head" else "TKO"
+                # Named finish types — specific strike method logged
+                _specialty_ko_map = {
+                    "flying_knee":         "KO (Flying Knee)",
+                    "wheel_kick":          "KO (Wheel Kick)",
+                    "spinning_elbow":      "KO (Spinning Elbow)",
+                    "elbow_spinning":      "KO (Spinning Elbow)",
+                    "head_kick":           "KO (Head Kick)",
+                    "knee_head":           "KO (Knee)",
+                    "spinning_back_kick":  "KO (Spinning Back Kick)",
+                    "superman_punch":      "KO (Superman Punch)",
+                    "body_kick":           "TKO (Body Shot)",
+                    "knee_body":           "TKO (Body Shot)",
+                    "front_kick":          "TKO (Body Shot)" if target == "body" else "KO",
+                }
+                if target == "body":
+                    finish_type = _specialty_ko_map.get(_st_val, "TKO (Body Shot)")
+                else:
+                    finish_type = _specialty_ko_map.get(_st_val, "KO")
                 log_event(
                     event_type="finish",
                     actor=attacker,
                     target=defender,
                     action=finish_type,
                     is_finish=True,
-                    extra={"finish_type": finish_type}
+                    extra={"finish_type": finish_type, "strike_type": _st_val}
                 )
                 return (attacker.fighter_id, finish_type)
-            
+
+            # ── Referee stoppage — taking unanswered shots while rocked ──
+            if (not is_finish
+                    and defender_state.is_rocked
+                    and target == "head"):
+                if not hasattr(defender_state, '_rocked_shots_taken'):
+                    defender_state._rocked_shots_taken = 0
+                defender_state._rocked_shots_taken += 1
+                _ref_stop_chance = min(0.35,
+                    defender_state._rocked_shots_taken * 0.08)
+                _ref_stop_chance *= max(0.4,
+                    1 - (defender.fight_iq / 250) - (defender.heart / 350))
+                if random.random() < _ref_stop_chance:
+                    _ref_method = "TKO (Referee Stoppage)"
+                    log_event(
+                        event_type="finish",
+                        actor=attacker,
+                        target=defender,
+                        action=_ref_method,
+                        is_finish=True,
+                        extra={"finish_type": _ref_method}
+                    )
+                    return (attacker.fighter_id, _ref_method)
+
+            # ── Rocked fighter in standup → grappler exploits ──
+            # A) High takedowns shoot; B) High submissions take the back
+            if (not is_finish
+                    and defender_state.is_rocked
+                    and target == "head"
+                    and fight_state.position in STANDING_POSITIONS):
+
+                if attacker.takedowns >= 68:
+                    _shoot_chance = min(0.18,
+                        (attacker.takedowns - 60) * 0.006)
+                    _shoot_chance *= max(0.8,
+                        1 + (attacker.takedowns - defender.takedown_defense) / 150)
+                    if random.random() < _shoot_chance:
+                        fight_state.position = (
+                            Position.BACK_MOUNT
+                            if random.random() < 0.55
+                            else Position.MOUNT
+                        )
+                        fight_state.top_fighter_id = attacker.fighter_id
+                        log_event(
+                            event_type="grappling",
+                            actor=attacker,
+                            target=defender,
+                            action="takedown_rocked",
+                            success=True,
+                            extra={"position": fight_state.position.value,
+                                   "rocked_takedown": True}
+                        )
+
+                elif (attacker.submissions >= 65
+                        and getattr(defender_state, '_rocked_shots_taken', 0) >= 2):
+                    _back_chance = min(0.12,
+                        (attacker.submissions - 60) * 0.004)
+                    if random.random() < _back_chance:
+                        fight_state.position = Position.STANDING_BACK
+                        fight_state.top_fighter_id = attacker.fighter_id
+                        log_event(
+                            event_type="grappling",
+                            actor=attacker,
+                            target=defender,
+                            action="take_back_standing",
+                            success=True,
+                            extra={"position": "standing_back",
+                                   "rocked_back_take": True}
+                        )
+
             if is_knockdown:
                 round_stats[attacker.fighter_id].knockdowns += 1
                 fight_state.position = Position.KNOCKDOWN_STANDING
@@ -3071,10 +3198,12 @@ def simulate_exchange(
         fighter1_state.rock_duration -= 1
         if fighter1_state.rock_duration <= 0:
             fighter1_state.is_rocked = False
+            fighter1_state._rocked_shots_taken = 0
     if fighter2_state.is_rocked:
         fighter2_state.rock_duration -= 1
         if fighter2_state.rock_duration <= 0:
             fighter2_state.is_rocked = False
+            fighter2_state._rocked_shots_taken = 0
     
     return None
 
@@ -3404,7 +3533,82 @@ def simulate_fight(
         # End of round
         all_stats[fighter1.fighter_id].append(round_stats[fighter1.fighter_id])
         all_stats[fighter2.fighter_id].append(round_stats[fighter2.fighter_id])
-        
+
+        # ── Between-round stoppages ──────────────────────────
+        # Doctor, corner, cut stoppages. All rare by design —
+        # when they happen, they're memorable. Only fires if
+        # the fight isn't already over and another round remains.
+        if round_num < config.scheduled_rounds:
+            for _ftr, _ftr_state, _opp in [
+                (fighter1, f1_state, fighter2),
+                (fighter2, f2_state, fighter1),
+            ]:
+                _stopped = False
+                _stop_method = None
+
+                # Cut stoppage — deep cuts from elbows
+                if _ftr_state.damage.cuts >= 3 and not _stopped:
+                    _cut_stop_chance = min(0.35,
+                        (_ftr_state.damage.cuts - 2) * 0.08)
+                    _cut_stop_chance *= max(0.4, 1 - (_ftr.heart / 200))
+                    if random.random() < _cut_stop_chance:
+                        _stop_method = "TKO (Doctor Stoppage - Cuts)"
+                        _stopped = True
+
+                # Doctor stoppage — severe cumulative damage
+                if (not _stopped
+                        and _ftr_state.health < 28
+                        and _ftr_state.damage.head > 55):
+                    _doc_chance = min(0.14,
+                        (55 - _ftr_state.health) * 0.003)
+                    _doc_chance *= max(0.5, 1 - (_ftr.heart / 250))
+                    if _ftr_state.chin_compromised:
+                        _doc_chance *= 1.35
+                    if random.random() < _doc_chance:
+                        _stop_method = "TKO (Doctor Stoppage)"
+                        _stopped = True
+
+                # Corner stoppage — trainer throws in the towel
+                if (not _stopped
+                        and round_num >= 2
+                        and _ftr_state.health < 22
+                        and _ftr_state.knockdowns_total >= 2):
+                    _corner_chance = min(0.18,
+                        (_ftr_state.knockdowns_total - 1) * 0.06)
+                    _corner_chance *= max(0.3, 1 - (_ftr.heart / 300))
+                    if random.random() < _corner_chance:
+                        _stop_method = "TKO (Corner Stoppage)"
+                        _stopped = True
+
+                if _stopped and _stop_method:
+                    event_log.append(FightEvent(
+                        event_type="finish",
+                        round_num=round_num,
+                        exchange_num=config.exchanges_per_round,
+                        actor_id=_opp.fighter_id,
+                        actor_name=_opp.name,
+                        target_id=_ftr.fighter_id,
+                        target_name=_ftr.name,
+                        action=_stop_method,
+                        is_finish=True,
+                        extra={"finish_type": _stop_method,
+                               "between_round": True}
+                    ))
+                    return FightResult(
+                        winner_id=_opp.fighter_id,
+                        loser_id=_ftr.fighter_id,
+                        method=_stop_method,
+                        finish_round=round_num,
+                        finish_time="5:00",
+                        fighter1_stats=[s.to_dict() for s in
+                                        all_stats[fighter1.fighter_id]],
+                        fighter2_stats=[s.to_dict() for s in
+                                        all_stats[fighter2.fighter_id]],
+                        fighter1_final_state=f1_state.to_dict(),
+                        fighter2_final_state=f2_state.to_dict(),
+                        event_log=event_log
+                    )
+
         # Score round
         s1, s2 = score_round(
             round_stats[fighter1.fighter_id],
