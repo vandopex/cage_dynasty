@@ -9743,6 +9743,11 @@ class GameBridge:
                             _ai_lines = []
                             if hasattr(_eng, 'full_commentary') and _eng.full_commentary:
                                 _ai_lines = [l for l in _eng.full_commentary.split('\n') if l.strip()]
+                            print(f"  🎬 [COMMENTARY DEBUG] fight={_ai_fight_id}")
+                            print(f"  🎬   full_commentary len={len(_eng.full_commentary) if hasattr(_eng,'full_commentary') else 'MISSING'}")
+                            print(f"  🎬   round_summaries len={len(_eng.round_summaries) if hasattr(_eng,'round_summaries') else 'MISSING'}")
+                            print(f"  🎬   round_commentary exists={hasattr(_eng,'round_commentary')}")
+                            print(f"  🎬   _ai_lines after full_commentary={len(_ai_lines)}")
                             # Fallback: round_commentary when full_commentary is empty
                             if not _ai_lines and hasattr(_eng, 'round_commentary'):
                                 for _rc in (_eng.round_commentary or []):
@@ -10194,6 +10199,11 @@ class GameBridge:
                             _ai_lines = []
                             if hasattr(_eng, 'full_commentary') and _eng.full_commentary:
                                 _ai_lines = [l for l in _eng.full_commentary.split('\n') if l.strip()]
+                            print(f"  🎬 [COMMENTARY DEBUG] fight={_ai_fight_id}")
+                            print(f"  🎬   full_commentary len={len(_eng.full_commentary) if hasattr(_eng,'full_commentary') else 'MISSING'}")
+                            print(f"  🎬   round_summaries len={len(_eng.round_summaries) if hasattr(_eng,'round_summaries') else 'MISSING'}")
+                            print(f"  🎬   round_commentary exists={hasattr(_eng,'round_commentary')}")
+                            print(f"  🎬   _ai_lines after full_commentary={len(_ai_lines)}")
                             # Fallback: round_commentary when full_commentary is empty
                             if not _ai_lines and hasattr(_eng, 'round_commentary'):
                                 for _rc in (_eng.round_commentary or []):
