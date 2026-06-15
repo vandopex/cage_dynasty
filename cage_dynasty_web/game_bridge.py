@@ -1397,6 +1397,78 @@ class GameBridge:
         import os
         return os.path.join(self._saves_dir(), f"bridge_{slot}.json")
 
+    _GLOBAL_CITIES: List[str] = [
+        # North America
+        "Las Vegas, NV", "New York, NY", "Los Angeles, CA",
+        "Miami, FL", "Chicago, IL", "Houston, TX",
+        "Atlanta, GA", "Seattle, WA", "Boston, MA",
+        "Denver, CO", "Dallas, TX", "Phoenix, AZ",
+        "Toronto, Canada", "Vancouver, Canada",
+        "Mexico City, Mexico", "Monterrey, Mexico",
+        # South America
+        "São Paulo, Brazil", "Rio de Janeiro, Brazil",
+        "Buenos Aires, Argentina", "Bogotá, Colombia",
+        "Lima, Peru", "Santiago, Chile",
+        "Caracas, Venezuela", "Medellín, Colombia",
+        # Europe
+        "London, England", "Manchester, England",
+        "Dublin, Ireland", "Glasgow, Scotland",
+        "Amsterdam, Netherlands", "Rotterdam, Netherlands",
+        "Berlin, Germany", "Munich, Germany",
+        "Hamburg, Germany", "Cologne, Germany",
+        "Paris, France", "Lyon, France",
+        "Madrid, Spain", "Barcelona, Spain",
+        "Rome, Italy", "Milan, Italy",
+        "Stockholm, Sweden", "Gothenburg, Sweden",
+        "Oslo, Norway", "Copenhagen, Denmark",
+        "Helsinki, Finland", "Warsaw, Poland",
+        "Krakow, Poland", "Prague, Czech Republic",
+        "Budapest, Hungary", "Vienna, Austria",
+        "Zurich, Switzerland", "Brussels, Belgium",
+        "Lisbon, Portugal", "Porto, Portugal",
+        "Moscow, Russia", "St. Petersburg, Russia",
+        "Kyiv, Ukraine", "Minsk, Belarus",
+        "Belgrade, Serbia", "Zagreb, Croatia",
+        "Riga, Latvia", "Tallinn, Estonia",
+        "Vilnius, Lithuania",
+        # Asia
+        "Tokyo, Japan", "Osaka, Japan", "Sapporo, Japan",
+        "Seoul, South Korea", "Busan, South Korea",
+        "Shanghai, China", "Beijing, China",
+        "Shenzhen, China", "Hong Kong",
+        "Bangkok, Thailand", "Phuket, Thailand",
+        "Singapore", "Kuala Lumpur, Malaysia",
+        "Jakarta, Indonesia", "Manila, Philippines",
+        "Taipei, Taiwan", "Macau",
+        "Almaty, Kazakhstan", "Nur-Sultan, Kazakhstan",
+        "Tashkent, Uzbekistan", "Baku, Azerbaijan",
+        "Tbilisi, Georgia", "Yerevan, Armenia",
+        # Middle East
+        "Dubai, UAE", "Abu Dhabi, UAE",
+        "Riyadh, Saudi Arabia", "Doha, Qatar",
+        "Istanbul, Turkey", "Ankara, Turkey",
+        "Tel Aviv, Israel", "Amman, Jordan",
+        # Oceania
+        "Sydney, Australia", "Melbourne, Australia",
+        "Brisbane, Australia", "Perth, Australia",
+        "Auckland, New Zealand",
+        # Africa
+        "Lagos, Nigeria", "Abuja, Nigeria",
+        "Nairobi, Kenya", "Johannesburg, South Africa",
+        "Cape Town, South Africa", "Cairo, Egypt",
+        "Casablanca, Morocco", "Accra, Ghana",
+        "Dar es Salaam, Tanzania", "Addis Ababa, Ethiopia",
+    ]
+
+    def _event_city(self, week: int) -> str:
+        """Pick a deterministic city for the given event week.
+        Same week always returns the same city across code paths —
+        avoids the same DFC X showing different cities in
+        different views (offer page vs event detail vs results)."""
+        import random as _evr
+        seed = (week + self._dfc_event_offset) * 17 + 31
+        return _evr.Random(seed).choice(self._GLOBAL_CITIES)
+
     def _dfc_label(self, week: int) -> str:
         """Ship C: format DFC event name with the world-gen offset applied.
         week=1 + offset=130 → "DFC 131". offset=0 (legacy saves) preserves
@@ -2965,6 +3037,7 @@ class GameBridge:
                 "opponent_momentum": self._get_momentum_tag(opp),
                 "weight_class":    pf.weight_class if isinstance(pf.weight_class, str) else str(pf.weight_class),
                 "event_name":      event_name,
+                "event_city":      self._event_city(event_week),
                 "week":            event_week,
                 "weeks_away":      weeks_away,
                 "purse":           purse,
@@ -9991,6 +10064,7 @@ class GameBridge:
         event: Dict[str, Any] = {
             "event_id":    event_id,
             "event_name":  event_name,
+            "event_city":  self._event_city(week),
             "week":        week,
             "fights":      [],
             "main_event":  None,
@@ -11883,6 +11957,7 @@ class GameBridge:
         return {
             "event_id":    f"event_{target_week}",
             "event_name":  self._dfc_label(target_week),
+            "event_city":  self._event_city(target_week),
             "week":        target_week,
             "fights":      [],
             "is_ai_event": True,

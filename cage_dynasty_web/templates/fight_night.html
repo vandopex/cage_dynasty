@@ -11,7 +11,7 @@
         ⚔️ Fight Night
     </div>
     <h1 style="font-family:var(--font-display);font-size:2.4rem;color:var(--text-bright);margin:0;">
-        {{ fight.event_name or ("Cage Dynasty " ~ week) }}
+        {{ fight.event_name or ("Cage Dynasty " ~ week) }}{% if fight.event_city %} <span style="font-size:1.2rem;color:var(--text-muted);font-weight:400;">· 📍 {{ fight.event_city }}</span>{% endif %}
     </h1>
     <div class="text-muted" style="margin-top:4px;">Week {{ week }}</div>
 </div>
@@ -96,7 +96,7 @@
 {% if all_fights %}
 <div class="card">
     <div class="card-header">
-        <h3>📋 {{ fight.event_name }} — Full Card</h3>
+        <h3>📋 {{ fight.event_name }}{% if fight.event_city %} · 📍 {{ fight.event_city }}{% endif %} — Full Card</h3>
     </div>
     <div style="padding:0;">
         {% set slot_order = ['main_event','co_main','main_card','prelim','early_prelim'] %}

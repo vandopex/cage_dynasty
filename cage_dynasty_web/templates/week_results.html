@@ -163,7 +163,7 @@
             <div style="font-family:var(--font-display);color:var(--text-bright);">
                 {% if uf.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=uf.fighter1_id) }}" style="color:var(--text-bright);text-decoration:none;">{{ uf.fighter1_name }}</a>{% else %}{{ uf.fighter1_name }}{% endif %} vs {% if uf.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=uf.fighter2_id) }}" style="color:var(--text-bright);text-decoration:none;">{{ uf.fighter2_name }}</a>{% else %}{{ uf.fighter2_name }}{% endif %}
                 <span style="color:var(--text-muted);font-size:.8rem;font-family:inherit;">
-                    &nbsp;·&nbsp; {{ uf.event_name }} &nbsp;·&nbsp;
+                    &nbsp;·&nbsp; {{ uf.event_name }}{% if uf.event_city %} · 📍 {{ uf.event_city }}{% endif %} &nbsp;·&nbsp;
                     {{ uf.weeks_until }}w out
                 </span>
             </div>
@@ -199,7 +199,7 @@
             </div>
             <div style="font-size:.82rem;color:var(--text-muted);margin-top:2px;">
                 via {{ fight.method }}{% if fight.method not in ('DEC','UNY DEC') %} (R{{ fight.round_finished }}){% endif %}
-                &nbsp;·&nbsp; {{ fight.event_name }}
+                &nbsp;·&nbsp; {{ fight.event_name }}{% if fight.event_city %} · 📍 {{ fight.event_city }}{% endif %}
             </div>
         </div>
         <div style="text-align:center;">
@@ -296,7 +296,7 @@
     <div class="card mb-lg">
         <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
             <h3>📋 Cage Dynasty Card Results</h3>
-            <span class="text-muted text-sm">{{ recap.ai_event.event_name }}</span>
+            <span class="text-muted text-sm">{{ recap.ai_event.event_name }}{% if recap.ai_event.event_city %} · 📍 {{ recap.ai_event.event_city }}{% endif %}</span>
         </div>
         <div style="padding:0;">
             {% for slot in slot_order %}

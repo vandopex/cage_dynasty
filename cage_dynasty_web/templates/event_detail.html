@@ -12,7 +12,7 @@
             Cage Dynasty — Week {{ event.week }}
         </div>
         <h1 style="font-family:var(--font-display);font-size:2rem;
-                   color:var(--text-bright);margin:0;">{{ event.event_name }}</h1>
+                   color:var(--text-bright);margin:0;">{{ event.event_name }}{% if event.event_city %} <span style="font-size:1rem;color:var(--text-muted);font-weight:400;">· 📍 {{ event.event_city }}</span>{% endif %}</h1>
         <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
             {{ event.fights|length }} fights
             {% if event.fotn and event.fotn.fighter1_name %}
