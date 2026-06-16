@@ -1623,6 +1623,17 @@ def select_action(
     
     # Fight state adjustments - removed desperate sub boost
 
+    # Top control bonus — wrestlers with elite control
+    # can threaten submissions even without elite sub skill.
+    # This represents grinding pressure, not technique.
+    if (position_secured
+            and getattr(fighter_attrs, 'top_control', 0) >= 75
+            and getattr(fighter_attrs, 'submissions', 0) >= 55):
+        _tc_bonus = int(
+            (getattr(fighter_attrs, 'top_control', 0) - 70)
+            * 0.8)
+        sub_weight += _tc_bonus
+
     if fighter_state.momentum > 70:
         strike_weight += 10
 
@@ -1654,7 +1665,34 @@ def select_action(
     _fs = getattr(fighter_attrs, 'fighting_style', None)
     if _fs is not None:
         _style_key = getattr(_fs, 'name', '') or str(_fs)
-    _sw = _STYLE_WEIGHTS.get(_style_key.upper(),
+    # Normalize ampersands + whitespace so raw strings like
+    # "Ground & Pound" match dict keys like "GROUND_AND_POUND".
+    _style_key = (_style_key.upper()
+                  .replace(' & ', ' AND ')
+                  .replace('&', 'AND')
+                  .strip())
+    # Alias map — covers both enum-NAME format and raw strings
+    # from world_gen / template system. Falls through to
+    # whitespace→underscore for direct dict hits.
+    _STYLE_ALIASES = {
+        'SAMBO': 'SAMBO',
+        'JUDO': 'JUDO',
+        'KARATE': 'KARATE',
+        'ORTHODOX_BOXER': 'ORTHODOX_BOXER',
+        'ORTHODOX BOXER': 'ORTHODOX_BOXER',
+        'BJJ': 'BJJ_SPECIALIST',
+        'BJJ SPECIALIST': 'BJJ_SPECIALIST',
+        'GROUND AND POUND': 'GROUND_AND_POUND',
+        'SPRAWL AND BRAWL': 'SPRAWL_AND_BRAWL',
+        'CLINCH FIGHTER': 'CLINCH_FIGHTER',
+        'COUNTER STRIKER': 'COUNTER_STRIKER',
+        'PRESSURE FIGHTER': 'PRESSURE_FIGHTER',
+        'POINT FIGHTER': 'POINT_FIGHTER',
+        'MUAY THAI': 'MUAY_THAI',
+    }
+    _style_key = _STYLE_ALIASES.get(
+        _style_key, _style_key.replace(' ', '_'))
+    _sw = _STYLE_WEIGHTS.get(_style_key,
         {"strike":1.0,"grapple":1.0,"submission":1.0})
     strike_weight = int(strike_weight * _sw["strike"])
     grapple_weight = int(grapple_weight * _sw["grapple"])

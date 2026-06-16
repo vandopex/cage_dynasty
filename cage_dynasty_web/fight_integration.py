@@ -598,8 +598,8 @@ class NarratedFightSimulator:
                 if not hasattr(defender_state, '_rocked_shots'):
                     defender_state._rocked_shots = 0
                 defender_state._rocked_shots += 1
-                _ref_chance = min(0.35,
-                    defender_state._rocked_shots * 0.08)
+                _ref_chance = min(0.22,
+                    defender_state._rocked_shots * 0.05)
                 _ref_chance *= max(0.4,
                     1 - (defender.fight_iq / 250)
                       - (defender.heart / 350))
