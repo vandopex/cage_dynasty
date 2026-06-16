@@ -519,7 +519,25 @@ class NarratedFightSimulator:
         action_type, action_data = select_action(
             actor, defender, self.fight_state, actor_state
         )
-        
+
+        # ── Sambo chain — force immediate sub attempt ─────
+        # When sambo set _sambo_chain on last exchange, the
+        # NEXT exchange auto-routes into a position-appropriate
+        # submission attempt before guard recovery fires.
+        if getattr(actor_state, '_sambo_chain', False):
+            actor_state._sambo_chain = False
+            _pos = self.fight_state.position
+            _forced_sub = None
+            if _pos == Position.BACK_MOUNT:
+                _forced_sub = SubmissionType.REAR_NAKED_CHOKE
+            elif _pos == Position.MOUNT:
+                _forced_sub = SubmissionType.ARMBAR
+            elif _pos == Position.SIDE_CONTROL_TOP:
+                _forced_sub = SubmissionType.KIMURA
+            if _forced_sub is not None:
+                action_type = "submission"
+                action_data = _forced_sub
+
         # Execute action
         if action_type == "strike":
             return self._execute_strike(
@@ -567,6 +585,26 @@ class NarratedFightSimulator:
             attacker_state.momentum = min(
                 100, attacker_state.momentum + 20)
 
+        # ── Counter Striker window — apply ───────────────
+        # fight_iq determines timing quality.
+        # 1-exchange window only.
+        _counter_mult = 1.0
+        if getattr(attacker_state, '_counter_window', 0) > 0:
+            attacker_state._counter_window = 0
+            _iq = getattr(attacker, 'fight_iq', 70)
+            _counter_mult = (
+                1.6 if _iq >= 85 else
+                1.45 if _iq >= 75 else
+                1.3)
+
+        # ── Brawler counter — consume pending power ──────
+        # Brawler just walked through a head strike; the
+        # return shot carries extra power.
+        _brawler_mult = getattr(
+            attacker_state, '_brawler_counter', 1.0)
+        if _brawler_mult > 1.0:
+            attacker_state._brawler_counter = 1.0
+
         # Calculate success
         landed, was_counter = calculate_strike_success(
             attacker, defender, strike,
@@ -577,22 +615,130 @@ class NarratedFightSimulator:
         target_area = "head"
         caused_knockdown = False
         caused_rock = False
-        
+
+        if not landed:
+            # ── Counter Striker window — set on whiff ──────
+            # If a counter-striker dodged the strike, they
+            # get a 1-exchange counter window.
+            _def_style_cw = str(getattr(
+                defender.fighting_style, 'name', '')
+                or defender.fighting_style or '').upper()
+            if 'COUNTER' in _def_style_cw:
+                defender_state._counter_window = 1
+
         if landed:
             # Calculate damage
             damage, target_area = calculate_strike_damage(
                 attacker, defender, strike,
                 attacker_state, defender_state, was_counter
             )
-            
+
             # Use fight_integration specific multiplier — tuned separately from
             # fight_engine.DAMAGE_MULTIPLIER because the exchange loops differ
             damage = damage * FI_DAMAGE_MULTIPLIER
-            
+
+            # ── Muay Thai knee amplification ───────────────
+            # Knee_head and knee_body bypass guard differently
+            # from punches in clinch.
+            _sv = strike.value if hasattr(
+                strike, 'value') else str(strike)
+            _att_style = str(getattr(
+                attacker.fighting_style, 'name', '')
+                or attacker.fighting_style or '').upper()
+            if 'MUAY_THAI' in _att_style:
+                if _sv == 'knee_head':
+                    damage *= 1.30 * 1.10
+                elif _sv in ('knee_body', 'knee_strike'):
+                    damage *= 1.30
+
+            # ── Counter Striker damage multiplier ──────────
+            if _counter_mult > 1.0:
+                damage *= _counter_mult
+
+            # ── Brawler counter damage multiplier ──────────
+            if _brawler_mult > 1.0:
+                damage *= _brawler_mult
+
+            # ── Karate patience power bonus ────────────────
+            if (getattr(attacker_state,
+                        '_karate_patience', False)
+                    and target_area == 'head'):
+                damage *= 1.40
+                attacker_state._karate_patience = False
+
+            # ── Point Fighter off the line — defender ──────
+            # Defender moving on angles takes reduced damage.
+            if getattr(defender_state,
+                       '_movement_window', 0) > 0:
+                defender_state._movement_window -= 1
+                damage *= 0.80
+
+            # ── Brawler walk-through — defender rolls with it ──
+            _def_brawl_style = str(getattr(
+                defender.fighting_style, 'name', '')
+                or defender.fighting_style or '').upper()
+            if ('BRAWLER' in _def_brawl_style
+                    and target_area == 'head'):
+                _b_chin = getattr(defender, 'chin', 70)
+                _b_chance = (
+                    0.25 if _b_chin >= 80 else
+                    0.18 if _b_chin >= 70 else
+                    0.10)
+                if random.random() < _b_chance:
+                    damage *= 0.75
+                    _b_power = (
+                        1.4 if _b_chin >= 80 else
+                        1.3 if _b_chin >= 70 else
+                        1.2)
+                    defender_state._brawler_counter = _b_power
+
+            # ── Point Fighter — set movement window on land ──
+            _att_style_pf = str(getattr(
+                attacker.fighting_style, 'name', '')
+                or attacker.fighting_style or '').upper()
+            if 'POINT' in _att_style_pf:
+                attacker_state._movement_window = 2
+
             # Apply damage
             caused_knockdown, is_finish = defender_state.apply_damage(
                 damage, target_area
             )
+
+            # ── GnP accumulation — dominant-position TKO ──
+            _gnp_pos_check = str(getattr(
+                self.fight_state, 'position', '')).upper()
+            _in_gnp_pos = any(p in _gnp_pos_check
+                for p in ('MOUNT', 'BACK_MOUNT',
+                          'SIDE_CONTROL'))
+            _att_gnp_style = str(getattr(
+                attacker.fighting_style, 'name', '')
+                or attacker.fighting_style or '').upper()
+            _is_gnp = 'GROUND' in _att_gnp_style
+            if (not is_finish
+                    and _in_gnp_pos
+                    and target_area == 'head'):
+                _rate = 1.4 if _is_gnp else 1.0
+                if 'MOUNT' in _gnp_pos_check:
+                    _rate *= 1.2
+                _prev_gnp = getattr(
+                    defender_state, '_gnp_accumulation', 0)
+                defender_state._gnp_accumulation = (
+                    _prev_gnp + damage * _rate)
+                if defender_state._gnp_accumulation >= 55:
+                    _gnp_tko = min(0.30,
+                        (defender_state._gnp_accumulation
+                         - 50) * 0.03)
+                    _gnp_tko *= max(0.4,
+                        1 - getattr(defender,
+                            'heart', 70) / 300)
+                    if random.random() < _gnp_tko:
+                        method = "TKO (Ground and Pound)"
+                        self._log_finish(
+                            attacker.fighter_id,
+                            method, exchange_num)
+                        return (attacker.fighter_id, method)
+            if self.fight_state.position in STANDING_POSITIONS:
+                defender_state._gnp_accumulation = 0
 
             # ── Leg kick TKO — accumulated leg damage ──────
             if (not is_finish and target_area == "legs"
@@ -877,11 +1023,58 @@ class NarratedFightSimulator:
             if action in takedown_actions:
                 self.round_stats[attacker.fighter_id].takedowns_attempted += 1
                 self.round_stats[attacker.fighter_id].takedowns_landed += 1
-                
+
                 # Slam damage
                 if action == GrapplingAction.SLAM:
                     slam_damage = 5 + attacker.strength * 0.1
                     defender_state.apply_damage(slam_damage, "body")
+
+                # ── Sambo/Judo throw-to-position routing ──
+                # fight_iq + takedowns determines landing.
+                # Elite skill = almost always back mount.
+                _throw_style = str(getattr(
+                    attacker.fighting_style, 'name', '')
+                    or attacker.fighting_style or '').upper()
+                _is_sambo = 'SAMBO' in _throw_style
+                _is_judo = 'JUDO' in _throw_style
+                if _is_sambo or _is_judo:
+                    _td = getattr(attacker, 'takedowns', 70)
+                    _iq = getattr(attacker, 'fight_iq', 70)
+                    _pos_skill = (
+                        _td * 0.6 + _iq * 0.4) / 100
+                    if _is_judo:
+                        _back_mount_pct = min(0.88,
+                            0.70 + (_pos_skill - 0.70) * 0.60)
+                        _side_ctrl_pct = min(0.10,
+                            0.20 - (_pos_skill - 0.70) * 0.30)
+                    else:
+                        _back_mount_pct = min(0.82,
+                            0.60 + (_pos_skill - 0.65) * 0.55)
+                        _side_ctrl_pct = 0.30
+                    _r = random.random()
+                    if _r < _back_mount_pct:
+                        new_pos = Position.BACK_MOUNT
+                    elif _r < _back_mount_pct + _side_ctrl_pct:
+                        new_pos = Position.SIDE_CONTROL_TOP
+                    else:
+                        new_pos = Position.FULL_GUARD_TOP
+                    self.fight_state.position = new_pos
+                    self.fight_state.top_fighter_id = (
+                        attacker.fighter_id)
+                    new_position = new_pos
+
+                    # ── Sambo immediate sub chain ─────────
+                    # Sambo chains takedown directly into sub.
+                    if (_is_sambo
+                            and getattr(attacker,
+                                'submissions', 0) >= 65):
+                        _chain_chance = (
+                            0.35 if _td >= 85 and _iq >= 75
+                            else 0.25 if _td >= 80
+                            else 0.22 if _td >= 75
+                            else 0.12)
+                        if random.random() < _chain_chance:
+                            attacker_state._sambo_chain = True
         else:
             # Failed attempt
             if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG}:

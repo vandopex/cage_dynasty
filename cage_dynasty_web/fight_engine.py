@@ -1743,6 +1743,23 @@ def select_action(
             strike_weight = int(strike_weight * 1.25)
             grapple_weight = int(grapple_weight * 1.15)
 
+    # ── Point Fighter first-exchange jab ──────────────
+    # Fastest to establish range at round start.
+    if (_style_key == 'POINT_FIGHTER'
+            and getattr(fight_state,
+                'exchanges_this_round', 1) <= 1):
+        strike_weight = int(strike_weight * 1.20)
+
+    # ── Karate patience — wait and punish ─────────────
+    # If Karate fighter hasn't landed yet this round,
+    # flag for a power bonus on next head strike.
+    # Lyoto Machida / Wonderboy effect.
+    if _style_key == 'KARATE':
+        _strikes_landed = getattr(
+            fighter_state, 'strikes_landed', 0)
+        if _strikes_landed == 0:
+            fighter_state._karate_patience = True
+
     # Stamina factor
     stamina_factor = fighter_state.stamina / 100
     strike_weight = int(strike_weight * stamina_factor)
