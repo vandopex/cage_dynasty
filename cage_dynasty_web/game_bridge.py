@@ -681,6 +681,13 @@ class WebFighter:
     training_queue_active: bool = False
     # Career-best consecutive win streak (max W run in history).
     best_win_streak: int = 0
+    # Derived composite scouting stats. Computed in converters
+    # from real per-attribute stats so the scouting module
+    # doesn't read phantom 50s. Never used by engine; read by
+    # scouting and any UI surface that wants a single grappling
+    # number.
+    wrestling: int = 0
+    bjj: int = 0
 
 
 @dataclass
@@ -4912,7 +4919,7 @@ class GameBridge:
     
     def _convert_mock_fighter(self, f) -> WebFighter:
         """Convert mock Fighter to WebFighter"""
-        return WebFighter(
+        _wf = WebFighter(
             fighter_id=f.fighter_id,
             name=f.name,
             nickname=f.nickname,
@@ -5002,6 +5009,14 @@ class GameBridge:
             traits=f.traits,
             fight_history=f.fight_history
         )
+        _wf.wrestling = int(
+            _wf.takedowns * 0.4 +
+            _wf.takedown_defense * 0.3 +
+            _wf.top_control * 0.3)
+        _wf.bjj = int(
+            _wf.submissions * 0.5 +
+            _wf.guard * 0.5)
+        return _wf
     
     def _convert_mock_camp(self, c) -> WebCamp:
         """Convert mock Camp to WebCamp"""
@@ -5122,7 +5137,7 @@ class GameBridge:
         wins   = 0
         losses = 0
 
-        return WebFighter(
+        _wf = WebFighter(
             fighter_id=amateur.fighter_id,
             name=amateur.name,
             nickname=None,
@@ -5174,6 +5189,14 @@ class GameBridge:
             fight_history=list(
                 getattr(amateur, 'fight_history', []) or []),
         )
+        _wf.wrestling = int(
+            _wf.takedowns * 0.4 +
+            _wf.takedown_defense * 0.3 +
+            _wf.top_control * 0.3)
+        _wf.bjj = int(
+            _wf.submissions * 0.5 +
+            _wf.guard * 0.5)
+        return _wf
 
     def _convert_real_fighter(self, fighter) -> WebFighter:
         """
@@ -5369,7 +5392,7 @@ class GameBridge:
         else:
             _mtag = ""
 
-        return WebFighter(
+        _wf = WebFighter(
             fighter_id=fighter.fighter_id,
             name=fighter.name,
             nickname=nickname,
@@ -5447,6 +5470,14 @@ class GameBridge:
                 for f in history[-10:]
             ],
         )
+        _wf.wrestling = int(
+            _wf.takedowns * 0.4 +
+            _wf.takedown_defense * 0.3 +
+            _wf.top_control * 0.3)
+        _wf.bjj = int(
+            _wf.submissions * 0.5 +
+            _wf.guard * 0.5)
+        return _wf
 
 
     # =========================================================================
