@@ -56,7 +56,7 @@ from fight_engine import (
 # may have damage-amplifying factors (gameplan, condition, fighter attrs from
 # real game_state) that the random-Gaussian synthetic doesn't capture. Future
 # tuning should weight production observations over synthetic.
-FI_DAMAGE_MULTIPLIER = 0.42
+FI_DAMAGE_MULTIPLIER = 0.48
 
 # Define missing position sets locally
 GROUND_TOP_POSITIONS = {
