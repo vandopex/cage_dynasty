@@ -132,7 +132,7 @@
                      text-transform:uppercase;letter-spacing:.08em;">
             Speed
         </span>
-        {% for spd, label in [('fast','Fast'),('normal','Normal'),('slow','Slow')] %}
+        {% for spd, label in [('fast','Fast'),('normal','Normal'),('slow','Slow'),('cinematic','🎬')] %}
         <button onclick="setSpeed('{{ spd }}')"
                 id="spd-{{ spd }}"
                 style="font-size:.62rem;padding:3px 8px;
@@ -145,6 +145,12 @@
         {% endfor %}
     </div>
 
+    <div id="live-hint"
+         style="font-size:.62rem;color:var(--text-muted);
+                margin-left:auto;font-style:italic;">
+        Pick a speed and hit Watch Live
+    </div>
+
     <div id="live-status"
          style="font-size:.7rem;color:var(--text-muted);
                 margin-left:auto;display:none;">
@@ -155,6 +161,12 @@
 
 {% if rounds %}
 <div id="commentary-container">
+<style>
+#commentary-container .commentary-line,
+#commentary-container .round-header {
+    opacity: 0;
+}
+</style>
 {% for round in rounds %}
 <div class="card mb-md round-card" data-round="{{ round.num }}">
     {# Round header #}
@@ -338,9 +350,10 @@
 <script>
 // ── Live playback engine ─────────────────────────────
 const SPEEDS = {
-    fast:   { base: 120, pause: 800,  round_pause: 1500 },
-    normal: { base: 250, pause: 1500, round_pause: 2500 },
-    slow:   { base: 450, pause: 2500, round_pause: 4000 },
+    fast:      { base: 600,  pause: 2000, round_pause: 3000  },
+    normal:    { base: 1200, pause: 3500, round_pause: 5000  },
+    slow:      { base: 2000, pause: 5000, round_pause: 7000  },
+    cinematic: { base: 3500, pause: 8000, round_pause: 12000 },
 };
 
 let currentSpeed = 'normal';
@@ -374,7 +387,7 @@ function buildLineQueue() {
 
 function setSpeed(spd) {
     currentSpeed = spd;
-    ['fast','normal','slow'].forEach(s => {
+    ['fast','normal','slow','cinematic'].forEach(s => {
         const btn = document.getElementById('spd-' + s);
         if (!btn) return;
         btn.style.background = s === spd
@@ -386,6 +399,8 @@ function setSpeed(spd) {
 
 function startLiveMode() {
     if (isPlaying) return;
+    const hint = document.getElementById('live-hint');
+    if (hint) hint.style.display = 'none';
     const container = document.getElementById('commentary-container');
     if (!container) return;
     container.querySelectorAll('.commentary-line, .round-header').forEach(el => {
