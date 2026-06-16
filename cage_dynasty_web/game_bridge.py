@@ -6498,47 +6498,121 @@ class GameBridge:
             )
             _auto_rest_reason = None
 
+            # ── Fight camp taper protocol ─────────────────
+            # Authoritative when a fight is approaching.
+            # Overrides queue, hysteresis, and the critical
+            # fatigue cascade. Coach quality determines how
+            # fresh the fighter peaks.
+            _in_fight_camp = (
+                _upcoming_week is not None and _weeks_to_fight <= 8)
+            if _in_fight_camp:
+                _coach_rating = int(
+                    self._coach.get('rating', 65)
+                    if self._coach else 65)
+
+                # Peak fatigue target scales with coach
+                # quality — elite coaches get fighters
+                # fresher for fight night
+                _peak_target = (
+                    15 if _coach_rating >= 85 else
+                    22 if _coach_rating >= 72 else
+                    30 if _coach_rating >= 58 else
+                    40)
+
+                if _weeks_to_fight >= 6:
+                    # Early camp: cap at MODERATE
+                    if active_plan.get('intensity') in (
+                            'INTENSE', 'EXTREME'):
+                        active_plan['intensity'] = 'MODERATE'
+                        _auto_rest_reason = (
+                            f"Fight camp: {_weeks_to_fight}w out"
+                            f" — capping at MODERATE")
+                elif _weeks_to_fight >= 3:
+                    # Mid camp: LIGHT only (sharpening)
+                    if active_plan.get('intensity') not in (
+                            'REST', 'LIGHT'):
+                        active_plan['intensity'] = 'LIGHT'
+                        _auto_rest_reason = (
+                            f"Fight camp: {_weeks_to_fight}w out"
+                            f" — tapering to LIGHT")
+                elif _weeks_to_fight >= 2:
+                    # Final approach: peak-target check
+                    if _fatigue_ar > _peak_target + 15:
+                        active_plan['intensity'] = 'REST'
+                        active_plan['focus'] = 'sparring'
+                        _auto_rest_reason = (
+                            f"Fight camp: peaking"
+                            f" — resting toward {_peak_target}%")
+                    else:
+                        active_plan['intensity'] = 'LIGHT'
+                elif _weeks_to_fight == 1:
+                    # Fight week: REST unless at peak target
+                    if _fatigue_ar > _peak_target:
+                        active_plan['intensity'] = 'REST'
+                        active_plan['focus'] = 'sparring'
+                        _auto_rest_reason = (
+                            f"Fight week — final rest"
+                            f" ({_fatigue_ar}% → {_peak_target}%)")
+                    else:
+                        active_plan['intensity'] = 'LIGHT'
+
+                # Suspend hysteresis during fight camp —
+                # don't let recovery mode block the taper.
+                _rest_key = f"_auto_resting_{fid}"
+                if getattr(self, _rest_key, False):
+                    setattr(self, _rest_key, False)
+
+                # 🏕️ news flavor for taper changes
+                if _auto_rest_reason:
+                    self._news_items.insert(0, {
+                        "headline": (
+                            f"🏕️ {fighter.name}: "
+                            f"{_auto_rest_reason}"),
+                        "category": "training",
+                        "week": self._game_state.week_number,
+                    })
+                    # Clear so the ⚡ block below doesn't
+                    # double-post the same event.
+                    _auto_rest_reason = None
+
             # ── Auto-rest hysteresis ──────────────────────
             # Once auto-rest fires, stay in REST until fatigue
             # drops to 40. Prevents oscillation where a fighter
             # trains → auto-rest → trains → auto-rest endlessly.
-            _rest_key = f"_auto_resting_{fid}"
-            _currently_resting = getattr(self, _rest_key, False)
-            if _currently_resting:
-                if _fatigue_ar <= 40:
-                    setattr(self, _rest_key, False)
-                    _currently_resting = False
-                else:
-                    _auto_rest_reason = (
-                        f"Auto-recovering "
-                        f"({_fatigue_ar}% → target 40%)")
-                    active_plan["focus"] = 'sparring'
-                    active_plan["intensity"] = 'REST'
+            # Skipped entirely when a fight camp is active.
+            if not _in_fight_camp:
+                _rest_key = f"_auto_resting_{fid}"
+                _currently_resting = getattr(self, _rest_key, False)
+                if _currently_resting:
+                    if _fatigue_ar <= 40:
+                        setattr(self, _rest_key, False)
+                        _currently_resting = False
+                    else:
+                        _auto_rest_reason = (
+                            f"Auto-recovering "
+                            f"({_fatigue_ar}% → target 40%)")
+                        active_plan["focus"] = 'sparring'
+                        active_plan["intensity"] = 'REST'
 
-            if not _currently_resting:
-                if _fatigue_ar >= 80:
-                    _auto_rest_reason = (
-                        f"Auto-rest: fatigue critical ({_fatigue_ar}%)")
-                    active_plan["focus"] = 'sparring'
-                    active_plan["intensity"] = 'REST'
-                    # Set hysteresis flag — stay resting until 40
-                    setattr(self, _rest_key, True)
-                    _currently_resting = True
-                elif _fatigue_ar >= 75 and active_plan["intensity"] in ('INTENSE', 'EXTREME'):
-                    _auto_rest_reason = (
-                        f"Auto-adjusted: fatigue {_fatigue_ar}% "
-                        f"— dropped to MODERATE")
-                    active_plan["intensity"] = 'MODERATE'
-                elif _fatigue_ar >= 65 and active_plan["intensity"] == 'EXTREME':
-                    _auto_rest_reason = (
-                        f"Auto-adjusted: fatigue {_fatigue_ar}% "
-                        f"— dropped EXTREME → INTENSE")
-                    active_plan["intensity"] = 'INTENSE'
-                elif _weeks_to_fight <= 2 and _fatigue_ar >= 50:
-                    _auto_rest_reason = (
-                        f"Auto-adjusted: fight in {_weeks_to_fight}w "
-                        f"— protecting condition")
-                    active_plan["intensity"] = 'LIGHT'
+                if not _currently_resting:
+                    if _fatigue_ar >= 80:
+                        _auto_rest_reason = (
+                            f"Auto-rest: fatigue critical ({_fatigue_ar}%)")
+                        active_plan["focus"] = 'sparring'
+                        active_plan["intensity"] = 'REST'
+                        # Set hysteresis flag — stay resting until 40
+                        setattr(self, _rest_key, True)
+                        _currently_resting = True
+                    elif _fatigue_ar >= 75 and active_plan["intensity"] in ('INTENSE', 'EXTREME'):
+                        _auto_rest_reason = (
+                            f"Auto-adjusted: fatigue {_fatigue_ar}% "
+                            f"— dropped to MODERATE")
+                        active_plan["intensity"] = 'MODERATE'
+                    elif _fatigue_ar >= 65 and active_plan["intensity"] == 'EXTREME':
+                        _auto_rest_reason = (
+                            f"Auto-adjusted: fatigue {_fatigue_ar}% "
+                            f"— dropped EXTREME → INTENSE")
+                        active_plan["intensity"] = 'INTENSE'
 
             if _auto_rest_reason:
                 self._news_items.insert(0, {
