@@ -509,11 +509,18 @@ class FighterState:
             if random.random() < _body_tko_chance:
                 is_finish = True
         elif target == "head" and amount >= 12:
-            if random.random() < amount * 0.01:
+            # ── Chin erosion — knockdowns make next finish easier ──
+            # Each prior KD adds 4 to _chin_erosion; multiplier scales
+            # KD + rock chance up to 1.30× at 12 points of erosion.
+            _erosion = getattr(self, '_chin_erosion', 0)
+            _erosion_mult = 1.0 + min(0.30, _erosion * 0.025)
+            if random.random() < amount * 0.01 * _erosion_mult:
                 is_knockdown = True
                 self.knockdowns_this_round += 1
                 self.knockdowns_total += 1
-            elif random.random() < amount * 0.02:
+                # Cumulative tax — represents real damage.
+                self._chin_erosion = _erosion + 4
+            elif random.random() < amount * 0.02 * _erosion_mult:
                 self.is_rocked = True
                 # HIGH RECOVERY: Shake off cobwebs faster
                 reduction = 1 if self.recovery_rating >= 80 else 0
@@ -1634,6 +1641,20 @@ def select_action(
             * 1.0)
         sub_weight += _tc_bonus
 
+    # ── Guard threat from bottom ──────────────────────
+    # BJJ specialists are dangerous from their back.
+    # High guard stat + GUARD position = active sub threat.
+    # Represents triangle/armbar hunting from bottom.
+    if (position in GUARD_POSITIONS
+            and not is_top
+            and getattr(fighter_attrs, 'guard', 0) >= 70
+            and getattr(fighter_attrs, 'submissions', 0) >= 65):
+        _guard_sub_bonus = int(
+            (getattr(fighter_attrs, 'guard', 0) - 60) * 0.9
+            + (getattr(fighter_attrs, 'submissions', 0) - 60)
+            * 0.5)
+        sub_weight += _guard_sub_bonus
+
     if fighter_state.momentum > 70:
         strike_weight += 10
 
@@ -1697,6 +1718,30 @@ def select_action(
     strike_weight = int(strike_weight * _sw["strike"])
     grapple_weight = int(grapple_weight * _sw["grapple"])
     sub_weight = int(sub_weight * _sw["submission"])
+
+    # ── Late-round cardio advantage ──────────────────────
+    # Cardio gap widens the longer the fight goes.
+    # A fighter with much better cardio dominates round 3.
+    _round = getattr(fight_state, 'current_round', 1) or 1
+    if _round >= 2:
+        _opp_cardio = getattr(opponent_attrs, 'cardio', 70)
+        _my_cardio = getattr(fighter_attrs, 'cardio', 70)
+        _cardio_gap = _my_cardio - _opp_cardio
+        if _cardio_gap >= 12:
+            _cardio_mult = 1.0 + (
+                (_cardio_gap - 10) * 0.015 * _round)
+            _cardio_mult = min(_cardio_mult, 1.35)
+            strike_weight = int(strike_weight * _cardio_mult)
+            grapple_weight = int(grapple_weight * _cardio_mult)
+            sub_weight = int(sub_weight * _cardio_mult)
+
+    # ── Clinch/pressure style advantage ──────────────
+    # Pressure / clinch fighters thrive in close quarters.
+    if _style_key in (
+            'PRESSURE_FIGHTER', 'CLINCH_FIGHTER', 'BRAWLER'):
+        if position in CLINCH_POSITIONS:
+            strike_weight = int(strike_weight * 1.25)
+            grapple_weight = int(grapple_weight * 1.15)
 
     # Stamina factor
     stamina_factor = fighter_state.stamina / 100
@@ -2587,8 +2632,17 @@ def process_submission_progress(
         fight_state.submission_active = False
         return False, True
     
+    # ── Fatigue degrades submission escape ────────────
+    # A tired fighter can't generate the explosive
+    # movement needed to escape. Effective threshold drops
+    # with stamina.
+    _def_stamina = getattr(defender_state, 'stamina', 100)
+    _fatigue_escape_mult = max(0.55, _def_stamina / 100 + 0.3)
+    effective_escape = (
+        config.submission_escape_threshold * _fatigue_escape_mult)
+
     # Check for escape (threshold is now 95, was 80)
-    if fight_state.submission_escape_progress >= config.submission_escape_threshold:
+    if fight_state.submission_escape_progress >= effective_escape:
         fight_state.submission_active = False
         return True, False
     

@@ -550,6 +550,23 @@ class NarratedFightSimulator:
         exchange_num: int
     ) -> Optional[Tuple[str, str]]:
         """Execute a strike and generate commentary"""
+        # ── Adrenaline surge window decrement ─────────────
+        # Survived-the-rock window: 3-exchange momentum burst,
+        # decays back to 50 when the window closes.
+        if getattr(attacker_state, '_surge_exchanges', 0) > 0:
+            attacker_state._surge_exchanges -= 1
+            if attacker_state._surge_exchanges == 0:
+                attacker_state.momentum = max(
+                    50, attacker_state.momentum - 25)
+
+        # ── Sprawl counter window decrement ───────────────
+        # Sprawl-and-brawl just defended a takedown; brief
+        # momentum boost on the counter strike.
+        if getattr(attacker_state, '_sprawl_counter', 0) > 0:
+            attacker_state._sprawl_counter -= 1
+            attacker_state.momentum = min(
+                100, attacker_state.momentum + 20)
+
         # Calculate success
         landed, was_counter = calculate_strike_success(
             attacker, defender, strike,
@@ -869,6 +886,14 @@ class NarratedFightSimulator:
             # Failed attempt
             if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG}:
                 self.round_stats[attacker.fighter_id].takedowns_attempted += 1
+                # ── Counter off the sprawl ────────────────
+                # Sprawl-and-brawl fighters get a brief counter
+                # window after successfully defending a takedown.
+                _s_style = str(getattr(
+                    defender.fighting_style, 'name', '')
+                    or defender.fighting_style or '')
+                if 'SPRAWL' in _s_style.upper():
+                    defender_state._sprawl_counter = 2
         
         # Log grappling action with new position if applicable
         action_type = grappling_to_action_type(action)
@@ -1069,7 +1094,14 @@ class NarratedFightSimulator:
                 self.fighter1_state.rock_duration -= recovery
                 if self.fighter1_state.rock_duration <= 0:
                     self.fighter1_state.is_rocked = False
-            
+                    # ── Survived the storm — adrenaline surge ──
+                    # ~12% chance: fighter who survives being rocked
+                    # gets a brief momentum burst. "Hurt and dangerous."
+                    if random.random() < 0.12:
+                        self.fighter1_state.momentum = min(
+                            100, self.fighter1_state.momentum + 30)
+                        self.fighter1_state._surge_exchanges = 3
+
             if self.fighter2_state.is_rocked:
                 recovery = 1
                 if self.corner_bonus_f2 > 0 and random.random() < self.corner_bonus_f2:
@@ -1077,6 +1109,10 @@ class NarratedFightSimulator:
                 self.fighter2_state.rock_duration -= recovery
                 if self.fighter2_state.rock_duration <= 0:
                     self.fighter2_state.is_rocked = False
+                    if random.random() < 0.12:
+                        self.fighter2_state.momentum = min(
+                            100, self.fighter2_state.momentum + 30)
+                        self.fighter2_state._surge_exchanges = 3
             
             # Referee standup check - only if on the ground
             if (self.fight_state.position not in STANDING_POSITIONS and
