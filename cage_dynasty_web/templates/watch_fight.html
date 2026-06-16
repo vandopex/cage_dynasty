@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %} vs {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %}{% endblock %}
+{% block title %}{% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %} vs {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %}
+{% endblock %}
 
 {% block content %}
 <div style="max-width:780px;margin:0 auto;">
@@ -108,12 +109,57 @@
 {% endif %}
 
 {# ── Commentary ── #}
+<div id="live-controls" style="
+    display:flex;align-items:center;gap:12px;
+    margin-bottom:var(--spacing-lg);
+    padding:var(--spacing-md) var(--spacing-lg);
+    background:var(--bg-dark);border-radius:8px;
+    border:1px solid var(--border-color);">
+
+    <button id="live-btn"
+        onclick="startLiveMode()"
+        style="font-family:var(--font-display);
+               font-size:.85rem;padding:8px 20px;
+               background:rgba(0,230,118,.15);
+               border:1px solid var(--neon-green);
+               border-radius:5px;color:var(--neon-green);
+               cursor:pointer;letter-spacing:.05em;">
+        ▶ Watch Live
+    </button>
+
+    <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:.65rem;color:var(--text-muted);
+                     text-transform:uppercase;letter-spacing:.08em;">
+            Speed
+        </span>
+        {% for spd, label in [('fast','Fast'),('normal','Normal'),('slow','Slow')] %}
+        <button onclick="setSpeed('{{ spd }}')"
+                id="spd-{{ spd }}"
+                style="font-size:.62rem;padding:3px 8px;
+                       background:{% if spd == 'normal' %}rgba(255,255,255,.1){% else %}transparent{% endif %};
+                       border:1px solid {% if spd == 'normal' %}rgba(255,255,255,.3){% else %}var(--border-color){% endif %};
+                       border-radius:3px;color:var(--text-muted);
+                       cursor:pointer;">
+            {{ label }}
+        </button>
+        {% endfor %}
+    </div>
+
+    <div id="live-status"
+         style="font-size:.7rem;color:var(--text-muted);
+                margin-left:auto;display:none;">
+        Round <span id="live-round">1</span>
+        · Line <span id="live-line">0</span>
+    </div>
+</div>
+
 {% if rounds %}
+<div id="commentary-container">
 {% for round in rounds %}
-<div class="card mb-md">
+<div class="card mb-md round-card" data-round="{{ round.num }}">
     {# Round header #}
     {% if round.num > 0 %}
-    <div style="display:flex;align-items:center;justify-content:space-between;
+    <div class="round-header" style="display:flex;align-items:center;justify-content:space-between;
                 padding:var(--spacing-sm) var(--spacing-md);
                 background:var(--bg-dark);border-bottom:1px solid var(--border-color);">
         <span style="font-family:var(--font-display);font-size:.8rem;
@@ -139,7 +185,7 @@
         {% if 'TAP! TAP! TAP!' in line or 'IT\'S OVER' in line or 'STOP THE FIGHT' in line
               or 'LIGHTS OUT' in line or 'THE FINAL BLOW' in line or 'AND THAT\'S THE ONE' in line
               or 'KILL SHOT' in line or 'Excellent stoppage' in line %}
-        <div style="color:var(--blood-red);font-weight:700;font-size:.88rem;
+        <div class="commentary-line tier-1" style="color:var(--blood-red);font-weight:700;font-size:.88rem;
                     padding:4px 8px;margin:3px 0;
                     background:rgba(211,47,47,.12);
                     border-left:3px solid var(--blood-red);
@@ -149,7 +195,7 @@
         {% elif 'TAP' in line or 'taps' in line.lower()
                 or ('locked in' in line.lower() and 'TIGHT' in line)
                 or 'It\'s over' in line %}
-        <div style="color:var(--info);font-weight:700;font-size:.88rem;
+        <div class="commentary-line tier-2" style="color:var(--info);font-weight:700;font-size:.88rem;
                     padding:4px 8px;margin:3px 0;
                     background:rgba(33,150,243,.12);
                     border-left:3px solid var(--info);
@@ -160,7 +206,7 @@
                 or 'WOBBLES' in line or 'POUNCES' in line
                 or 'is in DEEP' in line
                 or 'WOBBLE' in line %}
-        <div style="color:var(--blood-red);font-weight:700;font-size:.86rem;
+        <div class="commentary-line tier-3" style="color:var(--blood-red);font-weight:700;font-size:.86rem;
                     padding:3px 8px;margin:2px 0;
                     background:rgba(211,47,47,.09);
                     border-left:3px solid var(--blood-red-light);
@@ -172,7 +218,7 @@
                 or 'BEAUTIFUL double-leg' in line or 'PERFECT level change' in line
                 or 'single leg' in line.lower() or 'TEXTBOOK takedown' in line
                 or 'completes the' in line.lower() %}
-        <div style="color:#4fc3f7;font-weight:600;font-size:.82rem;
+        <div class="commentary-line tier-4" style="color:#4fc3f7;font-weight:600;font-size:.82rem;
                     padding:3px 8px;margin:2px 0;
                     background:rgba(79,195,247,.08);
                     border-left:3px solid #4fc3f7;
@@ -185,7 +231,7 @@
                 or 'TRUCK POSITION' in line or 'truck position' in line
                 or 'full mount' in line.lower()
                 or 'takes the back' in line.lower() %}
-        <div style="color:#ffb74d;font-weight:600;font-size:.82rem;
+        <div class="commentary-line tier-5" style="color:#ffb74d;font-weight:600;font-size:.82rem;
                     padding:3px 8px;margin:2px 0;
                     background:rgba(255,183,77,.08);
                     border-left:3px solid #ffb74d;
@@ -197,7 +243,7 @@
                 or 'transitions to a' in line.lower()
                 or 'attempt' in line.lower() and ('Choke' in line or 'Lock' in line
                     or 'Bar' in line or 'Triangle' in line or 'Slicer' in line) %}
-        <div style="color:#81c784;font-weight:500;font-size:.81rem;
+        <div class="commentary-line tier-6" style="color:#81c784;font-weight:500;font-size:.81rem;
                     padding:2px 8px;margin:1px 0;
                     background:rgba(129,199,132,.07);
                     border-left:2px solid #81c784;
@@ -205,17 +251,17 @@
 
         {# ── TIER 7: Round headers and summaries ── #}
         {% elif line.startswith('===') or line.startswith('---') %}
-        <div style="color:var(--text-muted);border-top:1px solid var(--border-color);
+        <div class="commentary-line tier-7" style="color:var(--text-muted);border-top:1px solid var(--border-color);
                     margin:var(--spacing-sm) 0;padding-top:var(--spacing-sm);
                     font-size:.75rem;letter-spacing:.04em;">{{ line }}</div>
 
         {% elif line.startswith('[Round') or (line.startswith('[') and ':' in line) %}
-        <div style="color:var(--gold);font-weight:600;margin-top:var(--spacing-sm);
+        <div class="commentary-line tier-7" style="color:var(--gold);font-weight:600;margin-top:var(--spacing-sm);
                     font-size:.8rem;padding:2px 0;">{{ line }}</div>
 
         {# ── TIER 8: Corner advice ── #}
         {% elif line.startswith('💼') or 'In the Corner' in line %}
-        <div style="color:var(--gold);font-style:italic;font-size:.78rem;
+        <div class="commentary-line tier-8" style="color:var(--gold);font-style:italic;font-size:.78rem;
                     padding:4px 8px;margin:4px 0;
                     background:rgba(255,215,0,.06);
                     border-left:2px solid rgba(255,215,0,.3);
@@ -227,12 +273,12 @@
                 or 'FINISH is NEAR' in line or 'UNLOADS' in line
                 or 'ALL OVER' in line or 'SERIOUS trouble' in line
                 or 'SURVIVING' in line or 'championship-level' in line.lower() %}
-        <div style="color:var(--text-bright);font-weight:600;font-size:.83rem;
+        <div class="commentary-line tier-9" style="color:var(--text-bright);font-weight:600;font-size:.83rem;
                     padding:2px 4px;margin:1px 0;">{{ line }}</div>
 
         {# ── DEFAULT: regular action lines ── #}
         {% else %}
-        <div style="padding:1px 0;color:var(--text-secondary);font-size:.8rem;">{{ line }}</div>
+        <div class="commentary-line tier-default" style="padding:1px 0;color:var(--text-secondary);font-size:.8rem;">{{ line }}</div>
 
         {% endif %}
         {% endfor %}
@@ -252,7 +298,7 @@
             </span>
         </div>
         {% for advice_line in round.corner %}
-        <div style="font-family:'Courier New',monospace;font-size:.82rem;
+        <div class="commentary-line tier-corner" style="font-family:'Courier New',monospace;font-size:.82rem;
                     color:var(--text-bright);line-height:1.6;padding:2px 0;">
             {{ advice_line }}
         </div>
@@ -261,6 +307,7 @@
     {% endif %}
 </div>
 {% endfor %}
+</div>
 
 {% else %}
 {# No commentary stored — show basic result #}
@@ -288,4 +335,132 @@
 </div>
 
 </div>
+<script>
+// ── Live playback engine ─────────────────────────────
+const SPEEDS = {
+    fast:   { base: 120, pause: 800,  round_pause: 1500 },
+    normal: { base: 250, pause: 1500, round_pause: 2500 },
+    slow:   { base: 450, pause: 2500, round_pause: 4000 },
+};
+
+let currentSpeed = 'normal';
+let isPlaying = false;
+let playbackTimer = null;
+
+function buildLineQueue() {
+    const queue = [];
+    const container = document.getElementById('commentary-container');
+    if (!container) return queue;
+    const cards = container.querySelectorAll('.round-card');
+    cards.forEach((card, ri) => {
+        const header = card.querySelector('.round-header');
+        if (header) {
+            queue.push({ el: header, isRound: true, delay: 0 });
+        }
+        const lines = card.querySelectorAll('.commentary-line');
+        lines.forEach((line, li) => {
+            const isFinish = line.classList.contains('tier-1')
+                || line.classList.contains('tier-2');
+            const isKey = line.classList.contains('tier-3')
+                || line.classList.contains('tier-9');
+            queue.push({ el: line, isFinish, isKey, delay: 0 });
+        });
+        if (ri < cards.length - 1) {
+            queue.push({ isPause: true });
+        }
+    });
+    return queue;
+}
+
+function setSpeed(spd) {
+    currentSpeed = spd;
+    ['fast','normal','slow'].forEach(s => {
+        const btn = document.getElementById('spd-' + s);
+        if (!btn) return;
+        btn.style.background = s === spd
+            ? 'rgba(255,255,255,.1)' : 'transparent';
+        btn.style.borderColor = s === spd
+            ? 'rgba(255,255,255,.3)' : 'var(--border-color)';
+    });
+}
+
+function startLiveMode() {
+    if (isPlaying) return;
+    const container = document.getElementById('commentary-container');
+    if (!container) return;
+    container.querySelectorAll('.commentary-line, .round-header').forEach(el => {
+        el.style.opacity = '0';
+        el.style.transition = 'opacity 0.3s';
+    });
+    const btn = document.getElementById('live-btn');
+    btn.textContent = '⏸ Playing...';
+    btn.onclick = stopLive;
+    btn.style.background = 'rgba(211,47,47,.15)';
+    btn.style.borderColor = 'var(--blood-red)';
+    btn.style.color = 'var(--blood-red)';
+    document.getElementById('live-status').style.display = 'block';
+    isPlaying = true;
+    const queue = buildLineQueue();
+    playQueue(queue, 0);
+}
+
+function playQueue(queue, idx) {
+    if (!isPlaying || idx >= queue.length) {
+        finishLive();
+        return;
+    }
+    const item = queue[idx];
+    const spd = SPEEDS[currentSpeed];
+    if (item.isPause) {
+        playbackTimer = setTimeout(() => { playQueue(queue, idx + 1); }, spd.round_pause);
+        return;
+    }
+    if (item.el) {
+        item.el.style.opacity = '1';
+        item.el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        const roundEl = document.getElementById('live-round');
+        const lineEl = document.getElementById('live-line');
+        if (roundEl && item.el.closest('.round-card')) {
+            const card = item.el.closest('.round-card');
+            roundEl.textContent = card.dataset.round || '?';
+        }
+        if (lineEl) lineEl.textContent = idx + 1;
+    }
+    let delay = spd.base;
+    if (item.isRound) delay = spd.round_pause / 2;
+    if (item.isFinish) delay = spd.pause * 2;
+    else if (item.isKey) delay = spd.pause;
+    playbackTimer = setTimeout(() => { playQueue(queue, idx + 1); }, delay);
+}
+
+function stopLive() {
+    isPlaying = false;
+    if (playbackTimer) clearTimeout(playbackTimer);
+    const container = document.getElementById('commentary-container');
+    if (container) {
+        container.querySelectorAll('.commentary-line, .round-header').forEach(el => {
+            el.style.opacity = '1';
+        });
+    }
+    const btn = document.getElementById('live-btn');
+    btn.textContent = '▶ Watch Live';
+    btn.onclick = startLiveMode;
+    btn.style.background = 'rgba(0,230,118,.15)';
+    btn.style.borderColor = 'var(--neon-green)';
+    btn.style.color = 'var(--neon-green)';
+    document.getElementById('live-status').style.display = 'none';
+}
+
+function finishLive() {
+    isPlaying = false;
+    const btn = document.getElementById('live-btn');
+    btn.textContent = '↺ Watch Again';
+    btn.onclick = () => { startLiveMode(); };
+    btn.style.background = 'rgba(99,179,237,.15)';
+    btn.style.borderColor = 'var(--info)';
+    btn.style.color = 'var(--info)';
+    document.getElementById('live-status').style.display = 'none';
+}
+</script>
+
 {% endblock %}
