@@ -752,10 +752,10 @@ class NarratedFightSimulator:
                     else 1.0)
                 defender_state._clinch_body_acc = (
                     _prev_cb + damage * _cb_rate)
-                if defender_state._clinch_body_acc >= 45:
-                    _cb_tko = min(0.25,
+                if defender_state._clinch_body_acc >= 30:
+                    _cb_tko = min(0.22,
                         (defender_state._clinch_body_acc
-                         - 40) * 0.025)
+                         - 25) * 0.025)
                     _cb_tko *= max(0.4,
                         1 - getattr(defender,
                             'heart', 70) / 320
@@ -774,7 +774,7 @@ class NarratedFightSimulator:
             # Standing back up after a KD is exhausting —
             # fighters are visibly slower after the canvas.
             if caused_knockdown:
-                defender_state.spend_stamina(12)
+                defender_state.spend_stamina(8)
 
             # ── GnP accumulation — dominant-position TKO ──
             _gnp_pos_check = str(getattr(
@@ -789,17 +789,17 @@ class NarratedFightSimulator:
             if (not is_finish
                     and _in_gnp_pos
                     and target_area == 'head'):
-                _rate = 1.4 if _is_gnp else 1.0
+                _rate = 1.2 if _is_gnp else 1.0
                 if 'MOUNT' in _gnp_pos_check:
-                    _rate *= 1.2
+                    _rate *= 1.1
                 _prev_gnp = getattr(
                     defender_state, '_gnp_accumulation', 0)
                 defender_state._gnp_accumulation = (
                     _prev_gnp + damage * _rate)
-                if defender_state._gnp_accumulation >= 55:
-                    _gnp_tko = min(0.30,
+                if defender_state._gnp_accumulation >= 75:
+                    _gnp_tko = min(0.22,
                         (defender_state._gnp_accumulation
-                         - 50) * 0.03)
+                         - 70) * 0.025)
                     _gnp_tko *= max(0.35,
                         1 - getattr(defender, 'heart', 70) / 300
                         - getattr(defender, 'composure', 70) / 450)

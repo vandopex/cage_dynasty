@@ -514,18 +514,18 @@ class FighterState:
             # KD + rock chance up to 1.30× at 12 points of erosion.
             _erosion = getattr(self, '_chin_erosion', 0)
             _erosion_mult = 1.0 + min(0.30, _erosion * 0.025)
-            if random.random() < amount * 0.01 * _erosion_mult:
+            if random.random() < amount * 0.015 * _erosion_mult:
                 is_knockdown = True
                 self.knockdowns_this_round += 1
                 self.knockdowns_total += 1
                 # Cumulative tax — represents real damage.
                 self._chin_erosion = _erosion + 4
-            elif random.random() < amount * 0.02 * _erosion_mult:
+            elif random.random() < amount * 0.025 * _erosion_mult:
                 self.is_rocked = True
                 # ── Rock stamina drain ────────────────
                 # Absorbing a rocking shot changes breathing —
                 # legs get heavy immediately.
-                self.spend_stamina(6)
+                self.spend_stamina(4)
                 # HIGH RECOVERY: Shake off cobwebs faster
                 reduction = 1 if self.recovery_rating >= 80 else 0
                 self.rock_duration = max(1, random.randint(1, 3) - reduction)
