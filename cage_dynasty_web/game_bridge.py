@@ -679,6 +679,8 @@ class WebFighter:
     training_queue_index:  int = 0
     training_queue_intensity: str = "MODERATE"
     training_queue_active: bool = False
+    # Career-best consecutive win streak (max W run in history).
+    best_win_streak: int = 0
 
 
 @dataclass
@@ -5202,6 +5204,29 @@ class GameBridge:
                 else:
                     break
 
+        # ── Career-best win streak ───────────────────────────────
+        # Walk full history forward, track max consecutive Ws.
+        _best_ws = 0
+        _run_ws = 0
+        for f in history:
+            res = f.get('result') if isinstance(f, dict) else getattr(f, 'result', '')
+            if res == 'W':
+                _run_ws += 1
+                if _run_ws > _best_ws:
+                    _best_ws = _run_ws
+            else:
+                _run_ws = 0
+        # Mirror to engine fighter so retirement summary
+        # (game_bridge.py:7782) reads the same value.
+        try:
+            _prev_best = getattr(fighter, 'best_win_streak', 0) or 0
+            if _best_ws > _prev_best:
+                fighter.best_win_streak = _best_ws
+        except Exception:
+            pass
+        best_win_streak = max(_best_ws,
+            getattr(fighter, 'best_win_streak', 0) or 0)
+
         # ── Camp name ─────────────────────────────────────────────
         camp_name = "Free Agent"
         if fighter.camp_id and self._game_state:
@@ -5392,6 +5417,7 @@ class GameBridge:
             condition_color=condition_color,
             win_streak=win_streak,
             lose_streak=lose_streak,
+            best_win_streak=best_win_streak,
             traits=list(fdata.get("traits", [])),
             momentum_tag=_mtag,
             fight_history=[
@@ -5480,7 +5506,12 @@ class GameBridge:
         "guard":            ("GRAPPLING",    "guard"),
         "cardio":           ("CONDITIONING", "cardio"),
         "strength":         ("CONDITIONING", "strength"),
+        "speed":            ("CONDITIONING", "speed"),
+        "chin":             ("CONDITIONING", "chin"),
+        "recovery":         ("CONDITIONING", "recovery"),
         "fight_iq":         ("MENTAL",       "fight_iq"),
+        "composure":        ("MENTAL",       "composure"),
+        "heart":            ("MENTAL",       "heart"),
         "sparring":         ("SPARRING",     "sparring"),
     }
 
