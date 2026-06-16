@@ -934,6 +934,13 @@ def register_routes(app):
         except Exception:
             decay_risks = {}
 
+        # Auto-rest hysteresis — fighters currently locked into
+        # REST until fatigue drops to 40. Drives the UI indicator.
+        recovering_fighters = {
+            f.fighter_id for f in fighters
+            if getattr(bridge, f'_auto_resting_{f.fighter_id}', False)
+        }
+
         return render_template('training.html',
             fighters=fighters,
             camp=camp,
@@ -943,6 +950,7 @@ def register_routes(app):
             training_groups=training_groups,
             intensity_options=intensity_options,
             decay_risks=decay_risks,
+            recovering_fighters=recovering_fighters,
             week=bridge.week_number,
         )
     

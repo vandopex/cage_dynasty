@@ -122,7 +122,16 @@
                                 background:{% if fighter.fatigue < 40 %}var(--neon-green){% elif fighter.fatigue < 70 %}var(--warning){% else %}var(--blood-red){% endif %};"></div>
                 </div>
                 {# ── Auto-rest status indicator ── #}
-                {% if fighter.fatigue >= 80 %}
+                {% if fighter.fighter_id in recovering_fighters %}
+                <div style="margin-top:4px;font-size:.62rem;font-weight:700;
+                            color:var(--neon-blue, #38bdf8);
+                            padding:3px 6px;border-radius:3px;
+                            background:rgba(56,189,248,.10);
+                            border-left:2px solid var(--neon-blue, #38bdf8);
+                            text-align:right;letter-spacing:.02em;">
+                    🔄 Auto-recovering — resumes training at 40% fatigue
+                </div>
+                {% elif fighter.fatigue >= 80 %}
                 <div style="margin-top:4px;font-size:.62rem;font-weight:700;
                             color:var(--blood-red);
                             padding:3px 6px;border-radius:3px;

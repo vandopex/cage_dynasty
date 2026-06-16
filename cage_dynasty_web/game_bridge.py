@@ -6498,26 +6498,47 @@ class GameBridge:
             )
             _auto_rest_reason = None
 
-            if _fatigue_ar >= 80:
-                _auto_rest_reason = (
-                    f"Auto-rest: fatigue critical ({_fatigue_ar}%)")
-                active_plan["focus"] = 'sparring'
-                active_plan["intensity"] = 'REST'
-            elif _fatigue_ar >= 75 and active_plan["intensity"] in ('INTENSE', 'EXTREME'):
-                _auto_rest_reason = (
-                    f"Auto-adjusted: fatigue {_fatigue_ar}% "
-                    f"— dropped to MODERATE")
-                active_plan["intensity"] = 'MODERATE'
-            elif _fatigue_ar >= 65 and active_plan["intensity"] == 'EXTREME':
-                _auto_rest_reason = (
-                    f"Auto-adjusted: fatigue {_fatigue_ar}% "
-                    f"— dropped EXTREME → INTENSE")
-                active_plan["intensity"] = 'INTENSE'
-            elif _weeks_to_fight <= 2 and _fatigue_ar >= 50:
-                _auto_rest_reason = (
-                    f"Auto-adjusted: fight in {_weeks_to_fight}w "
-                    f"— protecting condition")
-                active_plan["intensity"] = 'LIGHT'
+            # ── Auto-rest hysteresis ──────────────────────
+            # Once auto-rest fires, stay in REST until fatigue
+            # drops to 40. Prevents oscillation where a fighter
+            # trains → auto-rest → trains → auto-rest endlessly.
+            _rest_key = f"_auto_resting_{fid}"
+            _currently_resting = getattr(self, _rest_key, False)
+            if _currently_resting:
+                if _fatigue_ar <= 40:
+                    setattr(self, _rest_key, False)
+                    _currently_resting = False
+                else:
+                    _auto_rest_reason = (
+                        f"Auto-recovering "
+                        f"({_fatigue_ar}% → target 40%)")
+                    active_plan["focus"] = 'sparring'
+                    active_plan["intensity"] = 'REST'
+
+            if not _currently_resting:
+                if _fatigue_ar >= 80:
+                    _auto_rest_reason = (
+                        f"Auto-rest: fatigue critical ({_fatigue_ar}%)")
+                    active_plan["focus"] = 'sparring'
+                    active_plan["intensity"] = 'REST'
+                    # Set hysteresis flag — stay resting until 40
+                    setattr(self, _rest_key, True)
+                    _currently_resting = True
+                elif _fatigue_ar >= 75 and active_plan["intensity"] in ('INTENSE', 'EXTREME'):
+                    _auto_rest_reason = (
+                        f"Auto-adjusted: fatigue {_fatigue_ar}% "
+                        f"— dropped to MODERATE")
+                    active_plan["intensity"] = 'MODERATE'
+                elif _fatigue_ar >= 65 and active_plan["intensity"] == 'EXTREME':
+                    _auto_rest_reason = (
+                        f"Auto-adjusted: fatigue {_fatigue_ar}% "
+                        f"— dropped EXTREME → INTENSE")
+                    active_plan["intensity"] = 'INTENSE'
+                elif _weeks_to_fight <= 2 and _fatigue_ar >= 50:
+                    _auto_rest_reason = (
+                        f"Auto-adjusted: fight in {_weeks_to_fight}w "
+                        f"— protecting condition")
+                    active_plan["intensity"] = 'LIGHT'
 
             if _auto_rest_reason:
                 self._news_items.insert(0, {
