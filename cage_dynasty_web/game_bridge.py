@@ -5161,7 +5161,8 @@ class GameBridge:
             win_streak=0,
             lose_streak=0,
             traits=list(getattr(amateur, 'traits', []) or []),
-            fight_history=[],
+            fight_history=list(
+                getattr(amateur, 'fight_history', []) or []),
         )
 
     def _convert_real_fighter(self, fighter) -> WebFighter:

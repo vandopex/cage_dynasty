@@ -227,7 +227,11 @@ class AmateurFighter:
     wins: int = 0
     losses: int = 0
     amateur_fights: List[Dict[str, Any]] = field(default_factory=list)
-    
+    # Structured fight history (parallel to pro format) — populated
+    # by tournament resolution; read by game_bridge converter for
+    # amateur profile display.
+    fight_history: List[Dict[str, Any]] = field(default_factory=list)
+
     # Tournament history
     tournament_wins: int = 0
     tournament_finals: int = 0
@@ -971,7 +975,7 @@ class AmateurSystem:
         # Simulate quarterfinals
         qf_winners = []
         for fight in tournament.rounds[1]:
-            self._simulate_fight(fight)
+            self._simulate_fight(fight, tournament)
             all_fights.append(fight)
             qf_winners.append(fight.winner_id)
         
@@ -990,7 +994,7 @@ class AmateurSystem:
                 round_number=2,
                 bracket_position=i // 2,
             )
-            self._simulate_fight(fight)
+            self._simulate_fight(fight, tournament)
             sf_fights.append(fight)
             all_fights.append(fight)
         
@@ -1012,7 +1016,7 @@ class AmateurSystem:
             round_number=3,
             bracket_position=0,
         )
-        self._simulate_fight(final)
+        self._simulate_fight(final, tournament)
         all_fights.append(final)
         
         tournament.rounds[3] = [final]
@@ -1085,7 +1089,8 @@ class AmateurSystem:
                      a.get("composure", 50)) / 3
         return striking, grappling, physical, mental
 
-    def _simulate_fight(self, fight: "TournamentFight") -> None:
+    def _simulate_fight(self, fight: "TournamentFight",
+                        tournament: Optional["Tournament"] = None) -> None:
         """
         Simulate a single amateur fight using attribute-based matchup scoring.
 
@@ -1189,6 +1194,26 @@ class AmateurSystem:
         loser.amateur_fights.append({
             "opponent": winner.name, "result": "L",
             "method": fight.method, "tournament": True,
+        })
+
+        # Structured fight history — parallel to pro format
+        _week = getattr(tournament, 'week', 0) or 0
+        _tname = getattr(tournament, 'name', 'Tournament')
+        winner.fight_history.append({
+            "result": "W",
+            "opponent_id": loser.fighter_id,
+            "opponent_name": getattr(loser, 'name', ''),
+            "week": _week,
+            "tournament": _tname,
+            "method": fight.method,
+        })
+        loser.fight_history.append({
+            "result": "L",
+            "opponent_id": winner.fighter_id,
+            "opponent_name": getattr(winner, 'name', ''),
+            "week": _week,
+            "tournament": _tname,
+            "method": fight.method,
         })
 
         # Per-tournament-fight stat development. Higher-potential
