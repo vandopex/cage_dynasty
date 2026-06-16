@@ -704,6 +704,18 @@ class NarratedFightSimulator:
                 damage, target_area
             )
 
+            # ── Body shot stamina drain ───────────────
+            # Body work steals the opponent's breath.
+            # Strategically pays off in later rounds.
+            if target_area == 'body':
+                defender_state.spend_stamina(damage * 0.4)
+
+            # ── Knockdown stamina tax ─────────────────
+            # Standing back up after a KD is exhausting —
+            # fighters are visibly slower after the canvas.
+            if caused_knockdown:
+                defender_state.spend_stamina(12)
+
             # ── GnP accumulation — dominant-position TKO ──
             _gnp_pos_check = str(getattr(
                 self.fight_state, 'position', '')).upper()
@@ -1023,6 +1035,11 @@ class NarratedFightSimulator:
             if action in takedown_actions:
                 self.round_stats[attacker.fighter_id].takedowns_attempted += 1
                 self.round_stats[attacker.fighter_id].takedowns_landed += 1
+
+                # ── Takedown impact stamina drain ─────
+                # Scramble, impact, position recovery —
+                # the defender's gas tank takes a hit.
+                defender_state.spend_stamina(8)
 
                 # Slam damage
                 if action == GrapplingAction.SLAM:

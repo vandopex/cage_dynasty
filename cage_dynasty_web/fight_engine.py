@@ -522,6 +522,10 @@ class FighterState:
                 self._chin_erosion = _erosion + 4
             elif random.random() < amount * 0.02 * _erosion_mult:
                 self.is_rocked = True
+                # ── Rock stamina drain ────────────────
+                # Absorbing a rocking shot changes breathing —
+                # legs get heavy immediately.
+                self.spend_stamina(6)
                 # HIGH RECOVERY: Shake off cobwebs faster
                 reduction = 1 if self.recovery_rating >= 80 else 0
                 self.rock_duration = max(1, random.randint(1, 3) - reduction)
