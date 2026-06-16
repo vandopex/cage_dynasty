@@ -542,18 +542,26 @@ class FighterState:
         """Between-round recovery using recovery attribute."""
         self.knockdowns_this_round = 0
         self.is_knocked_down = False
-        
-        # STAMINA RECOVERY: Base + recovery bonus
-        # Base: 10, Bonus: 0-10 based on recovery rating
-        base_recovery = 10
-        bonus_recovery = self.recovery_rating / 10  # 0-10 extra
-        self.stamina = min(100, self.stamina + base_recovery + bonus_recovery)
-        
-        # HEALTH RECOVERY: Up to 5% based on recovery rating
-        # This represents corner work, catching breath, etc.
-        health_regain = self.recovery_rating * 0.05  # Up to 5 points
-        self.health = min(self.max_health, self.health + health_regain)
-        
+
+        # Recovery stat now meaningfully separates fighters.
+        # Base: 15 (up from 10 — accounts for new stamina drains)
+        # Bonus: scales 0-25 with recovery stat (was 0-10)
+        # Elite (90+) gets back ~40 stamina between rounds;
+        # poor (40-) gets back ~18.
+        base_recovery = 15
+        _rec = self.recovery_rating
+        bonus_recovery = (_rec / 100) * 25
+        # Championship round bonus — adrenaline in late rounds
+        if getattr(self, '_current_round', 0) >= 4:
+            bonus_recovery *= 1.3
+        self.stamina = min(100,
+            self.stamina + base_recovery + bonus_recovery)
+
+        # Health recovery: up to 8 points (was 5).
+        health_regain = self.recovery_rating * 0.08
+        self.health = min(self.max_health,
+            self.health + health_regain)
+
         self.is_rocked = False
         self.rock_duration = 0
     
@@ -2656,9 +2664,12 @@ def process_submission_progress(
     # ── Fatigue degrades submission escape ────────────
     # A tired fighter can't generate the explosive
     # movement needed to escape. Effective threshold drops
-    # with stamina.
+    # with stamina. Composure resists technique breakdown.
     _def_stamina = getattr(defender_state, 'stamina', 100)
-    _fatigue_escape_mult = max(0.55, _def_stamina / 100 + 0.3)
+    _composure = getattr(defender, 'composure', 70)
+    _composure_bonus = (_composure - 70) * 0.002
+    _fatigue_escape_mult = max(0.55,
+        _def_stamina / 100 + 0.3 + _composure_bonus)
     effective_escape = (
         config.submission_escape_threshold * _fatigue_escape_mult)
 

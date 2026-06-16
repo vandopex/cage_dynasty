@@ -418,6 +418,8 @@ class NarratedFightSimulator:
         }
         
         # Reset fighter round states (includes base stamina recovery)
+        self.fighter1_state._current_round = self.current_round
+        self.fighter2_state._current_round = self.current_round
         self.fighter1_state.new_round()
         self.fighter2_state.new_round()
         
@@ -586,16 +588,22 @@ class NarratedFightSimulator:
                 100, attacker_state.momentum + 20)
 
         # ── Counter Striker window — apply ───────────────
-        # fight_iq determines timing quality.
-        # 1-exchange window only.
+        # fight_iq = timing quality; speed = execution quality.
+        # Both needed for elite counter striking.
         _counter_mult = 1.0
         if getattr(attacker_state, '_counter_window', 0) > 0:
             attacker_state._counter_window = 0
             _iq = getattr(attacker, 'fight_iq', 70)
-            _counter_mult = (
+            _spd = getattr(attacker, 'speed', 70)
+            _iq_mult = (
                 1.6 if _iq >= 85 else
                 1.45 if _iq >= 75 else
                 1.3)
+            _spd_mod = (
+                1.0 if _spd >= 75 else
+                0.90 if _spd >= 65 else
+                0.80)
+            _counter_mult = _iq_mult * _spd_mod
 
         # ── Brawler counter — consume pending power ──────
         # Brawler just walked through a head strike; the
@@ -617,13 +625,25 @@ class NarratedFightSimulator:
         caused_rock = False
 
         if not landed:
-            # ── Counter Striker window — set on whiff ──────
-            # If a counter-striker dodged the strike, they
-            # get a 1-exchange counter window.
+            # ── Fight IQ: read and react ───────────────────
+            # Any fighter can counter but IQ determines how
+            # reliably they recognize the opening. Counter
+            # strikers always set the window; others gate on
+            # fight_iq tiers.
             _def_style_cw = str(getattr(
                 defender.fighting_style, 'name', '')
                 or defender.fighting_style or '').upper()
+            _def_iq = getattr(defender, 'fight_iq', 70)
+            _counter_set = False
             if 'COUNTER' in _def_style_cw:
+                _counter_set = True
+            elif _def_iq >= 85:
+                _counter_set = random.random() < 0.45
+            elif _def_iq >= 75:
+                _counter_set = random.random() < 0.25
+            elif _def_iq >= 65:
+                _counter_set = random.random() < 0.10
+            if _counter_set:
                 defender_state._counter_window = 1
 
         if landed:
@@ -718,6 +738,38 @@ class NarratedFightSimulator:
             if target_area == 'body':
                 defender_state.spend_stamina(damage * 0.4)
 
+            # ── Clinch body accumulation ───────────────
+            # Repeated body work in clinch forces stoppages.
+            # Muay Thai specialty.
+            _in_clinch_pos = (
+                self.fight_state.position
+                in CLINCH_POSITIONS)
+            if target_area == 'body' and _in_clinch_pos:
+                _prev_cb = getattr(
+                    defender_state, '_clinch_body_acc', 0)
+                _cb_rate = (
+                    1.4 if 'MUAY_THAI' in _att_style
+                    else 1.0)
+                defender_state._clinch_body_acc = (
+                    _prev_cb + damage * _cb_rate)
+                if defender_state._clinch_body_acc >= 45:
+                    _cb_tko = min(0.25,
+                        (defender_state._clinch_body_acc
+                         - 40) * 0.025)
+                    _cb_tko *= max(0.4,
+                        1 - getattr(defender,
+                            'heart', 70) / 320
+                        - getattr(defender,
+                            'composure', 70) / 450)
+                    if random.random() < _cb_tko:
+                        method = "TKO (Body Shots)"
+                        self._log_finish(
+                            attacker.fighter_id,
+                            method, exchange_num)
+                        return (attacker.fighter_id, method)
+            if self.fight_state.position not in CLINCH_POSITIONS:
+                defender_state._clinch_body_acc = 0
+
             # ── Knockdown stamina tax ─────────────────
             # Standing back up after a KD is exhausting —
             # fighters are visibly slower after the canvas.
@@ -748,9 +800,9 @@ class NarratedFightSimulator:
                     _gnp_tko = min(0.30,
                         (defender_state._gnp_accumulation
                          - 50) * 0.03)
-                    _gnp_tko *= max(0.4,
-                        1 - getattr(defender,
-                            'heart', 70) / 300)
+                    _gnp_tko *= max(0.35,
+                        1 - getattr(defender, 'heart', 70) / 300
+                        - getattr(defender, 'composure', 70) / 450)
                     if random.random() < _gnp_tko:
                         method = "TKO (Ground and Pound)"
                         self._log_finish(
@@ -783,9 +835,10 @@ class NarratedFightSimulator:
                 defender_state._rocked_shots += 1
                 _ref_chance = min(0.22,
                     defender_state._rocked_shots * 0.05)
-                _ref_chance *= max(0.4,
+                _ref_chance *= max(0.35,
                     1 - (defender.fight_iq / 250)
-                      - (defender.heart / 350))
+                      - (defender.heart / 350)
+                      - (defender.composure / 400))
                 if random.random() < _ref_chance:
                     method = "TKO (Referee Stoppage)"
                     self._log_finish(attacker.fighter_id,
