@@ -5892,29 +5892,51 @@ class GameBridge:
         if self._game_state and fighter_id in self._game_state._fighter_data:
             _fdata_fat = self._game_state._fighter_data[fighter_id]
             _current_fatigue = int(_fdata_fat.get('fatigue', 0))
-            _applied_delta = fatigue_delta
-            if intensity_up == 'REST':
-                _ftr_fat = self._game_state.get_fighter(fighter_id)
-                _rec_stat = int(_fdata_fat.get('recovery',
-                    getattr(_ftr_fat, 'recovery', 50) if _ftr_fat else 50))
-                _age_val  = int(getattr(_ftr_fat, 'age', 25) if _ftr_fat else 25)
-                if _rec_stat >= 85:
-                    _applied_delta = -20
-                elif _rec_stat >= 70:
-                    _applied_delta = -17
-                elif _rec_stat >= 50:
-                    _applied_delta = -15
-                elif _rec_stat >= 35:
-                    _applied_delta = -12
+            _ftr_fat = self._game_state.get_fighter(fighter_id)
+            _rec = int(_fdata_fat.get('recovery',
+                getattr(_ftr_fat, 'recovery', 70) if _ftr_fat else 70))
+            _age = int(getattr(_ftr_fat, 'age', 26) if _ftr_fat else 26)
+
+            # Recovery modifier: rec 90 = 0.80x, rec 70 = 1.0x,
+            # rec 50 = 1.20x (clamped 0.75 - 1.25)
+            _rec_mod = max(0.75, min(1.25,
+                1.0 - (_rec - 70) * 0.0125))
+
+            # Age modifier: ≤28 = 1.0x, 35 = 1.28x, 38+ = 1.35x
+            _age_mod = max(0.85, min(1.35,
+                1.0 + max(0, _age - 28) * 0.04))
+
+            _effective_delta = fatigue_delta
+            if fatigue_delta < 0:
+                # REST: better recovery bounces back more.
+                _effective_delta = int(
+                    fatigue_delta * max(0.80, _rec / 100 + 0.30))
+            else:
+                # Training: scales with both recovery and age.
+                _effective_delta = round(
+                    fatigue_delta * _rec_mod * _age_mod)
+
+            # ── S&C Coach fatigue modifier ────────────────────
+            # S&C coaches specialize in managing training load.
+            # Check head coach + any multi-coach staff member.
+            _sc_specialties = ('s&c', 'strength', 'conditioning',
+                               'cardio', 's and c')
+            _sc_rating = 0
+            if self._coach and self._coach.get('specialty', '').lower() in _sc_specialties:
+                _sc_rating = max(_sc_rating, self._coach.get('rating', 60))
+            for _c in (self._coaching_staff or []):
+                if str(_c.get('specialty', '')).lower() in _sc_specialties:
+                    _sc_rating = max(_sc_rating, _c.get('rating', 60))
+            if _sc_rating >= 60:
+                _sc_mod = max(0.70, 1.0 - (_sc_rating - 60) * 0.015)
+                if _effective_delta > 0:
+                    _effective_delta = round(_effective_delta * _sc_mod)
                 else:
-                    _applied_delta = -10
-                if _age_val < 26:
-                    _applied_delta -= 2
-                elif _age_val >= 37:
-                    _applied_delta += 3
-                elif _age_val >= 31:
-                    _applied_delta += 2
-            _new_fatigue = max(0, min(100, _current_fatigue + _applied_delta))
+                    _sc_rest_bonus = int((_sc_rating - 60) * 0.12)
+                    _effective_delta = min(0,
+                        _effective_delta - _sc_rest_bonus)
+
+            _new_fatigue = max(0, min(100, _current_fatigue + _effective_delta))
             _fdata_fat['fatigue'] = _new_fatigue
             _ftr_sync = self._game_state.get_fighter(fighter_id)
             if _ftr_sync and hasattr(_ftr_sync, 'fatigue'):
@@ -6630,8 +6652,29 @@ class GameBridge:
                         _sm += 0.20
                     return _sm
 
+                # ── Specialty focus match bonus ───────────
+                # Coach is extra effective when player's training
+                # focus matches the coach's domain.
+                _FOCUS_MATCH = {
+                    'striking_coach': ['boxing','kicks',
+                                       'clinch_striking',
+                                       'striking_defense'],
+                    'grappling_coach': ['takedowns','top_control',
+                                        'submissions','guard',
+                                        'takedown_defense'],
+                    'sc_coach': ['strength','cardio','chin',
+                                 'recovery','speed'],
+                    'mma_coach': ['fight_iq','composure',
+                                  'heart','sparring'],
+                }
+                _active_focus = active_plan.get('focus', 'sparring')
+                _focus_matches = _FOCUS_MATCH.get(cs_focus, [])
+                _focus_bonus = (
+                    1.35 if _active_focus in _focus_matches else 1.0)
+
                 _base_per_attr_gain = ((cs_passive / len(cs_attrs))
-                                       * cs_boost * _trait_mult * _rate)
+                                       * cs_boost * _trait_mult * _rate
+                                       * _focus_bonus)
 
                 if real_fighter and _base_per_attr_gain > 0:
                     _fdata_c = self._game_state._fighter_data.get(fid, {})
