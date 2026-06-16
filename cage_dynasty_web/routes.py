@@ -2716,6 +2716,141 @@ def register_routes(app):
 
         commentary = _collapse_position_clusters(commentary)
 
+        # ── Semantic similarity filter ───────────────────
+        # Lines describing the same action with different
+        # wording still feel repetitive. Group into action
+        # signatures, cap each at _MAX_SIG per round.
+        _ACTION_CLUSTERS = [
+            {
+                'keys': ['digs in punches while controlling',
+                         'punishes', 'from behind',
+                         'short punches to the side',
+                         'short shots connect from',
+                         'lands short punches to the side',
+                         'punishing from back'],
+                'sig': 'back_control_strikes',
+            },
+            {
+                'keys': ['protects the head well',
+                         'maintains position excellently',
+                         'Solid defensive work',
+                         'defends the punches while fighting',
+                         'controls the wrists',
+                         'does an excellent job of tying up'],
+                'sig': 'defensive_survival',
+            },
+            {
+                'keys': ['defends the back take attempt',
+                         'turns into', 'prevent the back take',
+                         'stops the back take',
+                         'good awareness from',
+                         'Good awareness from'],
+                'sig': 'back_take_defense',
+            },
+            {
+                'keys': ['sprawls perfectly',
+                         'shows great balance, stuffing',
+                         'stuffs the shot',
+                         'wrestling defense is on point',
+                         'Excellent takedown defense',
+                         'stuffing the shot'],
+                'sig': 'takedown_defense',
+            },
+            {
+                'keys': ['passes the guard',
+                         'guard pass',
+                         'slices through the guard',
+                         'Excellent guard passing',
+                         'SMOOTH transition past the guard',
+                         'BEAUTIFUL guard pass'],
+                'sig': 'guard_pass',
+            },
+            {
+                'keys': ['secures the clinch',
+                         "They're clinched up",
+                         'Into the clinch',
+                         'ties up with',
+                         'Good clinch work',
+                         'clinched up'],
+                'sig': 'clinch',
+            },
+            {
+                'keys': ['Good ground punches from',
+                         'A clean punch gets through',
+                         'connects with short punches on the ground',
+                         'lands a solid punch from the top',
+                         'Ground strikes land',
+                         'Short strikes connect from',
+                         'finds the mark from the top',
+                         'lands from side control',
+                         'finds the mark with an elbow from side control',
+                         'A sharp elbow connects from side control',
+                         'Short strikes connect from'],
+                'sig': 'ground_strikes',
+            },
+            {
+                'keys': ['advances to a better position',
+                         'improves position beautifully',
+                         'SMOOTH transition to a more dominant',
+                         'Great positional awareness',
+                         'Excellent positional grappling'],
+                'sig': 'position_improve',
+            },
+            {
+                'keys': ['frames against the neck',
+                         'frames effectively',
+                         'frames well to limit',
+                         'using the underhook to disrupt',
+                         'Good defensive work from',
+                         'tucks the chin'],
+                'sig': 'defensive_frames',
+            },
+            {
+                'keys': ['circles away beautifully',
+                         'uses excellent footwork',
+                         'Smart movement from',
+                         'keeps the fight at range',
+                         'angles out nicely'],
+                'sig': 'footwork',
+            },
+        ]
+        _MAX_SIG = 2
+
+        def _semantic_dedup(lines):
+            result = []
+            sig_counts = {}
+
+            def _get_sig(line):
+                for cluster in _ACTION_CLUSTERS:
+                    if any(k in line for k in cluster['keys']):
+                        return cluster['sig']
+                return None
+
+            for line in lines:
+                stripped = line.strip()
+                if (stripped.startswith('===')
+                        or stripped.lower().startswith('round ')
+                        or stripped.startswith('[Round')):
+                    sig_counts = {}
+                    result.append(line)
+                    continue
+                is_key = any(kw in stripped
+                             for kw in _FINISH_KEYWORDS)
+                if is_key:
+                    result.append(line)
+                    continue
+                sig = _get_sig(stripped)
+                if sig:
+                    count = sig_counts.get(sig, 0)
+                    if count < _MAX_SIG:
+                        result.append(line)
+                        sig_counts[sig] = count + 1
+                else:
+                    result.append(line)
+            return result
+
+        commentary = _semantic_dedup(commentary)
+
         # Parse commentary into rounds. Ship K1: use the engine's
         # `[Round N: <summary>]` bracketed end-of-round line as the
         # round boundary — round-start lines from the engine are
