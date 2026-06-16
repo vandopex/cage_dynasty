@@ -637,6 +637,14 @@ class NarratedFightSimulator:
             # fight_engine.DAMAGE_MULTIPLIER because the exchange loops differ
             damage = damage * FI_DAMAGE_MULTIPLIER
 
+            # ── Strength KO amplification ─────────────────
+            # Hard hitters punch through defense more.
+            # Ngannou effect — str 70 = 1.0x, str 90 = 1.06x.
+            if target_area == 'head':
+                _str = getattr(attacker, 'strength', 70)
+                _str_mod = 1.0 + max(0, _str - 70) * 0.003
+                damage *= _str_mod
+
             # ── Muay Thai knee amplification ───────────────
             # Knee_head and knee_body bypass guard differently
             # from punches in clinch.
