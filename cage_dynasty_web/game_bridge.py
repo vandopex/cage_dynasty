@@ -2992,6 +2992,8 @@ class GameBridge:
             for ranked_id in division.rankings:
                 if ranked_id == fid or ranked_id in scheduled_fids:
                     continue
+                if not self._is_available(ranked_id, week):
+                    continue
                 opp = self._game_state.get_fighter(ranked_id)
                 if not opp or not opp.is_active:
                     continue
