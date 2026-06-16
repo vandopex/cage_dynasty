@@ -6504,7 +6504,7 @@ class GameBridge:
             # fatigue cascade. Coach quality determines how
             # fresh the fighter peaks.
             _in_fight_camp = (
-                _upcoming_week is not None and _weeks_to_fight <= 8)
+                _upcoming_week is not None and _weeks_to_fight <= 7)
             if _in_fight_camp:
                 _coach_rating = int(
                     self._coach.get('rating', 65)
@@ -6519,7 +6519,7 @@ class GameBridge:
                     30 if _coach_rating >= 58 else
                     40)
 
-                if _weeks_to_fight >= 6:
+                if _weeks_to_fight >= 5:
                     # Early camp: cap at MODERATE
                     if active_plan.get('intensity') in (
                             'INTENSE', 'EXTREME'):
