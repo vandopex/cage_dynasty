@@ -8201,11 +8201,11 @@ class GameBridge:
         except Exception as e:
             print(f"  ⚠️ [MAINTENANCE] Failed: {e}")
 
-        # ── AI Camp Coaching — passive gains every 2 weeks ────────────
-        # AI fighters develop over time via their camp's coaching specialty.
-        # Cadence + breadth lifted by the potential rework: every 2 weeks
-        # (was 4), primary + secondary stat each pass (was primary only),
-        # and the per-fighter potential ceiling now bounds growth.
+        # ── AI fighter weekly training ────────────────────────────────
+        # AI fighters now mirror the player's training system: weekly
+        # smart intensity decisions, fatigue management, fight camp taper,
+        # coach quality effects. See _advance_ai_fighter_training for the
+        # full per-fighter logic.
         self._advance_ai_fighter_training(week)
 
         # Annual coach career events (drift, retirement, poaching)
@@ -8217,59 +8217,61 @@ class GameBridge:
 
     def _advance_ai_fighter_training(self, week: int) -> None:
         """
-        Apply passive training gains to all AI fighters every 2 weeks.
-        Each fighter trains TWO stats per pass: primary (full gain) +
-        secondary (50%), both keyed off their fighting style. Young
-        fighters gain more; veterans plateau. Ceiling is min(camp tier
-        cap, fighter's stored potential).
+        Weekly AI fighter training — mirrors the player's
+        system with smart autonomous decisions.
+        Runs WEEKLY (not every 4 weeks).
+        Each fighter tracks their own fatigue and manages
+        it based on schedule, age, and camp quality.
         """
         if not self._game_state:
             return
 
-        # AI fighter training focuses on their primary style stat
-        # This is independent of coach archetypes — each fighter's style
-        # determines what they drill between fights
         _STYLE_FOCUS = {
-            "Orthodox Boxer":   "boxing",        "Muay Thai":       "kicks",
-            "Kickboxer":        "kicks",          "Wrestler":        "takedowns",
-            "BJJ Specialist":   "submissions",    "Ground & Pound":  "top_control",
-            "Clinch Fighter":   "clinch_striking", "Counter Striker": "striking_defense",
-            "Pressure Fighter": "boxing",          "Sambo":          "takedowns",
-            "Brawler":          "strength",        "Judo":           "takedowns",
-            "Point Fighter":    "fight_iq",        "Hybrid":         "fight_iq",
-            "Karate":           "striking_defense","Sprawl & Brawl": "takedown_defense",
+            "Orthodox Boxer":   ["boxing","striking_defense","cardio"],
+            "Muay Thai":        ["kicks","clinch_striking","cardio"],
+            "Kickboxer":        ["kicks","boxing","striking_defense"],
+            "Wrestler":         ["takedowns","top_control","strength"],
+            "BJJ Specialist":   ["submissions","guard","takedowns"],
+            "Ground & Pound":   ["top_control","takedowns","boxing"],
+            "Clinch Fighter":   ["clinch_striking","top_control","strength"],
+            "Counter Striker":  ["striking_defense","fight_iq","boxing"],
+            "Pressure Fighter": ["boxing","cardio","clinch_striking"],
+            "Sambo":            ["takedowns","submissions","strength"],
+            "Brawler":          ["strength","chin","boxing"],
+            "Judo":             ["takedowns","top_control","strength"],
+            "Point Fighter":    ["fight_iq","speed","striking_defense"],
+            "Hybrid":           ["fight_iq","boxing","takedowns"],
+            "Karate":           ["striking_defense","kicks","speed"],
+            "Sprawl & Brawl":   ["takedown_defense","boxing","cardio"],
         }
-        # Secondary stat per style — gets 50% of the primary's gain.
-        # Picks a complementary attr that the style realistically drills.
-        _STYLE_SECONDARY = {
-            "Orthodox Boxer":   "striking_defense",
-            "Muay Thai":        "clinch_striking",
-            "Kickboxer":        "striking_defense",
-            "Wrestler":         "takedown_defense",
-            "BJJ Specialist":   "guard",
-            "Ground & Pound":   "takedowns",
-            "Clinch Fighter":   "top_control",
-            "Counter Striker":  "fight_iq",
-            "Pressure Fighter": "cardio",
-            "Sambo":            "submissions",
-            "Brawler":          "chin",
-            "Judo":             "top_control",
-            "Point Fighter":    "speed",
-            "Hybrid":           "composure",
-            "Karate":           "speed",
-            "Sprawl & Brawl":   "striking_defense",
+
+        _INTENSITY_FATIGUE = {
+            "REST": -15, "LIGHT": 2,
+            "MODERATE": 5, "INTENSE": 10, "EXTREME": 18,
+        }
+
+        _INTENSITY_GAIN = {
+            "REST": 0.0, "LIGHT": 0.15,
+            "MODERATE": 0.35, "INTENSE": 0.60, "EXTREME": 0.85,
         }
 
         player_camp_id = self._game_state.player_camp_id
 
         for camp in self._game_state.camps.values():
             if camp.camp_id == player_camp_id:
-                continue  # Player fighters handled separately
+                continue
 
-            # Get camp tier cap
             tier = getattr(camp, 'tier', 'LOCAL').upper()
-            tier_cap = {"GARAGE": 65, "LOCAL": 72, "REGIONAL": 80,
-                        "NATIONAL": 90, "ELITE": 100}.get(tier, 72)
+            tier_cap = {
+                "GARAGE": 65, "LOCAL": 72, "REGIONAL": 80,
+                "NATIONAL": 90, "ELITE": 100
+            }.get(tier, 72)
+
+            # Camp coach quality affects training output
+            _camp_coach_rating = getattr(
+                camp, 'head_coach_rating', 65) or 65
+            _coach_gain_mult = max(0.7,
+                min(1.4, 0.7 + (_camp_coach_rating - 50) / 100))
 
             for fid in getattr(camp, 'fighter_ids', []):
                 fighter = self._game_state.get_fighter(fid)
@@ -8277,291 +8279,238 @@ class GameBridge:
                     continue
 
                 age = getattr(fighter, 'age', 28)
+                style = getattr(
+                    fighter, 'fighting_style', 'Orthodox Boxer')
+                focus_attrs = _STYLE_FOCUS.get(
+                    style, ['fight_iq', 'boxing', 'cardio'])
 
-                # AI fatigue management — rest when tired,
-                # taper before fights, train normally otherwise
-                _ai_fatigue = int(
-                    self._game_state._fighter_data.get(fid, {}).get('fatigue', 0)
+                # Get or initialize fighter fatigue
+                _fdata = self._game_state._fighter_data.get(fid, {})
+                _fatigue = int(_fdata.get('fatigue', 0))
+
+                # Find upcoming fight
+                _upcoming = next(
+                    (sf.get('week', 99) for sf in
+                     self._scheduled_fights
+                     if sf.get('fighter1_id') == fid
+                     or sf.get('fighter2_id') == fid),
+                    None
                 )
-                _ai_weeks_to_fight = None
-                for _sf in self._scheduled_fights:
-                    if (_sf.get('fighter1_id') == fid or
-                            _sf.get('fighter2_id') == fid):
-                        _wtu = _sf.get('weeks_until', 99)
-                        if _ai_weeks_to_fight is None or _wtu < _ai_weeks_to_fight:
-                            _ai_weeks_to_fight = _wtu
+                _weeks_out = (
+                    (_upcoming - week)
+                    if _upcoming else 99)
 
-                if _ai_fatigue > 70:
-                    _ai_intensity = 'REST'
-                elif _ai_fatigue > 50 and _ai_weeks_to_fight is not None and _ai_weeks_to_fight <= 2:
-                    _ai_intensity = 'LIGHT'
-                elif _ai_weeks_to_fight is not None and _ai_weeks_to_fight <= 1:
-                    _ai_intensity = 'LIGHT'
+                # ── Decide intensity ──────────────────────
+                # Fight camp taper mirrors player system
+                if _weeks_out <= 7:
+                    # In fight camp
+                    if _weeks_out >= 5:
+                        intensity = 'MODERATE'
+                    elif _weeks_out >= 3:
+                        intensity = 'LIGHT'
+                    elif _weeks_out >= 2:
+                        intensity = ('REST'
+                            if _fatigue > 30 else 'LIGHT')
+                    else:
+                        intensity = ('REST'
+                            if _fatigue > 20 else 'LIGHT')
+                elif _fatigue >= 75:
+                    # Auto-rest — too fatigued
+                    intensity = 'REST'
+                elif _fatigue >= 60:
+                    # High fatigue — back off
+                    intensity = 'MODERATE'
                 else:
-                    _ai_intensity = 'MODERATE'
+                    # Normal training — pick by career phase
+                    if age < 24:
+                        # Young — push hard
+                        intensity = 'INTENSE'
+                    elif age < 30:
+                        # Prime — train smart
+                        intensity = (
+                            'INTENSE' if _fatigue < 45
+                            else 'MODERATE')
+                    elif age < 34:
+                        # Veteran — manage load
+                        intensity = (
+                            'MODERATE' if _fatigue < 50
+                            else 'LIGHT')
+                    else:
+                        # Late career — preserve
+                        intensity = (
+                            'LIGHT' if _fatigue < 55
+                            else 'REST')
 
-                _ai_fatigue_delta = {
-                    'REST': -15, 'LIGHT': 2, 'MODERATE': 5,
-                    'INTENSE': 10, 'EXTREME': 18,
-                }.get(_ai_intensity, 5)
+                    # Elite coach pushes harder safely
+                    if (_camp_coach_rating >= 80
+                            and intensity == 'MODERATE'
+                            and _fatigue < 50):
+                        intensity = 'INTENSE'
 
-                if _ai_intensity == 'REST':
-                    _rec = int(self._game_state._fighter_data.get(
-                        fid, {}).get('recovery',
-                        getattr(fighter, 'recovery', 50)))
-                    if _rec >= 85:   _ai_fatigue_delta = -20
-                    elif _rec >= 70: _ai_fatigue_delta = -17
-                    elif _rec >= 50: _ai_fatigue_delta = -15
-                    elif _rec >= 35: _ai_fatigue_delta = -12
-                    else:            _ai_fatigue_delta = -10
-                    _ai_age = getattr(fighter, 'age', 25)
-                    if _ai_age < 26:   _ai_fatigue_delta -= 2
-                    elif _ai_age >= 37: _ai_fatigue_delta += 3
-                    elif _ai_age >= 31: _ai_fatigue_delta += 2
+                # ── Apply fatigue delta ───────────────────
+                _delta = _INTENSITY_FATIGUE[intensity]
 
-                _new_ai_fatigue = max(0, min(100, _ai_fatigue + _ai_fatigue_delta))
-                if fid in self._game_state._fighter_data:
-                    self._game_state._fighter_data[fid]['fatigue'] = _new_ai_fatigue
+                # Recovery stat modifier
+                _rec = getattr(fighter, 'recovery', 70)
+                _age_mod = max(0.85, min(1.35,
+                    1.0 + max(0, age - 28) * 0.04))
+                _rec_mod = max(0.75, min(1.25,
+                    1.0 - (_rec - 70) * 0.0125))
+
+                if _delta < 0:
+                    _delta = int(
+                        _delta * max(0.80, _rec / 100 + 0.30))
+                else:
+                    _delta = round(
+                        _delta * _rec_mod * _age_mod)
+
+                _new_fatigue = max(0, min(100,
+                    _fatigue + _delta))
+                _fdata['fatigue'] = _new_fatigue
+                if fid not in self._game_state._fighter_data:
+                    self._game_state._fighter_data[fid] = _fdata
+                else:
+                    self._game_state._fighter_data[fid][
+                        'fatigue'] = _new_fatigue
                 if hasattr(fighter, 'fatigue'):
-                    fighter.fatigue = _new_ai_fatigue
+                    fighter.fatigue = _new_fatigue
 
-                if _ai_intensity == 'REST':
+                # ── Apply training gains ──────────────────
+                base_gain = _INTENSITY_GAIN[intensity]
+                if base_gain <= 0:
+                    # Age decline still fires on REST weeks
+                    if age >= 31:
+                        try:
+                            self._apply_age_decline(
+                                fid, age, tier, "MODERATE")
+                            fighter.overall_rating = (
+                                self._compute_ovr(fighter))
+                        except Exception:
+                            pass
                     continue
 
-                style = getattr(fighter, 'fighting_style', 'Orthodox Boxer')
-                focus_attr = _STYLE_FOCUS.get(style, 'fight_iq')
-                secondary_attr = _STYLE_SECONDARY.get(style, 'composure')
+                # Age modifier on gains
+                age_gain_mult = (
+                    1.4 if age < 24 else
+                    1.1 if age < 28 else
+                    0.8 if age < 33 else
+                    0.4)
 
-                # ── Intensity decision ──────────────────────────────
-                # Uses coach quality, career phase, and stat headroom
-                # to pick the right training intensity for this fighter
-                # this week. Mirrors real camp management logic.
+                # Train primary style stats in rotation
+                # Week-based rotation so all 3 get attention
+                _focus_idx = week % len(focus_attrs)
+                focus_attr = focus_attrs[_focus_idx]
 
-                _coach_rating = int(getattr(camp, 'head_coach_rating', 50))
-                _current_focus = float(getattr(fighter, focus_attr, 60))
-                _headroom = max(0, tier_cap - _current_focus)
-                _career_phase = (
-                    "veteran"   if age >= 37 else
-                    "declining" if age >= 31 else
-                    "prime"     if age >= 26 else
-                    "rising"
-                )
+                current = float(getattr(fighter,
+                    focus_attr, 60))
 
-                if _career_phase == "rising":
-                    _base_intensity = "INTENSE"
-                elif _career_phase == "prime":
-                    _base_intensity = "INTENSE" if _headroom > 10 else "MODERATE"
-                elif _career_phase == "declining":
-                    _base_intensity = "MODERATE" if _headroom > 8 else "LIGHT"
-                else:  # veteran
-                    _base_intensity = "LIGHT"
-
-                import random as _rnd_int
-                _roll = _rnd_int.random()
-                if _coach_rating >= 80:
-                    if _roll < 0.75:
-                        _chosen_intensity = _base_intensity
-                    else:
-                        _step_up = {"LIGHT":"MODERATE","MODERATE":"INTENSE","INTENSE":"INTENSE","EXTREME":"INTENSE"}
-                        _chosen_intensity = _step_up.get(_base_intensity, _base_intensity)
-                        if _career_phase in ("declining","veteran"):
-                            _chosen_intensity = _base_intensity
-                elif _coach_rating >= 55:
-                    if _roll < 0.60:
-                        _chosen_intensity = _base_intensity
-                    elif _roll < 0.85:
-                        _step_up = {"LIGHT":"MODERATE","MODERATE":"INTENSE","INTENSE":"INTENSE","EXTREME":"INTENSE"}
-                        _chosen_intensity = _step_up.get(_base_intensity, _base_intensity)
-                    else:
-                        _step_down = {"INTENSE":"MODERATE","MODERATE":"LIGHT","LIGHT":"LIGHT","EXTREME":"INTENSE"}
-                        _chosen_intensity = _step_down.get(_base_intensity, _base_intensity)
-                else:
-                    if _roll < 0.40:
-                        _chosen_intensity = _base_intensity
-                    elif _roll < 0.75:
-                        _step_up = {"LIGHT":"MODERATE","MODERATE":"INTENSE","INTENSE":"INTENSE","EXTREME":"INTENSE"}
-                        _chosen_intensity = _step_up.get(_base_intensity, _base_intensity)
-                    else:
-                        _step_down = {"INTENSE":"MODERATE","MODERATE":"LIGHT","LIGHT":"LIGHT","EXTREME":"INTENSE"}
-                        _chosen_intensity = _step_down.get(_base_intensity, _base_intensity)
-
-                if _headroom <= 3:
-                    _chosen_intensity = "LIGHT"
-                elif _headroom <= 6 and _chosen_intensity == "INTENSE":
-                    _chosen_intensity = "MODERATE"
-
-                _INTENSITY_GAIN_MAP = {
-                    "LIGHT": 0.15, "MODERATE": 0.35,
-                    "INTENSE": 0.60, "EXTREME": 0.85,
-                }
-                _intensity_gain_mult = _INTENSITY_GAIN_MAP.get(_chosen_intensity, 0.35)
-
-                if age < 24:
-                    _age_mult = 1.4
-                elif age < 28:
-                    _age_mult = 1.1
-                elif age < 33:
-                    _age_mult = 0.8
-                elif age < 37:
-                    _age_mult = 0.5
-                else:
-                    _age_mult = 0.2
-
-                gain = _intensity_gain_mult * _age_mult
-                base_gain = gain  # compat with for-loop below
-
-                # Fatigue cost from chosen training intensity.
-                # NOTE: the fatigue management block above already wrote
-                # _new_ai_fatigue for the management-level intensity
-                # (LIGHT/MODERATE/INTENSE/EXTREME each add their own delta).
-                # This block adds the chosen-intensity training cost on top,
-                # so a fighter training INTENSE accumulates fatigue faster
-                # than a fighter the management block put on LIGHT.
-                _intensity_fatigue = {
-                    "LIGHT": 1, "MODERATE": 3,
-                    "INTENSE": 6, "EXTREME": 10,
-                }.get(_chosen_intensity, 3)
-                _current_fdata = self._game_state._fighter_data.get(fid, {})
-                _cur_fat = int(_current_fdata.get('fatigue', 0))
-                if _ai_intensity != 'REST':
-                    _train_fat = min(100, _cur_fat + _intensity_fatigue)
-                    _current_fdata['fatigue'] = _train_fat
-                    if hasattr(fighter, 'fatigue'):
-                        fighter.fatigue = _train_fat
-
-                # Per-fighter potential bounds growth alongside tier cap.
-                ovr_now = getattr(fighter, 'overall_rating', 60)
-                stored_potential = self._game_state._fighter_data.get(fid, {}).get(
-                    "potential", ovr_now + 8)
+                # Per-fighter potential ceiling bounds growth
+                stored_potential = self._game_state._fighter_data.get(
+                    fid, {}).get("potential",
+                    getattr(fighter, 'overall_rating', 60) + 8)
                 effective_cap = min(tier_cap, int(stored_potential))
 
-                # Train both primary (full gain) and secondary (50%).
-                # Stats live in _fighter_data (Ship #32) — writes here.
-                _ai_fdata = self._game_state._fighter_data.get(fid, {})
-                for attr, mult in ((focus_attr, 1.0), (secondary_attr, 0.5)):
-                    current = float(_ai_fdata.get(attr, 60))
-                    gain = base_gain * mult
-                    # Athletic vs technical per-stat multiplier — mirrors
-                    # _diminishing_gain on the player side.
-                    if attr in self._ATHLETIC_BASE_STATS:
-                        gain *= 0.5
-                    elif attr in self._TECHNICAL_STATS:
-                        gain *= 1.2
-                    if current >= effective_cap:
-                        gain *= max(0.1, 1 - (current - effective_cap) * 0.1)
-                    if gain > 0.05:
-                        if fid in self._game_state._fighter_data:
-                            self._game_state._fighter_data[fid][attr] = round(
-                                min(100.0, current + gain), 2)
+                # Diminishing returns above effective cap
+                _cap_mod = 1.0
+                if current >= effective_cap:
+                    _cap_mod = max(0.05,
+                        1 - (current - effective_cap) * 0.15)
+                elif current >= effective_cap - 5:
+                    _cap_mod = 0.4
 
-                # Style-weighted OVR — see _compute_ovr for weight vectors.
+                effective = (base_gain
+                    * age_gain_mult
+                    * _coach_gain_mult
+                    * _cap_mod)
+
+                if effective > 0.02 and hasattr(
+                        fighter, focus_attr):
+                    setattr(fighter, focus_attr,
+                        min(100.0, current + effective))
+                    # Mirror to _fighter_data (Ship #32)
+                    if fid in self._game_state._fighter_data:
+                        self._game_state._fighter_data[fid][
+                            focus_attr] = round(
+                            min(100.0, current + effective), 2)
+
+                # Style-weighted OVR
                 fighter.overall_rating = self._compute_ovr(fighter)
 
-                # Age decline — applies weekly for AI fighters 31+
+                # Age decline at 31+ — applies weekly
                 if age >= 31:
                     try:
-                        self._apply_age_decline(fid, age, tier, "MODERATE")
-                        fighter.overall_rating = self._compute_ovr(fighter)
-                    except Exception as _ae:
-                        print(f"⚠️  AI age decline failed for {fid}: {_ae}")
+                        self._apply_age_decline(
+                            fid, age, tier, "MODERATE")
+                        fighter.overall_rating = (
+                            self._compute_ovr(fighter))
+                    except Exception:
+                        pass
 
-                # ── Training news — ambient world storytelling ──────
-                # Fires rarely (probability-gated) so the news feed
-                # stays meaningful rather than flooding with training
-                # updates every week. Only emits for notable events:
-                # prospect grinding hard, veteran resting, coach
-                # pushing a fighter, or a genuine OVR milestone.
+                # ── Training news — ambient storytelling ──
+                # Probability-gated so the feed stays clean.
                 try:
                     import random as _tn_rnd
+                    _career_phase = (
+                        "veteran"   if age >= 37 else
+                        "declining" if age >= 31 else
+                        "prime"     if age >= 26 else
+                        "rising"
+                    )
                     _fighter_name = getattr(fighter, 'name', '')
                     _camp_name = getattr(camp, 'name', '')
-                    _coach_name = getattr(camp, 'head_coach_name',
-                                          getattr(camp, 'name', 'their coaching staff'))
                     _ovr_now = fighter.overall_rating
-
                     _news_headline = None
-                    _news_category = "training"
-
-                    if (_chosen_intensity == "INTENSE"
+                    if (intensity == "INTENSE"
                             and _career_phase == "rising"
-                            and _tn_rnd.random() < 0.08):
+                            and _tn_rnd.random() < 0.04):
                         _news_headline = _tn_rnd.choice([
                             f"🏋️ {_fighter_name} putting in serious work at {_camp_name} — prospect looks sharp.",
                             f"💪 {_fighter_name} grinding through an intense training block. One to watch.",
                             f"🔥 {_camp_name} running {_fighter_name} hard in camp. The young prospect is responding well.",
                         ])
-
-                    elif (_chosen_intensity == "INTENSE"
-                            and _career_phase == "prime"
-                            and _coach_rating >= 80
-                            and _tn_rnd.random() < 0.06):
-                        _news_headline = _tn_rnd.choice([
-                            f"⚡ {_fighter_name} in an elite training block at {_camp_name}. Camp sources say he looks dangerous.",
-                            f"🏆 {_camp_name} pushing {_fighter_name} hard ahead of a big run. High expectations.",
-                        ])
-
-                    elif (_chosen_intensity in ("LIGHT", "REST")
+                    elif (intensity in ("LIGHT", "REST")
                             and _career_phase in ("declining", "veteran")
-                            and _tn_rnd.random() < 0.10):
+                            and _tn_rnd.random() < 0.05):
                         _news_headline = _tn_rnd.choice([
                             f"😴 {_fighter_name} taking a lighter week at {_camp_name}. Veterans train smart.",
                             f"🧊 {_fighter_name} in recovery mode. {_camp_name} managing their veteran carefully.",
-                            f"⏸️ {_fighter_name} stepping back from intense training. Body maintenance at this stage of a career.",
                         ])
-
-                    elif (_chosen_intensity == "INTENSE"
-                            and _career_phase in ("declining", "veteran")
-                            and _coach_rating < 55
-                            and _tn_rnd.random() < 0.12):
-                        _news_headline = _tn_rnd.choice([
-                            f"⚠️ {_fighter_name} being pushed hard despite age concerns. Questions about {_camp_name}'s approach.",
-                            f"😬 {_fighter_name} grinding through intense camp at {getattr(fighter, 'age', '?')} years old. Camp staff under scrutiny.",
-                        ])
-
                     elif (_ovr_now in (70, 80, 90, 99)
-                            and _tn_rnd.random() < 0.60):
+                            and _tn_rnd.random() < 0.30):
                         _milestone_copy = {
-                            70: [
-                                f"📈 {_fighter_name} crosses 70 OVR at {_camp_name}. Legitimate pro contender.",
-                                f"⭐ {_fighter_name} is developing into a real threat at {_camp_name}.",
-                            ],
-                            80: [
-                                f"🔥 {_fighter_name} reaches 80 OVR. {_camp_name} has a dangerous fighter on their hands.",
-                                f"⚡ {_fighter_name} at 80 OVR — top-level talent emerging from {_camp_name}.",
-                            ],
-                            90: [
-                                f"👑 {_fighter_name} has reached elite status. 90 OVR at {_camp_name}.",
-                                f"🏆 {_fighter_name} — 90 OVR. One of the best in the world.",
-                            ],
-                            99: [
-                                f"🐐 {_fighter_name} reaches 99 OVR. An all-time great at {_camp_name}.",
-                                f"💎 {_fighter_name} — 99 OVR. Generational talent.",
-                            ],
+                            70: [f"📈 {_fighter_name} crosses 70 OVR at {_camp_name}. Legitimate pro contender."],
+                            80: [f"🔥 {_fighter_name} reaches 80 OVR. {_camp_name} has a dangerous fighter on their hands."],
+                            90: [f"👑 {_fighter_name} has reached elite status. 90 OVR at {_camp_name}."],
+                            99: [f"🐐 {_fighter_name} reaches 99 OVR. An all-time great at {_camp_name}."],
                         }
                         _news_headline = _tn_rnd.choice(
                             _milestone_copy.get(_ovr_now,
-                                [f"📈 {_fighter_name} reaching new heights at {_camp_name}."])
-                        )
-
+                                [f"📈 {_fighter_name} reaching new heights at {_camp_name}."]))
                     if _news_headline:
                         self._news_items.insert(0, {
                             "headline": _news_headline,
                             "category": "training",
                             "week":     week,
                         })
-                except Exception as _tne:
+                except Exception:
                     pass
 
-        # Sample output to show AI is developing
-        if self._game_state:
+        # Sample log every 4 weeks
+        if week % 4 == 0 and self._game_state:
             import random as _airand
-            ai_fighters = [f for f in self._game_state.fighters.values()
-                          if f.is_active and f.camp_id != self._game_state.player_camp_id
-                          and hasattr(f, 'overall_rating')]
+            ai_fighters = [
+                f for f in
+                self._game_state.fighters.values()
+                if f.is_active
+                and f.camp_id != self._game_state.player_camp_id
+                and hasattr(f, 'overall_rating')]
             if ai_fighters:
-                sample = _airand.sample(ai_fighters, min(4, len(ai_fighters)))
-                s = " | ".join(f"{f.name[:10]}:{f.overall_rating}" for f in sample)
-                print(f"  🌍 [AI DEV week {week}] Sample OVRs → {s}")
+                sample = _airand.sample(
+                    ai_fighters, min(4, len(ai_fighters)))
+                s = " | ".join(
+                    f"{f.name[:10]}:{f.overall_rating}"
+                    for f in sample)
+                print(f"  🌍 [AI DEV w{week}] {s}")
 
     def _advance_coach_careers(self, week: int) -> None:
         """Annual coach career events — drift, retirement, poaching.
