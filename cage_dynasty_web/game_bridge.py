@@ -2594,6 +2594,7 @@ class GameBridge:
                     "headline": f"🔥 FIGHT OF THE NIGHT: {f1n} vs {f2n} — ${FOTN_BONUS:,} bonus each!",
                     "category": "fotn",
                     "week":     self._game_state.week_number if self._game_state else 1,
+                    "fight_id": fotn_fid or "",
                 })
 
             # ── Inbound fight offers from promotion ───────────────────
@@ -3192,6 +3193,8 @@ class GameBridge:
                         "headline": _hl,
                         "category": "player_result",
                         "week": self._game_state.week_number,
+                        "fight_id": fight.get("fight_id", ""),
+                        "fighter_id": ftr.fighter_id,
                     })
                 else:
                     self._player_camp_losses += 1
@@ -3201,6 +3204,8 @@ class GameBridge:
                         "headline": _hl,
                         "category": "player_result",
                         "week": self._game_state.week_number,
+                        "fight_id": fight.get("fight_id", ""),
+                        "fighter_id": ftr.fighter_id,
                     })
             elif fight.get("is_player_fight") and not ftr.camp_id:
                 # Free-agent the player booked via challenge/offer flow.
@@ -3753,6 +3758,8 @@ class GameBridge:
                                          f"(Heat: {heat_score}/100)",
                             "category": "rivalry",
                             "week":      self._game_state.week_number if self._game_state else 1,
+                            "fighter1_id": fighter1.fighter_id,
+                            "fighter2_id": fighter2.fighter_id,
                         })
             except Exception as exc:
                 print(f"⚠️ Rivalry detection failed: {exc}")
@@ -3782,6 +3789,9 @@ class GameBridge:
                         "category": "upset",
                         "week":     self._game_state.week_number,
                         "icon":     "😱",
+                        "fight_id": fight.get("fight_id", ""),
+                        "winner_id": winner.fighter_id,
+                        "loser_id": loser.fighter_id,
                     })
             except Exception:
                 pass
