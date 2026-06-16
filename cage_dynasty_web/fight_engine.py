@@ -1627,11 +1627,11 @@ def select_action(
     # can threaten submissions even without elite sub skill.
     # This represents grinding pressure, not technique.
     if (position_secured
-            and getattr(fighter_attrs, 'top_control', 0) >= 75
-            and getattr(fighter_attrs, 'submissions', 0) >= 55):
+            and getattr(fighter_attrs, 'top_control', 0) >= 72
+            and getattr(fighter_attrs, 'submissions', 0) >= 52):
         _tc_bonus = int(
-            (getattr(fighter_attrs, 'top_control', 0) - 70)
-            * 0.8)
+            (getattr(fighter_attrs, 'top_control', 0) - 63)
+            * 1.0)
         sub_weight += _tc_bonus
 
     if fighter_state.momentum > 70:
