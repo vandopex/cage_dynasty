@@ -140,7 +140,7 @@
                     {{ offer.weeks_away }}w
                 </div>
                 <div style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
-                            margin-top:2px;">{{ offer.event_name }}</div>
+                            margin-top:2px;">{{ offer.event_name }}{% if offer.event_city %} · 📍 {{ offer.event_city }}{% endif %}</div>
             </div>
             <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-sm);
                         text-align:center;">

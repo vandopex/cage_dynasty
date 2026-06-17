@@ -491,7 +491,7 @@
                             {{ fight.fighter2_name }}
                         </div>
                         <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
-                            {{ fight.event_name }}
+                            {{ fight.event_name }}{% if fight.event_city %} · 📍 {{ fight.event_city }}{% endif %}
                         </div>
                     </div>
                     <div style="text-align:right;">
@@ -558,7 +558,7 @@
         <div class="card mb-lg dash-card-preview" style="border-color:rgba(255,215,0,.25);">
             <div class="card-header" style="border-bottom:1px solid rgba(255,215,0,.15);">
                 <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <h3 style="color:var(--gold);">📅 {{ player_card.event_name }}</h3>
+                    <h3 style="color:var(--gold);">📅 {{ player_card.event_name }}{% if player_card.event_city %} <span style="font-size:.85rem;color:var(--text-muted);font-weight:400;">· 📍 {{ player_card.event_city }}</span>{% endif %}</h3>
                     <span style="font-size:.75rem;color:var(--text-muted);">
                         {{ player_card.weeks_out }}w away
                     </span>

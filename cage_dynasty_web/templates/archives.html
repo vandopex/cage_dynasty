@@ -20,7 +20,7 @@
                 padding:var(--spacing-md);border-bottom:1px solid var(--border-color);">
         <div>
             <span style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);">
-                {{ event.event_name }}
+                {{ event.event_name }}{% if event.event_city %} <span style="font-size:.75rem;color:var(--text-muted);">· 📍 {{ event.event_city }}</span>{% endif %}
             </span>
             <span style="font-size:.72rem;color:var(--text-muted);margin-left:8px;">
                 {{ event.fights|length if event.fights is defined else 0 }} fights

@@ -37,7 +37,7 @@
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
         <div>
             <h3 style="margin:0;{% if event.player_has_fight %}color:var(--gold);{% endif %}">
-                {{ event.event_name }}
+                {{ event.event_name }}{% if event.event_city %} <span style="font-size:.75rem;color:var(--text-muted);font-weight:400;">· 📍 {{ event.event_city }}</span>{% endif %}
                 {% if event.player_has_fight %}<span style="font-size:.7rem;margin-left:6px;">⭐ YOUR FIGHT</span>{% endif %}
             </h3>
             <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">{{ event.fights|length }} fights</div>
