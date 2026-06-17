@@ -96,8 +96,9 @@
     <div style="display:grid;grid-template-columns:1fr auto;gap:0;
                 flex-wrap:wrap;">
 
-        {# Left — identity #}
-        <div style="padding:var(--spacing-xl);">
+        {# Left — identity. Reduced vertical padding for compact
+           hero when no nickname/streak fills the space. #}
+        <div style="padding:var(--spacing-md) var(--spacing-xl);">
 
             {# Camp / division context #}
             <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.15em;
@@ -252,9 +253,11 @@
 
         </div>
 
-        {# Right — OVR + condition + actions #}
+        {# Right — OVR + condition + actions.
+           justify-content:center vertically centers against
+           whatever height left panel naturally has. #}
         <div style="min-width:140px;max-width:160px;background:var(--bg-dark);
-                    padding:var(--spacing-xl);
+                    padding:var(--spacing-md) var(--spacing-xl);
                     display:flex;flex-direction:column;align-items:center;
                     justify-content:center;gap:var(--spacing-md);
                     border-left:1px solid var(--border-color);">
@@ -859,17 +862,82 @@
 {# ═══════════════════════════════════════════════════════════
    FIGHT HISTORY
 ══════════════════════════════════════════════════════════════ #}
+{# Detect former-champion status: fighter is not currently champion
+   but has at least one prior title fight in their history. #}
+{% set former_champ = namespace(detected=false) %}
+{% if not fighter.is_champion %}
+    {% for _fh in (fighter.fight_history or []) %}
+        {% if _fh.get('was_title_fight') %}
+            {% set former_champ.detected = true %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
 <div class="card mb-lg">
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
-        <h3>📜 Fight History</h3>
+        <h3>📜 Fight History
+            {% if former_champ.detected %}
+            <span style="font-size:.65rem;color:var(--gold);
+                         margin-left:8px;letter-spacing:.06em;
+                         text-transform:uppercase;font-weight:600;">
+                Former Champion
+            </span>
+            {% endif %}
+        </h3>
         <span style="font-size:.75rem;color:var(--text-muted);">{{ wins }}W · {{ losses }}L</span>
     </div>
     <div style="padding:0;">
+        {# Next scheduled fight — surfaces above past fights so the
+           upcoming bout is visible. Styled with blue/info border
+           to distinguish from history rows. #}
+        {% if next_fight %}
+        <div style="display:flex;align-items:center;
+                    gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    border-left:3px solid var(--info);
+                    background:rgba(33,150,243,.04);">
+            <div style="flex-shrink:0;text-align:center;min-width:42px;">
+                <span style="font-family:var(--font-display);font-size:.72rem;
+                             color:var(--info);letter-spacing:.04em;">
+                    NEXT
+                </span>
+                {% if next_fight.is_title_fight %}
+                <div style="margin-top:1px;">
+                    <span title="Title fight">🏆</span>
+                </div>
+                {% endif %}
+            </div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-family:var(--font-display);font-size:.9rem;
+                            color:var(--text-bright);">
+                    vs {% if next_fight.opponent_id %}<a href="{{ url_for('fighter_profile', fighter_id=next_fight.opponent_id) }}" style="color:inherit;text-decoration:none;">{{ next_fight.opponent_name }}</a>{% else %}{{ next_fight.opponent_name }}{% endif %}
+                </div>
+                <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">
+                    {{ next_fight.event_name }}
+                    {% if next_fight.week %} · Week {{ next_fight.week }}{% endif %}
+                    {% if next_fight.card_slot %} · {{ next_fight.card_slot|replace('_', ' ')|title }}{% endif %}
+                </div>
+            </div>
+            {% if next_fight.fight_id %}
+            <div style="flex-shrink:0;text-align:right;">
+                <a href="{{ url_for('fight_camp', fight_id=next_fight.fight_id) }}"
+                   style="font-size:.68rem;color:var(--info);text-decoration:none;
+                          padding:3px 8px;border:1px solid var(--info);
+                          border-radius:3px;">
+                    Fight Camp →
+                </a>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         {% set history = fighter.fight_history %}
         {% if history %}
         {% for fight in history|reverse %}
         {% if loop.index <= 10 %}
-        {% set is_win = fight.result == 'W' %}
+        {% set is_draw = (fight.result == 'D')
+            or (fight.method and 'Draw' in fight.method) %}
+        {% set is_win = (not is_draw) and fight.result == 'W' %}
         {% set method = fight.method or 'DEC' %}
         {# Belt context — cross-reference fight.week against belt_history.
            Namespace pattern: {% set %} inside {% for %} doesn't escape loop scope. #}
@@ -887,18 +955,24 @@
         <div style="display:flex;align-items:center;gap:var(--spacing-md);
                     padding:var(--spacing-sm) var(--spacing-md);
                     border-bottom:1px solid var(--border-color);
-                    border-left:3px solid {% if is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                    border-left:3px solid {% if is_draw %}var(--warning){% elif is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
 
             {# Result badge #}
             <div style="flex-shrink:0;text-align:center;min-width:32px;">
                 <span style="font-family:var(--font-display);font-size:.75rem;
-                             color:{% if is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
-                    {% if is_win %}WIN{% else %}LOSS{% endif %}
+                             color:{% if is_draw %}var(--warning){% elif is_win %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                    {% if is_draw %}DRAW{% elif is_win %}WIN{% else %}LOSS{% endif %}
                 </span>
                 {% if bns.won %}
                 <span title="Won championship" style="margin-left:4px;">🏆</span>
                 {% elif bns.defended %}
                 <span title="Title defense" style="margin-left:4px;">🛡️</span>
+                {% endif %}
+                {% if fight.was_title_fight and not is_win and not is_draw %}
+                <div style="font-size:.55rem;color:var(--text-muted);
+                            margin-top:1px;letter-spacing:.04em;">
+                    Belt lost
+                </div>
                 {% endif %}
             </div>
 

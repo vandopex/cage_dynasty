@@ -789,6 +789,38 @@ def register_routes(app):
             and fighter.fighter_id not in player_ids
         )
 
+        # Next scheduled fight — scan _scheduled_fights for this
+        # fighter, return earliest by week. Surfaces above fight
+        # history so the upcoming bout is visible on the profile.
+        next_fight = None
+        try:
+            _candidates = [
+                sf for sf in (bridge._scheduled_fights or [])
+                if sf.get('fighter1_id') == fighter.fighter_id
+                or sf.get('fighter2_id') == fighter.fighter_id
+            ]
+            if _candidates:
+                _candidates.sort(
+                    key=lambda f: f.get('week', 9999))
+                _nf = _candidates[0]
+                # Resolve opponent perspective
+                _is_f1 = _nf.get('fighter1_id') == fighter.fighter_id
+                next_fight = {
+                    'fight_id':      _nf.get('fight_id', ''),
+                    'opponent_id':   (_nf.get('fighter2_id')
+                                      if _is_f1
+                                      else _nf.get('fighter1_id')),
+                    'opponent_name': (_nf.get('fighter2_name')
+                                      if _is_f1
+                                      else _nf.get('fighter1_name')),
+                    'event_name':    _nf.get('event_name', ''),
+                    'week':          _nf.get('week', 0),
+                    'is_title_fight': _nf.get('is_title_fight', False),
+                    'card_slot':     _nf.get('card_slot', ''),
+                }
+        except Exception:
+            next_fight = None
+
         return render_template('fighter_profile.html',
             fighter=fighter,
             attributes=attributes,
@@ -806,6 +838,7 @@ def register_routes(app):
             contract_options=contract_options,
             player_ids=player_ids,
             fighter_sponsors=fighter_sponsors,
+            next_fight=next_fight,
             is_free_agent=is_free_agent,
             can_sign=can_sign,
             week=bridge.week_number,
