@@ -1215,15 +1215,36 @@ class HistorySimulator:
             # Track in title_holders
             self.title_holders[weight_class] = champion.fighter_id
             
-            # Record in belt history
+            # Record in belt history. Event name slots into DFC
+            # universe; won_method keeps "Inaugural" substring so
+            # champions.html:96 branch detects inaugural reigns.
+            _founding_event = f"DFC Founding — {weight_class} Championship"
             self.belt_history.crown_initial_champion(
                 fighter_id=champion.fighter_id,
                 fighter_name=champion.name,
                 weight_class=weight_class,
-                week=0,  # Pre-history
-                event_name="Inaugural",
+                week=0,
+                event_name=_founding_event,
+                won_method="Inaugural Crown",
             )
-            
+
+            # Synthetic fight_history entry — the inaugural crowning
+            # was previously metadata-only on the BeltReign and never
+            # appeared on the champion's personal timeline. Adds a
+            # tombstone-style record so the profile shows the moment.
+            champion.fight_history.append({
+                "event_name":     _founding_event,
+                "event_number":   0,
+                "opponent_id":    None,
+                "opponent_name":  "—",
+                "result":         "W",
+                "method":         "Inaugural Crown",
+                "round":          None,
+                "was_title_fight": True,
+                "weight_class":   weight_class,
+                "week":           0,
+            })
+
             # Give champion a popularity boost
             champion.popularity = min(100, champion.popularity + random.randint(15, 25))
     
