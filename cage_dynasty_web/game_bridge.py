@@ -2901,32 +2901,75 @@ class GameBridge:
         surface. Each entry: {year, week, awards: List[str], structured: Dict}."""
         return list(getattr(self, '_yearly_awards', []))
 
-    def _expire_stale_offers(self, max_age_weeks: int = 3) -> None:
-        """Drop offers older than max_age_weeks. Fires once per advance.
-        Legacy offers without created_week get stamped on first sight."""
+    def _expire_stale_offers(self) -> None:
+        """Drop offers based on target's tier-aware decision window
+        (signing_delay_weeks). Auto-withdraw if offerer becomes
+        unavailable mid-window (booked / injured / inactive).
+
+        M3 Part B — replaces fixed 3w lapse with per-tier decision
+        windows (4/3/2 by target rank) and adds offerer-state
+        monitoring so the offer dissolves when its premise (the
+        proposed opponent's availability) no longer holds."""
         if not self._game_state:
             return
         current = self._game_state.week_number
-        kept, dropped = [], []
+        kept, dropped, withdrawn = [], [], []
         for o in self._fight_offers:
             created = o.get("created_week")
             if created is None:
                 o["created_week"] = current
                 kept.append(o)
                 continue
-            if current - created > max_age_weeks:
+
+            # Tier-aware max age = target's signing delay (4/3/2 per tier)
+            target = self._game_state.get_fighter(o.get("fighter_id", ""))
+            max_age = (self._signing_delay_weeks(target,
+                           getattr(target, 'is_champion', False))
+                       if target else 3)
+
+            # Offerer-unavailable check: booked / injured / inactive
+            offerer_id = o.get("opponent_id")
+            offerer_unavailable = False
+            if offerer_id:
+                offerer = self._game_state.get_fighter(offerer_id)
+                if offerer:
+                    if any(sf.get("fighter1_id") == offerer_id or
+                           sf.get("fighter2_id") == offerer_id
+                           for sf in self._scheduled_fights):
+                        offerer_unavailable = True
+                    if (INJURY_AVAILABLE and self._injury_system
+                            and not self._injury_system.is_cleared_to_fight(offerer_id)):
+                        offerer_unavailable = True
+                    if not getattr(offerer, 'is_active', True):
+                        offerer_unavailable = True
+
+            if offerer_unavailable:
+                withdrawn.append(o)
+            elif current - created > max_age:
                 dropped.append(o)
             else:
                 kept.append(o)
+
         self._fight_offers = kept
+
         for o in dropped:
             self._news_items.insert(0, {
                 "headline": (f"⌛ Offer lapsed: "
                              f"{o.get('fighter_name','?')} vs "
                              f"{o.get('opponent_name','?')} "
                              f"({o.get('event_name','?')})"),
-                "category": "signing",
-                "week":     current,
+                "category":   "signing",
+                "week":       current,
+                "fighter_id": o.get("fighter_id", ""),
+            })
+        for o in withdrawn:
+            self._news_items.insert(0, {
+                "headline": (f"🚫 Offer withdrawn: "
+                             f"{o.get('opponent_name','?')} no longer "
+                             f"available — bout vs "
+                             f"{o.get('fighter_name','?')} cancelled."),
+                "category":   "signing",
+                "week":       current,
                 "fighter_id": o.get("fighter_id", ""),
             })
 
