@@ -93,7 +93,7 @@
                     </div>
                     <div class="reign-details">
                         <div>
-                            {% if reign.won_method == 'Inaugural' %}
+                            {% if 'Inaugural' in (reign.won_method or '') %}
                             🏆 Inaugural Champion at {{ reign.won_event }}
                             {% else %}
                             Won from {{ reign.won_from_name or 'Previous Champion' }} via {{ reign.won_method }} at {{ reign.won_event }}
