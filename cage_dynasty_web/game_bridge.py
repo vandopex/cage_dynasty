@@ -9475,16 +9475,45 @@ class GameBridge:
                 name = getattr(ai_fighter, 'name', target_fighter_id)
                 return {"success": False, "error": f"{name} is already booked for another fight"}
 
-        # Block if player fighter is injured
+        # Block if either fighter won't be healed by earliest scheduling week.
+        # Mirrors accept_offer's return_week check (line 4580) — over-blocking
+        # the binary "is currently injured" gate denied valid future bookings.
         if INJURY_AVAILABLE and self._injury_system:
-            if not self._injury_system.is_cleared_to_fight(player_fighter_id):
-                _pname = getattr(player_fighter, 'name', player_fighter_id)
-                return {"success": False,
-                        "error": f"{_pname} is injured and cannot fight."}
-            if not self._injury_system.is_cleared_to_fight(target_fighter_id):
-                _tname = getattr(ai_fighter, 'name', target_fighter_id)
-                return {"success": False,
-                        "error": f"{_tname} is injured and unavailable."}
+            c_rank = self._get_fighter_rank(player_fighter)
+            t_rank = self._get_fighter_rank(ai_fighter)
+            _min_weeks_out = self._weeks_out_for_fight(c_rank, t_rank)
+            _earliest_fight_week = (
+                (self._game_state.week_number if self._game_state else 0)
+                + _min_weeks_out
+            )
+            for _chk_id, _chk_name in [
+                (player_fighter_id, getattr(player_fighter, 'name', 'Your fighter')),
+                (target_fighter_id, getattr(ai_fighter, 'name', 'Opponent')),
+            ]:
+                if self._injury_system.is_cleared_to_fight(_chk_id):
+                    continue
+                # Currently injured — check if they'll heal in time
+                _return_week = 0
+                try:
+                    _injuries = (self._injury_system.get_active_injuries(_chk_id)
+                                 if hasattr(self._injury_system, 'get_active_injuries')
+                                 else [])
+                    for _inj in (_injuries or []):
+                        _rw = (getattr(_inj, 'return_week', None)
+                               or getattr(_inj, 'expected_return', None)
+                               or 0)
+                        _return_week = max(_return_week, int(_rw or 0))
+                except Exception:
+                    _return_week = 0
+                if _return_week > _earliest_fight_week:
+                    _wks_needed = _return_week - (
+                        self._game_state.week_number if self._game_state else 0)
+                    return {
+                        "success": False,
+                        "error": (f"{_chk_name} won't be cleared until Week {_return_week}. "
+                                  f"Earliest available booking is Week {_earliest_fight_week}. "
+                                  f"Wait {_wks_needed - _min_weeks_out} more weeks before challenging."),
+                    }
 
         # Block if target has a truly active (unresolved) negotiation
         _resolved = ("COMPLETED", "BROKEN_DOWN", "AI_DECLINED")
@@ -10261,13 +10290,21 @@ class GameBridge:
                     _uncleared_names = []
                     if not _f1_clr: _uncleared_names.append(f1.name)
                     if not _f2_clr: _uncleared_names.append(f2.name)
-                    self._news_items.insert(0, {
+                    # fighter_id → primary injured (first uncleared).
+                    # loser_id → secondary injured (if both uncleared).
+                    _primary_inj = (f1.fighter_id if not _f1_clr
+                                    else f2.fighter_id)
+                    _news_dict = {
                         "headline": (f"🚫 {f1.name} vs {f2.name} at "
                                      f"{event_name} cancelled — "
                                      f"{' and '.join(_uncleared_names)} not cleared to fight."),
-                        "category": "injury",
-                        "week": week,
-                    })
+                        "category":   "injury",
+                        "week":       week,
+                        "fighter_id": _primary_inj,
+                    }
+                    if not _f1_clr and not _f2_clr:
+                        _news_dict["loser_id"] = f2.fighter_id
+                    self._news_items.insert(0, _news_dict)
                     continue
 
             # Ship DR2: track draws to skip winner/loser-specific blocks
