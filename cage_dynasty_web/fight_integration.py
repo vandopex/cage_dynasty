@@ -1184,13 +1184,20 @@ class NarratedFightSimulator:
         attacker_state.spend_stamina(5)
         if not success:
             attacker_state.spend_stamina(3)  # Extra cost for failed attempt
-        
+
         # Update control time
         if success and new_position in DOMINANT_POSITIONS:
             self.round_stats[attacker.fighter_id].control_time += 1.0
-        
+
+        # Bug V — any grappling resolved on the ground counts as
+        # activity (success or fail). Was: only success+position-change
+        # flagged. Caused referee standup during active defensive
+        # grappling and maintained dominant control.
+        if self.fight_state.position not in STANDING_POSITIONS:
+            self._ground_action_this_exchange = True
+
         return None
-    
+
     def _execute_submission_attempt(
         self,
         attacker: FighterAttributes,
@@ -1206,8 +1213,12 @@ class NarratedFightSimulator:
             attacker, defender, submission,
             attacker_state, defender_state, self.fight_state
         )
-        
+
         self.round_stats[attacker.fighter_id].submission_attempts += 1
+
+        # Bug V — submission attempts are always activity, even when
+        # they don't lock in. Was: only active submission flagged.
+        self._ground_action_this_exchange = True
         
         if locked_in:
             # Start submission sequence
@@ -1396,9 +1407,15 @@ class NarratedFightSimulator:
                     # Active ground fighting - reset inactivity
                     self.fight_state.ground_inactivity = 0
                 else:
-                    # No meaningful action - increment inactivity
-                    self.fight_state.ground_inactivity += 1
-                    
+                    # No meaningful action - increment inactivity.
+                    # Bug V — dominant positions count as half-activity:
+                    # holding back mount / mount / side control is real
+                    # work even without a flashy transition this exchange.
+                    if self.fight_state.position in DOMINANT_POSITIONS:
+                        self.fight_state.ground_inactivity += 0.5
+                    else:
+                        self.fight_state.ground_inactivity += 1
+
                     if self.fight_state.ground_inactivity >= self.config.standup_threshold:
                         # Log the referee standup
                         self.commentary.log_event(

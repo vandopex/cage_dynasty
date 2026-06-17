@@ -3435,9 +3435,9 @@ def score_round(
         return (10, 8)
     elif ratio <= 0.25 and score2 >= 30:
         return (8, 10)
-    elif ratio >= 0.55:
+    elif ratio >= 0.52:
         return (10, 9)
-    elif ratio <= 0.45:
+    elif ratio <= 0.48:
         return (9, 10)
     else:
         return (10, 10)
@@ -3838,12 +3838,35 @@ def simulate_fight(
                 winner_name = fighter2.name
                 loser_name = fighter1.name
             else:
-                winner_id = None
-                loser_id = None
-                winner_name = None
-                loser_name = None
-            
+                # Judges system returned no winner — break by cumulative
+                # judge totals across all scorecards. Only true draw when
+                # sums are exactly equal.
+                _f1_total_p = sum(sc.fighter1_score
+                                  for sc in decision_result.scorecards)
+                _f2_total_p = sum(sc.fighter2_score
+                                  for sc in decision_result.scorecards)
+                if _f1_total_p > _f2_total_p:
+                    winner_id = fighter1.fighter_id
+                    loser_id = fighter2.fighter_id
+                    winner_name = fighter1.name
+                    loser_name = fighter2.name
+                elif _f2_total_p > _f1_total_p:
+                    winner_id = fighter2.fighter_id
+                    loser_id = fighter1.fighter_id
+                    winner_name = fighter2.name
+                    loser_name = fighter1.name
+                else:
+                    winner_id = None
+                    loser_id = None
+                    winner_name = None
+                    loser_name = None
+
             decision_type = decision_result.decision_type.value.replace(" Decision", "") if decision_result.decision_type else None
+            # Tiebreaker case — judges system returned None winner but
+            # cumulative totals broke the tie. Mark as Split for narrative.
+            if (winner_id is not None
+                    and decision_result.winner not in (1, 2)):
+                decision_type = "Split"
             
             judge_scores = [(sc.fighter1_score, sc.fighter2_score) for sc in decision_result.scorecards]
             judge_names = [sc.judge_name for sc in decision_result.scorecards]
@@ -3902,7 +3925,7 @@ def simulate_fight(
     
     f1_wins = sum(1 for j1, j2 in judge_scores if j1 > j2)
     f2_wins = sum(1 for j1, j2 in judge_scores if j2 > j1)
-    
+
     if f1_wins >= 2:
         winner_id = fighter1.fighter_id
         loser_id = fighter2.fighter_id
@@ -3911,11 +3934,30 @@ def simulate_fight(
         winner_id = fighter2.fighter_id
         loser_id = fighter1.fighter_id
         decision_type = "Unanimous" if f2_wins == 3 else "Split"
+    elif f1_wins == 0 and f2_wins == 0:
+        # All judges tied — break by cumulative judge totals.
+        # Only a true draw when sums are exactly equal.
+        _f1_total = sum(j1 for j1, _ in judge_scores)
+        _f2_total = sum(j2 for _, j2 in judge_scores)
+        if _f1_total > _f2_total:
+            winner_id = fighter1.fighter_id
+            loser_id = fighter2.fighter_id
+            decision_type = "Split"  # narrow win
+        elif _f2_total > _f1_total:
+            winner_id = fighter2.fighter_id
+            loser_id = fighter1.fighter_id
+            decision_type = "Split"
+        else:
+            winner_id = None
+            loser_id = None
+            decision_type = None
     else:
+        # 1-1-1 split (impossible in fallback path since judges
+        # use identical scoring with noise — but defensive).
         winner_id = None
         loser_id = None
         decision_type = None
-    
+
     method = f"{decision_type} Decision" if decision_type else "Draw"
     
     return FightResult(

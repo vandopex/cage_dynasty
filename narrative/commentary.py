@@ -3426,17 +3426,27 @@ class FightCommentarySystem:
             if len(self.commentary_log) % 3 == 0:
                 should_log = True
         elif action_type in (ActionType.CLINCH, ActionType.POSITION_ADVANCE, ActionType.SWEEP, ActionType.ESCAPE, ActionType.STAND_UP):
-            # Always log grappling transitions and position changes
-            should_log = True
+            # Sample grappling transitions like missed strikes —
+            # was always-on, caused grappling to crowd out striking.
+            if len(self.commentary_log) % 3 == 0:
+                should_log = True
         elif action_type == ActionType.TAKEDOWN:
             # Always log takedown attempts (success or fail)
             should_log = True
-        
+
         if should_log and commentary:
             self.commentary_log.append(commentary)
-        
-        # === NEW: Position announcement when position changes ===
-        if new_position and success:
+
+        # === Position announcement when position changes ===
+        # Suppress when action_type already mentioned position
+        # (TAKEDOWN / CLINCH / POSITION_ADVANCE) to avoid the
+        # triple-log pattern: action line + position-change line +
+        # this announcement all firing for one grappling event.
+        _grapple_already_logged = action_type in (
+            ActionType.TAKEDOWN, ActionType.CLINCH,
+            ActionType.POSITION_ADVANCE,
+        )
+        if new_position and success and not _grapple_already_logged:
             pos_commentary = self._generate_position_announcement(actor, target, new_position)
             if pos_commentary:
                 self.commentary_log.append(pos_commentary)
