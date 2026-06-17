@@ -184,8 +184,19 @@
         <div style="font-size:3rem;">{% if player_won %}🏆{% else %}💀{% endif %}</div>
         <div style="flex:1;">
             <div style="font-family:var(--font-display);font-size:2rem;
-                        color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                        color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};
+                        display:flex;align-items:center;gap:10px;">
                 {% if player_won %}VICTORY{% else %}DEFEAT{% endif %}
+                {% if fight.is_fotn %}
+                <span style="font-size:.7rem;font-family:var(--font-display);
+                             padding:3px 10px;border-radius:4px;
+                             background:rgba(255,215,0,.15);
+                             color:var(--gold);
+                             border:1px solid rgba(255,215,0,.5);
+                             letter-spacing:.06em;line-height:1;">
+                    🔥 FOTN
+                </span>
+                {% endif %}
             </div>
             <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);margin-top:4px;">
                 {% if fight.method == 'DRAW' or fight.method == 'Draw' or fight.is_draw %}
@@ -317,8 +328,8 @@
             <div style="display:flex;align-items:center;gap:8px;
                         padding:8px var(--spacing-md);
                         border-bottom:1px solid var(--border-color);
-                        {% if recap.ai_event.fotn and recap.ai_event.fotn.fight_id == fight.fight_id %}background:rgba(255,215,0,.04);{% endif %}">
-                {# Method badge #}
+                        {% if fight.is_fotn %}background:rgba(255,215,0,.12);border-left:3px solid var(--gold);{% endif %}">
+                {# Method badge + FOTN pill #}
                 <div style="flex-shrink:0;text-align:center;min-width:58px;">
                     <span style="font-size:.65rem;font-family:var(--font-display);
                                  padding:2px 5px;border-radius:2px;display:block;
@@ -326,6 +337,16 @@
                                  color:{{ method_colors.get(fight.method, 'var(--text-muted)') }};">
                         {{ fight.method }}
                     </span>
+                    {% if fight.is_fotn %}
+                    <span style="font-size:.55rem;font-family:var(--font-display);
+                                 padding:1px 4px;border-radius:2px;display:block;
+                                 margin-top:2px;background:rgba(255,215,0,.2);
+                                 color:var(--gold);
+                                 border:1px solid rgba(255,215,0,.4);
+                                 letter-spacing:.04em;">
+                        🔥 FOTN
+                    </span>
+                    {% endif %}
                     {% if fight.get('weight_class') %}
                     <span style="font-size:.55rem;color:var(--text-muted);display:block;margin-top:1px;
                                  text-transform:uppercase;letter-spacing:.04em;">
