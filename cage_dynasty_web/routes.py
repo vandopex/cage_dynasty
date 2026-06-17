@@ -779,6 +779,16 @@ def register_routes(app):
                 if s["fighter_id"] == fighter_id
             ]
 
+        # Free agent sign-from-profile flags
+        is_free_agent = (
+            bridge._game_state is not None
+            and fighter.fighter_id in bridge._game_state.free_agents
+        )
+        can_sign = (
+            is_free_agent
+            and fighter.fighter_id not in player_ids
+        )
+
         return render_template('fighter_profile.html',
             fighter=fighter,
             attributes=attributes,
@@ -796,6 +806,8 @@ def register_routes(app):
             contract_options=contract_options,
             player_ids=player_ids,
             fighter_sponsors=fighter_sponsors,
+            is_free_agent=is_free_agent,
+            can_sign=can_sign,
             week=bridge.week_number,
         )
     
@@ -2035,6 +2047,27 @@ def register_routes(app):
             styles=styles,
             all_prospects=prospects,
         )
+
+    @app.route('/sign-fighter/<fighter_id>', methods=['POST'])
+    def sign_fighter_from_profile(fighter_id):
+        """Sign a free-agent fighter directly from their profile."""
+        bridge = get_bridge()
+        from flask import flash
+        try:
+            contract_fights = int(
+                request.form.get('contract_fights', 3))
+        except (TypeError, ValueError):
+            contract_fights = 3
+        result = bridge.sign_free_agent(
+            fighter_id, contract_fights)
+        if result.get('success'):
+            flash(result.get('message', 'Fighter signed!'),
+                  'success')
+        else:
+            flash(result.get('error',
+                'Could not sign fighter.'), 'error')
+        return redirect(url_for('fighter_profile',
+            fighter_id=fighter_id))
 
     @app.route('/amateur/sign/<amateur_id>', methods=['POST'])
     def sign_amateur(amateur_id):

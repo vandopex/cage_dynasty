@@ -2316,8 +2316,9 @@ class GameBridge:
                         print(f"  ✅ [RECOVERY] {fname_h} cleared: {desc}")
                         self._news_items.append({
                             "headline": f"✅ {fname_h} has been medically cleared — ready to compete",
-                            "category": "injury",
-                            "week": current_week,
+                            "category":   "injury",
+                            "week":       current_week,
+                            "fighter_id": fid_h,
                         })
 
                 # Weekly injury report summary
@@ -6226,9 +6227,10 @@ class GameBridge:
                         _hl = (f"🤕 {_fname} suffers training injury: {injury.description} "
                                f"— {injury.recovery_weeks} week recovery")
                     self._news_items.insert(0, {
-                        "headline": _hl,
-                        "category": "injury",
-                        "week": self._game_state.week_number,
+                        "headline":   _hl,
+                        "category":   "injury",
+                        "week":       self._game_state.week_number,
+                        "fighter_id": _rftr.fighter_id,
                     })
                     self._maybe_queue_champion_injury_decision(_rftr, injury)
 
@@ -6273,9 +6275,10 @@ class GameBridge:
                             self._news_items.insert(0, {
                                 "headline": (f"⚕️ {_fname} injured — "
                                              f"bout vs {_opp} cancelled."),
-                                "category": "injury",
-                                "week":     self._game_state.week_number,
-                                "icon":     "⚕️",
+                                "category":   "injury",
+                                "week":       self._game_state.week_number,
+                                "icon":       "⚕️",
+                                "fighter_id": _inj_fid,
                             })
                             print(f"  ⚕️  [INJURY CANCEL] {_fname} vs {_opp} "
                                   f"cancelled ({_inj_weeks}w injury)")
@@ -10522,8 +10525,10 @@ class GameBridge:
                                    f"{_inj.description} — out {_inj.recovery_weeks} weeks. "
                                    f"Title defense delayed.")
                             self._news_items.append({
-                                "headline": _hl,
-                                "category": "injury", "week": week,
+                                "headline":   _hl,
+                                "category":   "injury",
+                                "week":       week,
+                                "fighter_id": _ftr.fighter_id,
                             })
                         else:
                             _ftr_rank = self._get_fighter_rank(_ftr) if hasattr(
@@ -10546,8 +10551,9 @@ class GameBridge:
                                         + (f" Ranked #{_ftr_rank} in {getattr(_ftr,'weight_class','')}."
                                            if _rank_val <= 15 else "")
                                     ),
-                                    "category": "injury",
-                                    "week": week,
+                                    "category":   "injury",
+                                    "week":       week,
+                                    "fighter_id": _ftr.fighter_id,
                                 })
                         self._maybe_queue_champion_injury_decision(_ftr, _inj)
 
@@ -11004,6 +11010,88 @@ class GameBridge:
                     "fight_id":  fight.get("fight_id", ""),
                     "event_id":  event.get("event_id", ""),
                 })
+
+            # ── Personality callout for notable AI wins ──
+            try:
+                import random as _co
+                _wp = self._get_ai_neg_personality(winner)
+                _wr = self._get_fighter_rank(winner)
+                _ws = 0
+                for _fh in reversed(getattr(
+                        winner, 'fight_history', [])):
+                    if ((_fh.get('result')
+                            if isinstance(_fh, dict)
+                            else '') == 'W'):
+                        _ws += 1
+                    else:
+                        break
+                if ((_wr is not None and _wr <= 10)
+                        or _ws >= 3):
+                    if _co.random() < 0.25:
+                        _lines = {
+                            "ELITE": [
+                                f"👑 {winner.name}: 'The division "
+                                f"knows where I stand. Send the next one.'",
+                                f"👑 {winner.name}: 'The belt stays here. "
+                                f"Next challenger.'",
+                            ],
+                            "CONTENDER": [
+                                f"🎤 {winner.name} calls out the top 5: "
+                                f"'I've done everything asked. "
+                                f"Give me my shot.'",
+                                f"🎤 {winner.name}: '#{_wr} and climbing. "
+                                f"Who's next?'",
+                            ],
+                            "CALCULATED": [
+                                f"📊 {winner.name}: 'The gameplan worked "
+                                f"exactly as designed. I knew how this "
+                                f"ended before I walked out.'",
+                                f"📊 {winner.name}: 'I've studied everyone "
+                                f"in this division. None of them worry me.'",
+                            ],
+                            "SHOWMAN": [
+                                f"🎭 {winner.name}: 'The fans came to see "
+                                f"a show. We delivered. Let's do it again.'",
+                                f"🎭 {winner.name} points to the crowd: "
+                                f"'THAT is why you buy a ticket.'",
+                            ],
+                            "PROSPECT": [
+                                f"📈 {winner.name}: 'I told everyone I was "
+                                f"ready for this level. Nobody believed me. "
+                                f"They do now.'",
+                                f"📈 {winner.name} on a {_ws}-fight "
+                                f"win streak: 'The rankings need "
+                                f"to reflect this.'",
+                            ],
+                            "WARRIOR": [
+                                f"⚔️ {winner.name}: 'I don't care who "
+                                f"they put in front of me. Line them up.'",
+                                f"⚔️ {winner.name}: 'Next. Ready to go.'",
+                            ],
+                            "HUNGRY": [
+                                f"🔥 {winner.name}: 'Nobody gave me a "
+                                f"chance. Story of my life. I use that.'",
+                                f"🔥 {winner.name}: 'I came from nothing. "
+                                f"This win means everything.'",
+                            ],
+                            "JOURNEYMAN": [
+                                f"🎖️ {winner.name}: 'Been in the game "
+                                f"long enough to know you cherish "
+                                f"every W.'",
+                                f"🎖️ {winner.name}: 'I've shared the cage "
+                                f"with champions. I know how to win.'",
+                            ],
+                        }
+                        _pool = _lines.get(
+                            _wp, _lines["WARRIOR"])
+                        self._news_items.insert(0, {
+                            "headline": _co.choice(_pool),
+                            "category": "callout",
+                            "week":     week,
+                            "fighter_id": winner.fighter_id,
+                        })
+            except Exception:
+                pass
 
         # Ship G1: apply unified slot assignment via shared helper.
         # Saturday Findings #5/#6/#7: fallback path produced cards with
@@ -11523,9 +11611,10 @@ class GameBridge:
             headline = f"🚨 {name} knocked out for the {ko_losses}{'rd' if ko_losses==3 else 'th'} time. Serious durability questions."
 
         self._news_items.insert(0, {
-            "headline": headline,
-            "category": "injury",
-            "week": week,
+            "headline":   headline,
+            "category":   "injury",
+            "week":       week,
+            "fighter_id": fighter.fighter_id,
         })
 
         self._clear_cache()
@@ -14244,9 +14333,10 @@ class GameBridge:
                         _hl = (f"🤕 {_inj_name} injured: {_inj.description} "
                                f"— {_inj.recovery_weeks} week recovery")
                     self._news_items.insert(0, {
-                        "headline": _hl,
-                        "category": "injury",
-                        "week": self._game_state.week_number,
+                        "headline":   _hl,
+                        "category":   "injury",
+                        "week":       self._game_state.week_number,
+                        "fighter_id": _ftr_inj.fighter_id if _ftr_inj else "",
                     })
                     self._maybe_queue_champion_injury_decision(_ftr_inj, _inj)
                     # Store fight damage for training camp injury risk
