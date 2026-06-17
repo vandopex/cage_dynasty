@@ -7934,8 +7934,11 @@ class GameBridge:
                     "headline": f"🏆 {champion_name} "
                                 f"(Grade {ceiling_to_display_grade(getattr(amateur,'potential_ceiling',70))}) "
                                 f"signs pro contract with {signing_camp.name}",
-                    "category": "signing",
-                    "week":     week,
+                    "category":   "signing",
+                    "week":       week,
+                    "fighter_id": champion_id,
+                    "camp_id":    signing_camp.camp_id,
+                    "camp_name":  signing_camp.name,
                 })
 
         # ── Coach scouting tip ─────────────────────────────────────────
@@ -10491,8 +10494,9 @@ class GameBridge:
                             print(f"  📋 [AI CONTRACT] {_ftr_c.name} contract expired at {_camp_nm} — free agent")
                             self._news_items.append({
                                 "headline": f"📋 {_ftr_c.name} is a free agent — contract with {_camp_nm} expired",
-                                "category": "contract",
-                                "week": week,
+                                "category":   "contract",
+                                "week":       week,
+                                "fighter_id": _ftr_c.fighter_id,
                             })
                             # AI camps bid for newly available fighter
                             self._ai_bid_for_free_agent(_ftr_c.fighter_id, _ftr_c)
@@ -15335,8 +15339,11 @@ class GameBridge:
             _style = getattr(fighter, 'fighting_style', 'Balanced')
             self._news_items.insert(0, {
                 "headline": f"{arch_emoji} {fighter.name} signs with {winning_camp.name} — {_style}, OVR {_ovr}",
-                "category": "signing",
-                "week": self._game_state.week_number,
+                "category":  "signing",
+                "week":      self._game_state.week_number,
+                "fighter_id": fighter_id,
+                "camp_id":    winning_camp.camp_id,
+                "camp_name":  winning_camp.name,
             })
         print(f"  {arch_emoji} [AI SIGNING] {fighter.name} → {winning_camp.name} "
               f"({arch}) [score: {_top_score:.0f}]")

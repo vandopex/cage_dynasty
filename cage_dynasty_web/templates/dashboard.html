@@ -710,23 +710,43 @@
                             {% if item.winner_id %}
                             <span>·</span>
                             <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
-                               style="color:var(--neon-green);text-decoration:none;">View →</a>
-                            {% elif item.category in ('fotn','fight','player_result') %}
+                               style="color:var(--neon-green);text-decoration:none;">Profile →</a>
+                            {% endif %}
+                            {% if item.fighter_id and not item.winner_id %}
                             <span>·</span>
-                            <a href="{{ url_for('news_feed') }}"
-                               style="color:var(--text-muted);text-decoration:none;">News →</a>
-                            {% elif item.category in ('title','champion') %}
+                            <a href="{{ url_for('fighter_profile', fighter_id=item.fighter_id) }}"
+                               style="color:var(--info);text-decoration:none;">Profile →</a>
+                            {% endif %}
+                            {% if item.camp_id %}
                             <span>·</span>
-                            <a href="{{ url_for('champions') }}"
-                               style="color:var(--gold);text-decoration:none;">Champions →</a>
-                            {% elif item.category in ('signing','contract','free_agent') %}
+                            <a href="{{ url_for('camp_detail', camp_id=item.camp_id) }}"
+                               style="color:var(--text-muted);text-decoration:none;">
+                                {{ item.camp_name or 'Camp' }} →
+                            </a>
+                            {% endif %}
+                            {% if item.fight_id %}
                             <span>·</span>
-                            <a href="{{ url_for('roster') }}"
-                               style="color:var(--text-muted);text-decoration:none;">Roster →</a>
-                            {% elif item.category in ('injury',) %}
-                            <span>·</span>
-                            <a href="{{ url_for('roster') }}"
-                               style="color:var(--blood-red);text-decoration:none;">Roster →</a>
+                            <a href="{{ url_for('watch_fight', fight_id=item.fight_id) }}"
+                               style="color:var(--neon-green);text-decoration:none;">▶ Watch →</a>
+                            {% endif %}
+                            {% if not item.winner_id and not item.fighter_id and not item.camp_id and not item.fight_id %}
+                                {% if item.category in ('fotn','fight','player_result') %}
+                                <span>·</span>
+                                <a href="{{ url_for('news_feed') }}"
+                                   style="color:var(--text-muted);text-decoration:none;">News →</a>
+                                {% elif item.category in ('title','champion') %}
+                                <span>·</span>
+                                <a href="{{ url_for('champions') }}"
+                                   style="color:var(--gold);text-decoration:none;">Champions →</a>
+                                {% elif item.category in ('signing','contract','free_agent') %}
+                                <span>·</span>
+                                <a href="{{ url_for('roster') }}"
+                                   style="color:var(--text-muted);text-decoration:none;">Roster →</a>
+                                {% elif item.category in ('injury',) %}
+                                <span>·</span>
+                                <a href="{{ url_for('roster') }}"
+                                   style="color:var(--blood-red);text-decoration:none;">Roster →</a>
+                                {% endif %}
                             {% endif %}
                         </div>
                     </div>
