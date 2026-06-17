@@ -1273,14 +1273,63 @@ class NarratedFightSimulator:
             return (attacker_id, "Submission", sub_name)
         
         if escaped:
+            # ── Capture drama context BEFORE clearing state ──────
+            _sub_type = self.fight_state.submission_type
+            _sub_name = (_sub_type.value if _sub_type
+                         else 'submission')
+            _progress = self.fight_state.submission_progress or 0.0
+            _finish_threshold = (
+                self.config.submission_progress_to_finish or 70.0)
+            _progress_pct = (_progress / _finish_threshold
+                             if _finish_threshold else 0.0)
+
+            # Tier the escape by how close to finish it was.
+            # 0.85+ = near-tap escape (Sandman moment),
+            # 0.55+ = got tight,
+            # else  = flat deflection.
+            if _progress_pct >= 0.85:
+                _stage = "escape_dramatic"
+            elif _progress_pct >= 0.55:
+                _stage = "escape_tight"
+            else:
+                _stage = "escape"
+
+            # Get formatted commentary direct from generator so the
+            # custom stage routes to the right pool. Append to log
+            # manually since log_event's routing doesn't know about
+            # stage-tiered escapes.
+            try:
+                _escape_text = self.commentary.generate_submission_commentary(
+                    actor=defender.name,
+                    target=attacker.name,
+                    move=_sub_name,
+                    stage=_stage,
+                )
+                if _escape_text:
+                    self.commentary.commentary_log.append(_escape_text)
+            except Exception:
+                pass
+
+            # Log event for stats / event_log
+            try:
+                self.commentary.log_event(
+                    action_type=ActionType.ESCAPE,
+                    actor=defender.name,
+                    target=attacker.name,
+                    action=f"escape_{_sub_name}",
+                    success=True,
+                    damage=0.0,
+                    exchange_num=exchange_num,
+                )
+            except Exception:
+                pass
+
             self.fight_state.submission_active = False
             self.fight_state.submission_type = None
             self.fight_state.submission_attacker_id = None
             self.fight_state.submission_progress = 0.0
             self.fight_state.submission_escape_progress = 0.0
-            
-            # Could log escape event here
-        
+
         return None
     
     def _log_finish(self, winner_id: str, method: str, exchange_num: int):

@@ -1397,6 +1397,24 @@ SUB_ENTRY_TEMPLATES = {
     ]
 }
 
+SUB_ESCAPE_DRAMATIC_TEMPLATES = [
+    "INCREDIBLE escape! {actor} slips out of the {move} at the last second!",
+    "{actor} ESCAPES! That was as close to tapping as you can get!",
+    "HOW?! {actor} somehow gets out of the {move}! The crowd is on its feet!",
+    "MIRACULOUS! {actor} survives the {move}! {target} can't believe it!",
+    "{actor} JUST escapes — that was a millisecond from over!",
+    "The {move} was IN — and somehow {actor} got out! Unreal heart!",
+]
+
+SUB_ESCAPE_TIGHT_TEMPLATES = [
+    "{actor} fights free of the {move}! It was getting tight!",
+    "Big escape from {actor} — that {move} was a problem!",
+    "{actor} works out of the {move}! {target} had it deep!",
+    "{actor} grits through it and escapes the {move}!",
+    "{target} loses the {move} as {actor} battles to safety!",
+]
+
+
 SUBMISSION_TEMPLATES = {
     "success": [
         "IT'S OVER! {actor} locks in the {move} and {target} TAPS OUT!",
@@ -3137,6 +3155,10 @@ class FightCommentarySystem:
                 "The {move} is sunk in deep!",
                 "{target} is fighting the {move}!"
             ]
+        elif stage == "escape_dramatic":
+            template_list = SUB_ESCAPE_DRAMATIC_TEMPLATES
+        elif stage == "escape_tight":
+            template_list = SUB_ESCAPE_TIGHT_TEMPLATES
         elif stage == "escape":
             template_list = SUB_ENTRY_TEMPLATES.get("fail", [])
         else:  # finish

@@ -213,6 +213,19 @@
                     border-left:3px solid var(--info);
                     border-radius:0 4px 4px 0;">{{ line }}</div>
 
+        {# ── TIER ESCAPE: dramatic submission escape ── #}
+        {% elif 'ESCAPES' in line or 'INCREDIBLE escape' in line
+                or 'MIRACULOUS' in line
+                or 'JUST escapes' in line
+                or 'HOW?!' in line and 'gets out' in line
+                or 'somehow gets out' in line
+                or 'last second' in line %}
+        <div class="commentary-line tier-escape" style="color:#ff9800;font-weight:700;font-size:.86rem;
+                    padding:3px 8px;margin:2px 0;
+                    background:rgba(255,152,0,.10);
+                    border-left:3px solid #ff9800;
+                    border-radius:0 4px 4px 0;letter-spacing:.01em;">🛟 {{ line }}</div>
+
         {# ── TIER 3: Knockdown / rocked ── #}
         {% elif 'KNOCKED DOWN' in line or 'KNOCKDOWN' in line or 'KO!' in line
                 or 'WOBBLES' in line or 'POUNCES' in line
@@ -375,7 +388,8 @@ function buildLineQueue() {
             const isFinish = line.classList.contains('tier-1')
                 || line.classList.contains('tier-2');
             const isKey = line.classList.contains('tier-3')
-                || line.classList.contains('tier-9');
+                || line.classList.contains('tier-9')
+                || line.classList.contains('tier-escape');
             queue.push({ el: line, isFinish, isKey, delay: 0 });
         });
         if (ri < cards.length - 1) {
