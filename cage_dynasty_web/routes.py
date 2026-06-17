@@ -1939,14 +1939,35 @@ def register_routes(app):
             data = {"available": False}
 
         # Tab + filter + sort from URL params
-        active_tab = request.args.get('tab', 'scout')
-        wc_filter  = request.args.get('wc', '')
-        sort_by    = request.args.get('sort', 'potential')
+        active_tab   = request.args.get('tab', 'scout')
+        wc_filter    = request.args.get('wc', '')
+        style_filter = request.args.get('style', '')
+        sort_by      = request.args.get('sort', 'potential')
 
-        # Sort all_prospects
-        prospects = data.get('all_prospects', []) if isinstance(data, dict) else []
+        # Source: prefer data['all_prospects'] if present, else flatten
+        # from data['eligible'] (weight-class-grouped dict) so the filter
+        # surface always has something to work with.
+        prospects = []
+        if isinstance(data, dict):
+            prospects = list(data.get('all_prospects') or [])
+            if not prospects:
+                for _wc, _ff in (data.get('eligible') or {}).items():
+                    for _f in _ff:
+                        prospects.append({**_f, 'wc': _wc})
+
+        # Apply filters
+        if wc_filter:
+            prospects = [f for f in prospects
+                         if (f.get('wc') == wc_filter
+                             or f.get('weight_class') == wc_filter)]
+        if style_filter:
+            prospects = [f for f in prospects
+                         if (f.get('style') or '') == style_filter]
+
+        # Apply sort
         if sort_by == 'ovr':
-            prospects = sorted(prospects, key=lambda x: -x.get('overall', 0))
+            prospects = sorted(prospects, key=lambda x: -(
+                x.get('overall') or x.get('overall_rating', 0)))
         elif sort_by == 'record':
             prospects = sorted(prospects, key=lambda x: (
                 -(x.get('wins', 0) + x.get('losses', 0)),
@@ -1960,10 +1981,16 @@ def register_routes(app):
             _grade_order = {'Elite': 0, 'High': 1, 'Average': 2, 'Limited': 3}
             prospects = sorted(prospects, key=lambda x: (
                 _grade_order.get(x.get('potential', 'Average'), 2),
-                -x.get('overall', 0)
+                -(x.get('overall') or x.get('overall_rating', 0))
             ))
         if isinstance(data, dict):
             data['all_prospects'] = prospects
+
+        # Build filter option lists from the current prospect pool
+        # (so the dropdown reflects what's actually available).
+        styles = sorted(set(
+            f.get('style', '') for f in prospects
+            if f.get('style')))
 
         # Build graduates list from authoritative registry
         graduates = []
@@ -2001,9 +2028,12 @@ def register_routes(app):
             amateur=data,
             active_tab=active_tab,
             wc_filter=wc_filter,
+            style_filter=style_filter,
             sort_by=sort_by,
             graduates=graduates,
             weight_classes=weight_classes,
+            styles=styles,
+            all_prospects=prospects,
         )
 
     @app.route('/amateur/sign/<amateur_id>', methods=['POST'])
