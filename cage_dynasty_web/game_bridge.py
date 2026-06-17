@@ -12292,17 +12292,18 @@ class GameBridge:
     def _signing_delay_weeks(self, fighter, is_champion: bool = False) -> int:
         """Weeks a fighter waits after cooldown before they can be booked.
         Applies to winners and losers alike — everyone takes time to decide.
-        Champions/top-5: 3w, top 6-15: 2w, unranked: 1w.
+        Per M3 spec: decision weeks + 1 grace week.
+        Champions/top-5: 3+1=4w, top 6-15: 2+1=3w, unranked: 1+1=2w.
         """
         if is_champion:
-            return 3
+            return 4
         rank = self._get_fighter_rank(fighter)
         if rank is not None and rank <= 5:
-            return 3
+            return 4
         elif rank is not None and rank <= 15:
-            return 2
+            return 3
         else:
-            return 1
+            return 2
 
     def _apply_signing_delay(self, fighter, week: int, is_champion: bool = False) -> None:
         """Record when this fighter is next claimable for booking.
