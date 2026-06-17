@@ -2927,6 +2927,7 @@ class GameBridge:
                              f"({o.get('event_name','?')})"),
                 "category": "signing",
                 "week":     current,
+                "fighter_id": o.get("fighter_id", ""),
             })
 
     def _maybe_generate_inbound_offers(self) -> None:
@@ -3087,6 +3088,7 @@ class GameBridge:
                             f"{f' · #{opp_rank}' if opp_rank else ''}",
                 "category": "signing",
                 "week":     week,
+                "fighter_id": pf.fighter_id,
                 "icon":     "📨",
             })
 
@@ -4634,6 +4636,7 @@ class GameBridge:
             "headline": f"📝 SIGNED: {offer['fighter_name']} vs {offer['opponent_name']}",
             "category": "signing",
             "week": self._game_state.week_number,
+            "fighter_id": offer.get("fighter_id", ""),
         })
         
         return {
@@ -9540,6 +9543,7 @@ class GameBridge:
                          f"waiting for their response."),
             "category": "signing",
             "week":     current_week,
+            "fighter_id": ai_fighter.fighter_id,
         })
         return {
             "success":  True,
@@ -9646,6 +9650,7 @@ class GameBridge:
             "headline":  f"📝 SIGNED: {neg['player_fighter_name']} vs {neg['ai_fighter_name']}",
             "category": "signing",
             "week":      self._game_state.week_number,
+            "fighter_id": neg["ai_fighter_id"],
         })
         return fight
 
@@ -15949,6 +15954,7 @@ class GameBridge:
                                      f"{new_class} after struggling at {wc}."),
                         "category": "signing",
                         "week": current_week,
+                        "fighter_id": fid,
                     })
                     moved = True
 
@@ -15968,6 +15974,7 @@ class GameBridge:
                                      f"— looking for a fresh start."),
                         "category": "signing",
                         "week": current_week,
+                        "fighter_id": fid,
                     })
 
     def _process_ai_camp_roster(self, current_week: int) -> None:
@@ -16048,8 +16055,9 @@ class GameBridge:
                             "headline": (f"🚪 {fighter.name} released by "
                                          f"{camp_name} after "
                                          f"{lose_streak}-fight skid."),
-                            "category": "signing",
-                            "week": current_week,
+                            "category":   "signing",
+                            "week":       current_week,
+                            "fighter_id": fid,
                         })
                     released = True
 
@@ -16066,6 +16074,7 @@ class GameBridge:
                                      f"a fresh start."),
                         "category": "signing",
                         "week": current_week,
+                        "fighter_id": fid,
                     })
                     released = True
 
@@ -16086,6 +16095,7 @@ class GameBridge:
                                          f"{idle_weeks} weeks of inactivity."),
                             "category": "signing",
                             "week": current_week,
+                            "fighter_id": fid,
                         })
 
     def _process_weekly_sponsors(self, current_week: int) -> None:
@@ -16154,6 +16164,7 @@ class GameBridge:
                                      f"from their roster."),
                         "category": "signing",
                         "week": current_week,
+                        "fighter_id": fid,
                     })
                 else:
                     kept.append(s)
@@ -16200,6 +16211,7 @@ class GameBridge:
                                      f"${brand['fight_bonus']:,} per fight."),
                         "category": "signing",
                         "week": current_week,
+                        "fighter_id": fid,
                     })
                     current_sponsors.add(brand["id"])
 
@@ -16400,6 +16412,7 @@ class GameBridge:
                                  f"Head to negotiations to finalize."),
                     "category": "signing",
                     "week":     current_week,
+                    "fighter_id": target_id,
                 })
             else:
                 _DECLINE_REASONS = {
@@ -16415,6 +16428,7 @@ class GameBridge:
                                  f"Your challenge was declined."),
                     "category": "signing",
                     "week":     current_week,
+                    "fighter_id": target_id,
                 })
                 # 4-week re-challenge cooldown
                 if not hasattr(self, '_challenge_cooldown'):
@@ -16566,6 +16580,7 @@ class GameBridge:
                              f"{new_class}."),
                 "category": "signing",
                 "week": current_week,
+                "fighter_id": fighter_id,
             })
 
         # Cancel from upcoming cards — unlock if card drops below capacity
@@ -16627,6 +16642,7 @@ class GameBridge:
                          f"unranked in the new division."),
             "category": "signing",
             "week": current_week,
+                "fighter_id": fighter_id,
         })
 
         self._clear_cache()
@@ -16771,8 +16787,10 @@ class GameBridge:
         }
         self._news_items.insert(0, {
             "headline": f"✅ EXTENDED: {ftr.name} re-signs — {contract_fights}-fight deal (${resign_cost:,})",
-            "category": "signing",
-            "week": self._game_state.week_number,
+            "category":   "signing",
+            "week":       self._game_state.week_number,
+            "fighter_id": fighter_id,
+            "camp_id":    self._game_state.player_camp_id,
         })
         self._clear_cache()
         return {"success": True, "message": f"Re-signed {ftr.name} — {contract_fights}-fight deal"}
@@ -16864,6 +16882,8 @@ class GameBridge:
             "headline": f"📝 SIGNED: {fighter.name} — {contract_fights}-fight deal (${signing_cost:,})",
             "category": "signing",
             "week":     self._game_state.week_number,
+            "fighter_id": fighter_id,
+            "camp_id":    self._game_state.player_camp_id,
         })
         self._clear_cache()
         return {"success": True, "message": f"Signed {fighter.name} — {contract_fights}-fight deal for ${signing_cost:,}"}
@@ -17179,6 +17199,8 @@ class GameBridge:
                 "headline": f"📝 SIGNED: {amateur.name} goes pro with your camp (${signing_cost:,})",
                 "category": "signing",
                 "week":     self.week_number,
+                "fighter_id": amateur.fighter_id,
+                "camp_id":    self._game_state.player_camp_id,
             })
             self._clear_cache()
             return {"success": True,
