@@ -3803,6 +3803,96 @@ class GameBridge:
             except Exception:
                 pass
 
+        # ── Personality-driven post-fight callouts ──────────
+        # Top fighters with strong personalities make noise
+        # after wins. Probability-gated to keep feed clean.
+        if self._game_state:
+            try:
+                import random as _co_rnd
+                _w_pers = self._get_ai_neg_personality(winner)
+                _w_rank = self._get_fighter_rank(winner)
+                _w_streak = 0
+                for _fh in reversed(getattr(
+                        winner, 'fight_history', [])):
+                    if ((_fh.get('result')
+                            if isinstance(_fh, dict)
+                            else '') == 'W'):
+                        _w_streak += 1
+                    else:
+                        break
+                _fire_callout = (
+                    (_w_rank is not None and _w_rank <= 10)
+                    or _w_streak >= 3
+                )
+                if _fire_callout and _co_rnd.random() < 0.35:
+                    _callout_lines = {
+                        "ELITE": [
+                            f"👑 {winner.name} after the win: "
+                            f"'The division knows where I stand. "
+                            f"Send the next one.'",
+                            f"👑 {winner.name}: 'I've been the best "
+                            f"in this division for years. "
+                            f"The numbers prove it.'",
+                        ],
+                        "CONTENDER": [
+                            f"🎤 {winner.name} calls out the top 5: "
+                            f"'I've done everything asked of me. "
+                            f"Give me my shot.'",
+                            f"🎤 {winner.name}: '#{_w_rank} and climbing. "
+                            f"Who's next?'",
+                        ],
+                        "CALCULATED": [
+                            f"📊 {winner.name}: 'The gameplan worked "
+                            f"exactly as designed. I knew how this "
+                            f"ended before I walked out.'",
+                            f"📊 {winner.name}: 'I've studied everyone "
+                            f"in this division. None of them worry me.'",
+                        ],
+                        "SHOWMAN": [
+                            f"🎭 {winner.name}: 'The fans came to see "
+                            f"a show and we delivered. Let's do it again.'",
+                            f"🎭 {winner.name} points to the crowd: "
+                            f"'THAT is why you buy a ticket.'",
+                        ],
+                        "PROSPECT": [
+                            f"📈 {winner.name}: 'I told everyone I was "
+                            f"ready for this level. Nobody believed me. "
+                            f"They do now.'",
+                            f"📈 {winner.name} on a {_w_streak}-fight "
+                            f"win streak: 'The rankings need to "
+                            f"reflect this.'",
+                        ],
+                        "WARRIOR": [
+                            f"⚔️ {winner.name}: 'I don't care who they "
+                            f"put in front of me. Line them up.'",
+                            f"⚔️ {winner.name}: 'Next. I'm ready "
+                            f"to go again.'",
+                        ],
+                        "HUNGRY": [
+                            f"🔥 {winner.name}: 'Nobody gave me a chance. "
+                            f"Story of my life. I use that.'",
+                            f"🔥 {winner.name}: 'I came from nothing. "
+                            f"This win means everything to me.'",
+                        ],
+                        "JOURNEYMAN": [
+                            f"🎖️ {winner.name}: 'Been in the game "
+                            f"long enough to know you cherish "
+                            f"every W.'",
+                            f"🎖️ {winner.name}: 'I've shared the cage "
+                            f"with champions. I know how to win.'",
+                        ],
+                    }
+                    _lines = _callout_lines.get(
+                        _w_pers, _callout_lines["WARRIOR"])
+                    self._news_items.insert(0, {
+                        "headline": _co_rnd.choice(_lines),
+                        "category": "callout",
+                        "week":     self._game_state.week_number,
+                        "fighter_id": winner.fighter_id,
+                    })
+            except Exception:
+                pass
+
         # ── Update camp record ────────────────────────────────────────
         self._apply_post_fight_camp_record(winner, loser, fight, method)
 
@@ -8980,37 +9070,136 @@ class GameBridge:
             }
             prob += arch_mods.get(arch, 0)
 
-        # ── 5. Clamp ──────────────────────────────────────────────────────
+        # ── 5. Fighter personality modifier ───────────────────────────────
+        # Each archetype has different fight acceptance bias
+        # beyond camp archetype.
+        _target_pers = self._get_ai_neg_personality(target)
+        _pers_mods = {
+            "WARRIOR":    +15,
+            "HUNGRY":     +20,
+            "JOURNEYMAN": +10,
+            "SHOWMAN":    +8,
+            "PROSPECT":   +3,
+            "CONTENDER":  -5,
+            "CALCULATED": -10,
+            "ELITE":      -18,
+        }
+        prob += _pers_mods.get(_target_pers, 0)
+
+        # SHOWMAN bonus for exciting matchup styles
+        if _target_pers == "SHOWMAN":
+            _chal_style = str(getattr(
+                challenger, 'fighting_style', '')).upper()
+            if any(x in _chal_style for x in
+                   ('BRAWLER', 'PRESSURE', 'MUAY_THAI', 'STRIKER')):
+                prob += 10
+
+        # CALCULATED penalty for bad style matchups
+        if _target_pers == "CALCULATED":
+            _chal_style = str(getattr(
+                challenger, 'fighting_style', '')).upper()
+            _targ_style = str(getattr(
+                target, 'fighting_style', '')).upper()
+            if ('WRESTLER' in _chal_style
+                    and 'STRIKER' in _targ_style):
+                prob -= 8
+
+        # HUNGRY bonus when target is the underdog
+        if _target_pers == "HUNGRY":
+            if c_rank is not None and t_rank is None:
+                prob += 10
+
+        # ── 6. Clamp ──────────────────────────────────────────────────────
         return max(2, min(97, prob))
 
     def _get_ai_neg_personality(self, fighter) -> str:
         """
-        Personality from rank and record — drives negotiation style.
-        WARRIOR:   unranked or on a losing streak — takes anything
-        PROSPECT:  unranked but hot streak — starting to be picky
-        CONTENDER: ranked #6-15 — wants fights that move them up
-        ELITE:     ranked #1-5 — very selective, money demands
-        """
-        rank    = self._get_fighter_rank(fighter)
-        wins    = getattr(fighter, 'wins',   0)
-        losses  = getattr(fighter, 'losses', 0)
+        8 personality archetypes derived from rank, record,
+        career phase, style, and attributes. Drives
+        negotiation, contract demands, training behavior,
+        morale triggers, and news voice.
 
-        # Streak
-        streak = 0
+        WARRIOR:    Takes any fight, any time
+        PROSPECT:   Rising, confident, picky about exposure
+        CONTENDER:  Political, wants title shot trajectory
+        ELITE:      Selective, high demands, legacy-focused
+        JOURNEYMAN: Veteran paycheck fighter, ultra-stable
+        SHOWMAN:    Entertainment-first, takes exciting fights
+        CALCULATED: Chess player, stylistic matchup only
+        HUNGRY:     Underdog mentality, never declines
+        """
+        rank   = self._get_fighter_rank(fighter)
+        wins   = getattr(fighter, 'wins', 0)
+        losses = getattr(fighter, 'losses', 0)
+        age    = getattr(fighter, 'age', 26)
+        fiq    = getattr(fighter, 'fight_iq', 70)
+        heart  = getattr(fighter, 'heart', 70)
+        style  = getattr(fighter, 'fighting_style', '')
+
+        # Win streak
+        win_streak = 0
         for fh in reversed(getattr(fighter, 'fight_history', [])):
-            if (fh.get('result') if isinstance(fh, dict) else '') == 'W':
-                streak += 1
+            if (fh.get('result') if isinstance(fh, dict)
+                    else '') == 'W':
+                win_streak += 1
             else:
                 break
 
-        if rank is not None and rank <= 5:
+        # Lose streak
+        lose_streak = 0
+        for fh in reversed(getattr(fighter, 'fight_history', [])):
+            if (fh.get('result') if isinstance(fh, dict)
+                    else '') == 'L':
+                lose_streak += 1
+            else:
+                break
+
+        total = wins + losses
+
+        # ── JOURNEYMAN ───────────────────────────────
+        if age >= 33 and total >= 18:
+            return "JOURNEYMAN"
+        if age >= 31 and total >= 22 and rank is None:
+            return "JOURNEYMAN"
+
+        # ── ELITE ────────────────────────────────────
+        if rank is not None and rank <= 3:
             return "ELITE"
-        elif rank is not None and rank <= 15:
+
+        # ── CALCULATED ───────────────────────────────
+        if fiq >= 80 and rank is not None and rank <= 10:
+            return "CALCULATED"
+        if fiq >= 85 and rank is not None:
+            return "CALCULATED"
+
+        # ── CONTENDER (top 10) ───────────────────────
+        if rank is not None and rank <= 10:
             return "CONTENDER"
-        elif streak >= 3 and wins >= 3:
+
+        # ── SHOWMAN ──────────────────────────────────
+        _s = str(style).upper()
+        if (heart >= 78 and total >= 6 and
+                any(x in _s for x in
+                    ('BRAWLER', 'PRESSURE', 'MUAY_THAI'))):
+            return "SHOWMAN"
+
+        # ── CONTENDER (extended) ─────────────────────
+        if rank is not None and rank <= 15:
+            return "CONTENDER"
+
+        # ── HUNGRY ───────────────────────────────────
+        if heart >= 80 and rank is None and total <= 10:
+            return "HUNGRY"
+        if (heart >= 75 and lose_streak >= 1
+                and rank is None and wins >= 2):
+            return "HUNGRY"
+
+        # ── PROSPECT ─────────────────────────────────
+        if win_streak >= 3 and wins >= 3 and rank is None:
             return "PROSPECT"
-        else:
-            return "WARRIOR"
+
+        # ── WARRIOR (default) ────────────────────────
+        return "WARRIOR"
 
     def _generate_ai_counter(self, neg: Dict) -> Dict:
         """
@@ -9034,70 +9223,208 @@ class GameBridge:
             roll = random.randint(1, 100)
 
             if roll <= prob:
-                # They want the fight — may still counter on money
+                # ── WARRIOR ──────────────────────────
                 if personality == "WARRIOR":
-                    # Warriors just say yes
-                    return {"decision": "ACCEPT", "message": None, "counter_purse": None}
+                    return {"decision": "ACCEPT",
+                            "message": None,
+                            "counter_purse": None}
 
+                # ── HUNGRY ───────────────────────────
+                elif personality == "HUNGRY":
+                    return {"decision": "ACCEPT",
+                            "message": "I'll be ready. "
+                                "This is what I've been "
+                                "working for.",
+                            "counter_purse": None}
+
+                # ── JOURNEYMAN ───────────────────────
+                elif personality == "JOURNEYMAN":
+                    if random.random() < 0.30:
+                        bump = int(offered_purse * 0.08)
+                        return {
+                            "decision": "COUNTER",
+                            "message": f"I've been around "
+                                f"long enough to know "
+                                f"my value. "
+                                f"${offered_purse+bump:,} "
+                                f"and I'm there.",
+                            "counter_purse":
+                                offered_purse + bump,
+                        }
+                    return {"decision": "ACCEPT",
+                            "message": None,
+                            "counter_purse": None}
+
+                # ── SHOWMAN ──────────────────────────
+                elif personality == "SHOWMAN":
+                    if random.random() < 0.45:
+                        bump = int(offered_purse * 0.10)
+                        return {
+                            "decision": "COUNTER",
+                            "message": f"The fans are gonna "
+                                f"love this one. Make it "
+                                f"${offered_purse+bump:,} "
+                                f"and I'll put on a show.",
+                            "counter_purse":
+                                offered_purse + bump,
+                        }
+                    return {"decision": "ACCEPT",
+                            "message": "Let's give the "
+                                "people what they want.",
+                            "counter_purse": None}
+
+                # ── PROSPECT ─────────────────────────
                 elif personality == "PROSPECT":
                     if random.random() < 0.40:
                         bump = int(offered_purse * 0.12)
                         return {
                             "decision": "COUNTER",
-                            "message": f"I'm building my name. Make it ${offered_purse+bump:,} and I'm in.",
-                            "counter_purse": offered_purse + bump,
+                            "message": f"I'm building my "
+                                f"name. Make it "
+                                f"${offered_purse+bump:,} "
+                                f"and I'm in.",
+                            "counter_purse":
+                                offered_purse + bump,
                         }
-                    return {"decision": "ACCEPT", "message": None, "counter_purse": None}
+                    return {"decision": "ACCEPT",
+                            "message": None,
+                            "counter_purse": None}
 
-                elif personality == "CONTENDER":
-                    if random.random() < 0.60:
-                        bump = int(offered_purse * random.uniform(0.15, 0.25))
+                # ── CALCULATED ───────────────────────
+                elif personality == "CALCULATED":
+                    if prob >= 65:
+                        return {"decision": "ACCEPT",
+                                "message": "I've looked at "
+                                    "the tape. "
+                                    "This works for me.",
+                                "counter_purse": None}
+                    else:
+                        bump = int(offered_purse * 0.18)
                         return {
                             "decision": "COUNTER",
-                            "message": f"I'm ranked. That needs to reflect in the pay — ${offered_purse+bump:,}.",
-                            "counter_purse": offered_purse + bump,
+                            "message": f"The matchup "
+                                f"isn't ideal for me "
+                                f"right now. "
+                                f"${offered_purse+bump:,} "
+                                f"makes it worth it.",
+                            "counter_purse":
+                                offered_purse + bump,
                         }
-                    return {"decision": "ACCEPT", "message": None, "counter_purse": None}
 
+                # ── CONTENDER ────────────────────────
+                elif personality == "CONTENDER":
+                    if random.random() < 0.60:
+                        bump = int(offered_purse *
+                            random.uniform(0.15, 0.25))
+                        return {
+                            "decision": "COUNTER",
+                            "message": f"I'm ranked. "
+                                f"That needs to reflect "
+                                f"in the pay — "
+                                f"${offered_purse+bump:,}.",
+                            "counter_purse":
+                                offered_purse + bump,
+                        }
+                    return {"decision": "ACCEPT",
+                            "message": None,
+                            "counter_purse": None}
+
+                # ── ELITE ────────────────────────────
                 elif personality == "ELITE":
-                    # Always counter on money first
-                    bump = int(offered_purse * random.uniform(0.25, 0.45))
+                    bump = int(offered_purse *
+                        random.uniform(0.25, 0.45))
                     return {
                         "decision": "COUNTER",
-                        "message": f"You know what a fight with me is worth. ${offered_purse+bump:,} or find someone else.",
+                        "message": f"You know what a "
+                            f"fight with me is worth. "
+                            f"${offered_purse+bump:,} "
+                            f"or find someone else.",
                         "counter_purse": offered_purse + bump,
                     }
+
+                # ── fallback ─────────────────────────
+                else:
+                    return {"decision": "ACCEPT",
+                            "message": None,
+                            "counter_purse": None}
+
             else:
-                # Don't want the fight — decline with reason
                 decline_msgs = {
-                    "ELITE":     "That matchup doesn't make sense for where I'm at. Come back when you've earned it.",
-                    "CONTENDER": "I'm not fighting down. Win a few more and we'll talk.",
-                    "PROSPECT":  "My team doesn't like this matchup right now.",
-                    "WARRIOR":   "Not the right time. Ask me again next month.",
+                    "ELITE":      "That matchup doesn't "
+                        "make sense for where I'm at. "
+                        "Come back when you've earned it.",
+                    "CONTENDER":  "I'm not fighting down. "
+                        "Win a few more and we'll talk.",
+                    "CALCULATED": "I've studied you. "
+                        "The timing isn't right. "
+                        "Ask me again after your "
+                        "next few fights.",
+                    "SHOWMAN":    "My team doesn't think "
+                        "this fight sells. "
+                        "Give me someone the fans "
+                        "want to see me fight.",
+                    "PROSPECT":   "My team doesn't like "
+                        "this matchup right now.",
+                    "JOURNEYMAN": "I've got other options "
+                        "on the table. "
+                        "Better money elsewhere.",
+                    "HUNGRY":     "I want this fight "
+                        "bad, but my camp "
+                        "won't let me take it. "
+                        "Maybe next time.",
+                    "WARRIOR":    "Not the right time. "
+                        "Ask me again next month.",
                 }
                 return {
                     "decision": "DECLINE",
-                    "message": decline_msgs.get(personality, "Not interested."),
+                    "message": decline_msgs.get(
+                        personality,
+                        "Not interested."),
                     "counter_purse": None,
                 }
 
         # Second exchange — player has countered, AI responds
-        if personality == "WARRIOR":
-            return {"decision": "ACCEPT", "message": None, "counter_purse": None}
+        if personality in ("WARRIOR", "HUNGRY", "JOURNEYMAN"):
+            return {"decision": "ACCEPT",
+                    "message": None,
+                    "counter_purse": None}
+        elif personality == "SHOWMAN":
+            if random.random() < 0.75:
+                return {"decision": "ACCEPT",
+                        "message": "Let's make some noise.",
+                        "counter_purse": None}
+            return {"decision": "DECLINE",
+                    "message": "Still not feeling the number.",
+                    "counter_purse": None}
         elif personality in ("PROSPECT", "CONTENDER"):
             if random.random() < 0.65:
-                return {"decision": "ACCEPT", "message": None, "counter_purse": None}
+                return {"decision": "ACCEPT",
+                        "message": None,
+                        "counter_purse": None}
             return {
                 "decision": "DECLINE",
-                "message": "We can't find common ground. Come back with a better number.",
+                "message": "We can't find common ground. "
+                    "Better number next time.",
                 "counter_purse": None,
             }
+        elif personality == "CALCULATED":
+            if random.random() < 0.70:
+                return {"decision": "ACCEPT",
+                        "message": "Alright. "
+                            "The numbers work.",
+                        "counter_purse": None}
+            return {"decision": "DECLINE",
+                    "message": "I've run the math. "
+                        "This doesn't work for me.",
+                    "counter_purse": None}
         else:  # ELITE
             if random.random() < 0.50:
-                return {"decision": "ACCEPT", "message": None, "counter_purse": None}
+                return {"decision": "ACCEPT",
+                        "message": None,
+                        "counter_purse": None}
             return {
                 "decision": "DECLINE",
-                "message": "We're too far apart. This one isn't happening.",
+                "message": "We're too far apart.",
                 "counter_purse": None,
             }
 
@@ -14737,14 +15064,37 @@ class GameBridge:
                     contract['fights_completed'] = contract.get('fights_completed', 0) + 1
                     contract['fights_remaining'] = max(0,
                         contract['total_fights'] - contract['fights_completed'])
-                    # Morale: win = +8, loss compounds with streak (founder eased)
+                    # Morale: personality-aware win boost + loss hit
                     last_result = history[-1].get('result', '')
                     ls = getattr(ftr, 'lose_streak', 0) or 0
+                    pers = contract.get('personality', 'WARRIOR')
                     if last_result == 'W':
-                        contract['morale'] = min(100, contract.get('morale', 75) + 8)
+                        win_boost = {
+                            "WARRIOR":    8,
+                            "HUNGRY":     12,
+                            "SHOWMAN":    10,
+                            "PROSPECT":   10,
+                            "JOURNEYMAN": 5,
+                            "CALCULATED": 7,
+                            "CONTENDER":  9,
+                            "ELITE":      6,
+                        }.get(pers, 8)
+                        contract['morale'] = min(100,
+                            contract.get('morale', 75) + win_boost)
                     elif last_result == 'L':
+                        loss_hit = {
+                            "WARRIOR":    10 + ls * 3,
+                            "HUNGRY":     8 + ls * 2,
+                            "SHOWMAN":    12 + ls * 3,
+                            "PROSPECT":   15 + ls * 4,
+                            "JOURNEYMAN": 5 + ls * 1,
+                            "CALCULATED": 10 + ls * 3,
+                            "CONTENDER":  12 + ls * 3,
+                            "ELITE":      14 + ls * 4,
+                        }.get(pers, 10 + ls * 3)
+                        # Founder floor still applies as safety net.
                         contract['morale'] = max(morale_floor,
-                            contract.get('morale', 75) - (loss_penalty + ls * streak_penalty))
+                            contract.get('morale', 75) - loss_hit)
                     # Ship L1: win streak demand — fighter wants recognition.
                     # One-shot per streak via win_demand_fired_week flag.
                     win_streak = self._get_fighter_win_streak(ftr)
@@ -14787,10 +15137,25 @@ class GameBridge:
                                 _m += 5
                         contract['morale'] = max(morale_floor, min(100, _m))
             else:
-                # Inactivity morale decay — founder: 1 pt/wk after 14w; others: 2 pt/wk after 10w
+                # Inactivity morale decay — personality-aware.
+                # Founder idle_threshold + morale_floor still apply.
                 last_fight_week = history[-1].get('week', 0) if history and isinstance(history[-1], dict) else 0
                 if current_week - last_fight_week >= idle_threshold:
-                    contract['morale'] = max(morale_floor, contract.get('morale', 75) - idle_decay)
+                    pers = contract.get('personality', 'WARRIOR')
+                    pers_decay = {
+                        "WARRIOR":    4,
+                        "HUNGRY":     3,
+                        "SHOWMAN":    4,
+                        "PROSPECT":   2,
+                        "JOURNEYMAN": 1,
+                        "CALCULATED": 1,
+                        "CONTENDER":  3,
+                        "ELITE":      2,
+                    }.get(pers, 2)
+                    # Founder's idle_decay floor still wins if lower.
+                    _decay = min(pers_decay, idle_decay) if is_founder else pers_decay
+                    contract['morale'] = max(morale_floor,
+                        contract.get('morale', 75) - _decay)
 
             morale = contract.get('morale', 75)
             fights_remaining = contract.get('fights_remaining', 1)
@@ -16299,6 +16664,8 @@ class GameBridge:
             # Preserve founding-fighter flag through re-sign so loyalty
             # bonus carries forward across contract renewals.
             "is_founding_fighter": current.get('is_founding_fighter', False),
+            # Personality drives morale, negotiation, news voice.
+            "personality":         self._get_ai_neg_personality(ftr),
         }
         self._news_items.insert(0, {
             "headline": f"✅ EXTENDED: {ftr.name} re-signs — {contract_fights}-fight deal (${resign_cost:,})",
@@ -16387,6 +16754,8 @@ class GameBridge:
             "holdout_weeks":    0,        # Weeks in holdout state
             "is_holdout":       False,
             "signed_week":      self._game_state.week_number,
+            # Personality drives morale, negotiation, news voice.
+            "personality":      self._get_ai_neg_personality(fighter),
         }
 
         self._news_items.insert(0, {
