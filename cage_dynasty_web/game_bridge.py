@@ -3004,6 +3004,9 @@ class GameBridge:
                     continue
                 if not self._is_available(ranked_id, week):
                     continue
+                # Rematch exclusion — 8w cooldown for player offers
+                if self._recently_fought(fid, ranked_id, weeks=8):
+                    continue
                 opp = self._game_state.get_fighter(ranked_id)
                 if not opp or not opp.is_active:
                     continue
@@ -8939,6 +8942,36 @@ class GameBridge:
     # MATCHMAKING ENGINE — record & rank based, no ratings
     # ─────────────────────────────────────────────────────────────────────────
 
+    def _recently_fought(
+        self,
+        fighter_a_id: str,
+        fighter_b_id: str,
+        weeks: int = 8,
+    ) -> bool:
+        """Returns True if fighters A and B fought within the last
+        `weeks` weeks. Used to suppress rematches from offer pools
+        and AI matchmaking. Scans both fighters' fight_history so
+        either side's record is sufficient evidence."""
+        if not self._game_state:
+            return False
+        current_week = self._game_state.week_number or 0
+        cutoff = current_week - weeks
+        for fid, opp_id in (
+            (fighter_a_id, fighter_b_id),
+            (fighter_b_id, fighter_a_id),
+        ):
+            ftr = self._game_state.get_fighter(fid)
+            if not ftr:
+                continue
+            for h in getattr(ftr, 'fight_history', []) or []:
+                if not isinstance(h, dict):
+                    continue
+                if h.get('opponent_id') != opp_id:
+                    continue
+                if int(h.get('week', 0) or 0) >= cutoff:
+                    return True
+        return False
+
     def _fight_acceptance_probability(
         self,
         challenger_id: str,
@@ -10758,17 +10791,28 @@ class GameBridge:
             ranked_pool = [f for f in pool if f.fighter_id in ranked_ids]
             unrank_pool = [f for f in pool if f.fighter_id not in ranked_ids]
 
+            # Pair fighters with up to 3 retries to avoid recent
+            # rematches (4w cooldown — lighter than player offers to
+            # keep AI cards diverse without over-restricting).
             f1 = f2 = None
-            if len(ranked_pool) >= 2:
-                # Pick adjacent pair from ranked list
-                idx = random.randint(0, len(ranked_pool) - 2)
-                f1, f2 = ranked_pool[idx], ranked_pool[idx + 1]
-            elif len(unrank_pool) >= 2:
-                # Two unranked
-                f1, f2 = random.sample(unrank_pool, 2)
-            elif len(pool) >= 2:
-                f1, f2 = random.sample(pool, 2)
-            else:
+            for _attempt in range(3):
+                if len(ranked_pool) >= 2:
+                    idx = random.randint(0, len(ranked_pool) - 2)
+                    _f1, _f2 = ranked_pool[idx], ranked_pool[idx + 1]
+                elif len(unrank_pool) >= 2:
+                    _f1, _f2 = random.sample(unrank_pool, 2)
+                elif len(pool) >= 2:
+                    _f1, _f2 = random.sample(pool, 2)
+                else:
+                    break
+                if not self._recently_fought(
+                        _f1.fighter_id, _f2.fighter_id, weeks=4):
+                    f1, f2 = _f1, _f2
+                    break
+                # If exhausted retries, accept the last pair —
+                # better a rematch than skipping the card slot.
+                f1, f2 = _f1, _f2
+            if f1 is None or f2 is None:
                 continue
 
             # Title status from champion presence (no pre-built card carries it here)
@@ -13704,6 +13748,9 @@ class GameBridge:
             return 100.0 - (100.0 - final_h) * ((r_idx + 1) / n)
 
         advice_by_round: Dict[int, Dict[str, Any]] = {}
+        # Track templates used across this fight's corner moments
+        # so _pick_template avoids repeats round-to-round.
+        _seen_templates: set = set()
         for r_idx in range(last_for_advice):
             p_rs = p_stats_list[r_idx] if isinstance(p_stats_list[r_idx], dict) else {}
             o_rs = o_stats_list[r_idx] if (r_idx < len(o_stats_list) and isinstance(o_stats_list[r_idx], dict)) else {}
@@ -13724,6 +13771,7 @@ class GameBridge:
                 cumulative_score_gap   = cumulative_gap,
                 round_num              = r_idx + 1,   # 1-based round just completed
                 total_rounds           = total_rounds,
+                seen_templates         = _seen_templates,
             )
             if adv:
                 advice_by_round[r_idx + 1] = adv

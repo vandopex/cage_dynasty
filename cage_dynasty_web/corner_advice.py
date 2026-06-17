@@ -949,6 +949,7 @@ def _pick_template(
     situations: List[str],
     tier: str,
     rating: int,
+    seen_templates: Optional[set] = None,
 ) -> Optional[Tuple[str, str]]:
     """
     Returns (chosen_situation, chosen_template) or None.
@@ -958,14 +959,25 @@ def _pick_template(
     2. Generalist (mma_head) library at (situation, tier) — only if
        rating >= CORNER_SECONDARY_DOMAIN_MIN (cross-specialty read)
     3. Fall back to "close_round" at tier in primary library
+
+    seen_templates: if provided, filters out already-used templates
+    from each pool; only falls back to the full pool when all entries
+    have been seen (so repeats are inevitable). Prevents the same
+    line from echoing across rounds when the pool is small.
     """
     primary = ARCHETYPE_LIBRARIES.get(archetype, MMA_HEAD_COACH)
+    _seen = seen_templates if seen_templates is not None else set()
+
+    def _pick(pool: List[str]) -> str:
+        # Prefer unseen entries; fall back to full pool if exhausted.
+        unseen = [t for t in pool if t not in _seen]
+        return random.choice(unseen if unseen else pool)
 
     for sit in SITUATION_PRIORITY:
         if sit not in situations:
             continue
         if sit in primary and tier in primary[sit]:
-            return sit, random.choice(primary[sit][tier])
+            return sit, _pick(primary[sit][tier])
 
     # Secondary domain fallback at high rating
     if rating >= CORNER_SECONDARY_DOMAIN_MIN and archetype != "mma_head":
@@ -973,11 +985,11 @@ def _pick_template(
             if sit not in situations:
                 continue
             if sit in MMA_HEAD_COACH and tier in MMA_HEAD_COACH[sit]:
-                return sit, random.choice(MMA_HEAD_COACH[sit][tier])
+                return sit, _pick(MMA_HEAD_COACH[sit][tier])
 
     # Final fallback — close_round at tier in primary
     if "close_round" in primary and tier in primary["close_round"]:
-        return "close_round", random.choice(primary["close_round"][tier])
+        return "close_round", _pick(primary["close_round"][tier])
 
     return None
 
@@ -994,6 +1006,7 @@ def generate_corner_advice(
     cumulative_score_gap: float,
     round_num: int,
     total_rounds: int,
+    seen_templates: Optional[set] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Build corner advice for a single between-round moment.
@@ -1026,10 +1039,13 @@ def generate_corner_advice(
         cumulative_score_gap, round_num, total_rounds,
     )
 
-    pick = _pick_template(archetype, situations, tier, rating)
+    pick = _pick_template(archetype, situations, tier, rating, seen_templates)
     if not pick:
         return None
     chosen_situation, template = pick
+    # Record so caller's future picks avoid this template.
+    if seen_templates is not None:
+        seen_templates.add(template)
 
     line = template.format(
         fighter_name=fighter_name,
