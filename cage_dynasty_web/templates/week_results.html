@@ -351,6 +351,14 @@
                     {% else %}
                         {% set l_pre = l_new %}
                     {% endif %}
+                    {% if fight.method == 'DRAW' or fight.method == 'Draw' or fight.get('is_draw') %}
+                    <span style="color:var(--warning);font-family:var(--font-display);">
+                        {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name or fight.winner_name or '?' }}</a>{% else %}{{ fight.fighter1_name or fight.winner_name or '?' }}{% endif %}
+                    </span>
+                    <span style="color:var(--text-muted);font-size:.75em;"> vs </span>
+                    <span style="color:var(--text-secondary);">{% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name or fight.loser_name or '?' }}</a>{% else %}{{ fight.fighter2_name or fight.loser_name or '?' }}{% endif %}</span>
+                    <span style="color:var(--warning);font-size:.72em;margin-left:4px;">DRAW</span>
+                    {% else %}
                     <span style="color:var(--neon-green);font-family:var(--font-display);">
                         {% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %}
                     </span>
@@ -360,6 +368,7 @@
                     <span style="color:var(--text-secondary);">{% if fight.loser_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.loser_id) }}" style="color:inherit;text-decoration:none;">{{ fight.loser_name }}</a>{% else %}{{ fight.loser_name }}{% endif %}</span>
                     {% if l_pre == 0 %}<span style="color:var(--gold);font-size:.72em;"> C</span>
                     {% elif l_pre %}<span style="color:var(--text-muted);font-size:.72em;"> #{{ l_pre }}</span>{% endif %}
+                    {% endif %}
                     {% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC') %}
                     <span style="color:var(--text-muted);font-size:.75em;"> · R{{ fight.get('round', fight.get('round_finished','?')) }}</span>
                     {% endif %}
@@ -404,9 +413,16 @@
                     {{ fight.method }}
                 </span>
                 <div style="flex:1;font-size:.82rem;">
+                    {% if fight.method == 'DRAW' or fight.method == 'Draw' or fight.get('is_draw') %}
+                    <span style="color:var(--warning);font-family:var(--font-display);">{% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name or fight.winner_name or '?' }}</a>{% else %}{{ fight.fighter1_name or fight.winner_name or '?' }}{% endif %}</span>
+                    <span style="color:var(--text-muted);"> vs </span>
+                    <span style="color:var(--text-secondary);">{% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name or fight.loser_name or '?' }}</a>{% else %}{{ fight.fighter2_name or fight.loser_name or '?' }}{% endif %}</span>
+                    <span style="color:var(--warning);font-size:.72em;margin-left:4px;">DRAW</span>
+                    {% else %}
                     <span style="color:var(--neon-green);font-family:var(--font-display);">{% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %}</span>
                     <span style="color:var(--text-muted);"> def. </span>
                     <span style="color:var(--text-secondary);">{% if fight.loser_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.loser_id) }}" style="color:inherit;text-decoration:none;">{{ fight.loser_name }}</a>{% else %}{{ fight.loser_name }}{% endif %}</span>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}

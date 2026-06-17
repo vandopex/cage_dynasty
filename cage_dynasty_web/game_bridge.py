@@ -6158,6 +6158,11 @@ class GameBridge:
                                             camp_tier.upper(), 65) - _perm_erosion)
                                     _new_val = min(_new_val, _chin_ceil)
                             _fdata_ref[stat] = _new_val
+                            # Mirror to FighterRecord attr so _read_stat /
+                            # _compute_ovr see the fresh value (Item 1 audit:
+                            # _read_stat prefers attr; stale world-gen attr
+                            # was hiding the _fighter_data update from OVR).
+                            setattr(fighter, stat, _new_val)
                         actual_gains[stat] = round(effective, 2)
 
                 # Age decline — applies weekly for fighters 31+
