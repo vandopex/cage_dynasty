@@ -1092,16 +1092,78 @@ def register_routes(app):
                 seen.add(f.fighter_id)
                 unique_fighters.append(f)
         
+        def _p4p_score(f):
+            # OVR is the foundation
+            score = f.overall_rating * 2.0
+            # Win volume — diminishing above 20
+            score += min(getattr(f, 'wins', 0), 20) * 3.0
+            # Finish rate — dominance indicator
+            total = (getattr(f, 'wins', 0)
+                     + getattr(f, 'losses', 0))
+            if total >= 5:
+                finishes = (getattr(f, 'ko_wins', 0)
+                            + getattr(f, 'sub_wins', 0))
+                score += (finishes / total) * 25
+            # Division rank bonus — #1 worth more than #10
+            rank = getattr(f, 'ranking', None)
+            if rank and rank > 0:
+                score += max(0, 16 - rank) * 4
+            # Champion bonus — meaningful but not dominant.
+            # A weak champ shouldn't auto-beat a great non-champ.
+            if getattr(f, 'is_champion', False):
+                score += 20
+                defenses = getattr(
+                    f, 'title_defenses', 0) or 0
+                score += defenses * 8
+            score -= getattr(f, 'losses', 0) * 2.0
+            return score
+
         p4p_fighters = sorted(
-            [f for f in unique_fighters if f.is_active],
-            key=lambda f: (f.is_champion, f.overall_rating, f.wins),
+            [f for f in unique_fighters
+             if f.is_active
+             and (getattr(f, 'wins', 0)
+                  + getattr(f, 'losses', 0)) >= 3],
+            key=_p4p_score,
             reverse=True
         )[:15]
-        
+
         # GOAT rankings
+        def _goat_score(f):
+            wins   = getattr(f, 'wins', 0)
+            losses = getattr(f, 'losses', 0)
+            ko_w   = getattr(f, 'ko_wins', 0)
+            sub_w  = getattr(f, 'sub_wins', 0)
+            total  = wins + losses
+            # Win volume (primary)
+            score = wins * 10
+            # Finish quality bonus
+            score += ko_w * 6
+            score += sub_w * 5
+            # Decision wins still count, less
+            score += max(0, wins - ko_w - sub_w) * 3
+            # Loss penalty — steeper for GOAT
+            score -= losses * 4
+            # Championship credit — sustained excellence
+            if getattr(f, 'is_champion', False):
+                score += 25
+            defenses = getattr(
+                f, 'title_defenses', 0) or 0
+            score += defenses * 12
+            # Longevity bonus
+            if total >= 20:
+                score += 15
+            elif total >= 15:
+                score += 8
+            # OVR modifier — quality matters
+            ovr = getattr(f, 'overall_rating', 60)
+            score += max(0, ovr - 70) * 2
+            return score
+
         goat_fighters = sorted(
-            [f for f in unique_fighters if f.wins + f.losses >= 5],
-            key=lambda f: (f.wins * 10 + f.ko_wins * 5 - f.losses * 2),
+            [f for f in unique_fighters
+             if (getattr(f, 'wins', 0)
+                 + getattr(f, 'losses', 0)) >= 5],
+            key=_goat_score,
             reverse=True
         )[:20]
         
