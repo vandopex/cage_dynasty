@@ -9878,47 +9878,77 @@ class GameBridge:
     def _generate_opponent_tendencies(self, opponent: Any) -> list:
         """
         Generate 2-3 human-readable scouting lines about an opponent.
-        Uses ko_wins, sub_wins, wins, losses, fighting_style from WebFighter.
-        Returns list of {icon, text} dicts.
+        All finish stats derived from fight_history (single source of
+        truth) so KO/sub counters and history can't disagree. Mutual
+        exclusion guards prevent contradictory lines like "Decision
+        hunter" + "Comes out fast" firing on the same fighter.
         """
         lines = []
-        total = max(1, getattr(opponent, 'wins', 0) + getattr(opponent, 'losses', 0))
-        wins  = getattr(opponent, 'wins', 0)
-        ko    = getattr(opponent, 'ko_wins', 0)
-        sub   = getattr(opponent, 'sub_wins', 0)
-        dec   = max(0, wins - ko - sub)
-        style = getattr(opponent, 'fighting_style', '') or ''
+        wins   = getattr(opponent, 'wins', 0)
+        losses = getattr(opponent, 'losses', 0)
+        total  = max(1, wins + losses)
+        style  = getattr(opponent, 'fighting_style', '') or ''
+        history = getattr(opponent, 'fight_history', []) or []
 
-        # Finish rate
-        finish_rate = (ko + sub) / max(1, wins)
+        # ── Single-pass finish stats from history ──────────────
+        def _is_w_finish(f):
+            return (isinstance(f, dict)
+                    and f.get('result') == 'W'
+                    and f.get('method', 'DEC') not in ('DEC', 'DRAW', ''))
+
+        def _round_of(f):
+            try:
+                return int(f.get('round_finished')
+                           or f.get('round', 99))
+            except (TypeError, ValueError):
+                return 99
+
+        def _method_of(f):
+            return str(f.get('method', '') or '').upper()
+
+        total_finishes = sum(1 for f in history if _is_w_finish(f))
+        early_finishes = sum(1 for f in history
+                             if _is_w_finish(f)
+                             and _round_of(f) <= 1)
+        late_finishes  = sum(1 for f in history
+                             if _is_w_finish(f)
+                             and _round_of(f) >= 3)
+        ko_finishes  = sum(1 for f in history
+                           if _is_w_finish(f)
+                           and _method_of(f).startswith(('KO', 'TKO')))
+        sub_finishes = sum(1 for f in history
+                           if _is_w_finish(f)
+                           and ('SUB' in _method_of(f)
+                                or 'SUBMISSION' in _method_of(f)))
+
+        finish_rate = total_finishes / max(1, wins)
+        # Decision % over ALL fights (not just wins) — accurate
+        # "goes the distance" framing.
+        dec_fights_count = total - total_finishes
+        dec_pct = int(dec_fights_count / max(1, total) * 100)
+
+        # ── Finish-rate line (mutually exclusive cases) ────────
         if wins == 0:
             lines.append({"icon": "📋", "text": "No pro record — unknown quantity."})
         elif finish_rate >= 0.75:
             lines.append({"icon": "💥", "text": f"Dangerous finisher — {int(finish_rate*100)}% of wins by stoppage."})
-        elif finish_rate <= 0.25:
-            lines.append({"icon": "📋", "text": f"Decision hunter — goes the distance {int((1-finish_rate)*100)}% of the time."})
+        elif (finish_rate <= 0.25
+                and early_finishes < 2
+                and total_finishes < 2):
+            # Mutual exclusion: don't claim "decision hunter" if the
+            # fighter has demonstrable finishing power in history.
+            lines.append({"icon": "📋", "text": f"Decision hunter — goes the distance {dec_pct}% of the time."})
 
-        # KO threat
-        if wins > 0 and ko / wins >= 0.5:
-            lines.append({"icon": "⚡", "text": f"KO artist — {ko} of {wins} wins by KO. Keep your hands up."})
-        elif wins > 0 and sub / wins >= 0.5:
-            lines.append({"icon": "🥋", "text": f"Submission specialist — {sub} of {wins} wins by sub. Stay off your back."})
+        # ── KO / Sub specialist (history-derived) ──────────────
+        if wins > 0 and ko_finishes / wins >= 0.5:
+            lines.append({"icon": "⚡", "text": f"KO artist — {ko_finishes} of {wins} wins by KO. Keep your hands up."})
+        elif wins > 0 and sub_finishes / wins >= 0.5:
+            lines.append({"icon": "🥋", "text": f"Submission specialist — {sub_finishes} of {wins} wins by sub. Stay off your back."})
 
-        # Fight history finish timing — check fight_history if available
-        history = getattr(opponent, 'fight_history', []) or []
+        # ── Fight history finish timing ────────────────────────
         if history and wins > 0:
-            early_finishes = sum(1 for f in history
-                                 if isinstance(f, dict)
-                                 and f.get('result') == 'W'
-                                 and f.get('method', '') not in ('DEC', 'DRAW')
-                                 and f.get('round_finished', 3) <= 1)
             if early_finishes >= 2:
                 lines.append({"icon": "🔥", "text": f"Comes out fast — {early_finishes} first-round finishes. Survive the storm."})
-            late_finishes = sum(1 for f in history
-                                if isinstance(f, dict)
-                                and f.get('result') == 'W'
-                                and f.get('method', '') not in ('DEC', 'DRAW')
-                                and f.get('round_finished', 1) >= 3)
             if late_finishes >= 2 and early_finishes < 2:
                 lines.append({"icon": "⏱️", "text": f"Dangerous late — {late_finishes} finishes in round 3+. Don't let it go long."})
 
