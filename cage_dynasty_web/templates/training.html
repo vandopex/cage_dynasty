@@ -968,12 +968,35 @@ function loadStyleTemplate(fighterId, style,
             ],
             floors: {fight_iq:62, boxing:58, takedowns:55, cardio:58},
         },
+        'Striker': {
+            queue: [
+                {focus:'boxing',           target: goal(boxing, 82)},
+                {focus:'striking_defense', target: goal(strDef, 72)},
+                {focus:'cardio',           target: goal(cardio, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {boxing:65, striking_defense:55, cardio:60,
+                     chin:55, fight_iq:55},
+        },
+        'Balanced': {
+            queue: [
+                {focus:'fight_iq',         target: goal(fightIq, 82)},
+                {focus:'boxing',           target: goal(boxing, 75)},
+                {focus:'takedowns',        target: goal(takedowns, 72)},
+                {focus:'cardio',           target: goal(cardio, 70)},
+                {focus:'maintain',         target: 0},
+            ],
+            floors: {fight_iq:62, boxing:58, takedowns:55, cardio:58},
+        },
     };
 
-    const tmpl = templates[style];
+    let tmpl = templates[style];
     if (!tmpl) {
-        alert('No template found for style: ' + style);
-        return;
+        // Silent fallback to Hybrid — covers any style key
+        // the templates dict doesn't recognize. Better than
+        // blocking the player with an alert dialog.
+        tmpl = templates['Hybrid'];
+        if (!tmpl) return;
     }
 
     const intSelect = document.querySelector(
