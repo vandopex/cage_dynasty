@@ -50,8 +50,88 @@
                 {% else %} · Unranked{% endif %}
             </div>
             <div style="font-size:.75rem;color:var(--info);">{{ neg.ai_fighter_rating }} OVR</div>
+
+            {# ── Fighting style pill ── #}
+            {% if opponent and opponent.fighting_style %}
+            {% set _style_family = {
+                "Orthodox Boxer":"striker","Muay Thai":"striker",
+                "Kickboxer":"striker","Counter Striker":"striker",
+                "Pressure Fighter":"striker","Brawler":"striker",
+                "Point Fighter":"striker","Striker":"striker",
+                "Karate":"striker",
+                "Wrestler":"grappler","BJJ Specialist":"grappler",
+                "Judo":"grappler","Sambo":"grappler",
+                "Ground & Pound":"hybrid","Sprawl & Brawl":"hybrid",
+                "Clinch Fighter":"hybrid","Hybrid":"hybrid",
+                "Balanced":"hybrid",
+            }.get(opponent.fighting_style, "hybrid") %}
+            {% set _style_color = {
+                "striker":  "var(--blood-red)",
+                "grappler": "var(--info)",
+                "hybrid":   "var(--violet, #a855f7)",
+            }.get(_style_family, "var(--text-muted)") %}
+            {% set _style_icon = {
+                "Orthodox Boxer":"🥊","Muay Thai":"🦵","Wrestler":"🤼",
+                "BJJ Specialist":"🥋","Kickboxer":"🦶","Brawler":"💥",
+                "Counter Striker":"↩️","Point Fighter":"🎯",
+                "Pressure Fighter":"⬆️","Ground & Pound":"👊",
+                "Clinch Fighter":"💪","Sprawl & Brawl":"🛡️",
+                "Sambo":"⚔️","Judo":"🔄","Hybrid":"⚡","Karate":"🥋",
+            }.get(opponent.fighting_style, "🥊") %}
+            <div style="display:inline-flex;align-items:center;gap:5px;
+                        margin-top:6px;padding:3px 8px;border-radius:3px;
+                        background:{{ _style_color }}1a;
+                        border:1px solid {{ _style_color }}55;
+                        font-size:.68rem;color:{{ _style_color }};
+                        font-family:var(--font-display);
+                        letter-spacing:.04em;">
+                <span>{{ _style_icon }}</span>
+                <span>{{ opponent.fighting_style }}</span>
+            </div>
+            {% endif %}
+
+            {# ── Top 3 stat pills ── #}
+            {% if top_stats %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px;
+                        margin-top:6px;">
+                {% for label, val in top_stats %}
+                <span style="font-size:.62rem;padding:2px 6px;
+                             border-radius:3px;
+                             background:rgba(255,255,255,.04);
+                             border:1px solid var(--border-color);
+                             color:var(--text-muted);">
+                    {{ label }}
+                    <span style="color:{% if val >= 85 %}var(--gold){% elif val >= 70 %}var(--neon-green){% else %}var(--info){% endif %};
+                                 font-weight:600;margin-left:3px;">
+                        {{ val }}
+                    </span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
         </div>
     </div>
+
+    {# ── Scout report lines ── #}
+    {% if scout_lines %}
+    <div style="margin-top:var(--spacing-md);padding:var(--spacing-sm) var(--spacing-md);
+                background:var(--bg-dark);border-radius:6px;
+                border-left:3px solid var(--info);">
+        <div style="font-size:.62rem;text-transform:uppercase;
+                    letter-spacing:.1em;color:var(--text-muted);
+                    margin-bottom:4px;">
+            🔍 Scout Report
+        </div>
+        {% for line in scout_lines %}
+        <div style="display:flex;align-items:flex-start;gap:6px;
+                    font-size:.78rem;color:var(--text-secondary);
+                    padding:2px 0;line-height:1.4;">
+            <span style="flex-shrink:0;">{{ line.icon }}</span>
+            <span>{{ line.text }}</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
 
 {# AI response message #}

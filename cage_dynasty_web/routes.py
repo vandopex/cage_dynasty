@@ -1629,10 +1629,75 @@ def register_routes(app):
         player_fighter = bridge.get_fighter(player_fighter_id)
         opponent       = bridge.get_fighter(ai_fighter_id)
 
+        # ── Stale offer check ──────────────────────────────
+        # Offerer (ai_fighter) might have been booked, injured,
+        # or retired between offer creation and player opening
+        # the negotiation page. Redirect away if unavailable.
+        try:
+            unavailable_reason = None
+            if bridge._game_state and opponent:
+                gs = bridge._game_state
+                if any(sf.get("fighter1_id") == ai_fighter_id
+                       or sf.get("fighter2_id") == ai_fighter_id
+                       for sf in (bridge._scheduled_fights or [])):
+                    unavailable_reason = "booked for another fight"
+                elif (hasattr(bridge, '_injury_system')
+                        and bridge._injury_system
+                        and not bridge._injury_system.is_cleared_to_fight(ai_fighter_id)):
+                    unavailable_reason = "injured"
+                elif not getattr(opponent, 'is_active', True):
+                    unavailable_reason = "no longer active"
+
+            if unavailable_reason:
+                # Clean up any matching offer
+                opp_name = getattr(opponent, 'name', neg.get('ai_fighter_name', 'Opponent'))
+                bridge._fight_offers = [
+                    o for o in (bridge._fight_offers or [])
+                    if o.get("opponent_id") != ai_fighter_id
+                       or o.get("fighter_id") != player_fighter_id
+                ]
+                flash(f"⚠️ {opp_name} is {unavailable_reason} — offer withdrawn.",
+                      "warning")
+                return redirect(url_for('fight_offers'))
+        except Exception:
+            pass
+
+        # ── Opponent intel — style pill data + top 3 stats + scout lines ──
+        top_stats = []
+        scout_lines = []
+        if opponent:
+            _stat_keys = [
+                ('Boxing', 'boxing'), ('Kicks', 'kicks'),
+                ('Clinch', 'clinch_striking'),
+                ('Striking D', 'striking_defense'),
+                ('Takedowns', 'takedowns'),
+                ('TD Defense', 'takedown_defense'),
+                ('Top Control', 'top_control'),
+                ('Submissions', 'submissions'),
+                ('Guard', 'guard'),
+                ('Strength', 'strength'), ('Speed', 'speed'),
+                ('Cardio', 'cardio'), ('Chin', 'chin'),
+                ('Fight IQ', 'fight_iq'),
+                ('Composure', 'composure'),
+                ('Heart', 'heart'),
+            ]
+            _stat_vals = [
+                (label, getattr(opponent, key, 0))
+                for label, key in _stat_keys
+            ]
+            _stat_vals.sort(key=lambda x: -(x[1] or 0))
+            top_stats = _stat_vals[:3]
+            try:
+                scout_lines = bridge._generate_opponent_tendencies(opponent)
+            except Exception:
+                scout_lines = []
+
         return render_template('negotiation.html',
             neg=neg,
             player_fighter=player_fighter,
             opponent=opponent,
+            top_stats=top_stats,
+            scout_lines=scout_lines,
             week=bridge.week_number,
         )
 
