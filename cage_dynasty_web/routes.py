@@ -1044,6 +1044,54 @@ def register_routes(app):
             if getattr(bridge, f'_auto_resting_{f.fighter_id}', False)
         }
 
+        # Ship: next-fight per fighter (for fight camp banner).
+        # Scan _scheduled_fights for earliest match, expose weeks_until +
+        # opponent name. Keyed by fighter_id for template lookup.
+        next_fights = {}
+        try:
+            sched = list(bridge._scheduled_fights or [])
+            for f in fighters:
+                fid = f.fighter_id
+                cands = [
+                    sf for sf in sched
+                    if sf.get('fighter1_id') == fid
+                    or sf.get('fighter2_id') == fid
+                ]
+                if not cands:
+                    continue
+                cands.sort(key=lambda sf: sf.get('week', 9999))
+                nf = cands[0]
+                weeks = max(0, nf.get('week', 0) - bridge.week_number)
+                is_f1 = nf.get('fighter1_id') == fid
+                next_fights[fid] = {
+                    'weeks_until':  weeks,
+                    'opponent':     (nf.get('fighter2_name')
+                                     if is_f1 else nf.get('fighter1_name')),
+                    'event_name':   nf.get('event_name', ''),
+                    'is_title':     nf.get('is_title_fight', False),
+                }
+        except Exception:
+            next_fights = {}
+
+        # Ship: 4-week OVR momentum per fighter from training_history.
+        # Sum of (ovr_after - ovr_before) across the last 4 weekly entries.
+        # Empty/missing history → 0.0 delta.
+        ovr_deltas = {}
+        try:
+            history = bridge.get_training_history() or {}
+            for f in fighters:
+                entries = history.get(f.fighter_id, [])[-4:]
+                if not entries:
+                    ovr_deltas[f.fighter_id] = 0.0
+                    continue
+                total = sum(
+                    float(e.get('ovr_after', 0)) - float(e.get('ovr_before', 0))
+                    for e in entries if isinstance(e, dict)
+                )
+                ovr_deltas[f.fighter_id] = total
+        except Exception:
+            ovr_deltas = {}
+
         return render_template('training.html',
             fighters=fighters,
             camp=camp,
@@ -1054,6 +1102,8 @@ def register_routes(app):
             intensity_options=intensity_options,
             decay_risks=decay_risks,
             recovering_fighters=recovering_fighters,
+            next_fights=next_fights,
+            ovr_deltas=ovr_deltas,
             week=bridge.week_number,
         )
     

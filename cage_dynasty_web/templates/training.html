@@ -76,7 +76,29 @@
                style="font-family:var(--font-display);font-size:1.1rem;color:var(--text-bright);text-decoration:none;">
                 {{ fighter.name }}
             </a>
-            <span class="text-muted text-sm" style="margin-left:8px;">{{ fighter.record_str }} · {{ fighter.weight_class }} · {{ fighter.overall_rating }} <span class="tip" data-tip="Overall Rating — a display-only summary of your fighter's stats. Never affects fight outcomes directly. A high OVR with weak specific stats can still lose.">OVR</span></span>
+            <span class="text-muted text-sm" style="margin-left:8px;">{{ fighter.record_str }} · {{ fighter.weight_class }} · {{ fighter.overall_rating }} <span class="tip" data-tip="Overall Rating — a display-only summary of your fighter's stats. Never affects fight outcomes directly. A high OVR with weak specific stats can still lose.">OVR</span>
+                {# Ship: OVR momentum — 4-week sum of training OVR deltas #}
+                {% set _od = ovr_deltas.get(fighter.fighter_id, 0.0) if ovr_deltas else 0.0 %}
+                {% if _od > 0.4 %}
+                <span style="margin-left:6px;font-size:.66rem;
+                             color:var(--neon-green);font-weight:600;"
+                      title="4-week OVR gain from training">
+                    ↑ +{{ '%.1f'|format(_od) }}
+                </span>
+                {% elif _od < -0.2 %}
+                <span style="margin-left:6px;font-size:.66rem;
+                             color:var(--blood-red);font-weight:600;"
+                      title="4-week OVR decline from training">
+                    ↓ {{ '%.1f'|format(_od) }}
+                </span>
+                {% else %}
+                <span style="margin-left:6px;font-size:.66rem;
+                             color:var(--text-muted);"
+                      title="4-week OVR plateau">
+                    → {{ '%.1f'|format(_od) }}
+                </span>
+                {% endif %}
+            </span>
             {% if fighter.fight_camp_active %}
             <span style="display:inline-block;margin-left:8px;font-size:.6rem;
                          font-weight:700;text-transform:uppercase;letter-spacing:.08em;
@@ -216,7 +238,122 @@
         </span>
     </div>
     {% endif %}
-    <form action="{{ url_for('set_training') }}" method="POST">
+    {# Ship E1 — injury banner. Auto-Rest selection + Intense/Extreme
+       disable handled by JS lower in the file (data-injured attr). #}
+    {% if fighter.is_injured %}
+    <div style="margin:0 var(--spacing-md) var(--spacing-sm);
+                padding:var(--spacing-sm) var(--spacing-md);
+                background:rgba(220,38,38,.08);
+                border:1px solid rgba(220,38,38,.35);
+                border-left:3px solid var(--blood-red);
+                border-radius:5px;">
+        <div style="font-size:.82rem;color:var(--blood-red);font-weight:600;">
+            ⚕️ {{ fighter.name }} is injured
+            {% if fighter.injury_desc %} — {{ fighter.injury_desc }}{% endif %}
+        </div>
+        {% if fighter.injury_weeks_out and fighter.injury_weeks_out > 0 %}
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">
+            Returns Week {{ week + fighter.injury_weeks_out }}
+            ({{ fighter.injury_weeks_out }}w out).
+            Rest auto-selected. Intense/Extreme disabled.
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Ship E2 — fight camp proximity banner. #}
+    {% set _nf = next_fights.get(fighter.fighter_id) if next_fights else None %}
+    {% if _nf and _nf.weeks_until <= 6 %}
+    {% if _nf.weeks_until <= 2 %}
+    <div style="margin:0 var(--spacing-md) var(--spacing-sm);
+                padding:var(--spacing-sm) var(--spacing-md);
+                background:rgba(220,38,38,.07);
+                border:1px solid rgba(220,38,38,.3);
+                border-left:3px solid var(--blood-red);
+                border-radius:5px;">
+        <div style="font-size:.82rem;color:var(--blood-red);font-weight:600;">
+            ⚠️ Fight week —
+            {% if _nf.weeks_until == 0 %}fight is THIS week{% else %}{{ _nf.weeks_until }}w out{% endif %}
+            {% if _nf.opponent %}vs <span style="color:var(--text-bright);">{{ _nf.opponent }}</span>{% endif %}
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">
+            Maintain condition only. Heavy training is a risk.
+        </div>
+    </div>
+    {% else %}
+    <div style="margin:0 var(--spacing-md) var(--spacing-sm);
+                padding:var(--spacing-sm) var(--spacing-md);
+                background:rgba(255,215,0,.06);
+                border:1px solid rgba(255,215,0,.3);
+                border-left:3px solid var(--gold);
+                border-radius:5px;">
+        <div style="font-size:.82rem;color:var(--gold);font-weight:600;">
+            🥊 Fight in {{ _nf.weeks_until }} weeks
+            {% if _nf.opponent %}vs <span style="color:var(--text-bright);">{{ _nf.opponent }}</span>{% endif %}
+            {% if _nf.is_title %}<span style="color:var(--gold);font-size:.7rem;">· TITLE</span>{% endif %}
+        </div>
+        <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">
+            Taper recommended — sharpen, don't build.
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# Ship E4 — active-queue summary above the queue details block.
+       Visible regardless of details toggle state. #}
+    {% if fighter.training_queue_active and fighter.training_queue %}
+    {% set _qi = fighter.training_queue_index %}
+    {% set _qq = fighter.training_queue %}
+    {% if _qi < _qq|length %}
+        {% set _cg = _qq[_qi] %}
+        {% if _cg.focus != 'maintain' %}
+            {% set _cur = fighter|attr(_cg.focus) %}
+            {% set _tgt = _cg.target %}
+            {% set _pct = (_cur * 100 // _tgt) if _tgt > 0 else 0 %}
+            {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
+            <div style="margin:0 var(--spacing-md) var(--spacing-sm);
+                        padding:var(--spacing-sm) var(--spacing-md);
+                        background:rgba(0,230,118,.05);
+                        border:1px solid rgba(0,230,118,.2);
+                        border-radius:5px;">
+                <div style="display:flex;justify-content:space-between;
+                            align-items:baseline;font-size:.78rem;">
+                    <span style="color:var(--text-bright);">
+                        📈 Current goal:
+                        <span style="color:var(--neon-green);font-weight:600;">{{ _cg.focus | replace('_',' ') | title }}</span>
+                        <span style="color:var(--text-muted);">{{ _cur }} → {{ _tgt }}</span>
+                    </span>
+                    <span style="font-size:.7rem;color:var(--text-muted);
+                                 font-family:var(--font-display);">
+                        {{ _pct }}%
+                    </span>
+                </div>
+                <div style="height:4px;margin-top:5px;
+                            background:rgba(255,255,255,.06);
+                            border-radius:2px;overflow:hidden;">
+                    <div style="width:{{ _pct }}%;height:100%;
+                                background:var(--neon-green);
+                                transition:width .3s;"></div>
+                </div>
+                {% if _qi + 1 < _qq|length %}
+                {% set _ng = _qq[_qi + 1] %}
+                <div style="margin-top:5px;font-size:.68rem;color:var(--text-muted);">
+                    Next:
+                    {% if _ng.focus == 'maintain' %}
+                        🔄 Maintain
+                    {% else %}
+                        {{ _ng.focus | replace('_',' ') | title }} → {{ _ng.target }}
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+        {% endif %}
+    {% endif %}
+    {% endif %}
+
+    <form action="{{ url_for('set_training') }}" method="POST"
+          data-injured="{{ '1' if fighter.is_injured else '0' }}"
+          data-fighter-id="{{ fighter.fighter_id }}">
         <input type="hidden" name="fighter_id" value="{{ fighter.fighter_id }}">
         <div style="padding:var(--spacing-md);display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
 
@@ -559,6 +696,8 @@
                  data-fid="{{ fighter.fighter_id }}"
                  data-style="{{ fighter.fighting_style }}"
                  data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
+                 data-fight-weeks="{% if _nf %}{{ _nf.weeks_until }}{% else %}-1{% endif %}"
+                 data-fight-opp="{% if _nf and _nf.opponent %}{{ _nf.opponent }}{% endif %}"
                  style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">
             </div>
             <button type="button"
@@ -1652,17 +1791,18 @@ function coachRecommend(
         strength, speed, cardio, chin, recovery,
         fight_iq:fightIq, composure, heart};
     // Score by sum(target - current, floored at 0) across non-maintain goals.
-    let best = null, bestScore = -1;
-    for (const tmpl of arr) {
+    let best = null, bestScore = -1, bestIdx = -1;
+    arr.forEach(function(tmpl, i) {
         let score = 0;
         for (const g of tmpl.queue) {
             if (g.focus === 'maintain') continue;
             const cur = statMap[g.focus] || 0;
             score += Math.max(0, g.target - cur);
         }
-        if (score > bestScore) { bestScore = score; best = tmpl; }
-    }
-    return best;
+        if (score > bestScore) { bestScore = score; best = tmpl; bestIdx = i; }
+    });
+    if (!best) return null;
+    return Object.assign({}, best, { _idx: bestIdx });
 }
 
 function loadStyleTemplate(fighterId, style,
@@ -1949,6 +2089,34 @@ function addMaintainRow(fighterId) {
     container.appendChild(row);
 }
 
+// Ship E1: injury-aware intensity. For each fighter's training form
+// flagged data-injured="1": auto-select Rest, deselect others, and
+// disable + visually mute Intense/Extreme labels.
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('form[data-injured="1"]').forEach(function(form) {
+        const radios = form.querySelectorAll('input[name="intensity"]');
+        radios.forEach(function(r) {
+            const label = r.closest('label');
+            if (r.value === 'rest') {
+                r.checked = true;
+                if (label) label.style.borderColor = 'var(--neon-green)';
+            } else {
+                r.checked = false;
+                if (label) label.style.borderColor = 'var(--border-color)';
+            }
+            if (r.value === 'intense' || r.value === 'extreme') {
+                r.disabled = true;
+                if (label) {
+                    label.style.opacity = '0.35';
+                    label.style.cursor = 'not-allowed';
+                    label.style.pointerEvents = 'none';
+                    label.title = 'Not available while injured';
+                }
+            }
+        });
+    });
+});
+
 // Ship: auto-save floors when Start Queue is clicked. The decay floors
 // UI is hidden — templates set floor values into the hidden form, and
 // this hook flushes them to the server before the queue form submits.
@@ -2005,10 +2173,43 @@ document.addEventListener('DOMContentLoaded', function() {
             + 'color:var(--info);">↑ ' + s + '</span>'
         ).join('');
 
+        // Ship E2 — fight-aware coach rec. If a fight is within 6 weeks,
+        // adjust the prelude. Inside 2 weeks, lean hard toward sharpening.
+        const fightWeeks = parseInt(el.dataset.fightWeeks, 10);
+        const fightOpp   = el.dataset.fightOpp || '';
+        let prelude = '💬 Coach recommends:';
+        if (!isNaN(fightWeeks) && fightWeeks >= 0 && fightWeeks <= 6) {
+            if (fightWeeks <= 2) {
+                prelude = '💬 Coach: Fight week — sharpening only.';
+            } else {
+                prelude = '💬 Coach: Fight in ' + fightWeeks
+                    + 'w' + (fightOpp ? ' vs ' + fightOpp : '')
+                    + ' — sharpen, don\'t build.';
+            }
+        }
+
+        // Ship E5 — one-click accept. Calls the same applyPickedTemplate
+        // path the picker uses, with the recommended template's index in
+        // the style array.
+        const idx = (typeof rec._idx === 'number') ? rec._idx : -1;
+        const styleEsc = String(style).replace(/'/g, "\\'");
+        const useBtn = (idx >= 0)
+            ? '<button type="button" '
+              + 'onclick="applyPickedTemplate(\'' + fid + '\',\''
+              + styleEsc + '\',' + idx + ')" '
+              + 'style="margin-left:8px;font-size:.62rem;padding:2px 8px;'
+              + 'background:rgba(0,230,118,.12);'
+              + 'border:1px solid rgba(0,230,118,.35);'
+              + 'color:var(--neon-green);border-radius:3px;'
+              + 'cursor:pointer;vertical-align:middle;">'
+              + '✓ Use This</button>'
+            : '';
+
         el.innerHTML =
-            '<div>💬 Coach recommends: '
+            '<div>' + prelude + ' '
             + '<span style="color:var(--gold);font-weight:600;">'
-            + rec.label + '</span></div>'
+            + rec.label + '</span>'
+            + useBtn + '</div>'
             + '<div style="margin-top:2px;">'
             + '<span style="color:var(--text-secondary);font-style:italic;">"'
             + (rec.desc || '') + '"</span>'
