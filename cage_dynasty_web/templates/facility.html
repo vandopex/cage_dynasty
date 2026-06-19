@@ -328,6 +328,130 @@
     {% endif %}
 </div>
 
+{# ── Medical Staff (Ship EC1 C) ── #}
+{% if fighter_intel %}
+<div class="card mt-lg">
+    <div class="card-header">
+        <h3>🏥 Medical Staff</h3>
+        <span style="font-size:.7rem;color:var(--text-muted);">
+            Reduces injury recovery time. Tier-gated.
+        </span>
+    </div>
+    {% for fi in fighter_intel %}
+    <div style="padding:var(--spacing-sm) var(--spacing-md);
+                border-bottom:1px solid var(--border-color);
+                display:flex;align-items:center;gap:var(--spacing-md);">
+        <div style="flex:1;min-width:0;">
+            <div style="font-family:var(--font-display);
+                        font-size:.85rem;color:var(--text-bright);">
+                {{ fi.fighter.name }}
+            </div>
+            {% if fi.medical_staff %}
+            <div style="font-size:.68rem;color:var(--neon-green);
+                        margin-top:1px;">
+                🏥 {{ fi.medical_staff.label }} —
+                ${{ "{:,}".format(fi.medical_staff.weekly_cost) }}/wk
+                · −{{ fi.medical_staff.recovery_reduction }}w base
+                · {{ (fi.medical_staff.success_rate * 100)|int }}% full
+            </div>
+            {% else %}
+            <div style="font-size:.68rem;color:var(--text-muted);
+                        margin-top:1px;">
+                No medical staff
+            </div>
+            {% endif %}
+        </div>
+        <div style="flex-shrink:0;display:flex;gap:6px;flex-wrap:wrap;
+                    justify-content:flex-end;">
+            {% if fi.medical_staff %}
+            <form method="POST" action="{{ url_for('fire_medical_staff', fighter_id=fi.fighter.fighter_id) }}"
+                  style="margin:0;"
+                  onsubmit="return confirm('Release medical staff for {{ fi.fighter.name }}?');">
+                <button type="submit" class="btn btn-sm"
+                        style="font-size:.65rem;padding:2px 8px;
+                               background:rgba(239,68,68,.15);
+                               color:#ef4444;">
+                    Release
+                </button>
+            </form>
+            {% else %}
+            {% for staff_key, opt in medical_options.items() %}
+            <form method="POST" action="{{ url_for('hire_medical_staff', fighter_id=fi.fighter.fighter_id) }}"
+                  style="margin:0;">
+                <input type="hidden" name="staff_key" value="{{ staff_key }}">
+                <button type="submit" class="btn btn-sm btn-outline"
+                        style="font-size:.6rem;padding:2px 6px;"
+                        title="${{ '{:,}'.format(opt.weekly_cost) }}/wk · −{{ opt.recovery_reduction }}w · {{ (opt.success_rate * 100)|int }}% full">
+                    {{ opt.label }}
+                </button>
+            </form>
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{# ── Overseas Training Camps (Ship EC1 D) ── #}
+<div class="card mt-lg">
+    <div class="card-header">
+        <h3>✈️ Overseas Training Camps</h3>
+        <span style="font-size:.7rem;color:var(--text-muted);">
+            Time-bounded trips. Stochastic gains.
+        </span>
+    </div>
+    {% for fi in fighter_intel %}
+    <div style="padding:var(--spacing-sm) var(--spacing-md);
+                border-bottom:1px solid var(--border-color);
+                display:flex;align-items:center;gap:var(--spacing-md);
+                flex-wrap:wrap;">
+        <div style="flex:1;min-width:140px;">
+            <div style="font-family:var(--font-display);
+                        font-size:.85rem;color:var(--text-bright);">
+                {{ fi.fighter.name }}
+            </div>
+            {% if fi.overseas_trip %}
+            <div style="font-size:.68rem;color:var(--info);margin-top:1px;">
+                ✈️ Abroad in {{ fi.overseas_trip.location }}
+                — returns Week {{ fi.overseas_trip.return_week }}
+                ({{ fi.overseas_trip.return_week - week }}w left)
+            </div>
+            {% else %}
+            <div style="font-size:.68rem;color:var(--text-muted);
+                        margin-top:1px;">
+                Available
+            </div>
+            {% endif %}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;
+                    justify-content:flex-end;">
+            {% if not fi.overseas_trip %}
+            {% for opt in fi.overseas_opts %}
+            {% if opt.available %}
+            <form method="POST" action="{{ url_for('send_overseas', fighter_id=fi.fighter.fighter_id) }}"
+                  style="margin:0;">
+                <input type="hidden" name="camp_tier" value="{{ opt.tier_key }}">
+                <button type="submit" class="btn btn-sm btn-outline"
+                        style="font-size:.6rem;padding:2px 6px;"
+                        title="${{ '{:,}'.format(opt.cost) }} · {{ opt.duration_weeks }}w · {{ (opt.success_rate * 100)|int }}% full">
+                    {{ opt.label }} · {{ opt.duration_weeks }}w
+                </button>
+            </form>
+            {% else %}
+            <button class="btn btn-sm" disabled
+                    style="font-size:.6rem;padding:2px 6px;opacity:.4;"
+                    title="Requires {{ opt.min_camp_tier }} facility">
+                🔒 {{ opt.label }}
+            </button>
+            {% endif %}
+            {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
 {# ── AI Camp Equipment Reference ── #}
 <div class="card mt-lg">
     <div class="card-header"><h3>🏟️ World Facilities</h3></div>

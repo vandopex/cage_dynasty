@@ -2372,14 +2372,68 @@ def register_routes(app):
                 for t in coach_status.get('traits', [])
             ]
         # Ship MC1b: surface tier slot limit so the staff grid can show usage
-        from game_bridge import COACH_TIER_STAFF_SLOTS
+        from game_bridge import COACH_TIER_STAFF_SLOTS, MEDICAL_STAFF_OPTIONS, OVERSEAS_CAMPS
         coach_status['max_slots'] = COACH_TIER_STAFF_SLOTS.get(
             bridge._get_camp_tier(), 1)
+
+        # Ship EC1 C+D — surface medical + overseas state
+        player_fighters = bridge.get_player_fighters()
+        medical_by_fid = {s['fighter_id']: s
+                          for s in bridge.get_medical_staff()}
+        overseas_by_fid = {t['fighter_id']: t
+                           for t in (bridge._overseas_trips or [])}
+        fighter_intel = []
+        for f in player_fighters:
+            fighter_intel.append({
+                'fighter':       f,
+                'medical_staff': medical_by_fid.get(f.fighter_id),
+                'overseas_trip': overseas_by_fid.get(f.fighter_id),
+                'overseas_opts': bridge.get_overseas_options(f.fighter_id),
+            })
+
         return render_template('facility.html',
             week=bridge.week_number,
             facility=fdata,
             coach_status=coach_status,
+            medical_options=MEDICAL_STAFF_OPTIONS,
+            overseas_camps=OVERSEAS_CAMPS,
+            fighter_intel=fighter_intel,
         )
+
+    @app.route('/medical/hire/<fighter_id>', methods=['POST'])
+    def hire_medical_staff(fighter_id):
+        """Hire medical staff for a player fighter."""
+        bridge = get_bridge()
+        staff_key = request.form.get('staff_key', '')
+        result = bridge.hire_medical_staff(fighter_id, staff_key)
+        if result.get('success'):
+            flash(result.get('message', 'Medical staff hired'), 'success')
+        else:
+            flash(result.get('error', 'Could not hire medical staff'), 'error')
+        return redirect(url_for('facility'))
+
+    @app.route('/medical/fire/<fighter_id>', methods=['POST'])
+    def fire_medical_staff(fighter_id):
+        """Release a fighter's medical staff."""
+        bridge = get_bridge()
+        result = bridge.fire_medical_staff(fighter_id)
+        if result.get('success'):
+            flash(result.get('message', 'Medical staff released'), 'success')
+        else:
+            flash(result.get('error', 'Could not release medical staff'), 'error')
+        return redirect(url_for('facility'))
+
+    @app.route('/overseas/send/<fighter_id>', methods=['POST'])
+    def send_overseas(fighter_id):
+        """Send a player fighter on an overseas training camp."""
+        bridge = get_bridge()
+        camp_tier = request.form.get('camp_tier', '')
+        result = bridge.send_overseas(fighter_id, camp_tier)
+        if result.get('success'):
+            flash(result.get('message', 'Fighter sent abroad'), 'success')
+        else:
+            flash(result.get('error', 'Could not send fighter'), 'error')
+        return redirect(url_for('facility'))
 
     @app.route('/coach/fire', methods=['POST'])
     def fire_coach():

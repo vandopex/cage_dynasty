@@ -849,6 +849,87 @@ _SPONSOR_BY_ID = {
 # _fighter_data[fid]['sponsor_milestones_fired'] set of
 # "sponsor_id:trigger" strings.
 # =============================================================
+# =============================================================
+# MEDICAL STAFF (Ship EC1 C)
+# Tier-gated PT/medical hires that reduce injury recovery time.
+# Stochastic — success_rate chance of full reduction, otherwise half.
+# =============================================================
+MEDICAL_STAFF_OPTIONS = {
+    'basic_pt': {
+        'label':              'Basic PT',
+        'min_camp_tier':      'REGIONAL',
+        'weekly_cost':        800,
+        'recovery_reduction': 2,
+        'success_rate':       0.70,
+    },
+    'sports_med': {
+        'label':              'Sports Medicine',
+        'min_camp_tier':      'NATIONAL',
+        'weekly_cost':        2000,
+        'recovery_reduction': 3,
+        'success_rate':       0.80,
+    },
+    'elite_med': {
+        'label':              'Elite Medical Team',
+        'min_camp_tier':      'ELITE',
+        'weekly_cost':        5000,
+        'recovery_reduction': 4,
+        'success_rate':       0.90,
+    },
+}
+_CAMP_TIER_ORDER = ['GARAGE', 'LOCAL', 'REGIONAL', 'NATIONAL', 'ELITE']
+
+# =============================================================
+# OVERSEAS TRAINING CAMPS (Ship EC1 D)
+# Time-bounded trips with stat boosts by location specialty.
+# Fighter unavailable for fights during the trip.
+# =============================================================
+OVERSEAS_CAMPS = {
+    'entry': {
+        'label':            'Regional Camp',
+        'locations':        ['Mexico City', 'Warsaw', 'Bucharest'],
+        'duration_weeks':   4,
+        'cost':             8000,
+        'success_rate':     0.65,
+        'stat_boost_full':  (2, 4),
+        'stat_boost_half':  (1, 2),
+        'min_camp_tier':    'REGIONAL',
+    },
+    'mid': {
+        'label':            'International Camp',
+        'locations':        ['Bangkok', 'Rio de Janeiro', 'Belo Horizonte'],
+        'duration_weeks':   6,
+        'cost':             18000,
+        'success_rate':     0.75,
+        'stat_boost_full':  (4, 6),
+        'stat_boost_half':  (2, 3),
+        'min_camp_tier':    'NATIONAL',
+    },
+    'elite': {
+        'label':            'Elite International Camp',
+        'locations':        ['Bangkok', 'Dagestan', 'Havana', 'Rio de Janeiro'],
+        'duration_weeks':   8,
+        'cost':             35000,
+        'success_rate':     0.85,
+        'stat_boost_full':  (6, 9),
+        'stat_boost_half':  (3, 4),
+        'min_camp_tier':    'ELITE',
+    },
+}
+
+# Location → trained stats. Falls back to default for any unlisted city.
+_OVERSEAS_LOCATION_STATS = {
+    'Bangkok':       ['kicks', 'clinch_striking'],
+    'Dagestan':      ['takedowns', 'top_control'],
+    'Rio de Janeiro':['submissions', 'guard'],
+    'Belo Horizonte':['submissions', 'guard'],
+    'Havana':        ['boxing', 'cardio'],
+    'Mexico City':   ['chin', 'heart'],
+    'Warsaw':        ['fight_iq', 'cardio'],
+    'Bucharest':     ['fight_iq', 'cardio'],
+}
+
+
 SPONSOR_MILESTONES = {
     'aggressive': [
         {'trigger': 'ko_finish',    'bonus':  3000, 'label': 'KO Performance Bonus'},
@@ -941,6 +1022,16 @@ class GameBridge:
         # an AI fight is in EITHER this list OR _upcoming_cards, never both.
         self._ai_deferred_bookings: List[Dict[str, Any]] = []
         self._fight_offers: List[Dict[str, Any]] = []
+
+        # Ship EC1 C — medical staff per fighter.
+        # Each: {fighter_id, staff_key, hired_week, weekly_cost}
+        self._medical_staff: List[Dict[str, Any]] = []
+
+        # Ship EC1 D — overseas trips in progress.
+        # Each: {fighter_id, camp_tier, location, depart_week,
+        #        return_week, stat_targets, cost_paid, success_rate,
+        #        boost_full, boost_half}
+        self._overseas_trips: List[Dict[str, Any]] = []
         self._completed_events: List[Dict[str, Any]] = []
         self._news_items: List[Dict[str, Any]] = []
 
@@ -1628,6 +1719,8 @@ class GameBridge:
             "amateur_graduates":        self._amateur_graduates,
             "champion_holds":           self._champion_holds,
             "fight_offers":             self._fight_offers,
+            "medical_staff":            self._medical_staff,
+            "overseas_trips":           self._overseas_trips,
             "completed_events":         [
                 {**{k: v for k, v in ev.items() if k != 'fights'},
                  'fights': [clean_fight(f) for f in ev.get('fights', [])]}
@@ -1862,6 +1955,8 @@ class GameBridge:
         # labels preserved).
         self._dfc_event_offset = int(data.get("dfc_event_offset", 0) or 0)
         self._fight_offers            = data.get("fight_offers", [])
+        self._medical_staff           = data.get("medical_staff", [])
+        self._overseas_trips          = data.get("overseas_trips", [])
         self._fighter_cooldowns       = {k: int(v) for k, v in
                                           data.get("fighter_cooldowns", {}).items()}
         self._fighter_signing_available = {k: int(v) for k, v in
@@ -2302,6 +2397,8 @@ class GameBridge:
 
             # Ship S1: weekly sponsor processing — retainers, drops, offers
             self._process_weekly_sponsors(current_week)
+            # Ship EC1 D — overseas trip returns
+            self._process_overseas_returns(current_week)
 
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
@@ -6300,6 +6397,8 @@ class GameBridge:
                 _injured = True
                 injury = generate_training_injury(fighter_id)
                 self._injury_system.add_injury(injury)
+                # Ship EC1 C: medical staff reduction if hired
+                self._apply_medical_recovery_reduction(fighter_id, injury)
                 # Halve gains this week
                 actual_gains = {k: round(v * 0.5, 2) for k, v in actual_gains.items()}
                 # Clear fight_damage after injury fires
@@ -7544,7 +7643,11 @@ class GameBridge:
         # Ship C2: coach salary is part of weekly overhead now
         coach_salary = self._coach_contract.get("salary", 0) if self._coach_contract else 0
 
-        total = overhead + fighter_total + coach_salary
+        # Ship EC1 C: medical staff weekly costs
+        medical_cost = sum(int(s.get('weekly_cost', 0) or 0)
+                           for s in (self._medical_staff or []))
+
+        total = overhead + fighter_total + coach_salary + medical_cost
 
         # Ship C2: check if balance covers everything; if not, mark coach skipped
         if self._camp_balance >= total:
@@ -7859,6 +7962,319 @@ class GameBridge:
             rep_fired.add('top5_reached')
 
         fdata['coach_rep_events_fired'] = list(rep_fired)
+
+    # =========================================================================
+    # MEDICAL STAFF (Ship EC1 C)
+    # =========================================================================
+    def _camp_tier_meets(self, required: str) -> bool:
+        """Returns True if player camp tier >= required tier."""
+        try:
+            current = self._get_camp_tier()
+            return (_CAMP_TIER_ORDER.index(current)
+                    >= _CAMP_TIER_ORDER.index(required))
+        except (ValueError, IndexError):
+            return False
+
+    def hire_medical_staff(self, fighter_id: str,
+                            staff_key: str) -> Dict[str, Any]:
+        """Hire medical staff for a player fighter. Tier-gated."""
+        opt = MEDICAL_STAFF_OPTIONS.get(staff_key)
+        if not opt:
+            return {"success": False,
+                    "error": "Unknown medical staff tier"}
+        if not self._camp_tier_meets(opt['min_camp_tier']):
+            return {"success": False,
+                    "error": f"Requires {opt['min_camp_tier']} facility"}
+        # Verify the fighter is on player roster
+        player_ids = {f.fighter_id for f in self.get_player_fighters()}
+        if fighter_id not in player_ids:
+            return {"success": False,
+                    "error": "Fighter not on your roster"}
+        # Already has staff?
+        if any(s.get('fighter_id') == fighter_id
+               for s in self._medical_staff):
+            return {"success": False,
+                    "error": "Fighter already has medical staff"}
+        cost = opt['weekly_cost']
+        if self._camp_balance < cost:
+            return {"success": False,
+                    "error": f"Need ${cost:,}, have ${self._camp_balance:,}"}
+        self._camp_balance -= cost
+        current_week = (self._game_state.week_number
+                        if self._game_state else 0)
+        self._medical_staff.append({
+            'fighter_id':  fighter_id,
+            'staff_key':   staff_key,
+            'hired_week':  current_week,
+            'weekly_cost': cost,
+        })
+        fighter = (self._game_state.get_fighter(fighter_id)
+                   if self._game_state else None)
+        _fname = getattr(fighter, 'name', fighter_id) if fighter else fighter_id
+        self._news_items.insert(0, {
+            'headline': (f"🏥 {opt['label']} hired for {_fname} "
+                         f"— ${cost:,}/wk."),
+            'category':   'training',
+            'week':       current_week,
+            'fighter_id': fighter_id,
+        })
+        self._clear_cache()
+        return {"success": True,
+                "message": f"Hired {opt['label']} for {_fname}"}
+
+    def fire_medical_staff(self, fighter_id: str) -> Dict[str, Any]:
+        """Release medical staff from a player fighter."""
+        before = len(self._medical_staff)
+        self._medical_staff = [s for s in self._medical_staff
+                               if s.get('fighter_id') != fighter_id]
+        if len(self._medical_staff) == before:
+            return {"success": False,
+                    "error": "No medical staff to release"}
+        current_week = (self._game_state.week_number
+                        if self._game_state else 0)
+        fighter = (self._game_state.get_fighter(fighter_id)
+                   if self._game_state else None)
+        _fname = getattr(fighter, 'name', fighter_id) if fighter else fighter_id
+        self._news_items.insert(0, {
+            'headline': f"🏥 Medical staff released for {_fname}.",
+            'category':   'training',
+            'week':       current_week,
+            'fighter_id': fighter_id,
+        })
+        self._clear_cache()
+        return {"success": True, "message": f"Released medical staff"}
+
+    def get_medical_staff(self) -> List[Dict[str, Any]]:
+        """Return medical staff list enriched for UI."""
+        out = []
+        for s in self._medical_staff:
+            opt = MEDICAL_STAFF_OPTIONS.get(s.get('staff_key'), {})
+            ftr = (self._game_state.get_fighter(s.get('fighter_id', ''))
+                   if self._game_state else None)
+            out.append({
+                **s,
+                'label':              opt.get('label', s.get('staff_key', '?')),
+                'recovery_reduction': opt.get('recovery_reduction', 0),
+                'success_rate':       opt.get('success_rate', 0),
+                'fighter_name':       getattr(ftr, 'name', s.get('fighter_id', ''))
+                                      if ftr else s.get('fighter_id', ''),
+            })
+        return out
+
+    def _apply_medical_recovery_reduction(
+            self, fighter_id: str, injury) -> int:
+        """When an injury fires for a player fighter, apply medical
+        staff reduction with stochastic success roll. Mutates the
+        injury's recovery_weeks + return_week in place. Returns
+        the actual reduction applied (0 if no staff)."""
+        import random as _mrnd
+        ms = next((s for s in self._medical_staff
+                   if s.get('fighter_id') == fighter_id), None)
+        if not ms:
+            return 0
+        opt = MEDICAL_STAFF_OPTIONS.get(ms.get('staff_key'))
+        if not opt:
+            return 0
+        if _mrnd.random() < opt['success_rate']:
+            reduction = opt['recovery_reduction']
+        else:
+            reduction = opt['recovery_reduction'] // 2
+        current_week = (self._game_state.week_number
+                        if self._game_state else 0)
+        old_weeks = int(getattr(injury, 'recovery_weeks', 0) or 0)
+        new_weeks = max(1, old_weeks - reduction)
+        actual = old_weeks - new_weeks
+        try:
+            injury.recovery_weeks = new_weeks
+            if hasattr(injury, 'return_week'):
+                injury.return_week = max(
+                    current_week + 1,
+                    int(getattr(injury, 'return_week', 0) or 0) - actual)
+        except Exception:
+            return 0
+        if actual > 0 and self._game_state:
+            fighter = self._game_state.get_fighter(fighter_id)
+            _fname = getattr(fighter, 'name', fighter_id) if fighter else fighter_id
+            self._news_items.insert(0, {
+                'headline': (f"🏥 {opt['label']} reduced {_fname}'s "
+                             f"recovery by {actual}w "
+                             f"({old_weeks}w → {new_weeks}w)."),
+                'category':   'injury',
+                'week':       current_week,
+                'fighter_id': fighter_id,
+            })
+        return actual
+
+    # =========================================================================
+    # OVERSEAS TRAINING CAMPS (Ship EC1 D)
+    # =========================================================================
+    def _stat_targets_for_overseas(
+            self, fighter, location: str) -> List[str]:
+        """Pick stat targets for an overseas trip. Location specialty
+        is primary; fighter style is secondary fallback if location
+        unlisted."""
+        if location in _OVERSEAS_LOCATION_STATS:
+            return list(_OVERSEAS_LOCATION_STATS[location])
+        # Style fallback
+        style = str(getattr(fighter, 'fighting_style', '') or '').lower()
+        if 'thai' in style:        return ['kicks', 'clinch_striking']
+        if 'wrestl' in style:      return ['takedowns', 'top_control']
+        if 'bjj' in style or 'submission' in style:
+            return ['submissions', 'guard']
+        if 'box' in style:         return ['boxing', 'cardio']
+        return ['fight_iq', 'cardio']
+
+    def send_overseas(
+            self, fighter_id: str, camp_tier: str) -> Dict[str, Any]:
+        """Send a fighter on an overseas training trip."""
+        import random as _ornd
+        opt = OVERSEAS_CAMPS.get(camp_tier)
+        if not opt:
+            return {"success": False,
+                    "error": "Unknown camp tier"}
+        if not self._camp_tier_meets(opt['min_camp_tier']):
+            return {"success": False,
+                    "error": f"Requires {opt['min_camp_tier']} facility"}
+        if not self._game_state:
+            return {"success": False, "error": "No game loaded"}
+
+        player_ids = {f.fighter_id for f in self.get_player_fighters()}
+        if fighter_id not in player_ids:
+            return {"success": False,
+                    "error": "Fighter not on your roster"}
+        # Already abroad?
+        if any(t.get('fighter_id') == fighter_id
+               for t in self._overseas_trips):
+            return {"success": False,
+                    "error": "Fighter is already abroad"}
+        # Currently injured?
+        if (INJURY_AVAILABLE and self._injury_system
+                and not self._injury_system.is_cleared_to_fight(fighter_id)):
+            return {"success": False,
+                    "error": "Fighter is injured"}
+        # Booked for fight within trip window?
+        current_week = self._game_state.week_number
+        return_week  = current_week + opt['duration_weeks']
+        for sf in self._scheduled_fights or []:
+            if (sf.get('fighter1_id') == fighter_id
+                    or sf.get('fighter2_id') == fighter_id):
+                fwk = sf.get('week', 99)
+                if fwk <= return_week:
+                    return {"success": False,
+                            "error": f"Booked for a fight in Week {fwk}"}
+        cost = opt['cost']
+        if self._camp_balance < cost:
+            return {"success": False,
+                    "error": f"Need ${cost:,}, have ${self._camp_balance:,}"}
+
+        self._camp_balance -= cost
+        location = _ornd.choice(opt['locations'])
+        fighter = self._game_state.get_fighter(fighter_id)
+        stat_targets = self._stat_targets_for_overseas(fighter, location)
+
+        self._overseas_trips.append({
+            'fighter_id':    fighter_id,
+            'camp_tier':     camp_tier,
+            'location':      location,
+            'depart_week':   current_week,
+            'return_week':   return_week,
+            'stat_targets':  stat_targets,
+            'cost_paid':     cost,
+            'success_rate':  opt['success_rate'],
+            'boost_full':    list(opt['stat_boost_full']),
+            'boost_half':    list(opt['stat_boost_half']),
+        })
+        _fname = getattr(fighter, 'name', fighter_id) if fighter else fighter_id
+        self._news_items.insert(0, {
+            'headline': (f"✈️ {_fname} departs for {location} — "
+                         f"{opt['duration_weeks']}w camp "
+                         f"(${cost:,})."),
+            'category':   'training',
+            'week':       current_week,
+            'fighter_id': fighter_id,
+        })
+        self._clear_cache()
+        return {"success": True,
+                "message": f"Sent {_fname} to {location} for {opt['duration_weeks']}w"}
+
+    def _process_overseas_returns(self, current_week: int) -> None:
+        """Called weekly from advance_week. Returning fighters get
+        stochastic stat gains applied to both FighterRecord and
+        _fighter_data (per OVR mirror fix)."""
+        import random as _rnd
+        if not self._game_state:
+            return
+        still_abroad = []
+        for trip in self._overseas_trips:
+            if trip.get('return_week', 0) > current_week:
+                still_abroad.append(trip)
+                continue
+
+            fighter_id = trip.get('fighter_id', '')
+            fighter = self._game_state.get_fighter(fighter_id)
+            if not fighter:
+                continue  # silently drop, fighter no longer exists
+
+            success = _rnd.random() < float(trip.get('success_rate', 0.65))
+            boost_range = (trip.get('boost_full', [2, 4])
+                           if success
+                           else trip.get('boost_half', [1, 2]))
+            applied = {}
+            fdata = self._game_state._fighter_data.setdefault(
+                fighter_id, {})
+            for stat in trip.get('stat_targets', []) or []:
+                bonus = _rnd.randint(int(boost_range[0]),
+                                     int(boost_range[1]))
+                old_val = float(fdata.get(
+                    stat, getattr(fighter, stat, 60)))
+                new_val = round(min(100.0, old_val + bonus), 2)
+                fdata[stat] = new_val
+                try:
+                    setattr(fighter, stat, new_val)
+                except Exception:
+                    pass
+                applied[stat] = bonus
+            # Recompute OVR if helper exists
+            try:
+                fighter.overall_rating = self._compute_ovr(fighter)
+            except Exception:
+                pass
+
+            label = "outstanding camp" if success else "below expectations"
+            stat_strs = ", ".join(f"{s} +{b}" for s, b in applied.items())
+            _fname = getattr(fighter, 'name', fighter_id)
+            self._news_items.insert(0, {
+                'headline': (f"✈️ {_fname} returns from "
+                             f"{trip.get('location', 'abroad')} — "
+                             f"{label}. {stat_strs}."),
+                'category':   'training',
+                'week':       current_week,
+                'fighter_id': fighter_id,
+            })
+        self._overseas_trips = still_abroad
+
+    def get_overseas_options(
+            self, fighter_id: str) -> List[Dict[str, Any]]:
+        """Available overseas trips for a fighter. Marks if currently
+        abroad and which tiers their camp can access."""
+        currently = next((t for t in self._overseas_trips
+                          if t.get('fighter_id') == fighter_id), None)
+        out = []
+        for tier_key, opt in OVERSEAS_CAMPS.items():
+            out.append({
+                'tier_key':       tier_key,
+                'label':          opt['label'],
+                'duration_weeks': opt['duration_weeks'],
+                'cost':           opt['cost'],
+                'min_camp_tier':  opt['min_camp_tier'],
+                'available':      self._camp_tier_meets(opt['min_camp_tier']),
+                'success_rate':   opt['success_rate'],
+                'stat_boost_full': opt['stat_boost_full'],
+                'stat_boost_half': opt['stat_boost_half'],
+                'currently_abroad': currently is not None,
+                'current_trip':   currently,
+            })
+        return out
 
     # =========================================================================
     # SCOUTING — STRENGTHS / WEAKNESSES / REPORT
@@ -10933,6 +11349,8 @@ class GameBridge:
                         _opp_id = winner.fighter_id if _is_loser else loser.fighter_id
                         _inj = generate_fight_injury(_ftr.fighter_id, _fo, _is_loser, _opp_id)
                         self._injury_system.add_injury(_inj)
+                        # Ship EC1 C: medical staff reduction if hired
+                        self._apply_medical_recovery_reduction(_ftr.fighter_id, _inj)
                         print(f"  🤕 [FIGHT INJURY] {_ftr.name} — {_inj.description} "
                               f"({_inj.severity_name}) · {_inj.recovery_weeks}w")
                         if getattr(_ftr, 'is_champion', False):
@@ -12620,7 +13038,13 @@ class GameBridge:
         self._fighter_cooldowns[fighter.fighter_id] = week + cooldown
 
     def _is_available(self, fighter_id: str, week: int) -> bool:
-        """True if fighter has no cooldown and signing delay blocking them."""
+        """True if fighter has no cooldown, signing delay, or overseas
+        trip blocking them."""
+        # Ship EC1 D — block fighters currently abroad
+        if any(t.get('fighter_id') == fighter_id
+               and t.get('return_week', 0) > week
+               for t in (self._overseas_trips or [])):
+            return False
         return (self._fighter_cooldowns.get(fighter_id, 0) <= week and
                 self._fighter_signing_available.get(fighter_id, 0) <= week)
 
@@ -14751,6 +15175,8 @@ class GameBridge:
                     _opp_inj = winner_id if _is_loser_inj else loser_id
                     _inj = generate_fight_injury(_fid_inj, _fo, _is_loser_inj, _opp_inj)
                     self._injury_system.add_injury(_inj)
+                    # Ship EC1 C: medical staff reduction if hired
+                    self._apply_medical_recovery_reduction(_fid_inj, _inj)
                     _ftr_inj = self._game_state.get_fighter(_fid_inj)
                     _inj_name = getattr(_ftr_inj, 'name', _fid_inj) if _ftr_inj else _fid_inj
                     print(f"  🤕 [FIGHT INJURY] {_inj_name} — {_inj.description} "
