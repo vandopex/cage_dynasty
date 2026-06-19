@@ -1076,6 +1076,12 @@ def register_routes(app):
             except ValueError:
                 floors[stat] = 0
         bridge.set_stat_floors(fighter_id, floors)
+        # Silent mode: invoked from the queue-form-submit hook in
+        # training.html so floors save quietly alongside the queue start.
+        # Skip the flash (would otherwise stack with the queue flash) and
+        # return 204 so the fetch caller doesn't have to follow a redirect.
+        if request.form.get('silent') == '1':
+            return ('', 204)
         flash(f"Stat floors saved.", "success")
         return redirect(url_for('training'))
 

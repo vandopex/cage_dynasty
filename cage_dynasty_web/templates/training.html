@@ -321,7 +321,10 @@
         </div>
     </form>
 
-    <details style="margin:0 var(--spacing-md) var(--spacing-md);">
+    {# Decay floors UI hidden — templates set floors, maintain protects.
+       Form remains rendered (display:none) so applyTemplate can populate
+       inputs and the queue-form submit hook can fetch-POST them silently. #}
+    <details style="margin:0 var(--spacing-md) var(--spacing-md);display:none;">
     <summary style="cursor:pointer;font-size:.72rem;color:var(--text-muted);
                     letter-spacing:.08em;text-transform:uppercase;
                     padding:4px 0;list-style:none;">
@@ -683,64 +686,7 @@
     {% endif %}
     </details>
 
-    {% if decay_risks and decay_risks.get(fighter.fighter_id) %}
-    {% set risks = decay_risks[fighter.fighter_id] %}
-    {# Build set of stats already in the queue — they're being trained,
-       not decaying. Also includes 'maintain' as a sentinel: if any goal
-       is 'maintain', the floor system protects everything, so all
-       decay pills are suppressed. #}
-    {% set _queued_stats = [] %}
-    {% set _has_maintain = namespace(v=False) %}
-    {% if fighter.training_queue %}
-        {% for _g in fighter.training_queue %}
-            {% if _g.focus == 'maintain' %}
-                {% set _has_maintain.v = True %}
-            {% else %}
-                {% set _ = _queued_stats.append(_g.focus) %}
-            {% endif %}
-        {% endfor %}
-    {% endif %}
-    {% set _filtered = [] %}
-    {% for stat, info in risks.items() %}
-        {% if not _has_maintain.v and stat not in _queued_stats %}
-            {% set _ = _filtered.append((stat, info)) %}
-        {% endif %}
-    {% endfor %}
-    {% if _filtered %}
-    <div style="margin:0 var(--spacing-md) var(--spacing-md);
-                padding:var(--spacing-sm) var(--spacing-md);
-                background:rgba(220,38,38,.06);border-radius:6px;
-                border-left:3px solid rgba(220,38,38,.3);">
-        <div style="font-size:.7rem;font-weight:600;
-                    color:var(--blood-red);margin-bottom:var(--spacing-sm);">
-            ⚠️ Stats currently decaying — consider raising floors
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:4px;">
-        {% for stat, info in _filtered %}
-        <span style="font-size:.62rem;padding:2px 6px;border-radius:3px;
-                     background:{% if info.risk_level == 'Critical' %}rgba(220,38,38,.2)
-                                {% elif info.risk_level == 'High' %}rgba(220,38,38,.15)
-                                {% elif info.risk_level == 'Medium' %}rgba(245,158,11,.12)
-                                {% elif info.risk_level == 'Warning' %}rgba(245,158,11,.08)
-                                {% else %}rgba(255,255,255,.06){% endif %};
-                     color:{% if info.risk_level in ('Critical','High') %}var(--blood-red)
-                           {% elif info.risk_level in ('Medium','Warning') %}var(--warning)
-                           {% else %}var(--text-muted){% endif %};
-                     border:1px solid {% if info.risk_level in ('Critical','High') %}rgba(220,38,38,.3)
-                                      {% elif info.risk_level in ('Medium','Warning') %}rgba(245,158,11,.2)
-                                      {% else %}rgba(255,255,255,.1){% endif %};">
-            {{ stat | replace('_',' ') | title }}
-            {% if info.risk_level == 'Critical' %}🔴
-            {% elif info.risk_level == 'High' %}🟠
-            {% elif info.risk_level == 'Medium' %}🟡
-            {% elif info.risk_level == 'Warning' %}⚠️
-            {% endif %}
-        </span>
-        {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-    {% endif %}
+    {# Decay-warning pills removed — templates + maintain are the system. #}
 </div>
 {% endfor %}
 
@@ -1999,6 +1945,26 @@ function addMaintainRow(fighterId) {
     container.appendChild(row);
 }
 
+// Ship: auto-save floors when Start Queue is clicked. The decay floors
+// UI is hidden — templates set floor values into the hidden form, and
+// this hook flushes them to the server before the queue form submits.
+// Uses silent=1 so the floors endpoint returns 204 without flashing.
+document.addEventListener('submit', function(e) {
+    const form = e.target;
+    if (!form.id || !form.id.startsWith('queue-form-')) return;
+    if (form._floorsSent) return;  // re-entry guard after fetch resolves
+    const fid = form.id.replace('queue-form-', '');
+    const floorsForm = document.getElementById('floors-form-' + fid);
+    if (!floorsForm) return;
+    e.preventDefault();
+    form._floorsSent = true;
+    const fd = new FormData(floorsForm);
+    fd.append('silent', '1');
+    fetch(floorsForm.action, { method: 'POST', body: fd })
+        .catch(() => {})  // network failure shouldn't block queue start
+        .finally(() => { form.submit(); });
+});
+
 // Ship: coach recommendation per fighter card. Picks the template
 // with the largest aggregate gap between target and current stat
 // (= biggest "need score"), renders label + short flavor above the
@@ -2018,11 +1984,31 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         if (!rec || !rec.label) return;
-        el.innerHTML = '💬 Coach recommends: '
+
+        // Top 2-3 non-maintain queue stats — surface them as small pills
+        // so the player can see what the recommended template trains
+        // without opening the picker.
+        const recStats = (rec.queue || [])
+            .filter(g => g.focus && g.focus !== 'maintain')
+            .slice(0, 3)
+            .map(g => g.focus.replace(/_/g, ' ').replace(/\b\w/g,
+                  c => c.toUpperCase()));
+        const pills = recStats.map(s =>
+            '<span style="display:inline-block;font-size:.62rem;'
+            + 'padding:1px 6px;margin-left:4px;border-radius:3px;'
+            + 'background:rgba(99,179,237,.08);'
+            + 'border:1px solid rgba(99,179,237,.25);'
+            + 'color:var(--info);">↑ ' + s + '</span>'
+        ).join('');
+
+        el.innerHTML =
+            '<div>💬 Coach recommends: '
             + '<span style="color:var(--gold);font-weight:600;">'
-            + rec.label + '</span>'
-            + ' — <span style="color:var(--text-secondary);font-style:italic;">"'
-            + (rec.desc || '') + '"</span>';
+            + rec.label + '</span></div>'
+            + '<div style="margin-top:2px;">'
+            + '<span style="color:var(--text-secondary);font-style:italic;">"'
+            + (rec.desc || '') + '"</span>'
+            + pills + '</div>';
     });
 });
 </script>
