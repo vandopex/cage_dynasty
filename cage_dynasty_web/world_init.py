@@ -2753,10 +2753,18 @@ class WorldInitializer:
                                              weights=[0.55, 0.45])[0]
 
                     # Remap world-gen attribute keys to the trigger
-                    # keys the traits module expects (iq -> fight_iq).
+                    # keys the traits module expects. World-gen produces
+                    # iq/wrestling/accuracy; trait triggers reference
+                    # fight_iq/takedowns/striking_defense. Without these
+                    # remaps, Veteran Savvy / Takedown Artist / Slippery
+                    # never fire via the attribute path at world gen.
                     _attr_for_traits = dict(fighter.attributes)
                     if 'iq' in _attr_for_traits and 'fight_iq' not in _attr_for_traits:
                         _attr_for_traits['fight_iq'] = _attr_for_traits['iq']
+                    if 'wrestling' in _attr_for_traits and 'takedowns' not in _attr_for_traits:
+                        _attr_for_traits['takedowns'] = _attr_for_traits['wrestling']
+                    if 'accuracy' in _attr_for_traits and 'striking_defense' not in _attr_for_traits:
+                        _attr_for_traits['striking_defense'] = _attr_for_traits['accuracy']
 
                     _traits = _assign_traits(_attr_for_traits, num_traits=_n)
                     _fdata['traits'] = list(_traits) if _traits else []
