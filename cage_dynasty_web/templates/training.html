@@ -802,207 +802,896 @@ function loadStyleTemplate(fighterId, style,
     const intensity = (careerPhase === 'Declining' || careerPhase === 'Veteran')
         ? 'MODERATE' : 'INTENSE';
 
+    // ── Template library — 4 templates per style + S&C universal ──
+    // Each style is an ARRAY of templates with label/desc/queue/floors.
+    // Strength & Conditioning is a single universal template.
+    // Striker + Balanced kept as single-template fallbacks.
     const templates = {
-        'Orthodox Boxer':   {
+
+        // ── STRIKING ────────────────────────────────
+        'Orthodox Boxer': [
+            {
+                label: 'Philly Shell',
+                desc:  'Defensive boxing. Counter-punch off the shell.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,82)},
+                    {focus:'striking_defense', target:goal(strDef,78)},
+                    {focus:'chin', target:goal(chin,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:65,striking_defense:62,chin:58,
+                         speed:52,cardio:55,fight_iq:50,recovery:48},
+            },
+            {
+                label: 'Body Snatcher',
+                desc:  'Body work camp. Break them down from the inside.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,80)},
+                    {focus:'clinch_striking', target:goal(clinch,72)},
+                    {focus:'strength', target:goal(strength,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:62,clinch_striking:55,strength:55,
+                         striking_defense:52,cardio:58,chin:52,fight_iq:48},
+            },
+            {
+                label: 'Jab & Move',
+                desc:  'Distance management. Points and movement.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'speed', target:goal(speed,75)},
+                    {focus:'fight_iq', target:goal(fightIq,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:60,speed:60,fight_iq:58,
+                         striking_defense:55,cardio:60,chin:50,composure:50},
+            },
+            {
+                label: 'Pressure Cooker',
+                desc:  'Volume and forward pressure. Smother them.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,80)},
+                    {focus:'cardio', target:goal(cardio,78)},
+                    {focus:'strength', target:goal(strength,65)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:62,cardio:65,strength:55,
+                         chin:55,heart:52,striking_defense:50,fight_iq:48},
+            },
+        ],
+
+        'Muay Thai': [
+            {
+                label: 'Eight Limbs',
+                desc:  'Full Muay Thai. Every weapon, every range.',
+                queue: [
+                    {focus:'kicks', target:goal(kicks,82)},
+                    {focus:'clinch_striking', target:goal(clinch,78)},
+                    {focus:'cardio', target:goal(cardio,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {kicks:65,clinch_striking:60,cardio:62,
+                         boxing:52,strength:52,heart:55,striking_defense:50},
+            },
+            {
+                label: 'Teep & Check',
+                desc:  'Defensive Muay Thai. Distance and timing.',
+                queue: [
+                    {focus:'kicks', target:goal(kicks,80)},
+                    {focus:'striking_defense', target:goal(strDef,75)},
+                    {focus:'fight_iq', target:goal(fightIq,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {kicks:62,striking_defense:58,fight_iq:55,
+                         cardio:58,clinch_striking:52,composure:50,speed:50},
+            },
+            {
+                label: 'Dirty Clinch',
+                desc:  'Clinch control and knees. Make it ugly.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,82)},
+                    {focus:'top_control', target:goal(topCtrl,65)},
+                    {focus:'strength', target:goal(strength,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:65,top_control:50,strength:58,
+                         kicks:55,cardio:60,heart:52,takedown_defense:48},
+            },
+            {
+                label: 'Heavy Hands',
+                desc:  'Power emphasis. One shot can end it.',
+                queue: [
+                    {focus:'kicks', target:goal(kicks,78)},
+                    {focus:'strength', target:goal(strength,75)},
+                    {focus:'chin', target:goal(chin,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {kicks:60,strength:62,chin:58,
+                         boxing:52,cardio:58,heart:55,clinch_striking:50},
+            },
+        ],
+
+        'Kickboxer': [
+            {
+                label: 'Dutch Style',
+                desc:  'Boxing and kicks in combination. Complete striker.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'kicks', target:goal(kicks,78)},
+                    {focus:'cardio', target:goal(cardio,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:60,kicks:60,cardio:62,
+                         striking_defense:55,speed:52,chin:52,fight_iq:48},
+            },
+            {
+                label: 'K-1 Pressure',
+                desc:  'Forward pressure with volume kicks.',
+                queue: [
+                    {focus:'kicks', target:goal(kicks,82)},
+                    {focus:'cardio', target:goal(cardio,78)},
+                    {focus:'strength', target:goal(strength,65)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {kicks:65,cardio:65,strength:55,
+                         chin:55,boxing:52,heart:55,fight_iq:48},
+            },
+            {
+                label: 'Switch Hitter',
+                desc:  'Stance switching to confuse and exploit.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,78)},
+                    {focus:'speed', target:goal(speed,75)},
+                    {focus:'kicks', target:goal(kicks,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:60,speed:62,kicks:58,
+                         boxing:55,composure:52,striking_defense:50,cardio:58},
+            },
+            {
+                label: 'Head Hunter',
+                desc:  'KO hunting. Take shots to land the big one.',
+                queue: [
+                    {focus:'kicks', target:goal(kicks,82)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'chin', target:goal(chin,75)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {kicks:65,strength:60,chin:62,
+                         boxing:52,heart:58,cardio:55,recovery:50},
+            },
+        ],
+
+        'Karate': [
+            {
+                label: 'Point Scoring',
+                desc:  'Speed bursts and distance control. Score and move.',
+                queue: [
+                    {focus:'speed', target:goal(speed,80)},
+                    {focus:'fight_iq', target:goal(fightIq,75)},
+                    {focus:'striking_defense', target:goal(strDef,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {speed:65,fight_iq:60,striking_defense:58,
+                         kicks:52,cardio:60,composure:52,boxing:48},
+            },
+            {
+                label: 'Full Contact',
+                desc:  'Kyokushin style. Condition to absorb and deliver.',
+                queue: [
+                    {focus:'kicks', target:goal(kicks,80)},
+                    {focus:'chin', target:goal(chin,75)},
+                    {focus:'cardio', target:goal(cardio,75)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {kicks:62,chin:62,cardio:65,
+                         strength:55,heart:55,boxing:50,recovery:50},
+            },
+            {
+                label: 'Blitz Attack',
+                desc:  'Explosive forward entries. Close distance fast.',
+                queue: [
+                    {focus:'speed', target:goal(speed,82)},
+                    {focus:'boxing', target:goal(boxing,72)},
+                    {focus:'fight_iq', target:goal(fightIq,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {speed:68,boxing:55,fight_iq:58,
+                         kicks:52,cardio:60,composure:50,striking_defense:48},
+            },
+            {
+                label: 'Defensive Shell',
+                desc:  'Elusive movement. Make them miss, make them pay.',
+                queue: [
+                    {focus:'striking_defense', target:goal(strDef,80)},
+                    {focus:'composure', target:goal(composure,72)},
+                    {focus:'speed', target:goal(speed,75)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {striking_defense:65,composure:58,speed:62,
+                         fight_iq:55,kicks:50,cardio:58,boxing:48},
+            },
+        ],
+
+        'Brawler': [
+            {
+                label: 'Bar Room',
+                desc:  'Pure aggression. First to land wins.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'strength', target:goal(strength,75)},
+                    {focus:'chin', target:goal(chin,78)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:58,strength:62,chin:65,
+                         heart:60,cardio:55,clinch_striking:50,recovery:50},
+            },
+            {
+                label: 'Dirty Fighter',
+                desc:  'Clinch and dirty boxing. Make it a street fight.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,80)},
+                    {focus:'heart', target:goal(heart,75)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:62,heart:62,strength:60,
+                         chin:58,boxing:52,cardio:58,takedown_defense:48},
+            },
+            {
+                label: 'Iron Chin',
+                desc:  'Condition to absorb punishment and keep coming.',
+                queue: [
+                    {focus:'chin', target:goal(chin,82)},
+                    {focus:'heart', target:goal(heart,78)},
+                    {focus:'recovery', target:goal(recovery,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {chin:68,heart:65,recovery:58,
+                         boxing:52,cardio:58,strength:52,composure:50},
+            },
+            {
+                label: 'Wild Swinger',
+                desc:  'KO or bust. Bet everything on one big shot.',
+                queue: [
+                    {focus:'strength', target:goal(strength,80)},
+                    {focus:'boxing', target:goal(boxing,72)},
+                    {focus:'chin', target:goal(chin,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {strength:65,boxing:55,chin:60,
+                         heart:60,cardio:52,clinch_striking:48,recovery:50},
+            },
+        ],
+
+        'Counter Striker': [
+            {
+                label: 'Rope-a-Dope',
+                desc:  'Bait and punish. Let them tire themselves out.',
+                queue: [
+                    {focus:'composure', target:goal(composure,80)},
+                    {focus:'striking_defense', target:goal(strDef,78)},
+                    {focus:'boxing', target:goal(boxing,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {composure:65,striking_defense:62,boxing:58,
+                         chin:58,fight_iq:55,cardio:55,recovery:50},
+            },
+            {
+                label: 'Surgeon',
+                desc:  'Precise counters. Pick them apart.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,82)},
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'striking_defense', target:goal(strDef,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:68,boxing:62,striking_defense:60,
+                         speed:55,composure:55,cardio:52,chin:50},
+            },
+            {
+                label: 'Reactive',
+                desc:  'Read and react. Speed of thought over speed of hand.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,80)},
+                    {focus:'speed', target:goal(speed,78)},
+                    {focus:'composure', target:goal(composure,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:65,speed:65,composure:60,
+                         striking_defense:58,boxing:52,cardio:55,chin:50},
+            },
+            {
+                label: 'Trap Setter',
+                desc:  'Manufacture openings. Set up the finish.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,82)},
+                    {focus:'boxing', target:goal(boxing,75)},
+                    {focus:'strength', target:goal(strength,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:68,boxing:60,strength:55,
+                         composure:58,striking_defense:55,speed:52,cardio:52},
+            },
+        ],
+
+        'Point Fighter': [
+            {
+                label: 'Speed Demon',
+                desc:  'Pure speed. Be there and gone before they react.',
+                queue: [
+                    {focus:'speed', target:goal(speed,85)},
+                    {focus:'kicks', target:goal(kicks,72)},
+                    {focus:'striking_defense', target:goal(strDef,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {speed:70,kicks:58,striking_defense:55,
+                         cardio:62,boxing:50,fight_iq:52,composure:48},
+            },
+            {
+                label: 'Touch & Go',
+                desc:  'In and out. Never where they expect you.',
+                queue: [
+                    {focus:'speed', target:goal(speed,80)},
+                    {focus:'striking_defense', target:goal(strDef,78)},
+                    {focus:'fight_iq', target:goal(fightIq,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {speed:65,striking_defense:62,fight_iq:60,
+                         composure:55,kicks:50,cardio:60,boxing:48},
+            },
+            {
+                label: 'Volume Points',
+                desc:  'Stack the scorecard. Win every round on output.',
+                queue: [
+                    {focus:'cardio', target:goal(cardio,82)},
+                    {focus:'boxing', target:goal(boxing,75)},
+                    {focus:'fight_iq', target:goal(fightIq,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {cardio:68,boxing:60,fight_iq:58,
+                         speed:60,kicks:50,composure:50,striking_defense:52},
+            },
+            {
+                label: 'Combo Artist',
+                desc:  'Chain combinations for maximum scoring.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,80)},
+                    {focus:'fight_iq', target:goal(fightIq,78)},
+                    {focus:'speed', target:goal(speed,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:62,fight_iq:62,speed:60,
+                         cardio:60,kicks:50,composure:52,striking_defense:50},
+            },
+        ],
+
+        'Pressure Fighter': [
+            {
+                label: 'Cut Off The Cage',
+                desc:  'Smother them. No escape, no rest.',
+                queue: [
+                    {focus:'cardio', target:goal(cardio,82)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'fight_iq', target:goal(fightIq,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {cardio:68,strength:60,fight_iq:58,
+                         boxing:55,chin:52,heart:55,takedown_defense:48},
+            },
+            {
+                label: 'Body Attack',
+                desc:  'Target the body. Break them down over rounds.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'clinch_striking', target:goal(clinch,75)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:60,clinch_striking:58,strength:60,
+                         cardio:62,chin:52,heart:52,fight_iq:48},
+            },
+            {
+                label: 'Chain Wrestling',
+                desc:  'Pressure into takedowns. Keep them guessing.',
+                queue: [
+                    {focus:'cardio', target:goal(cardio,78)},
+                    {focus:'takedowns', target:goal(takedowns,72)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {cardio:65,takedowns:55,strength:58,
+                         boxing:55,chin:50,top_control:48,fight_iq:48},
+            },
+            {
+                label: 'Relentless',
+                desc:  'Pure output volume. More punches than they can handle.',
+                queue: [
+                    {focus:'cardio', target:goal(cardio,85)},
+                    {focus:'boxing', target:goal(boxing,75)},
+                    {focus:'heart', target:goal(heart,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {cardio:70,boxing:60,heart:62,
+                         chin:55,strength:52,striking_defense:50,recovery:50},
+            },
+        ],
+
+        // ── GRAPPLING ───────────────────────────────
+        'Wrestler': [
+            {
+                label: 'Double Leg Machine',
+                desc:  'Perfect the shot. Level change, drive, finish.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,85)},
+                    {focus:'top_control', target:goal(topCtrl,72)},
+                    {focus:'strength', target:goal(strength,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:70,top_control:58,strength:60,
+                         cardio:58,chin:50,heart:50,takedown_defense:52},
+            },
+            {
+                label: 'Lay & Pray',
+                desc:  'Get on top and control. Win every round.',
+                queue: [
+                    {focus:'top_control', target:goal(topCtrl,82)},
+                    {focus:'takedowns', target:goal(takedowns,75)},
+                    {focus:'cardio', target:goal(cardio,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {top_control:68,takedowns:62,cardio:62,
+                         strength:58,chin:50,guard:48,fight_iq:50},
+            },
+            {
+                label: 'Scrambler',
+                desc:  'Win the chaos. Get up, get back on top.',
+                queue: [
+                    {focus:'top_control', target:goal(topCtrl,78)},
+                    {focus:'guard', target:goal(guard,68)},
+                    {focus:'fight_iq', target:goal(fightIq,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {top_control:62,guard:55,fight_iq:58,
+                         takedowns:58,cardio:60,heart:50,composure:48},
+            },
+            {
+                label: 'Chain Wrestling',
+                desc:  'Link takedowns into ground and pound.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,80)},
+                    {focus:'top_control', target:goal(topCtrl,75)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:65,top_control:62,strength:62,
+                         cardio:58,boxing:48,chin:50,takedown_defense:52},
+            },
+        ],
+
+        'BJJ Specialist': [
+            {
+                label: 'Guard Hunter',
+                desc:  'Pull guard, sweep, submit. The ground is your home.',
+                queue: [
+                    {focus:'guard', target:goal(guard,85)},
+                    {focus:'submissions', target:goal(subs,78)},
+                    {focus:'fight_iq', target:goal(fightIq,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {guard:70,submissions:62,fight_iq:58,
+                         top_control:52,cardio:55,composure:50,takedowns:48},
+            },
+            {
+                label: 'Top Control Pressure',
+                desc:  'Takedowns into grinding top pressure.',
+                queue: [
+                    {focus:'top_control', target:goal(topCtrl,82)},
+                    {focus:'takedowns', target:goal(takedowns,72)},
+                    {focus:'submissions', target:goal(subs,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {top_control:68,takedowns:58,submissions:58,
+                         strength:55,cardio:58,guard:50,fight_iq:50},
+            },
+            {
+                label: 'Leg Lock System',
+                desc:  'Lower body attack system. Heel hooks and kneebars.',
+                queue: [
+                    {focus:'submissions', target:goal(subs,85)},
+                    {focus:'guard', target:goal(guard,75)},
+                    {focus:'fight_iq', target:goal(fightIq,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {submissions:70,guard:62,fight_iq:60,
+                         takedowns:50,top_control:50,cardio:55,composure:52},
+            },
+            {
+                label: 'Gi Grind',
+                desc:  'Old school BJJ. Patience, position, patience.',
+                queue: [
+                    {focus:'submissions', target:goal(subs,80)},
+                    {focus:'fight_iq', target:goal(fightIq,78)},
+                    {focus:'composure', target:goal(composure,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {submissions:65,fight_iq:65,composure:60,
+                         guard:60,top_control:52,cardio:55,takedowns:48},
+            },
+        ],
+
+        'Judo': [
+            {
+                label: 'Uchi Mata Focus',
+                desc:  'The hip throw. Perfect it. Land it.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,85)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'fight_iq', target:goal(fightIq,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:70,strength:60,fight_iq:55,
+                         cardio:58,top_control:50,clinch_striking:48,heart:50},
+            },
+            {
+                label: 'Sacrifice Throws',
+                desc:  'High risk, high reward. Commit to the big throw.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,82)},
+                    {focus:'heart', target:goal(heart,75)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:68,heart:62,strength:60,
+                         chin:55,cardio:58,top_control:48,fight_iq:50},
+            },
+            {
+                label: 'Grip Fighting',
+                desc:  'Control before the throw. Win the grips.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,72)},
+                    {focus:'takedowns', target:goal(takedowns,80)},
+                    {focus:'fight_iq', target:goal(fightIq,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:55,takedowns:65,fight_iq:58,
+                         strength:58,top_control:50,cardio:58,composure:48},
+            },
+            {
+                label: 'Newaza',
+                desc:  'Ground work after the throw. Throw them, finish them.',
+                queue: [
+                    {focus:'submissions', target:goal(subs,78)},
+                    {focus:'guard', target:goal(guard,72)},
+                    {focus:'takedowns', target:goal(takedowns,75)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {submissions:62,guard:58,takedowns:62,
+                         top_control:55,cardio:55,fight_iq:52,strength:50},
+            },
+        ],
+
+        'Sambo': [
+            {
+                label: 'Combat Sambo',
+                desc:  'Strikes into throws. Real fighting, no rules.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,72)},
+                    {focus:'takedowns', target:goal(takedowns,80)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:55,takedowns:65,strength:60,
+                         chin:55,clinch_striking:50,top_control:52,cardio:55},
+            },
+            {
+                label: 'Leg Lock Sambo',
+                desc:  'Lower body submissions. The Russian specialty.',
+                queue: [
+                    {focus:'submissions', target:goal(subs,82)},
+                    {focus:'guard', target:goal(guard,72)},
+                    {focus:'fight_iq', target:goal(fightIq,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {submissions:68,guard:58,fight_iq:58,
+                         takedowns:58,top_control:50,cardio:55,composure:50},
+            },
+            {
+                label: 'Throws & Pins',
+                desc:  'Control after the throw. Dominant positions.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,82)},
+                    {focus:'top_control', target:goal(topCtrl,78)},
+                    {focus:'strength', target:goal(strength,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:68,top_control:65,strength:60,
+                         cardio:55,chin:50,heart:50,submissions:48},
+            },
+            {
+                label: 'Sport Sambo',
+                desc:  'Pure grappling excellence. Take them down, keep them.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,80)},
+                    {focus:'submissions', target:goal(subs,75)},
+                    {focus:'top_control', target:goal(topCtrl,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:65,submissions:60,top_control:60,
+                         cardio:58,strength:55,guard:50,fight_iq:50},
+            },
+        ],
+
+        // ── HYBRID ──────────────────────────────────
+        'Ground & Pound': [
+            {
+                label: 'Cage Bully',
+                desc:  'Wall work into GnP. Smother and punish.',
+                queue: [
+                    {focus:'top_control', target:goal(topCtrl,82)},
+                    {focus:'strength', target:goal(strength,75)},
+                    {focus:'boxing', target:goal(boxing,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {top_control:68,strength:62,boxing:55,
+                         takedowns:58,cardio:58,chin:52,heart:50},
+            },
+            {
+                label: 'Hammer Fist',
+                desc:  'Pure GnP damage. Get on top, turn off the lights.',
+                queue: [
+                    {focus:'top_control', target:goal(topCtrl,80)},
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {top_control:65,boxing:62,strength:62,
+                         takedowns:55,cardio:58,chin:52,submissions:48},
+            },
+            {
+                label: 'Positional GnP',
+                desc:  'Move through positions. Back mount to mount to side.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,80)},
+                    {focus:'top_control', target:goal(topCtrl,82)},
+                    {focus:'takedowns', target:goal(takedowns,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:65,top_control:68,takedowns:55,
+                         boxing:52,cardio:58,submissions:50,strength:55},
+            },
+            {
+                label: 'Submission Threat GnP',
+                desc:  'Keep them guessing — punch or submit.',
+                queue: [
+                    {focus:'submissions', target:goal(subs,75)},
+                    {focus:'top_control', target:goal(topCtrl,78)},
+                    {focus:'boxing', target:goal(boxing,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {submissions:60,top_control:65,boxing:55,
+                         fight_iq:58,takedowns:52,cardio:55,guard:48},
+            },
+        ],
+
+        'Sprawl & Brawl': [
+            {
+                label: 'Sprawl King',
+                desc:  'Stuff everything. Stay on the feet and finish.',
+                queue: [
+                    {focus:'takedown_defense', target:goal(tdDef,85)},
+                    {focus:'boxing', target:goal(boxing,75)},
+                    {focus:'cardio', target:goal(cardio,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedown_defense:70,boxing:60,cardio:62,
+                         striking_defense:55,chin:52,fight_iq:52,clinch_striking:48},
+            },
+            {
+                label: 'Counter Wrestler',
+                desc:  'Sprawl into offense. Punish the shot.',
+                queue: [
+                    {focus:'takedown_defense', target:goal(tdDef,82)},
+                    {focus:'boxing', target:goal(boxing,78)},
+                    {focus:'fight_iq', target:goal(fightIq,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedown_defense:68,boxing:62,fight_iq:60,
+                         speed:55,composure:55,cardio:58,striking_defense:52},
+            },
+            {
+                label: 'Clinch Buster',
+                desc:  'Break clinches and punish. No dirty boxing allowed.',
+                queue: [
+                    {focus:'takedown_defense', target:goal(tdDef,78)},
+                    {focus:'clinch_striking', target:goal(clinch,72)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedown_defense:65,clinch_striking:58,strength:58,
+                         boxing:55,cardio:58,chin:52,fight_iq:50},
+            },
+            {
+                label: 'Heavy Hands Sprawler',
+                desc:  'Sprawl and then land the big one.',
+                queue: [
+                    {focus:'takedown_defense', target:goal(tdDef,80)},
+                    {focus:'boxing', target:goal(boxing,80)},
+                    {focus:'strength', target:goal(strength,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedown_defense:65,boxing:65,strength:60,
+                         chin:55,cardio:58,heart:52,striking_defense:50},
+            },
+        ],
+
+        'Clinch Fighter': [
+            {
+                label: 'Dirty Boxer',
+                desc:  'Knees and elbows in close. Make it a phone booth.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,85)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'heart', target:goal(heart,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:70,strength:60,heart:60,
+                         chin:58,cardio:60,boxing:50,takedown_defense:48},
+            },
+            {
+                label: 'Wall & Stall',
+                desc:  'Pin them on the cage. Wear them out.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,78)},
+                    {focus:'cardio', target:goal(cardio,80)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:62,cardio:68,strength:62,
+                         takedown_defense:55,chin:52,heart:55,boxing:48},
+            },
+            {
+                label: 'Thai Plum',
+                desc:  'Muay Thai clinch. Double collar tie, knees.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,82)},
+                    {focus:'kicks', target:goal(kicks,70)},
+                    {focus:'fight_iq', target:goal(fightIq,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:68,kicks:55,fight_iq:58,
+                         cardio:60,strength:55,heart:52,chin:50},
+            },
+            {
+                label: 'Takedown Clinch',
+                desc:  'Use the clinch to set up slams and trips.',
+                queue: [
+                    {focus:'clinch_striking', target:goal(clinch,75)},
+                    {focus:'takedowns', target:goal(takedowns,78)},
+                    {focus:'strength', target:goal(strength,72)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {clinch_striking:60,takedowns:62,strength:62,
+                         cardio:58,top_control:50,chin:50,fight_iq:48},
+            },
+        ],
+
+        'Hybrid': [
+            {
+                label: 'Complete Fighter',
+                desc:  'Even development across all areas. No ceiling, no gap.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,78)},
+                    {focus:'boxing', target:goal(boxing,72)},
+                    {focus:'takedowns', target:goal(takedowns,70)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:60,boxing:58,takedowns:55,
+                         cardio:60,striking_defense:52,top_control:48,composure:52},
+            },
+            {
+                label: 'Striker First',
+                desc:  'Striking primary with grappling awareness.',
+                queue: [
+                    {focus:'boxing', target:goal(boxing,80)},
+                    {focus:'kicks', target:goal(kicks,72)},
+                    {focus:'takedown_defense', target:goal(tdDef,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {boxing:65,kicks:55,takedown_defense:55,
+                         cardio:58,striking_defense:52,chin:50,fight_iq:50},
+            },
+            {
+                label: 'Grappler First',
+                desc:  'Grappling primary with striking to set it up.',
+                queue: [
+                    {focus:'takedowns', target:goal(takedowns,80)},
+                    {focus:'top_control', target:goal(topCtrl,72)},
+                    {focus:'boxing', target:goal(boxing,62)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {takedowns:65,top_control:58,boxing:50,
+                         cardio:58,submissions:48,chin:50,fight_iq:52},
+            },
+            {
+                label: 'Chess Match',
+                desc:  'Fight IQ above everything. Outthink them.',
+                queue: [
+                    {focus:'fight_iq', target:goal(fightIq,85)},
+                    {focus:'composure', target:goal(composure,78)},
+                    {focus:'striking_defense', target:goal(strDef,68)},
+                    {focus:'maintain', target:0},
+                ],
+                floors: {fight_iq:70,composure:65,striking_defense:55,
+                         boxing:50,cardio:55,chin:52,speed:48},
+            },
+        ],
+
+        // ── UNIVERSAL ───────────────────────────────
+        'Strength & Conditioning': {
+            label: 'Strength & Conditioning',
+            desc:  'Pure physical development. Build the engine, not the technique.',
             queue: [
-                {focus:'boxing',           target: goal(boxing, 82)},
-                {focus:'striking_defense', target: goal(strDef, 72)},
-                {focus:'cardio',           target: goal(cardio, 70)},
-                {focus:'maintain',         target: 0},
+                {focus:'strength', target:goal(strength,80)},
+                {focus:'cardio', target:goal(cardio,82)},
+                {focus:'recovery', target:goal(recovery,75)},
+                {focus:'maintain', target:0},
             ],
-            floors: {boxing:65, striking_defense:55, cardio:60,
-                     chin:55, fight_iq:55},
+            floors: {strength:62,cardio:65,recovery:60,
+                     chin:55,heart:55,speed:50,composure:48},
         },
-        'Kickboxer': {
-            queue: [
-                {focus:'kicks',            target: goal(kicks, 82)},
-                {focus:'boxing',           target: goal(boxing, 72)},
-                {focus:'striking_defense', target: goal(strDef, 68)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {kicks:65, boxing:60, striking_defense:55, cardio:60},
-        },
-        'Muay Thai': {
-            queue: [
-                {focus:'kicks',            target: goal(kicks, 80)},
-                {focus:'clinch_striking',  target: goal(clinch, 78)},
-                {focus:'striking_defense', target: goal(strDef, 68)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {kicks:65, clinch_striking:60, chin:60, cardio:60},
-        },
-        'Pressure Fighter': {
-            queue: [
-                {focus:'boxing',           target: goal(boxing, 80)},
-                {focus:'cardio',           target: goal(cardio, 78)},
-                {focus:'chin',             target: goal(chin, 72)},
-                {focus:'clinch_striking',  target: goal(clinch, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {boxing:65, cardio:65, chin:60, clinch_striking:55},
-        },
-        'Counter Striker': {
-            queue: [
-                {focus:'striking_defense', target: goal(strDef, 85)},
-                {focus:'fight_iq',         target: goal(fightIq, 80)},
-                {focus:'boxing',           target: goal(boxing, 72)},
-                {focus:'speed',            target: goal(speed, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {striking_defense:70, fight_iq:65, boxing:55,
-                     composure:60},
-        },
-        'Point Fighter': {
-            queue: [
-                {focus:'fight_iq',         target: goal(fightIq, 85)},
-                {focus:'speed',            target: goal(speed, 78)},
-                {focus:'striking_defense', target: goal(strDef, 75)},
-                {focus:'boxing',           target: goal(boxing, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {fight_iq:68, speed:62, striking_defense:60,
-                     composure:60},
-        },
-        'Karate': {
-            queue: [
-                {focus:'striking_defense', target: goal(strDef, 82)},
-                {focus:'kicks',            target: goal(kicks, 78)},
-                {focus:'speed',            target: goal(speed, 72)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {striking_defense:65, kicks:60, speed:60,
-                     fight_iq:55},
-        },
-        'Wrestler': {
-            queue: [
-                {focus:'takedowns',        target: goal(takedowns, 88)},
-                {focus:'top_control',      target: goal(topCtrl, 80)},
-                {focus:'takedown_defense', target: goal(tdDef, 75)},
-                {focus:'strength',         target: goal(strength, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {takedowns:68, top_control:60, takedown_defense:60,
-                     strength:58, cardio:58},
-        },
-        'BJJ Specialist': {
-            queue: [
-                {focus:'submissions',      target: goal(subs, 90)},
-                {focus:'guard',            target: goal(guard, 82)},
-                {focus:'takedowns',        target: goal(takedowns, 72)},
-                {focus:'top_control',      target: goal(topCtrl, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {submissions:70, guard:65, takedowns:55,
-                     top_control:55},
-        },
-        'Sambo': {
-            queue: [
-                {focus:'takedowns',        target: goal(takedowns, 85)},
-                {focus:'submissions',      target: goal(subs, 78)},
-                {focus:'top_control',      target: goal(topCtrl, 72)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {takedowns:65, submissions:60, top_control:58,
-                     strength:58},
-        },
-        'Judo': {
-            queue: [
-                {focus:'takedowns',        target: goal(takedowns, 85)},
-                {focus:'top_control',      target: goal(topCtrl, 75)},
-                {focus:'strength',         target: goal(strength, 72)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {takedowns:65, top_control:60, strength:60,
-                     chin:55},
-        },
-        'Ground & Pound': {
-            queue: [
-                {focus:'takedowns',        target: goal(takedowns, 85)},
-                {focus:'top_control',      target: goal(topCtrl, 82)},
-                {focus:'boxing',           target: goal(boxing, 75)},
-                {focus:'strength',         target: goal(strength, 72)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {takedowns:65, top_control:62, boxing:58,
-                     strength:58, cardio:58},
-        },
-        'Sprawl & Brawl': {
-            queue: [
-                {focus:'takedown_defense', target: goal(tdDef, 85)},
-                {focus:'boxing',           target: goal(boxing, 80)},
-                {focus:'chin',             target: goal(chin, 72)},
-                {focus:'cardio',           target: goal(cardio, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {takedown_defense:68, boxing:62, chin:60,
-                     cardio:60},
-        },
-        'Clinch Fighter': {
-            queue: [
-                {focus:'clinch_striking',  target: goal(clinch, 85)},
-                {focus:'top_control',      target: goal(topCtrl, 78)},
-                {focus:'takedowns',        target: goal(takedowns, 72)},
-                {focus:'strength',         target: goal(strength, 68)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {clinch_striking:65, top_control:60, takedowns:55,
-                     strength:58},
-        },
-        'Brawler': {
-            queue: [
-                {focus:'strength',         target: goal(strength, 85)},
-                {focus:'chin',             target: goal(chin, 80)},
-                {focus:'boxing',           target: goal(boxing, 75)},
-                {focus:'cardio',           target: goal(cardio, 68)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {strength:65, chin:65, boxing:58, cardio:55},
-        },
-        'Hybrid': {
-            queue: [
-                {focus:'fight_iq',         target: goal(fightIq, 82)},
-                {focus:'boxing',           target: goal(boxing, 75)},
-                {focus:'takedowns',        target: goal(takedowns, 72)},
-                {focus:'cardio',           target: goal(cardio, 70)},
-                {focus:'maintain',         target: 0},
-            ],
-            floors: {fight_iq:62, boxing:58, takedowns:55, cardio:58},
-        },
+
+        // ── LEGACY single-template fallbacks ─────────
         'Striker': {
             queue: [
-                {focus:'boxing',           target: goal(boxing, 82)},
-                {focus:'striking_defense', target: goal(strDef, 72)},
-                {focus:'cardio',           target: goal(cardio, 70)},
-                {focus:'maintain',         target: 0},
+                {focus:'boxing', target:goal(boxing,82)},
+                {focus:'striking_defense', target:goal(strDef,72)},
+                {focus:'cardio', target:goal(cardio,70)},
+                {focus:'maintain', target:0},
             ],
-            floors: {boxing:65, striking_defense:55, cardio:60,
-                     chin:55, fight_iq:55},
+            floors: {boxing:65,striking_defense:55,cardio:60,
+                     chin:55,fight_iq:55},
         },
         'Balanced': {
             queue: [
-                {focus:'fight_iq',         target: goal(fightIq, 82)},
-                {focus:'boxing',           target: goal(boxing, 75)},
-                {focus:'takedowns',        target: goal(takedowns, 72)},
-                {focus:'cardio',           target: goal(cardio, 70)},
-                {focus:'maintain',         target: 0},
+                {focus:'fight_iq', target:goal(fightIq,82)},
+                {focus:'boxing', target:goal(boxing,75)},
+                {focus:'takedowns', target:goal(takedowns,72)},
+                {focus:'cardio', target:goal(cardio,70)},
+                {focus:'maintain', target:0},
             ],
-            floors: {fight_iq:62, boxing:58, takedowns:55, cardio:58},
+            floors: {fight_iq:62,boxing:58,takedowns:55,cardio:58},
         },
     };
 
-    let tmpl = templates[style];
-    if (!tmpl) {
-        // Silent fallback to Hybrid — covers any style key
-        // the templates dict doesn't recognize. Better than
-        // blocking the player with an alert dialog.
-        tmpl = templates['Hybrid'];
-        if (!tmpl) return;
+    // Cache library + intensity for picker callbacks.
+    window._fighterTemplates = window._fighterTemplates || {};
+    window._fighterTemplates[fighterId] = { templates: templates, intensity: intensity };
+
+    let styleTmpls = templates[style];
+    if (!styleTmpls) {
+        styleTmpls = templates['Hybrid'];
+        if (!styleTmpls) return;
     }
 
+    // Single-template (legacy Striker/Balanced/S&C) → apply directly.
+    if (!Array.isArray(styleTmpls)) {
+        applyTemplate(fighterId, styleTmpls, intensity);
+        flashLoadedButton(event && event.currentTarget);
+        return;
+    }
+
+    // Multi-template style → show picker grid + S&C option.
+    showTemplatePicker(fighterId, style, styleTmpls, templates['Strength & Conditioning']);
+}
+
+function applyTemplate(fighterId, tmpl, intensity) {
+    // Populate intensity dropdown
     const intSelect = document.querySelector(
         `#queue-form-${fighterId} [name="queue_intensity"]`);
     if (intSelect) intSelect.value = intensity;
 
+    // Populate queue rows
     const container = document.getElementById('queue-goals-' + fighterId);
     if (!container) return;
     container.innerHTML = '';
@@ -1018,13 +1707,12 @@ function loadStyleTemplate(fighterId, style,
         ['fight_iq','Fight IQ'],['composure','Composure'],['heart','Heart'],
     ];
 
-    tmpl.queue.forEach((goal, idx) => {
+    tmpl.queue.forEach((g, idx) => {
         const row = document.createElement('div');
         row.className = 'queue-row';
-        row.style.cssText = 'display:flex;align-items:center;'
-            + 'gap:6px;margin-bottom:4px;';
+        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
 
-        if (goal.focus === 'maintain') {
+        if (g.focus === 'maintain') {
             row.innerHTML = `
                 <span style="font-size:.6rem;color:var(--text-muted);
                              width:16px;text-align:center;">${idx+1}</span>
@@ -1032,15 +1720,13 @@ function loadStyleTemplate(fighterId, style,
                              flex:1;padding:3px 6px;">
                     🔄 Maintain (floor protection active)
                 </span>
-                <input type="hidden" name="queue_focus_${idx}"
-                       value="maintain">
+                <input type="hidden" name="queue_focus_${idx}" value="maintain">
                 <input type="hidden" name="queue_target_${idx}" value="0">
             `;
         } else {
             let opts = '<option value="">— pick focus —</option>'
                 + statOptions.map(([v, l]) =>
-                    `<option value="${v}"${v === goal.focus
-                        ? ' selected' : ''}>${l}</option>`
+                    `<option value="${v}"${v === g.focus ? ' selected' : ''}>${l}</option>`
                 ).join('');
             row.innerHTML = `
                 <span style="font-size:.6rem;color:var(--text-muted);
@@ -1051,10 +1737,9 @@ function loadStyleTemplate(fighterId, style,
                                border:1px solid rgba(255,255,255,.12);
                                border-radius:4px;color:var(--text-bright);
                                flex:1;">${opts}</select>
-                <span style="font-size:.65rem;color:var(--text-muted);">
-                    →</span>
+                <span style="font-size:.65rem;color:var(--text-muted);">→</span>
                 <input type="number" name="queue_target_${idx}"
-                       value="${goal.target}" min="1" max="99"
+                       value="${g.target}" min="1" max="99"
                        style="width:48px;padding:3px 4px;font-size:.68rem;
                               background:var(--surface-2);
                               border:1px solid rgba(255,255,255,.12);
@@ -1065,6 +1750,7 @@ function loadStyleTemplate(fighterId, style,
         container.appendChild(row);
     });
 
+    // Populate floor inputs
     const floorForm = document.querySelector(
         `form[action*="set_floors/${fighterId}"]`);
     if (floorForm) {
@@ -1073,16 +1759,17 @@ function loadStyleTemplate(fighterId, style,
             inp.style.borderColor = 'rgba(255,255,255,.08)';
         });
         Object.entries(tmpl.floors).forEach(([stat, val]) => {
-            const inp = floorForm.querySelector(
-                `input[name="floor_${stat}"]`);
+            const inp = floorForm.querySelector(`input[name="floor_${stat}"]`);
             if (inp) {
                 inp.value = val;
                 inp.style.borderColor = 'rgba(99,179,237,.4)';
             }
         });
     }
+}
 
-    const btn = event.currentTarget;
+function flashLoadedButton(btn) {
+    if (!btn) return;
     const orig = btn.textContent;
     btn.textContent = '✅ Template loaded';
     btn.style.borderColor = 'rgba(0,230,118,.4)';
@@ -1093,6 +1780,116 @@ function loadStyleTemplate(fighterId, style,
         btn.style.color = 'var(--gold)';
     }, 2000);
 }
+
+function showTemplatePicker(fighterId, style, styleTmpls, scTmpl) {
+    const btn = event && event.currentTarget;
+    const container = btn ? btn.parentElement : null;
+    if (!container) return;
+
+    // Remove any prior picker for this fighter
+    const existing = container.querySelector('.tmpl-picker');
+    if (existing) existing.remove();
+
+    function stats3(tmpl) {
+        return tmpl.queue
+            .filter(g => g.focus !== 'maintain')
+            .slice(0, 3)
+            .map(g => g.focus.replace(/_/g, ' '))
+            .join(' · ');
+    }
+
+    let html = '<div style="margin-top:8px;display:grid;'
+            + 'grid-template-columns:1fr 1fr;gap:6px;">';
+    styleTmpls.forEach((tmpl, idx) => {
+        html += `<div style="padding:8px;background:var(--bg-dark);
+                            border:1px solid rgba(255,255,255,.1);
+                            border-radius:4px;font-size:.7rem;">
+            <div style="font-family:var(--font-display);
+                        color:var(--text-bright);font-size:.78rem;">
+                ${tmpl.label}
+            </div>
+            <div style="color:var(--text-muted);font-size:.6rem;
+                        margin-top:2px;font-style:italic;">
+                ${tmpl.desc}
+            </div>
+            <div style="color:var(--info);font-size:.58rem;
+                        margin-top:4px;letter-spacing:.02em;">
+                ${stats3(tmpl)}
+            </div>
+            <button type="button"
+                    onclick="applyPickedTemplate('${fighterId}','${style.replace(/'/g, "\'")}',${idx})"
+                    style="margin-top:6px;font-size:.65rem;padding:3px 10px;
+                           background:rgba(0,230,118,.1);
+                           border:1px solid rgba(0,230,118,.3);
+                           color:var(--neon-green);border-radius:3px;
+                           cursor:pointer;">
+                Select
+            </button>
+        </div>`;
+    });
+
+    if (scTmpl) {
+        html += `<div style="grid-column:span 2;padding:8px;
+                            background:rgba(255,215,0,.04);
+                            border:1px solid rgba(255,215,0,.25);
+                            border-radius:4px;font-size:.7rem;">
+            <div style="font-family:var(--font-display);
+                        color:var(--gold);font-size:.78rem;">
+                💪 ${scTmpl.label} <span style="font-size:.55rem;
+                                                color:var(--text-muted);
+                                                letter-spacing:.06em;
+                                                margin-left:4px;">UNIVERSAL</span>
+            </div>
+            <div style="color:var(--text-muted);font-size:.6rem;
+                        margin-top:2px;font-style:italic;">
+                ${scTmpl.desc}
+            </div>
+            <div style="color:var(--gold);font-size:.58rem;
+                        margin-top:4px;letter-spacing:.02em;">
+                ${stats3(scTmpl)}
+            </div>
+            <button type="button"
+                    onclick="applyPickedTemplate('${fighterId}','__sc__',0)"
+                    style="margin-top:6px;font-size:.65rem;padding:3px 10px;
+                           background:rgba(255,215,0,.1);
+                           border:1px solid rgba(255,215,0,.3);
+                           color:var(--gold);border-radius:3px;
+                           cursor:pointer;">
+                Select S&C
+            </button>
+        </div>`;
+    }
+    html += '</div>';
+
+    const picker = document.createElement('div');
+    picker.className = 'tmpl-picker';
+    picker.innerHTML = html;
+    container.appendChild(picker);
+}
+
+function applyPickedTemplate(fighterId, style, idx) {
+    const cache = window._fighterTemplates && window._fighterTemplates[fighterId];
+    if (!cache) return;
+    const { templates, intensity } = cache;
+
+    let tmpl;
+    if (style === '__sc__') {
+        tmpl = templates['Strength & Conditioning'];
+    } else {
+        const styleTmpls = templates[style];
+        tmpl = Array.isArray(styleTmpls) ? styleTmpls[idx] : styleTmpls;
+    }
+    if (!tmpl) return;
+
+    applyTemplate(fighterId, tmpl, intensity);
+
+    // Remove picker and flash the original load button.
+    document.querySelectorAll('.tmpl-picker').forEach(p => p.remove());
+    const btn = document.querySelector(
+        `button[onclick*="loadStyleTemplate"][onclick*="${fighterId}"]`);
+    flashLoadedButton(btn);
+}
+
 
 function adjFloor(btn, delta) {
     const input = btn.parentElement.querySelector('input[type="number"]');
