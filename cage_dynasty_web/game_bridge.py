@@ -842,6 +842,44 @@ _SPONSOR_BY_ID = {
     for b in brands
 }
 
+# =============================================================
+# SPONSOR MILESTONES (Ship EC1 A2)
+# Per-personality bonus triggers — fire once per (fight, sponsor,
+# trigger) combination. Dedup via per-fighter
+# _fighter_data[fid]['sponsor_milestones_fired'] set of
+# "sponsor_id:trigger" strings.
+# =============================================================
+SPONSOR_MILESTONES = {
+    'aggressive': [
+        {'trigger': 'ko_finish',    'bonus':  3000, 'label': 'KO Performance Bonus'},
+        {'trigger': 'win_streak_3', 'bonus':  5000, 'label': 'Hot Streak Bonus'},
+        {'trigger': 'win_streak_5', 'bonus': 10000, 'label': 'Dominant Run Bonus'},
+        {'trigger': 'title_fight',  'bonus': 15000, 'label': 'Title Fight Appearance'},
+        {'trigger': 'title_win',    'bonus': 25000, 'label': 'Championship Bonus'},
+    ],
+    'image': [
+        {'trigger': 'main_event',   'bonus':  5000, 'label': 'Main Event Exposure Bonus'},
+        {'trigger': 'fotn',         'bonus':  8000, 'label': 'Fight of the Night Bonus'},
+        {'trigger': 'win_streak_3', 'bonus':  4000, 'label': 'Winning Image Bonus'},
+        {'trigger': 'title_win',    'bonus': 20000, 'label': 'Champion Image Bonus'},
+        {'trigger': 'ranked_top5',  'bonus':  6000, 'label': 'Top 5 Visibility Bonus'},
+    ],
+    'loyalty': [
+        {'trigger': 'win_streak_3', 'bonus':  2000, 'label': 'Loyalty Streak Bonus'},
+        {'trigger': 'comeback_win', 'bonus':  4000, 'label': 'Comeback Story Bonus'},
+        {'trigger': 'title_win',    'bonus': 15000, 'label': 'Title Loyalty Bonus'},
+        {'trigger': 'fights_10',    'bonus':  5000, 'label': '10-Fight Milestone'},
+        {'trigger': 'fights_20',    'bonus': 10000, 'label': 'Career Milestone Bonus'},
+    ],
+    'prestige': [
+        {'trigger': 'ranked_top5',  'bonus':  8000, 'label': 'Top 5 Prestige Bonus'},
+        {'trigger': 'ranked_top1',  'bonus': 15000, 'label': '#1 Contender Bonus'},
+        {'trigger': 'title_win',    'bonus': 30000, 'label': 'Championship Prestige'},
+        {'trigger': 'title_defend', 'bonus': 20000, 'label': 'Defense Prestige Bonus'},
+        {'trigger': 'fotn',         'bonus': 10000, 'label': 'Elite Performance Bonus'},
+    ],
+}
+
 
 # ============================================================================
 # GAME BRIDGE CLASS
@@ -7608,8 +7646,127 @@ class GameBridge:
                     self._total_purses_earned += brand["fight_bonus"]
                     self._week_purses_earned  += brand["fight_bonus"]
 
+        # Ship EC1 A2: sponsor milestone bonuses
+        if player_fid and self._game_state:
+            self._apply_sponsor_milestones(
+                player_fid, fight_result, player_won)
+
         self._camp_cache.clear()   # balance changed — invalidate cache
         return earned
+
+    def _apply_sponsor_milestones(
+            self,
+            player_fid: str,
+            fight_result: Dict[str, Any],
+            player_won: bool) -> None:
+        """EC1 A2 — fire personality-keyed milestone bonuses for each
+        of the fighter's active sponsors. Dedup per (sponsor, trigger)
+        via _fighter_data[fid]['sponsor_milestones_fired'] set."""
+        fdata = self._game_state._fighter_data.setdefault(player_fid, {})
+        sponsors = fdata.get("sponsors", []) or []
+        if not sponsors:
+            return
+
+        fighter = self._game_state.get_fighter(player_fid)
+        if not fighter:
+            return
+
+        # ── Derive trigger state from this fight + fighter state ──
+        method = str(fight_result.get("method", "") or "").upper()
+        is_title = bool(fight_result.get("is_title_fight"))
+        is_fotn  = bool(fight_result.get("is_fotn"))
+        slot     = str(fight_result.get("card_slot", "") or "").lower()
+        fight_id = str(fight_result.get("fight_id", "") or "")
+
+        win_streak  = self._get_fighter_win_streak(fighter) or 0
+        rank        = self._get_fighter_rank(fighter)
+        total_fights = (getattr(fighter, 'wins', 0)
+                        + getattr(fighter, 'losses', 0))
+
+        # Comeback win: this is W and prior fight in history was L.
+        history = getattr(fighter, 'fight_history', []) or []
+        was_loss_before = False
+        if player_won and len(history) >= 2:
+            prior = history[-2]
+            if isinstance(prior, dict) and prior.get('result') == 'L':
+                was_loss_before = True
+
+        # Was previously champion before this title fight win = defense
+        was_already_champion = (
+            is_title and player_won
+            and any(isinstance(h, dict)
+                    and h.get('was_title_fight')
+                    and h.get('result') == 'W'
+                    for h in history[:-1])
+        )
+
+        # ── Trigger flags ──
+        triggers = set()
+        if player_won and (method.startswith('KO') or method.startswith('TKO')):
+            triggers.add('ko_finish')
+        if player_won and win_streak >= 3:
+            triggers.add('win_streak_3')
+        if player_won and win_streak >= 5:
+            triggers.add('win_streak_5')
+        if is_title:
+            triggers.add('title_fight')
+        if is_title and player_won:
+            triggers.add('title_win')
+        if was_already_champion:
+            triggers.add('title_defend')
+        if slot == 'main_event':
+            triggers.add('main_event')
+        if is_fotn:
+            triggers.add('fotn')
+        if rank is not None and rank > 0 and rank <= 5:
+            triggers.add('ranked_top5')
+        if rank == 1:
+            triggers.add('ranked_top1')
+        if player_won and was_loss_before:
+            triggers.add('comeback_win')
+        if total_fights == 10:
+            triggers.add('fights_10')
+        if total_fights == 20:
+            triggers.add('fights_20')
+
+        if not triggers:
+            return
+
+        # Dedup set — per (sponsor_id, trigger) so multiple sponsors of
+        # different personalities CAN each pay for the same trigger,
+        # but a single sponsor pays once per trigger ever.
+        fired = fdata.setdefault('sponsor_milestones_fired', set())
+        if isinstance(fired, list):
+            fired = set(fired)  # legacy save normalization
+        current_week = self._game_state.week_number
+
+        for s in sponsors:
+            brand = _SPONSOR_BY_ID.get(s.get('sponsor_id', ''))
+            if not brand:
+                continue
+            personality = brand.get('personality', '')
+            for milestone in SPONSOR_MILESTONES.get(personality, []):
+                trig = milestone['trigger']
+                if trig not in triggers:
+                    continue
+                key = f"{brand['id']}:{trig}"
+                if key in fired:
+                    continue
+                fired.add(key)
+                bonus = int(milestone['bonus'])
+                self._camp_balance        += bonus
+                self._total_purses_earned += bonus
+                self._week_purses_earned  += bonus
+                self._news_items.insert(0, {
+                    'headline': (f"💰 {brand['name']} milestone bonus: "
+                                 f"{milestone['label']} — ${bonus:,}!"),
+                    'category':   'sponsor',
+                    'week':       current_week,
+                    'fighter_id': player_fid,
+                })
+
+        # Persist back as list (sets don't round-trip JSON cleanly)
+        fdata['sponsor_milestones_fired'] = list(fired)
 
     # =========================================================================
     # SCOUTING — STRENGTHS / WEAKNESSES / REPORT
