@@ -1073,6 +1073,12 @@ class GameBridge:
         self._ai_deferred_bookings: List[Dict[str, Any]] = []
         self._fight_offers: List[Dict[str, Any]] = []
 
+        # Ship S2 — performance-triggered sponsor approaches awaiting
+        # player accept/decline. Each: {offer_id, fighter_id, brand_id,
+        # brand_name, personality, tier, weekly_retainer, fight_bonus,
+        # attr_boost, trigger_reason, created_week, expires_week}.
+        self._pending_sponsor_offers: List[Dict[str, Any]] = []
+
         # Ship EC1 C — medical staff per fighter.
         # Each: {fighter_id, staff_key, hired_week, weekly_cost}
         self._medical_staff: List[Dict[str, Any]] = []
@@ -1776,6 +1782,7 @@ class GameBridge:
             "amateur_graduates":        self._amateur_graduates,
             "champion_holds":           self._champion_holds,
             "fight_offers":             self._fight_offers,
+            "pending_sponsor_offers":   self._pending_sponsor_offers,
             "medical_staff":            self._medical_staff,
             "overseas_trips":           self._overseas_trips,
             "fa_bidding_wars":          self._fa_bidding_wars,
@@ -2013,6 +2020,7 @@ class GameBridge:
         # labels preserved).
         self._dfc_event_offset = int(data.get("dfc_event_offset", 0) or 0)
         self._fight_offers            = data.get("fight_offers", [])
+        self._pending_sponsor_offers  = data.get("pending_sponsor_offers", [])
         self._medical_staff           = data.get("medical_staff", [])
         self._overseas_trips          = data.get("overseas_trips", [])
         self._fa_bidding_wars         = data.get("fa_bidding_wars", {})
@@ -7939,6 +7947,15 @@ class GameBridge:
 
         # Persist back as list (sets don't round-trip JSON cleanly)
         fdata['sponsor_milestones_fired'] = list(fired)
+
+        # Ship S2: fight-hot path also fires sponsor approaches.
+        # Performance triggers are freshest right after the fight result,
+        # so this is the narrative beat where a brand "calls."
+        try:
+            self._generate_sponsor_approaches(
+                player_fid, fighter, current_week)
+        except Exception as _se:
+            print(f"⚠️ sponsor approach generation failed: {_se!r}")
 
     # =========================================================================
     # COACH REPUTATION (Ship EC1 B)
@@ -17428,6 +17445,10 @@ class GameBridge:
                 # loyalty never drops
 
                 if dropped:
+                    # Ship S2 — record (brand:fighter) drop so the approach
+                    # system blocks re-offers from this brand to this fighter.
+                    fdata.setdefault('dropped_sponsor_ids', []).append(
+                        f"{brand['id']}:{fid}")
                     self._news_items.insert(0, {
                         "headline": (f"💔 {brand['name']} drops "
                                      f"{getattr(fighter,'name',fid)} "
@@ -17440,50 +17461,21 @@ class GameBridge:
                     kept.append(s)
             fdata["sponsors"] = kept
 
-        # --- 2. Inbound sponsor offers for player fighters ---
+        # --- 1.5. Expire stale pending sponsor offers (Ship S2) ---
+        self._pending_sponsor_offers = [
+            o for o in self._pending_sponsor_offers
+            if o.get('expires_week', 0) >= current_week
+        ]
+
+        # --- 2. Trigger-driven sponsor approaches (Ship S2) ---
+        # Replaces the old 10% silent auto-sign. Each player fighter
+        # gets a fresh approach evaluation based on rank + last-fight
+        # personality triggers. Queued as pending offers, not auto-signed.
         for fid in player_fighter_ids:
             fighter = self._game_state.get_fighter(fid)
             if not fighter:
                 continue
-            fdata = self._game_state._fighter_data.setdefault(fid, {})
-            current_sponsors = {s["sponsor_id"]
-                                for s in fdata.get("sponsors", []) or []}
-            rank = self._get_fighter_rank(fighter)
-
-            eligible_tiers = ["local"]
-            if rank is not None and rank <= 15:
-                eligible_tiers.append("regional")
-            if rank is not None and rank <= 5:
-                eligible_tiers.append("elite")
-
-            for personality, brands in SPONSOR_BRANDS.items():
-                for brand in brands:
-                    if brand["tier"] not in eligible_tiers:
-                        continue
-                    if brand["id"] in current_sponsors:
-                        continue
-                    if self._get_sponsor_client_count(brand["id"]) >= brand["max_clients"]:
-                        continue
-                    if (brand["personality"] == "prestige"
-                            and (rank is None or rank > 5)):
-                        continue
-                    if _rnd.random() > 0.10:
-                        continue
-                    fdata.setdefault("sponsors", []).append({
-                        "sponsor_id":  brand["id"],
-                        "signed_week": current_week,
-                    })
-                    self._news_items.insert(0, {
-                        "headline": (f"🎯 {brand['name']} signs "
-                                     f"{getattr(fighter,'name',fid)}! "
-                                     f"+${brand['weekly_retainer']:,}/wk "
-                                     f"retainer + "
-                                     f"${brand['fight_bonus']:,} per fight."),
-                        "category": "signing",
-                        "week": current_week,
-                        "fighter_id": fid,
-                    })
-                    current_sponsors.add(brand["id"])
+            self._generate_sponsor_approaches(fid, fighter, current_week)
 
         # --- 3. AI fighter sponsor assignment (sample 5/week) ---
         all_fids = list(self._game_state._fighter_data.keys())
@@ -17521,6 +17513,207 @@ class GameBridge:
                 "signed_week": current_week,
             })
             ai_processed += 1
+
+    # ── Ship S2: sponsor approach system ──────────────────────────
+    def _generate_sponsor_approaches(self, fighter_id: str,
+                                      fighter, current_week: int) -> None:
+        """Fire personality-matched sponsor approaches based on
+        recent performance. Replaces silent auto-sign — queues a
+        pending offer the player must accept or decline."""
+        import random as _rnd
+        if not self._game_state:
+            return
+        fdata = self._game_state._fighter_data.get(fighter_id, {})
+        held_ids = {s.get('sponsor_id')
+                    for s in (fdata.get('sponsors', []) or [])}
+
+        # Cap concurrent pending per fighter at 3.
+        pending_count = sum(
+            1 for o in self._pending_sponsor_offers
+            if o.get('fighter_id') == fighter_id)
+        if pending_count >= 3:
+            return
+
+        # Derive trigger state from fight history.
+        history = getattr(fighter, 'fight_history', []) or []
+        last = history[-1] if history else {}
+        if not isinstance(last, dict):
+            last = {}
+        last_result = last.get('result', '')
+        last_method = str(last.get('method', '') or '').upper()
+        last_fotn   = bool(last.get('is_fotn', False))
+        last_slot   = str(last.get('card_slot', '') or '').lower()
+        total_fights = (getattr(fighter, 'wins', 0)
+                        + getattr(fighter, 'losses', 0))
+        rank = self._get_fighter_rank(fighter)
+        win_streak = self._get_fighter_win_streak(fighter) or 0
+
+        # Comeback: prior was loss, this one is a win.
+        prior_was_loss = (
+            len(history) >= 2
+            and isinstance(history[-2], dict)
+            and history[-2].get('result') == 'L'
+            and last_result == 'W'
+        )
+
+        triggers = {
+            'aggressive': (
+                last_result == 'W'
+                and (last_method.startswith('KO')
+                     or last_method.startswith('TKO')
+                     or 'SUB' in last_method
+                     or 'SUBMISSION' in last_method)
+            ),
+            'image': (
+                last_fotn
+                or last_slot == 'main_event'
+                or (rank is not None and 0 < rank <= 5)
+            ),
+            'loyalty': (
+                prior_was_loss
+                or total_fights in (5, 10, 20)
+                or win_streak >= 5
+            ),
+            'prestige': (
+                getattr(fighter, 'is_champion', False)
+                or rank == 1
+            ),
+        }
+
+        eligible_tiers = ['local']
+        if rank is not None and rank <= 15:
+            eligible_tiers.append('regional')
+        if rank is not None and rank <= 5:
+            eligible_tiers.append('elite')
+
+        # Flat brand iteration — SPONSOR_BRANDS is keyed by personality
+        # with list values, so use the flat _SPONSOR_BY_ID dict.
+        all_brands = list(_SPONSOR_BY_ID.values())
+        drop_history = set(fdata.get('dropped_sponsor_ids', []) or [])
+
+        for personality, fired in triggers.items():
+            if not fired:
+                continue
+            pending_brand_ids = {
+                o.get('brand_id') for o in self._pending_sponsor_offers
+                if o.get('fighter_id') == fighter_id}
+            candidates = [
+                b for b in all_brands
+                if b.get('personality') == personality
+                and b.get('tier') in eligible_tiers
+                and b.get('id') not in held_ids
+                and b.get('id') not in pending_brand_ids
+                and self._get_sponsor_client_count(b['id']) <
+                    b.get('max_clients', 10)
+                and f"{b['id']}:{fighter_id}" not in drop_history
+            ]
+            if not candidates:
+                continue
+            brand = _rnd.choice(candidates)
+
+            reasons = {
+                'aggressive': "saw your finish and wants to back a fighter who ends it.",
+                'image':      "loves the spotlight you're generating right now.",
+                'loyalty':    "believes in the journey and wants in for the long run.",
+                'prestige':   "only backs the best — and right now that's you.",
+            }
+            offer_id = f"{fighter_id}:{brand['id']}:{current_week}"
+            self._pending_sponsor_offers.append({
+                'offer_id':        offer_id,
+                'fighter_id':      fighter_id,
+                'brand_id':        brand['id'],
+                'brand_name':      brand['name'],
+                'personality':     personality,
+                'tier':            brand['tier'],
+                'weekly_retainer': brand['weekly_retainer'],
+                'fight_bonus':     brand['fight_bonus'],
+                'attr_boost':      brand.get('attr_boost', {}),
+                'trigger_reason':  reasons[personality],
+                'created_week':    current_week,
+                'expires_week':    current_week + 4,
+            })
+            self._news_items.insert(0, {
+                'headline': (f"📣 {brand['name']} is interested in "
+                             f"{getattr(fighter, 'name', fighter_id)} "
+                             f"— check Sponsor Offers."),
+                'category':   'sponsor',
+                'week':       current_week,
+                'fighter_id': fighter_id,
+            })
+
+    def accept_sponsor_offer(self, offer_id: str) -> Dict[str, Any]:
+        """Player accepts a pending sponsor offer."""
+        if not self._game_state:
+            return {"success": False, "error": "No active game"}
+        offer = next((o for o in self._pending_sponsor_offers
+                      if o.get('offer_id') == offer_id), None)
+        if not offer:
+            return {"success": False, "error": "Offer not found"}
+
+        brand = _SPONSOR_BY_ID.get(offer['brand_id'])
+        if brand:
+            if (self._get_sponsor_client_count(offer['brand_id'])
+                    >= brand.get('max_clients', 10)):
+                # Brand filled up while offer was sitting. Remove the
+                # stale offer and report.
+                self._pending_sponsor_offers = [
+                    o for o in self._pending_sponsor_offers
+                    if o.get('offer_id') != offer_id]
+                return {"success": False,
+                        "error": "Sponsor has no more client slots"}
+
+        fighter_id = offer['fighter_id']
+        fdata = self._game_state._fighter_data.setdefault(fighter_id, {})
+        fdata.setdefault('sponsors', []).append({
+            'sponsor_id':  offer['brand_id'],
+            'signed_week': self._game_state.week_number,
+        })
+        self._pending_sponsor_offers = [
+            o for o in self._pending_sponsor_offers
+            if o.get('offer_id') != offer_id]
+
+        fighter = self._game_state.get_fighter(fighter_id)
+        fname = getattr(fighter, 'name', fighter_id)
+        self._news_items.insert(0, {
+            'headline': (f"✅ {offer['brand_name']} signs "
+                         f"{fname} — ${offer['weekly_retainer']:,}/wk"),
+            'category':   'sponsor',
+            'week':       self._game_state.week_number,
+            'fighter_id': fighter_id,
+        })
+        self._clear_cache()
+        return {"success": True,
+                "message": f"Signed with {offer['brand_name']}"}
+
+    def decline_sponsor_offer(self, offer_id: str) -> Dict[str, Any]:
+        """Player declines a pending sponsor offer."""
+        before = len(self._pending_sponsor_offers)
+        self._pending_sponsor_offers = [
+            o for o in self._pending_sponsor_offers
+            if o.get('offer_id') != offer_id]
+        if len(self._pending_sponsor_offers) == before:
+            return {"success": False, "error": "Offer not found"}
+        self._clear_cache()
+        return {"success": True, "message": "Offer declined"}
+
+    def get_pending_sponsor_offers(self) -> List[Dict[str, Any]]:
+        """Player-facing list of pending sponsor offers with derived
+        fighter_name + weeks_left for template rendering."""
+        if not self._game_state:
+            return []
+        out = []
+        for o in self._pending_sponsor_offers:
+            fighter = self._game_state.get_fighter(o.get('fighter_id', ''))
+            weeks_left = max(0,
+                o.get('expires_week', 0) - self._game_state.week_number)
+            out.append({
+                **o,
+                'fighter_name': (getattr(fighter, 'name',
+                                         o.get('fighter_id', '?'))
+                                 if fighter else '?'),
+                'weeks_left': weeks_left,
+            })
+        return out
 
     def _process_ai_free_agent_bidding(self, current_week: int) -> None:
         """Weekly AI free agent pickup sweep. Caps at 3 signings

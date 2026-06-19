@@ -236,10 +236,31 @@ def _generate_available_coaches(tier):
 
 def register_routes(app):
     """Register all routes with the Flask application."""
-    
+
     # Helper to get the game bridge
     def get_bridge():
         return app.game_bridge
+
+    # Ship S2: inject sidebar badge counts into every template render
+    # so nav badges work on all pages, not just the dashboard route.
+    @app.context_processor
+    def _inject_nav_counts():
+        try:
+            bridge = get_bridge()
+            if not bridge.game_started:
+                return {}
+            fighters = bridge.get_player_fighters()
+            fighter_ids = {f.fighter_id for f in fighters}
+            offers = bridge.get_fight_offers()
+            offer_count = len([o for o in offers
+                               if o.fighter_id in fighter_ids])
+            sponsor_offer_count = len(bridge.get_pending_sponsor_offers())
+            return {
+                'offer_count': offer_count,
+                'sponsor_offer_count': sponsor_offer_count,
+            }
+        except Exception:
+            return {}
     
     # =========================================================================
     # GAME SETUP / NEW GAME FLOW
@@ -892,14 +913,51 @@ def register_routes(app):
         """Decline a fight offer."""
         bridge = get_bridge()
         result = bridge.decline_fight_offer(offer_id)
-        
+
         if result.get("success"):
             flash("Offer declined", "info")
         else:
             flash(result.get("error", "Error declining offer"), "error")
-        
+
         return redirect(url_for('fight_offers'))
-    
+
+    # =========================================================================
+    # SPONSOR OFFERS — Ship S2
+    # =========================================================================
+
+    @app.route('/sponsor-offers')
+    def sponsor_offers():
+        """Pending sponsor approaches awaiting accept/decline."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return redirect(url_for('new_game'))
+        offers = bridge.get_pending_sponsor_offers()
+        return render_template('sponsor_offers.html',
+            offers=offers,
+            week=bridge.week_number,
+            balance=bridge._camp_balance,
+        )
+
+    @app.route('/sponsor-offers/accept/<offer_id>', methods=['POST'])
+    def accept_sponsor_offer(offer_id):
+        bridge = get_bridge()
+        result = bridge.accept_sponsor_offer(offer_id)
+        if result.get('success'):
+            flash(result.get('message', 'Sponsor signed!'), 'success')
+        else:
+            flash(result.get('error', 'Could not accept offer'), 'error')
+        return redirect(url_for('sponsor_offers'))
+
+    @app.route('/sponsor-offers/decline/<offer_id>', methods=['POST'])
+    def decline_sponsor_offer(offer_id):
+        bridge = get_bridge()
+        result = bridge.decline_sponsor_offer(offer_id)
+        if result.get('success'):
+            flash('Offer declined.', 'info')
+        else:
+            flash(result.get('error', 'Could not decline offer'), 'error')
+        return redirect(url_for('sponsor_offers'))
+
     # =========================================================================
     # TRAINING
     # =========================================================================

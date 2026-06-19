@@ -97,7 +97,7 @@
 </div>
 
 {# ── Alerts row ── #}
-{% if offer_count > 0 or pending_interviews or scout_tips %}
+{% if offer_count > 0 or (sponsor_offer_count and sponsor_offer_count > 0) or pending_interviews or scout_tips %}
 <div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
     {% if offer_count > 0 %}
     <a href="{{ url_for('fight_offers') }}"
@@ -109,6 +109,19 @@
             {{ offer_count }} Fight Offer{{ 's' if offer_count > 1 else '' }}
         </span>
         <span style="margin-left:auto;font-size:.75rem;color:var(--blood-red-light);">View →</span>
+    </a>
+    {% endif %}
+    {# Ship S2 — Sponsor approach notification #}
+    {% if sponsor_offer_count and sponsor_offer_count > 0 %}
+    <a href="{{ url_for('sponsor_offers') }}"
+       style="display:flex;align-items:center;gap:8px;padding:8px 16px;
+              background:rgba(255,165,0,.12);border:1px solid var(--gold);
+              border-radius:6px;text-decoration:none;flex:1;min-width:200px;">
+        <span style="font-size:1.1rem;">📣</span>
+        <span style="font-family:var(--font-display);color:var(--gold);font-size:.95rem;">
+            {{ sponsor_offer_count }} Sponsor Offer{{ 's' if sponsor_offer_count > 1 else '' }}
+        </span>
+        <span style="margin-left:auto;font-size:.75rem;color:var(--gold);">View →</span>
     </a>
     {% endif %}
     {% if scout_tips %}

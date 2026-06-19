@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Sponsor Offers{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">📣 Sponsor Offers</h1>
+    <div class="page-subtitle">
+        {{ offers|length }} pending · Balance ${{ "{:,}".format(balance) }}
+    </div>
+</div>
+
+{% set tier_color = {
+    'local':    'var(--info)',
+    'regional': 'var(--neon-green)',
+    'elite':    'var(--gold)',
+} %}
+{% set personality_label = {
+    'aggressive': '🔥 Aggressive',
+    'image':      '✨ Image',
+    'loyalty':    '🤝 Loyalty',
+    'prestige':   '👑 Prestige',
+} %}
+
+{% if not offers %}
+<div class="card">
+    <div style="padding:var(--spacing-xl);text-align:center;
+                color:var(--text-muted);">
+        <div style="font-size:1.6rem;margin-bottom:var(--spacing-sm);">📭</div>
+        <div style="font-size:.95rem;">No pending offers — keep performing.</div>
+        <div style="font-size:.72rem;margin-top:4px;">
+            Brands approach fighters off the back of finishes, FOTN
+            nights, win streaks, and title runs.
+        </div>
+    </div>
+</div>
+{% else %}
+
+{% for o in offers %}
+<div class="card mb-md" style="border:1px solid {{ tier_color.get(o.tier, 'var(--border-color)') }}55;">
+    <div style="padding:var(--spacing-md);">
+        <div style="display:flex;align-items:center;
+                    gap:var(--spacing-sm);flex-wrap:wrap;
+                    margin-bottom:var(--spacing-sm);">
+            <a href="{{ url_for('fighter_profile', fighter_id=o.fighter_id) }}"
+               style="font-family:var(--font-display);
+                      color:var(--text-bright);
+                      text-decoration:none;font-size:1.05rem;">
+                {{ o.fighter_name }}
+            </a>
+            <span style="color:var(--text-muted);font-size:.7rem;">←</span>
+            <span style="font-family:var(--font-display);
+                         color:var(--gold);font-size:1.05rem;">
+                {{ o.brand_name }}
+            </span>
+            <span style="font-size:.62rem;
+                         color:{{ tier_color.get(o.tier, 'var(--text-muted)') }};
+                         border:1px solid {{ tier_color.get(o.tier, 'var(--border-color)') }}77;
+                         padding:1px 6px;border-radius:3px;
+                         text-transform:uppercase;letter-spacing:.06em;">
+                {{ o.tier }}
+            </span>
+            <span style="font-size:.62rem;color:var(--text-muted);
+                         padding:1px 6px;border-radius:3px;
+                         background:rgba(255,255,255,.05);">
+                {{ personality_label.get(o.personality, o.personality) }}
+            </span>
+        </div>
+
+        <div style="font-size:.82rem;color:var(--text-secondary);
+                    font-style:italic;margin-bottom:var(--spacing-sm);
+                    padding-left:8px;
+                    border-left:2px solid {{ tier_color.get(o.tier, 'var(--border-color)') }}aa;">
+            📣 {{ o.brand_name }} {{ o.trigger_reason }}
+        </div>
+
+        <div style="display:flex;gap:var(--spacing-lg);flex-wrap:wrap;
+                    margin-bottom:var(--spacing-sm);font-size:.78rem;">
+            <div>
+                <span style="color:var(--text-muted);">Retainer:</span>
+                <span style="color:var(--neon-green);font-weight:600;">
+                    ${{ "{:,}".format(o.weekly_retainer) }}/wk
+                </span>
+            </div>
+            <div>
+                <span style="color:var(--text-muted);">Fight bonus:</span>
+                <span style="color:var(--neon-green);font-weight:600;">
+                    ${{ "{:,}".format(o.fight_bonus) }}
+                </span>
+            </div>
+            {% if o.attr_boost %}
+            <div>
+                <span style="color:var(--text-muted);">Boost:</span>
+                <span style="color:var(--info);">
+                    {% for stat, val in o.attr_boost.items() -%}
+                        +{{ val }} {{ stat|replace('_',' ')|title }}{% if not loop.last %}, {% endif %}
+                    {%- endfor %}
+                </span>
+            </div>
+            {% endif %}
+        </div>
+
+        <div style="display:flex;align-items:center;
+                    justify-content:space-between;flex-wrap:wrap;
+                    gap:var(--spacing-sm);">
+            <span style="font-size:.7rem;color:var(--text-muted);">
+                Expires Week {{ o.expires_week }}
+                ({{ o.weeks_left }}w left)
+            </span>
+            <div style="display:flex;gap:var(--spacing-sm);">
+                <form method="POST"
+                      action="{{ url_for('decline_sponsor_offer', offer_id=o.offer_id) }}"
+                      style="margin:0;">
+                    <button type="submit"
+                            style="padding:5px 14px;font-size:.75rem;
+                                   background:rgba(211,47,47,.1);
+                                   border:1px solid rgba(211,47,47,.4);
+                                   color:var(--blood-red-light);
+                                   border-radius:4px;cursor:pointer;">
+                        ✕ Decline
+                    </button>
+                </form>
+                <form method="POST"
+                      action="{{ url_for('accept_sponsor_offer', offer_id=o.offer_id) }}"
+                      style="margin:0;">
+                    <button type="submit"
+                            style="padding:5px 14px;font-size:.75rem;
+                                   background:rgba(0,230,118,.12);
+                                   border:1px solid rgba(0,230,118,.4);
+                                   color:var(--neon-green);
+                                   border-radius:4px;cursor:pointer;">
+                        ✓ Accept
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}

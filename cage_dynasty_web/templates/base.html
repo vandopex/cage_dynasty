@@ -136,6 +136,17 @@
                     <span class="icon">📨</span><span>Fight Offers</span>
                 </a>
                 {% endif %}
+                {# Ship S2 — Sponsor Offers #}
+                {% if sponsor_offer_count and sponsor_offer_count > 0 %}
+                <a href="{{ url_for('sponsor_offers') }}" class="nav-link {% if request.endpoint == 'sponsor_offers' %}active{% endif %}" style="color:var(--gold);">
+                    <span class="icon">📣</span><span>Sponsors</span>
+                    <span class="nav-badge">{{ sponsor_offer_count }}</span>
+                </a>
+                {% else %}
+                <a href="{{ url_for('sponsor_offers') }}" class="nav-link {% if request.endpoint == 'sponsor_offers' %}active{% endif %}">
+                    <span class="icon">📣</span><span>Sponsors</span>
+                </a>
+                {% endif %}
             </div>
 
             <div class="nav-section">
