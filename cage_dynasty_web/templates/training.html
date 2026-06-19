@@ -331,6 +331,7 @@
     </summary>
     <form method="POST"
           action="{{ url_for('set_stat_floors', fighter_id=fighter.fighter_id) }}"
+          id="floors-form-{{ fighter.fighter_id }}"
           style="margin-top:var(--spacing-sm);">
         {% set _floor_stats = [
             ('boxing','Boxing'),('kicks','Kicks'),
@@ -543,13 +544,19 @@
           id="queue-form-{{ fighter.fighter_id }}"
           style="margin-top:var(--spacing-sm);">
 
-        {# Style template loader #}
+        {# Style template loader + coach recommendation #}
         <div style="margin-bottom:var(--spacing-md);">
             <div style="font-size:.65rem;color:var(--text-muted);
                         margin-bottom:6px;">
                 Load a template for
                 <span style="color:var(--info);">
                     {{ fighter.fighting_style }}</span>:
+            </div>
+            <div id="coach-rec-{{ fighter.fighter_id }}"
+                 data-fid="{{ fighter.fighter_id }}"
+                 data-style="{{ fighter.fighting_style }}"
+                 data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
+                 style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">
             </div>
             <button type="button"
                     onclick="loadStyleTemplate(
@@ -678,6 +685,28 @@
 
     {% if decay_risks and decay_risks.get(fighter.fighter_id) %}
     {% set risks = decay_risks[fighter.fighter_id] %}
+    {# Build set of stats already in the queue — they're being trained,
+       not decaying. Also includes 'maintain' as a sentinel: if any goal
+       is 'maintain', the floor system protects everything, so all
+       decay pills are suppressed. #}
+    {% set _queued_stats = [] %}
+    {% set _has_maintain = namespace(v=False) %}
+    {% if fighter.training_queue %}
+        {% for _g in fighter.training_queue %}
+            {% if _g.focus == 'maintain' %}
+                {% set _has_maintain.v = True %}
+            {% else %}
+                {% set _ = _queued_stats.append(_g.focus) %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    {% set _filtered = [] %}
+    {% for stat, info in risks.items() %}
+        {% if not _has_maintain.v and stat not in _queued_stats %}
+            {% set _ = _filtered.append((stat, info)) %}
+        {% endif %}
+    {% endfor %}
+    {% if _filtered %}
     <div style="margin:0 var(--spacing-md) var(--spacing-md);
                 padding:var(--spacing-sm) var(--spacing-md);
                 background:rgba(220,38,38,.06);border-radius:6px;
@@ -687,7 +716,7 @@
             ⚠️ Stats currently decaying — consider raising floors
         </div>
         <div style="display:flex;flex-wrap:wrap;gap:4px;">
-        {% for stat, info in risks.items() %}
+        {% for stat, info in _filtered %}
         <span style="font-size:.62rem;padding:2px 6px;border-radius:3px;
                      background:{% if info.risk_level == 'Critical' %}rgba(220,38,38,.2)
                                 {% elif info.risk_level == 'High' %}rgba(220,38,38,.15)
@@ -710,6 +739,7 @@
         {% endfor %}
         </div>
     </div>
+    {% endif %}
     {% endif %}
 </div>
 {% endfor %}
@@ -789,24 +819,17 @@ function addQueueRow(fighterId) {
     container.appendChild(row);
 }
 
-function loadStyleTemplate(fighterId, style,
+function buildStyleTemplates(
     boxing, kicks, clinch, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
-    chin, recovery, fightIq, composure, heart, careerPhase) {
+    chin, recovery, fightIq, composure, heart) {
 
     function goal(cur, styleMin) {
         const t = Math.max(cur + 15, styleMin);
         return Math.min(95, t);
     }
 
-    const intensity = (careerPhase === 'Declining' || careerPhase === 'Veteran')
-        ? 'MODERATE' : 'INTENSE';
-
-    // ── Template library — 4 templates per style + S&C universal ──
-    // Each style is an ARRAY of templates with label/desc/queue/floors.
-    // Strength & Conditioning is a single universal template.
-    // Striker + Balanced kept as single-template fallbacks.
-    const templates = {
+    return {
 
         // ── STRIKING ────────────────────────────────
         'Orthodox Boxer': [
@@ -1663,6 +1686,52 @@ function loadStyleTemplate(fighterId, style,
             floors: {fight_iq:62,boxing:58,takedowns:55,cardio:58},
         },
     };
+}
+
+function coachRecommend(
+    fighterId, style,
+    boxing, kicks, clinch, strDef, takedowns, tdDef,
+    topCtrl, subs, guard, strength, speed, cardio,
+    chin, recovery, fightIq, composure, heart) {
+    const templates = buildStyleTemplates(
+        boxing, kicks, clinch, strDef, takedowns, tdDef,
+        topCtrl, subs, guard, strength, speed, cardio,
+        chin, recovery, fightIq, composure, heart);
+    let arr = templates[style];
+    if (!arr) arr = templates['Hybrid'];
+    if (!Array.isArray(arr) || !arr.length) return null;
+    const statMap = {boxing, kicks, clinch_striking:clinch,
+        striking_defense:strDef, takedowns, takedown_defense:tdDef,
+        top_control:topCtrl, submissions:subs, guard,
+        strength, speed, cardio, chin, recovery,
+        fight_iq:fightIq, composure, heart};
+    // Score by sum(target - current, floored at 0) across non-maintain goals.
+    let best = null, bestScore = -1;
+    for (const tmpl of arr) {
+        let score = 0;
+        for (const g of tmpl.queue) {
+            if (g.focus === 'maintain') continue;
+            const cur = statMap[g.focus] || 0;
+            score += Math.max(0, g.target - cur);
+        }
+        if (score > bestScore) { bestScore = score; best = tmpl; }
+    }
+    return best;
+}
+
+function loadStyleTemplate(fighterId, style,
+    boxing, kicks, clinch, strDef, takedowns, tdDef,
+    topCtrl, subs, guard, strength, speed, cardio,
+    chin, recovery, fightIq, composure, heart, careerPhase) {
+
+    const intensity = (careerPhase === 'Declining' || careerPhase === 'Veteran')
+        ? 'MODERATE' : 'INTENSE';
+
+    const templates = buildStyleTemplates(
+        boxing, kicks, clinch, strDef, takedowns, tdDef,
+        topCtrl, subs, guard, strength, speed, cardio,
+        chin, recovery, fightIq, composure, heart);
+
 
     // Cache library + intensity for picker callbacks.
     window._fighterTemplates = window._fighterTemplates || {};
@@ -1750,9 +1819,10 @@ function applyTemplate(fighterId, tmpl, intensity) {
         container.appendChild(row);
     });
 
-    // Populate floor inputs
-    const floorForm = document.querySelector(
-        `form[action*="set_floors/${fighterId}"]`);
+    // Populate floor inputs — use stable form id (Ship: floor selector
+    // hardening). Falls back to action-substring match for safety.
+    const floorForm = document.getElementById('floors-form-' + fighterId)
+        || document.querySelector(`form[action*="set_floors/${fighterId}"]`);
     if (floorForm) {
         floorForm.querySelectorAll('input[name^="floor_"]').forEach(inp => {
             inp.value = 0;
@@ -1928,6 +1998,33 @@ function addMaintainRow(fighterId) {
     `;
     container.appendChild(row);
 }
+
+// Ship: coach recommendation per fighter card. Picks the template
+// with the largest aggregate gap between target and current stat
+// (= biggest "need score"), renders label + short flavor above the
+// load button. No backend dependency — uses the same buildStyleTemplates
+// helper as the load flow, so source of truth stays single.
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-fid][data-stats]').forEach(function(el) {
+        if (!el.id || !el.id.startsWith('coach-rec-')) return;
+        const fid    = el.dataset.fid;
+        const style  = el.dataset.style;
+        const stats  = el.dataset.stats.split(',').map(Number);
+        if (stats.length !== 17 || stats.some(isNaN)) return;
+        let rec;
+        try {
+            rec = coachRecommend(fid, style, ...stats);
+        } catch (e) {
+            return;
+        }
+        if (!rec || !rec.label) return;
+        el.innerHTML = '💬 Coach recommends: '
+            + '<span style="color:var(--gold);font-weight:600;">'
+            + rec.label + '</span>'
+            + ' — <span style="color:var(--text-secondary);font-style:italic;">"'
+            + (rec.desc || '') + '"</span>';
+    });
+});
 </script>
 
 {% endblock %}
