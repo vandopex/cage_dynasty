@@ -140,6 +140,9 @@
 
             <div class="nav-section">
                 <div class="nav-section-title">Browse</div>
+                <a href="{{ url_for('free_agents_market') }}" class="nav-link {% if request.endpoint in ['free_agents_market'] %}active{% endif %}">
+                    <span class="icon">🆓</span><span>Free Agents</span>
+                </a>
                 <a href="{{ url_for('browse_camps') }}" class="nav-link {% if request.endpoint in ['browse_camps','camp_detail'] %}active{% endif %}">
                     <span class="icon">🏟️</span><span>Camps</span>
                 </a>

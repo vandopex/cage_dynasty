@@ -2423,6 +2423,109 @@ def register_routes(app):
             flash(result.get('error', 'Could not release medical staff'), 'error')
         return redirect(url_for('facility'))
 
+    @app.route('/free-agents')
+    def free_agents_market():
+        """Free agent market — browse, sort, filter all available FAs."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return redirect(url_for('new_game'))
+        if not bridge._game_state:
+            return redirect(url_for('new_game'))
+
+        sort_by   = request.args.get('sort', 'ovr')
+        wc_filter = request.args.get('wc', '')
+
+        free_agent_ids = bridge._game_state.free_agents or set()
+        free_agents = []
+        for fid in free_agent_ids:
+            f = bridge._game_state.get_fighter(fid)
+            if not f or not f.is_active:
+                continue
+            # Skip if currently in a fighter camp (defensive)
+            if f.camp_id:
+                continue
+            # Optional weight class filter
+            wc = getattr(f, 'weight_class', '') or ''
+            if wc_filter and wc != wc_filter:
+                continue
+            war = bridge._fa_bidding_wars.get(fid)
+            potential = 0
+            try:
+                potential = int(bridge._game_state._fighter_data.get(
+                    fid, {}).get('potential', 0) or 0)
+            except Exception:
+                pass
+            free_agents.append({
+                'fighter_id':    fid,
+                'name':          f.name,
+                'weight_class':  wc,
+                'style':         getattr(f, 'fighting_style', '') or 'Balanced',
+                'overall':       int(getattr(f, 'overall_rating', 0) or 0),
+                'potential':     potential,
+                'wins':          int(getattr(f, 'wins', 0) or 0),
+                'losses':        int(getattr(f, 'losses', 0) or 0),
+                'age':           int(getattr(f, 'age', 0) or 0),
+                'ranking':       bridge._get_fighter_rank(f),
+                'is_injured':    bool(
+                    bridge._injury_system.has_injuries(fid)
+                    if bridge._injury_system else False),
+                'personality':   bridge._get_ai_neg_personality(f),
+                'has_war':       war is not None,
+                'war_weeks_left': (max(0, war.get('deadline_week', 0) - bridge.week_number)
+                                   if war else 0),
+                'war_offer_count': (len(war.get('offers', []))
+                                    if war else 0),
+                'war_top_purse': (max((int(o.get('purse', 0))
+                                       for o in (war.get('offers', []) if war else [])
+                                       if not o.get('is_player')),
+                                      default=0)
+                                  if war else 0),
+            })
+
+        # Sort
+        if sort_by == 'age':
+            free_agents.sort(key=lambda x: x['age'])
+        elif sort_by == 'wins':
+            free_agents.sort(key=lambda x: -x['wins'])
+        elif sort_by == 'potential':
+            free_agents.sort(key=lambda x: -x['potential'])
+        else:  # ovr
+            free_agents.sort(key=lambda x: -x['overall'])
+
+        weight_classes = [
+            'Strawweight','Flyweight','Bantamweight','Featherweight',
+            'Lightweight','Welterweight','Middleweight',
+            'Light Heavyweight','Heavyweight'
+        ]
+
+        return render_template('free_agents.html',
+            free_agents=free_agents,
+            sort_by=sort_by,
+            wc_filter=wc_filter,
+            weight_classes=weight_classes,
+            balance=bridge._camp_balance,
+            week=bridge.week_number,
+        )
+
+    @app.route('/free-agents/offer/<fighter_id>', methods=['POST'])
+    def submit_fa_offer(fighter_id):
+        """Player submits an offer into an active bidding war."""
+        bridge = get_bridge()
+        try:
+            purse           = int(request.form.get('purse', 0))
+            contract_fights = int(request.form.get('contract_fights', 3))
+            signing_bonus   = int(request.form.get('signing_bonus', 0))
+        except (TypeError, ValueError):
+            flash("Invalid offer values", "error")
+            return redirect(url_for('free_agents_market'))
+        result = bridge.submit_player_fa_offer(
+            fighter_id, purse, contract_fights, signing_bonus)
+        if result.get('success'):
+            flash(result.get('message', 'Offer submitted'), 'success')
+        else:
+            flash(result.get('error', 'Could not submit offer'), 'error')
+        return redirect(url_for('free_agents_market'))
+
     @app.route('/overseas/send/<fighter_id>', methods=['POST'])
     def send_overseas(fighter_id):
         """Send a player fighter on an overseas training camp."""

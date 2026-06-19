@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Free Agent Market{% endblock %}
+{% block content %}
+
+<div class="page-header">
+    <h1 class="page-title">🆓 Free Agent Market</h1>
+    <div class="page-subtitle">
+        {{ free_agents|length }} available · Balance ${{ "{:,}".format(balance) }}
+    </div>
+</div>
+
+{% set style_color = {
+    "Orthodox Boxer":"var(--blood-red)","Muay Thai":"var(--blood-red)",
+    "Kickboxer":"var(--blood-red)","Counter Striker":"var(--blood-red)",
+    "Pressure Fighter":"var(--blood-red)","Brawler":"var(--blood-red)",
+    "Point Fighter":"var(--blood-red)","Striker":"var(--blood-red)",
+    "Karate":"var(--blood-red)",
+    "Wrestler":"var(--info)","BJJ Specialist":"var(--info)",
+    "Judo":"var(--info)","Sambo":"var(--info)",
+    "Ground & Pound":"var(--violet, #a855f7)",
+    "Sprawl & Brawl":"var(--violet, #a855f7)",
+    "Clinch Fighter":"var(--violet, #a855f7)",
+    "Hybrid":"var(--violet, #a855f7)",
+    "Balanced":"var(--violet, #a855f7)",
+} %}
+
+{# ── Filter + sort bar ── #}
+<div class="card mb-md">
+    <div style="padding:var(--spacing-sm) var(--spacing-md);
+                display:flex;flex-wrap:wrap;gap:var(--spacing-sm);
+                align-items:center;">
+
+        <span style="font-size:.62rem;color:var(--text-muted);
+                     text-transform:uppercase;">Sort:</span>
+        {% for s_id, s_label in [
+            ('ovr','OVR'),('potential','Potential'),
+            ('wins','Wins'),('age','Age'),
+        ] %}
+        <a href="{{ url_for('free_agents_market',
+            sort=s_id, wc=wc_filter) }}"
+           style="font-size:.7rem;padding:2px 8px;
+                  border-radius:3px;text-decoration:none;
+                  background:{% if sort_by == s_id %}rgba(0,230,118,.15){% else %}transparent{% endif %};
+                  color:{% if sort_by == s_id %}var(--neon-green){% else %}var(--text-muted){% endif %};
+                  border:1px solid {% if sort_by == s_id %}rgba(0,230,118,.3){% else %}transparent{% endif %};">
+            {{ s_label }}
+        </a>
+        {% endfor %}
+
+        <span style="color:var(--border-color);font-size:.65rem;">|</span>
+
+        <a href="{{ url_for('free_agents_market',
+            sort=sort_by, wc='') }}"
+           style="font-size:.7rem;padding:2px 8px;
+                  border-radius:3px;text-decoration:none;
+                  background:{% if not wc_filter %}rgba(0,230,118,.15){% else %}transparent{% endif %};
+                  color:{% if not wc_filter %}var(--neon-green){% else %}var(--text-muted){% endif %};
+                  border:1px solid {% if not wc_filter %}rgba(0,230,118,.3){% else %}transparent{% endif %};">
+            All
+        </a>
+        {% set wc_codes = {
+            'Strawweight':'STR','Flyweight':'FLY',
+            'Bantamweight':'BAN','Featherweight':'FEA',
+            'Lightweight':'LGT','Welterweight':'WEL',
+            'Middleweight':'MID',
+            'Light Heavyweight':'LHW','Heavyweight':'HVY'
+        } %}
+        {% for wc in weight_classes %}
+        <a href="{{ url_for('free_agents_market',
+            sort=sort_by, wc=wc) }}"
+           style="font-size:.7rem;padding:2px 8px;
+                  border-radius:3px;text-decoration:none;
+                  background:{% if wc_filter == wc %}rgba(0,230,118,.15){% else %}transparent{% endif %};
+                  color:{% if wc_filter == wc %}var(--neon-green){% else %}var(--text-muted){% endif %};
+                  border:1px solid {% if wc_filter == wc %}rgba(0,230,118,.3){% else %}transparent{% endif %};">
+            {{ wc_codes.get(wc, wc[:3]) }}
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+{# ── Active bidding wars callout ── #}
+{% set wars = free_agents | selectattr('has_war') | list %}
+{% if wars %}
+<div class="card mb-md" style="border:1px solid var(--gold);
+                                background:rgba(255,215,0,.04);">
+    <div class="card-header" style="border-bottom:1px solid rgba(255,215,0,.15);">
+        <h3 style="color:var(--gold);">🔥 Active Bidding Wars ({{ wars|length }})</h3>
+    </div>
+    <div style="padding:0;">
+        {% for fa in wars %}
+        <div style="padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <div style="display:flex;align-items:center;
+                        gap:var(--spacing-md);flex-wrap:wrap;">
+                <div style="flex:1;min-width:160px;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=fa.fighter_id) }}"
+                       style="font-family:var(--font-display);
+                              color:var(--text-bright);
+                              text-decoration:none;font-size:.95rem;">
+                        {{ fa.name }}
+                    </a>
+                    <span style="font-size:.65rem;color:var(--text-muted);
+                                 margin-left:6px;">
+                        {{ fa.weight_class }} · OVR {{ fa.overall }} ·
+                        {{ fa.personality }}
+                    </span>
+                    <div style="font-size:.7rem;color:var(--gold);margin-top:2px;">
+                        ⏳ {{ fa.war_weeks_left }}w left ·
+                        {{ fa.war_offer_count }} offer(s) ·
+                        Top AI bid: ${{ "{:,}".format(fa.war_top_purse) }}
+                    </div>
+                </div>
+                <form method="POST"
+                      action="{{ url_for('submit_fa_offer', fighter_id=fa.fighter_id) }}"
+                      style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                    <input type="number" name="purse" placeholder="Purse"
+                           value="{{ (fa.war_top_purse + 5000) if fa.war_top_purse else 15000 }}"
+                           min="5000" step="1000" required
+                           style="width:90px;padding:3px 6px;
+                                  font-size:.7rem;background:var(--bg-dark);
+                                  border:1px solid var(--border-color);
+                                  color:var(--text-bright);border-radius:3px;">
+                    <select name="contract_fights"
+                            style="padding:3px 6px;font-size:.7rem;
+                                   background:var(--bg-dark);
+                                   border:1px solid var(--border-color);
+                                   color:var(--text-bright);border-radius:3px;">
+                        <option value="3">3 fights</option>
+                        <option value="4">4 fights</option>
+                        <option value="5">5 fights</option>
+                    </select>
+                    <input type="number" name="signing_bonus"
+                           placeholder="Bonus" value="0" min="0" step="1000"
+                           style="width:80px;padding:3px 6px;
+                                  font-size:.7rem;background:var(--bg-dark);
+                                  border:1px solid var(--border-color);
+                                  color:var(--text-bright);border-radius:3px;">
+                    <button type="submit" class="btn btn-primary btn-sm"
+                            style="font-size:.7rem;
+                                   background:rgba(255,215,0,.2);
+                                   border:1px solid var(--gold);
+                                   color:var(--gold);">
+                        Submit Offer
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ── Free agent list ── #}
+<div class="card">
+    <div class="card-header">
+        <h3>📋 Available Free Agents</h3>
+    </div>
+    <div style="padding:0;">
+        {% for fa in free_agents %}
+        {% if not fa.has_war %}
+        <div style="display:flex;align-items:center;
+                    gap:var(--spacing-md);
+                    padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+            <div style="flex:1;min-width:0;">
+                <div style="display:flex;align-items:center;gap:8px;
+                            flex-wrap:wrap;">
+                    <a href="{{ url_for('fighter_profile', fighter_id=fa.fighter_id) }}"
+                       style="font-family:var(--font-display);
+                              color:var(--text-bright);
+                              text-decoration:none;font-size:.9rem;">
+                        {{ fa.name }}
+                    </a>
+                    {% if fa.ranking %}
+                    <span style="font-size:.65rem;
+                                 color:{% if fa.ranking <= 5 %}var(--gold){% else %}var(--info){% endif %};">
+                        #{{ fa.ranking }}
+                    </span>
+                    {% endif %}
+                    {% if fa.is_injured %}
+                    <span style="font-size:.62rem;color:var(--blood-red);
+                                 background:rgba(220,38,38,.12);
+                                 padding:1px 5px;border-radius:3px;">
+                        🤕 INJ
+                    </span>
+                    {% endif %}
+                    <span style="font-size:.62rem;
+                                 color:{{ style_color.get(fa.style, 'var(--text-muted)') }};
+                                 border:1px solid {{ style_color.get(fa.style, 'var(--border-color)') }}55;
+                                 padding:1px 6px;border-radius:3px;">
+                        {{ fa.style }}
+                    </span>
+                </div>
+                <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;">
+                    {{ fa.weight_class }} ·
+                    {{ fa.wins }}-{{ fa.losses }} ·
+                    Age {{ fa.age }} ·
+                    <span style="color:var(--text-muted);">{{ fa.personality }}</span>
+                </div>
+            </div>
+            <div style="text-align:center;flex-shrink:0;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.2rem;
+                            color:{% if fa.overall >= 85 %}var(--gold){% elif fa.overall >= 70 %}var(--neon-green){% else %}var(--info){% endif %};">
+                    {{ fa.overall }}
+                </div>
+                <div style="font-size:.55rem;color:var(--text-muted);
+                            text-transform:uppercase;letter-spacing:.08em;">
+                    OVR
+                </div>
+            </div>
+            <div style="flex-shrink:0;">
+                <form method="POST"
+                      action="{{ url_for('sign_fighter_from_profile', fighter_id=fa.fighter_id) }}"
+                      style="margin:0;">
+                    <input type="hidden" name="contract_fights" value="3">
+                    <button type="submit" class="btn btn-primary btn-sm"
+                            style="font-size:.7rem;">
+                        ✍️ Sign
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+        {% else %}
+        <div style="padding:var(--spacing-xl);text-align:center;
+                    color:var(--text-muted);">
+            No free agents available.
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% endblock %}

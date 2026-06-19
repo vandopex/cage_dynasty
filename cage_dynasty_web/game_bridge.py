@@ -1032,6 +1032,13 @@ class GameBridge:
         #        return_week, stat_targets, cost_paid, success_rate,
         #        boost_full, boost_half}
         self._overseas_trips: List[Dict[str, Any]] = []
+
+        # Ship FAW — free agent bidding wars (high-value FAs only).
+        # {fighter_id: {fighter_id, started_week, deadline_week,
+        #               offers: [{camp_id, camp_name, purse,
+        #                         contract_fights, signing_bonus,
+        #                         submitted_week, is_player}], }}
+        self._fa_bidding_wars: Dict[str, Dict[str, Any]] = {}
         self._completed_events: List[Dict[str, Any]] = []
         self._news_items: List[Dict[str, Any]] = []
 
@@ -1721,6 +1728,7 @@ class GameBridge:
             "fight_offers":             self._fight_offers,
             "medical_staff":            self._medical_staff,
             "overseas_trips":           self._overseas_trips,
+            "fa_bidding_wars":          self._fa_bidding_wars,
             "completed_events":         [
                 {**{k: v for k, v in ev.items() if k != 'fights'},
                  'fights': [clean_fight(f) for f in ev.get('fights', [])]}
@@ -1957,6 +1965,7 @@ class GameBridge:
         self._fight_offers            = data.get("fight_offers", [])
         self._medical_staff           = data.get("medical_staff", [])
         self._overseas_trips          = data.get("overseas_trips", [])
+        self._fa_bidding_wars         = data.get("fa_bidding_wars", {})
         self._fighter_cooldowns       = {k: int(v) for k, v in
                                           data.get("fighter_cooldowns", {}).items()}
         self._fighter_signing_available = {k: int(v) for k, v in
@@ -2399,6 +2408,8 @@ class GameBridge:
             self._process_weekly_sponsors(current_week)
             # Ship EC1 D — overseas trip returns
             self._process_overseas_returns(current_week)
+            # Ship FAW — bidding wars tick (AI offers + deadline resolution)
+            self._process_fa_bidding_wars(current_week)
 
             # ── Top up pipeline — add week N+8 ────────────────────────
             self._top_up_pipeline()
@@ -8273,6 +8284,336 @@ class GameBridge:
                 'stat_boost_half': opt['stat_boost_half'],
                 'currently_abroad': currently is not None,
                 'current_trip':   currently,
+            })
+        return out
+
+    # =========================================================================
+    # FREE AGENT BIDDING WARS (Ship FAW)
+    # High-value FAs (OVR ≥ 75 or ranked top-15) open a window where
+    # multiple camps + the player submit offers. Fighter picks at
+    # deadline via personality preference.
+    # =========================================================================
+    FAW_OVR_THRESHOLD       = 75
+    FAW_MIN_WINDOW_WEEKS    = 2
+    FAW_RANK_TRIGGER        = 15
+
+    def _is_fa_bid_eligible(self, fighter) -> bool:
+        """Returns True if this FA qualifies for a bidding war."""
+        if not fighter:
+            return False
+        ovr = int(getattr(fighter, 'overall_rating', 0) or 0)
+        if ovr >= self.FAW_OVR_THRESHOLD:
+            return True
+        rank = self._get_fighter_rank(fighter)
+        if rank is not None and 0 < rank <= self.FAW_RANK_TRIGGER:
+            return True
+        return False
+
+    def _open_bidding_war(self, fighter_id: str, fighter) -> None:
+        """Open a bidding war for this fighter. Triggered from
+        _ai_bid_for_free_agent when OVR/rank threshold met."""
+        if not self._game_state or not fighter:
+            return
+        if fighter_id in self._fa_bidding_wars:
+            return  # Already open
+        current = self._game_state.week_number
+        # Window length scales with fighter tier — use signing delay.
+        window = max(self.FAW_MIN_WINDOW_WEEKS,
+                     self._signing_delay_weeks(
+                         fighter, getattr(fighter, 'is_champion', False)))
+        deadline = current + window
+        self._fa_bidding_wars[fighter_id] = {
+            'fighter_id':    fighter_id,
+            'started_week':  current,
+            'deadline_week': deadline,
+            'offers':        [],
+        }
+        ovr = int(getattr(fighter, 'overall_rating', 0) or 0)
+        self._news_items.insert(0, {
+            'headline': (f"🔥 Bidding war opened for {fighter.name} "
+                         f"(OVR {ovr}) — deadline Week {deadline}."),
+            'category':   'signing',
+            'week':       current,
+            'fighter_id': fighter_id,
+        })
+
+    def _ai_submit_fa_offer(
+            self, fighter_id: str, fighter, war: Dict) -> None:
+        """An AI camp submits ONE offer per fighter per war (re-offers
+        suppressed; first AI offer per camp stands). Probability gated
+        by camp score so weak camps rarely chase top FAs."""
+        import random as _rnd
+        # Camps already offering this fighter
+        existing_camp_ids = {o.get('camp_id')
+                             for o in war.get('offers', [])
+                             if not o.get('is_player')}
+        # Eligible AI camps with roster slot
+        ai_camps = [
+            c for c in self._game_state.camps.values()
+            if not c.is_player
+            and getattr(c, 'fighter_count', 0) < getattr(c, 'max_fighters', 6)
+            and c.camp_id not in existing_camp_ids
+        ]
+        for camp in ai_camps:
+            score = self._score_fighter_for_camp(fighter, camp.camp_id)
+            if score <= 0:
+                continue
+            # Probability scales with score — top scorers very likely to bid
+            prob = min(0.40, score / 400)
+            if _rnd.random() > prob:
+                continue
+            ovr = int(getattr(fighter, 'overall_rating', 60) or 60)
+            # Purse derived from OVR + score blend
+            base_purse = max(8000, 5000 + ovr * 250)
+            score_mult = 1.0 + max(0, (score - 150) / 200)
+            purse = int(base_purse * score_mult)
+            # Contract length — better camps offer longer deals
+            contract_fights = _rnd.choice([3, 4, 5])
+            signing_bonus = int(purse * _rnd.uniform(0.15, 0.40))
+            war.setdefault('offers', []).append({
+                'camp_id':         camp.camp_id,
+                'camp_name':       camp.name,
+                'purse':           purse,
+                'contract_fights': contract_fights,
+                'signing_bonus':   signing_bonus,
+                'submitted_week':  self._game_state.week_number,
+                'is_player':       False,
+                'score':           score,
+            })
+
+    def _process_fa_bidding_wars(self, current_week: int) -> None:
+        """Weekly tick: AI camps submit fresh offers; resolve any
+        wars past their deadline."""
+        if not self._game_state:
+            return
+        resolved = []
+        for fid, war in list(self._fa_bidding_wars.items()):
+            # If fighter no longer free, drop the war silently.
+            if fid not in self._game_state.free_agents:
+                resolved.append(fid)
+                continue
+            fighter = self._game_state.get_fighter(fid)
+            if not fighter:
+                resolved.append(fid)
+                continue
+            # AI submits offers if war still open
+            if current_week < war['deadline_week']:
+                self._ai_submit_fa_offer(fid, fighter, war)
+                continue
+            # Past deadline → resolve
+            self._resolve_bidding_war(war, fighter)
+            resolved.append(fid)
+        for fid in resolved:
+            self._fa_bidding_wars.pop(fid, None)
+
+    def _resolve_bidding_war(
+            self, war: Dict, fighter) -> None:
+        """Fighter picks the winning offer using personality
+        preference. If no offers, war expires silently."""
+        offers = war.get('offers', []) or []
+        if not offers:
+            return
+        personality = self._get_ai_neg_personality(fighter)
+
+        def _camp_country(camp_id):
+            if not self._game_state:
+                return ''
+            c = self._game_state.get_camp(camp_id)
+            return getattr(c, 'country', '') if c else ''
+
+        def _camp_tier_rank(camp_id):
+            if not self._game_state:
+                return 0
+            c = self._game_state.get_camp(camp_id)
+            tier = str(getattr(c, 'tier', 'LOCAL') or 'LOCAL').upper()
+            try:
+                return _CAMP_TIER_ORDER.index(tier)
+            except ValueError:
+                return 0
+
+        # Personality-driven scoring of each offer
+        nat = (getattr(fighter, 'nationality', '')
+               or getattr(fighter, 'country', '') or '').lower()
+        def _offer_score(o):
+            purse  = int(o.get('purse', 0) or 0)
+            bonus  = int(o.get('signing_bonus', 0) or 0)
+            length = int(o.get('contract_fights', 3) or 3)
+            money  = purse + bonus
+            tier_r = _camp_tier_rank(o.get('camp_id', ''))
+            is_home = (_camp_country(o.get('camp_id', '')).lower() == nat)
+            home_bonus = 30000 if is_home else 0
+
+            if personality in ('WARRIOR', 'HUNGRY'):
+                return money
+            if personality == 'JOURNEYMAN':
+                # Security: longest contract first, then $.
+                return length * 50000 + money // 4
+            if personality == 'PROSPECT':
+                # Best camp tier (development) + money.
+                return tier_r * 25000 + money
+            if personality == 'CONTENDER':
+                # Highest-tier camp wins; money tiebreak.
+                return tier_r * 40000 + money // 2
+            if personality == 'ELITE':
+                # Money × tier prestige compound.
+                return money + tier_r * 30000
+            if personality == 'SHOWMAN':
+                # Money + slight tier bias.
+                return money + tier_r * 10000 + home_bonus
+            if personality == 'CALCULATED':
+                # Tier + money balance, slight home preference.
+                return tier_r * 20000 + money + home_bonus // 2
+            return money
+
+        offers_ranked = sorted(offers, key=_offer_score, reverse=True)
+        winner = offers_ranked[0]
+        winner_camp_id = winner.get('camp_id', '')
+        winner_camp_name = winner.get('camp_name', 'a camp')
+        is_player_winner = bool(winner.get('is_player'))
+
+        if not self._game_state:
+            return
+        # Execute the sign
+        if is_player_winner:
+            # Player won — apply the offer as if sign_free_agent fired.
+            cost = int(winner.get('purse', 0) or 0) + int(
+                winner.get('signing_bonus', 0) or 0)
+            # Funds already escrowed at submit time — no double-deduct.
+            self._game_state._sign_fighter_to_camp(
+                fighter.fighter_id, self._game_state.player_camp_id)
+            self._contracts[fighter.fighter_id] = {
+                'fighter_id':       fighter.fighter_id,
+                'camp_id':          self._game_state.player_camp_id,
+                'total_fights':     winner.get('contract_fights', 3),
+                'fights_remaining': winner.get('contract_fights', 3),
+                'fights_completed': 0,
+                'purse_per_fight':  winner.get('purse', 0),
+                'morale':           80,
+                'holdout_weeks':    0,
+                'is_holdout':       False,
+                'signed_week':      self._game_state.week_number,
+                'personality':      self._get_ai_neg_personality(fighter),
+            }
+            # Refund all other camp offers (no escrow on AI, just player)
+            self._news_items.insert(0, {
+                'headline': (f"✍️ {fighter.name} signs with YOUR camp "
+                             f"— beat {len(offers) - 1} other offers. "
+                             f"${cost:,} total."),
+                'category':   'signing',
+                'week':       self._game_state.week_number,
+                'fighter_id': fighter.fighter_id,
+                'camp_id':    self._game_state.player_camp_id,
+            })
+        else:
+            # AI camp won — refund player's escrow if they had an offer
+            for o in offers:
+                if o.get('is_player'):
+                    refund = (int(o.get('purse', 0) or 0)
+                              + int(o.get('signing_bonus', 0) or 0))
+                    self._camp_balance += refund
+                    self._news_items.insert(0, {
+                        'headline': (f"💸 ${refund:,} offer refunded "
+                                     f"— {fighter.name} signed elsewhere."),
+                        'category':   'signing',
+                        'week':       self._game_state.week_number,
+                        'fighter_id': fighter.fighter_id,
+                    })
+                    break
+            self._game_state._sign_fighter_to_camp(
+                fighter.fighter_id, winner_camp_id)
+            self._news_items.insert(0, {
+                'headline': (f"✍️ {fighter.name} signs with {winner_camp_name} "
+                             f"— chose them over {len(offers) - 1} other offers. "
+                             f"Personality: {personality}."),
+                'category':   'signing',
+                'week':       self._game_state.week_number,
+                'fighter_id': fighter.fighter_id,
+                'camp_id':    winner_camp_id,
+                'camp_name':  winner_camp_name,
+            })
+        self._clear_cache()
+
+    def submit_player_fa_offer(
+            self,
+            fighter_id: str,
+            purse: int,
+            contract_fights: int,
+            signing_bonus: int) -> Dict[str, Any]:
+        """Player submits an offer into an active bidding war.
+        Funds escrowed immediately; refunded if another camp wins."""
+        if not self._game_state:
+            return {"success": False, "error": "No game loaded"}
+        war = self._fa_bidding_wars.get(fighter_id)
+        if not war:
+            return {"success": False,
+                    "error": "No active bidding war for this fighter"}
+        try:
+            purse = int(purse)
+            signing_bonus = int(signing_bonus)
+            contract_fights = int(contract_fights)
+        except (TypeError, ValueError):
+            return {"success": False, "error": "Invalid offer values"}
+        if purse < 5000 or signing_bonus < 0 or contract_fights < 1:
+            return {"success": False, "error": "Offer values out of range"}
+        total = purse + signing_bonus
+        # Refund prior player offer if exists (one slot per war)
+        prior_player_offer = next(
+            (o for o in war.get('offers', []) if o.get('is_player')),
+            None)
+        prior_total = (int(prior_player_offer.get('purse', 0) or 0)
+                       + int(prior_player_offer.get('signing_bonus', 0) or 0)
+                       ) if prior_player_offer else 0
+        # Net change in escrow
+        net_charge = total - prior_total
+        if net_charge > self._camp_balance:
+            return {"success": False,
+                    "error": (f"Need ${net_charge:,} more for this offer. "
+                              f"Have ${self._camp_balance:,}")}
+        self._camp_balance -= net_charge
+        # Remove prior offer, add new one
+        war['offers'] = [o for o in war.get('offers', [])
+                         if not o.get('is_player')]
+        war['offers'].append({
+            'camp_id':         self._game_state.player_camp_id,
+            'camp_name':       'Your Camp',
+            'purse':           purse,
+            'contract_fights': contract_fights,
+            'signing_bonus':   signing_bonus,
+            'submitted_week':  self._game_state.week_number,
+            'is_player':       True,
+        })
+        self._clear_cache()
+        return {"success": True,
+                "message": f"Offer submitted: ${purse:,}/fight × {contract_fights} + ${signing_bonus:,} bonus"}
+
+    def get_bidding_wars(self) -> List[Dict[str, Any]]:
+        """Surface active bidding wars for UI."""
+        if not self._game_state:
+            return []
+        out = []
+        for fid, war in self._fa_bidding_wars.items():
+            fighter = self._game_state.get_fighter(fid)
+            if not fighter:
+                continue
+            offers = list(war.get('offers', []))
+            player_offer = next(
+                (o for o in offers if o.get('is_player')), None)
+            ai_offer_count = sum(
+                1 for o in offers if not o.get('is_player'))
+            top_ai_purse = max(
+                (int(o.get('purse', 0)) for o in offers
+                 if not o.get('is_player')),
+                default=0)
+            current_week = self._game_state.week_number
+            out.append({
+                'fighter_id':    fid,
+                'fighter_name':  fighter.name,
+                'deadline_week': war.get('deadline_week', 0),
+                'weeks_left':    max(0,
+                    war.get('deadline_week', 0) - current_week),
+                'ai_offer_count':  ai_offer_count,
+                'top_ai_purse':    top_ai_purse,
+                'player_offer':    player_offer,
             })
         return out
 
@@ -16259,9 +16600,15 @@ class GameBridge:
     def _ai_bid_for_free_agent(self, fighter_id: str, fighter) -> None:
         """
         After a fighter becomes a free agent, AI camps bid personality-first.
-        50% chance AI picks them up within the same week (simulates fast market).
+        High-value FAs (Ship FAW) open a bidding war instead of instant pickup;
+        lower-value FAs use the original 50%/score-max flow.
         """
         if not self._game_state or not fighter:
+            return
+        # Ship FAW — open bidding war for high-value FAs.
+        if self._is_fa_bid_eligible(fighter):
+            if fighter_id not in self._fa_bidding_wars:
+                self._open_bidding_war(fighter_id, fighter)
             return
         import random
         if random.random() > 0.50:
@@ -17705,6 +18052,11 @@ class GameBridge:
             return {"success": False, "error": f"{fighter.name} is already signed to a camp"}
         if fighter.fighter_id not in self._game_state.free_agents:
             return {"success": False, "error": f"{fighter.name} is not available"}
+        # Ship FAW — high-value FAs require bidding war submission
+        if fighter_id in self._fa_bidding_wars:
+            return {"success": False,
+                    "error": (f"{fighter.name} has an active bidding war. "
+                              f"Submit an offer on the Free Agents page.")}
 
         # Validate contract length vs camp tier
         player_camp  = self._game_state.get_camp(self._game_state.player_camp_id)
