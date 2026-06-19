@@ -1288,7 +1288,8 @@ class GameBridge:
                 self._coach['age'] = _cr.randint(35, 52)
             if 'potential' not in self._coach:
                 _r = self._coach.get('rating', 60)
-                if _r >= 80:   self._coach['potential'] = 'Elite'
+                if _r >= 92:   self._coach['potential'] = 'Legendary'
+                elif _r >= 80: self._coach['potential'] = 'Elite'
                 elif _r >= 68: self._coach['potential'] = 'High'
                 elif _r >= 55: self._coach['potential'] = 'Average'
                 else:          self._coach['potential'] = 'Limited'
@@ -1711,7 +1712,8 @@ class GameBridge:
             self._coach['age'] = _clr.randint(35, 52)
         if 'potential' not in self._coach:
             _cr = self._coach.get('rating', 60)
-            if _cr >= 80:   self._coach['potential'] = 'Elite'
+            if _cr >= 92:   self._coach['potential'] = 'Legendary'
+            elif _cr >= 80: self._coach['potential'] = 'Elite'
             elif _cr >= 68: self._coach['potential'] = 'High'
             elif _cr >= 55: self._coach['potential'] = 'Average'
             else:           self._coach['potential'] = 'Limited'
@@ -3446,7 +3448,8 @@ class GameBridge:
             _camp_id = getattr(_fighter_obj, 'camp_id', None) if _fighter_obj else None
 
             _POT_CEIL = {
-                'Elite': 95, 'High': 90, 'Average': 80, 'Limited': 70
+                'Legendary': 100, 'Elite': 95, 'High': 90,
+                'Average': 80, 'Limited': 70
             }
             _XP_PER_POINT = 10
 
@@ -7651,6 +7654,11 @@ class GameBridge:
             self._apply_sponsor_milestones(
                 player_fid, fight_result, player_won)
 
+        # Ship EC1 B: coach reputation from career events
+        if player_fid and self._game_state:
+            self._apply_coach_reputation_events(
+                fight_result, player_won, player_fid)
+
         self._camp_cache.clear()   # balance changed — invalidate cache
         return earned
 
@@ -7767,6 +7775,90 @@ class GameBridge:
 
         # Persist back as list (sets don't round-trip JSON cleanly)
         fdata['sponsor_milestones_fired'] = list(fired)
+
+    # =========================================================================
+    # COACH REPUTATION (Ship EC1 B)
+    # =========================================================================
+    def _award_coach_reputation(
+            self, amount: int, reason: str = "") -> None:
+        """Increment head coach reputation, capped at 100. Fires news
+        for milestone landmarks (every 25 points). Reputation grows
+        from career events: title wins, defenses, FOTNs, prospect
+        graduations, top-5 reaches, tenure milestones."""
+        if not self._coach:
+            return
+        prev = int(self._coach.get('reputation', 0) or 0)
+        new  = min(100, prev + amount)
+        if new == prev:
+            return
+        self._coach['reputation'] = new
+        # Milestone news at 25/50/75/100 reputation
+        crossed_milestone = None
+        for m in (25, 50, 75, 100):
+            if prev < m <= new:
+                crossed_milestone = m
+        if crossed_milestone and self._game_state:
+            self._news_items.insert(0, {
+                'headline': (f"⭐ {self._coach.get('name', 'Coach')} "
+                             f"reputation hits {crossed_milestone}. "
+                             f"Fame compounds — market value rising."),
+                'category': 'training',
+                'week':     self._game_state.week_number,
+            })
+
+    def _apply_coach_reputation_events(
+            self,
+            fight_result: Dict[str, Any],
+            player_won: bool,
+            player_fid: str) -> None:
+        """Fire coach reputation increments from this fight's career
+        events. Title win/defense/FOTN/top-5 reach all count. Tenure
+        milestones live in the coach contract weekly tick."""
+        if not self._coach or not player_won:
+            return
+        if not self._game_state:
+            return
+
+        fighter = self._game_state.get_fighter(player_fid)
+        if not fighter:
+            return
+
+        is_title = bool(fight_result.get('is_title_fight'))
+        is_fotn  = bool(fight_result.get('is_fotn'))
+        rank     = self._get_fighter_rank(fighter)
+        history  = getattr(fighter, 'fight_history', []) or []
+
+        # Title defense check: previous title fight in history was also a W
+        was_already_champion = (
+            is_title
+            and any(isinstance(h, dict)
+                    and h.get('was_title_fight')
+                    and h.get('result') == 'W'
+                    for h in history[:-1])
+        )
+
+        # Dedup per-fighter so top-5 reach + similar milestones
+        # fire once per fighter across their career.
+        fdata = self._game_state._fighter_data.setdefault(player_fid, {})
+        rep_fired = set(fdata.get('coach_rep_events_fired', []) or [])
+
+        if is_title and not was_already_champion:
+            # First-time title win = +15
+            self._award_coach_reputation(15, "title_win")
+        elif was_already_champion:
+            # Title defense = +10
+            self._award_coach_reputation(10, "title_defense")
+
+        if is_fotn:
+            self._award_coach_reputation(5, "fotn")
+
+        # Top-5 reach (once per fighter)
+        if (rank is not None and 0 < rank <= 5
+                and 'top5_reached' not in rep_fired):
+            self._award_coach_reputation(5, "top5_reach")
+            rep_fired.add('top5_reached')
+
+        fdata['coach_rep_events_fired'] = list(rep_fired)
 
     # =========================================================================
     # SCOUTING — STRENGTHS / WEAKNESSES / REPORT
@@ -15352,8 +15444,28 @@ class GameBridge:
                     - (skipped * COACH_SKIPPED_PAYCHECK_DECAY))
                 contract["skipped_paychecks"] = 0
 
+            # Ship EC1 B: tenure milestones for head coach reputation
+            if cid and cid == self._head_coach_id:
+                _wc = int(contract.get('weeks_completed', 0))
+                _tenure_fired = set(
+                    contract.get('tenure_rep_fired', []) or [])
+                if _wc >= 50 and 'tenure_50' not in _tenure_fired:
+                    self._award_coach_reputation(10, "tenure_50w")
+                    _tenure_fired.add('tenure_50')
+                if _wc >= 100 and 'tenure_100' not in _tenure_fired:
+                    self._award_coach_reputation(15, "tenure_100w")
+                    _tenure_fired.add('tenure_100')
+                contract['tenure_rep_fired'] = list(_tenure_fired)
+
             # Underpaid morale decay
-            market_rate = int(contract.get("rating", 60) * COACH_MARKET_RATE_PER_RATING)
+            # Ship EC1 B: reputation multiplier on market rate.
+            # Fame compounds — 50 reputation = +40% market value.
+            _rep = int(self._coach.get('reputation', 0) or 0) if (
+                cid == self._head_coach_id) else 0
+            _rep_mult = 1.0 + _rep * 0.008
+            market_rate = int(contract.get("rating", 60)
+                              * COACH_MARKET_RATE_PER_RATING
+                              * _rep_mult)
             if contract.get("salary", 0) < market_rate * COACH_UNDERPAID_THRESHOLD:
                 contract["morale"] = max(0,
                     contract.get("morale", COACH_MORALE_START) - COACH_UNDERPAID_DECAY)
@@ -15882,6 +15994,12 @@ class GameBridge:
                 "morale":          contract.get('morale', 85),
                 "weeks_remaining": contract.get('weeks_remaining', 0),
                 "total_weeks":     contract.get('total_weeks', 52),
+                # Ship EC1 B — reputation surfaces only for head coach
+                # since non-head coaches share the legacy _coach state.
+                "potential":       c.get('potential', 'Average'),
+                "reputation":      (int(self._coach.get('reputation', 0) or 0)
+                                    if c.get('coach_id') == self._head_coach_id
+                                    else 0),
             })
         return result
 
@@ -17531,6 +17649,8 @@ class GameBridge:
                 "fighter_id": amateur.fighter_id,
                 "camp_id":    self._game_state.player_camp_id,
             })
+            # Ship EC1 B: amateur graduation rep bump for head coach.
+            self._award_coach_reputation(3, "amateur_graduation")
             self._clear_cache()
             return {"success": True,
                     "message": f"Signed {amateur.name} for ${signing_cost:,}"}

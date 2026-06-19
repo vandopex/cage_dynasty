@@ -57,6 +57,17 @@
                     </span>
                     <span style="font-size:.72rem;color:var(--text-muted);">
                         {{ coach.specialty | title }} · {{ coach.rating }} RTG
+                        {% if coach.potential %}
+                        <span style="color:{% if coach.potential == 'Legendary' %}var(--gold){% elif coach.potential == 'Elite' %}var(--neon-green){% elif coach.potential == 'High' %}var(--info){% else %}var(--text-muted){% endif %};
+                                     margin-left:6px;font-weight:600;">
+                            · {{ coach.potential }}
+                        </span>
+                        {% endif %}
+                        {% if coach.is_head and coach.reputation and coach.reputation > 0 %}
+                        <span style="color:var(--gold);margin-left:6px;">
+                            · ⭐ Rep {{ coach.reputation }}
+                        </span>
+                        {% endif %}
                     </span>
                 </div>
                 <div style="display:flex;gap:6px;">
