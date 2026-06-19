@@ -1767,17 +1767,21 @@ function applyTemplate(fighterId, tmpl, intensity) {
 
     // Populate floor inputs — use stable form id (Ship: floor selector
     // hardening). Falls back to action-substring match for safety.
+    // Universal minimum 50: every stat seeded to 50 first, then template-
+    // specific higher values override. Nothing decays below baseline.
     const floorForm = document.getElementById('floors-form-' + fighterId)
         || document.querySelector(`form[action*="set_floors/${fighterId}"]`);
     if (floorForm) {
         floorForm.querySelectorAll('input[name^="floor_"]').forEach(inp => {
-            inp.value = 0;
+            inp.value = 50;
             inp.style.borderColor = 'rgba(255,255,255,.08)';
         });
         Object.entries(tmpl.floors).forEach(([stat, val]) => {
             const inp = floorForm.querySelector(`input[name="floor_${stat}"]`);
             if (inp) {
-                inp.value = val;
+                // Template floor wins only if higher than the 50 baseline.
+                const useVal = Math.max(50, parseInt(val, 10) || 0);
+                inp.value = useVal;
                 inp.style.borderColor = 'rgba(99,179,237,.4)';
             }
         });
@@ -2008,7 +2012,10 @@ document.addEventListener('DOMContentLoaded', function() {
             + '<div style="margin-top:2px;">'
             + '<span style="color:var(--text-secondary);font-style:italic;">"'
             + (rec.desc || '') + '"</span>'
-            + pills + '</div>';
+            + pills + '</div>'
+            + '<div style="margin-top:3px;font-size:.62rem;'
+            + 'color:var(--text-muted);">'
+            + '🛡️ All stats protected at 50 minimum</div>';
     });
 });
 </script>
