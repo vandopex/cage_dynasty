@@ -245,15 +245,85 @@ FIGHTER_TRAITS: Dict[str, Dict[str, Any]] = {
         "training_mod": 0.20,
         "conflicts": [],
     },
+
+    # === MENTAL / RESILIENCE TRAITS (added) ===
+    "Never Quit": {
+        "category": "Mental",
+        "description": "Refuses to fold. Comeback ability under fire.",
+        "flavor": "You'll have to put them out to keep them down",
+        "stat_mods": {},
+        "win_bonus": 0.02,
+        "ko_mod":   -0.06,
+        "sub_mod":   0.0,
+        "conflicts": [],
+    },
+    "Ice Cold": {
+        "category": "Mental",
+        "description": "Never rattled. Performs under pressure.",
+        "flavor": "Cool when it matters most",
+        "stat_mods": {},
+        "win_bonus": 0.04,
+        "ko_mod":   0.0,
+        "sub_mod":  0.0,
+        "conflicts": ["Veteran Savvy"],
+    },
+
+    # === PHYSICAL TRAITS (added) ===
+    "Explosive": {
+        "category": "Physical",
+        "description": "First-step quickness and burst power. Dangerous in exchanges.",
+        "flavor": "Zero-to-hurt in a heartbeat",
+        "stat_mods": {},
+        "win_bonus": 0.03,
+        "ko_mod":   0.05,
+        "sub_mod":  0.0,
+        "conflicts": [],
+    },
+    "Iron Lungs": {
+        "category": "Physical",
+        "description": "Elite gas tank. Gets better as the fight goes on.",
+        "flavor": "Built for championship rounds",
+        "stat_mods": {},
+        "win_bonus": 0.06,
+        "ko_mod":   0.0,
+        "sub_mod":  0.0,
+        "conflicts": [],
+    },
+
+    # === STRIKING TRAITS (added) ===
+    "Slippery": {
+        "category": "Striking",
+        "description": "Hard to hit clean. Elusive movement.",
+        "flavor": "Smoke in the wind",
+        "stat_mods": {},
+        "win_bonus": 0.0,
+        "ko_mod":  -0.10,
+        "sub_mod":  0.0,
+        "conflicts": ["Glass Cannon"],
+    },
+
+    # === GRAPPLING TRAITS (added) ===
+    "Takedown Artist": {
+        "category": "Grappling",
+        "description": "Offensive wrestling. Gets the fight where they want it.",
+        "flavor": "If they want it standing, they're not getting it",
+        "stat_mods": {},
+        "win_bonus": 0.05,
+        "ko_mod":   0.0,
+        "sub_mod":  0.0,
+        "conflicts": [],
+    },
 }
 
 # Trait categories for organization
 TRAIT_CATEGORIES = {
-    "Physical": ["Glass Cannon", "Iron Chin", "Cardio Machine", "Durable", "Injury Prone"],
-    "Striking": ["Knockout Artist", "Southpaw"],
-    "Grappling": ["Submission Ace", "Wrestler's Base"],
-    "Mental": ["Pressure Fighter", "Counter Striker", "Fast Starter", "Slow Starter", 
-               "Big Game Hunter", "Choke Artist", "Veteran Savvy", "Killer Instinct"],
+    "Physical": ["Glass Cannon", "Iron Chin", "Cardio Machine", "Durable",
+                 "Injury Prone", "Explosive", "Iron Lungs"],
+    "Striking": ["Knockout Artist", "Southpaw", "Slippery"],
+    "Grappling": ["Submission Ace", "Wrestler's Base", "Takedown Artist"],
+    "Mental": ["Pressure Fighter", "Counter Striker", "Fast Starter", "Slow Starter",
+               "Big Game Hunter", "Choke Artist", "Veteran Savvy", "Killer Instinct",
+               "Never Quit", "Ice Cold"],
     "Training": ["Gym Rat"],
 }
 
@@ -265,6 +335,8 @@ CONFLICTING_TRAITS: List[Tuple[str, str]] = [
     ("Pressure Fighter", "Counter Striker"),
     ("Fast Starter", "Slow Starter"),
     ("Big Game Hunter", "Choke Artist"),
+    ("Glass Cannon", "Slippery"),
+    ("Veteran Savvy", "Ice Cold"),
 ]
 
 # Attribute thresholds for trait assignment
@@ -276,6 +348,13 @@ TRAIT_ATTRIBUTE_TRIGGERS = {
     "Submission Ace": {"bjj": 80},
     "Wrestler's Base": {"wrestling": 75, "takedown_defense": 75},
     "Veteran Savvy": {"fight_iq": 80, "composure": 75},
+    # Added — match user spec stat thresholds
+    "Never Quit":       {"heart": 82},
+    "Explosive":        {"speed": 82},
+    "Iron Lungs":       {"cardio": 85},
+    "Slippery":         {"striking_defense": 82},
+    "Ice Cold":         {"composure": 85},
+    "Takedown Artist":  {"takedowns": 82},
 }
 
 # Weights for random trait assignment
@@ -288,7 +367,7 @@ TRAIT_RARITY = {
     "Pressure Fighter": 12,
     "Counter Striker": 12,
     "Durable": 10,
-    
+
     # Uncommon traits
     "Knockout Artist": 8,
     "Submission Ace": 8,
@@ -296,12 +375,21 @@ TRAIT_RARITY = {
     "Veteran Savvy": 8,
     "Gym Rat": 8,
     "Southpaw": 8,  # ~10% of population is left-handed
-    
+    # Added uncommons (normalized to existing 4-15 scale; user spec
+    # used 0.05-0.10 floats which would be ~150x rarer than other
+    # entries — preserved relative ordering, mapped onto integer scale).
+    "Explosive":        10,
+    "Takedown Artist":   9,
+    "Never Quit":        8,
+    "Slippery":          7,
+
     # Rare traits
     "Glass Cannon": 6,
     "Big Game Hunter": 6,
     "Killer Instinct": 5,
-    
+    "Ice Cold":     6,
+    "Iron Lungs":   5,
+
     # Negative traits (less common)
     "Injury Prone": 5,
     "Choke Artist": 4,
