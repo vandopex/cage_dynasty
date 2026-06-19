@@ -138,6 +138,18 @@ except ImportError:
     except ImportError:
         pass
 
+# Traits System (for AI fighter trait assignment at world gen)
+TRAITS_AVAILABLE = False
+try:
+    from systems.traits import assign_traits as _assign_traits
+    TRAITS_AVAILABLE = True
+except ImportError:
+    try:
+        from traits import assign_traits as _assign_traits
+        TRAITS_AVAILABLE = True
+    except ImportError:
+        pass
+
 
 # ============================================================================
 # NAME DATABASE (Comprehensive)
@@ -2720,6 +2732,38 @@ class WorldInitializer:
             # Ship K5: persist personality
             _fdata['personality'] = str(getattr(
                 fighter, 'personality', 'Competitor'))
+
+            # Ship: AI fighter trait assignment at world gen.
+            # Uses the traits module's assign_traits() which handles
+            # attribute-triggered + weighted random + conflict avoidance.
+            # OVR-gated trait count:
+            #   skill_rating >= 80 (elite): 1 or 2 traits
+            #   skill_rating >= 65 (mid):   0 / 1 / 2 (mostly 1)
+            #   skill_rating <  65 (raw):   0 or 1 (mostly 0)
+            if TRAITS_AVAILABLE and not _fdata.get('traits'):
+                try:
+                    _ovr = int(getattr(fighter, 'skill_rating', 50))
+                    if _ovr >= 80:
+                        _n = random.choices([1, 2], weights=[0.45, 0.55])[0]
+                    elif _ovr >= 65:
+                        _n = random.choices([0, 1, 2],
+                                             weights=[0.20, 0.65, 0.15])[0]
+                    else:
+                        _n = random.choices([0, 1],
+                                             weights=[0.55, 0.45])[0]
+
+                    # Remap world-gen attribute keys to the trigger
+                    # keys the traits module expects (iq -> fight_iq).
+                    _attr_for_traits = dict(fighter.attributes)
+                    if 'iq' in _attr_for_traits and 'fight_iq' not in _attr_for_traits:
+                        _attr_for_traits['fight_iq'] = _attr_for_traits['iq']
+
+                    _traits = _assign_traits(_attr_for_traits, num_traits=_n)
+                    _fdata['traits'] = list(_traits) if _traits else []
+                except Exception as _te:
+                    print(f"  ⚠️ trait assignment failed for {fighter.fighter_id}: {_te}")
+                    _fdata['traits'] = []
+
             self.game_state._fighter_data[fighter.fighter_id] = _fdata
     
     def _update_division_state(self, weight_class: str) -> None:
