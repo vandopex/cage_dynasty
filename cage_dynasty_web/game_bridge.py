@@ -7565,6 +7565,19 @@ class GameBridge:
             fid = winner_id if player_won else loser_id
             base = _rank_purse(fid)
 
+        # ── Ship EC1 A1: card slot purse multiplier ───────
+        # Main event eats up the spotlight; prelims earn less.
+        # Applied to base before win bonus stacks on top.
+        SLOT_MULTIPLIERS = {
+            'main_event':   1.5,
+            'co_main':      1.25,
+            'main_card':    1.0,
+            'prelim':       0.85,
+            'early_prelim': 0.70,
+        }
+        _slot = str(fight_result.get('card_slot', '') or '').lower()
+        base = int(base * SLOT_MULTIPLIERS.get(_slot, 1.0))
+
         if player_won:
             earned = base * 2   # show + win bonus combined
             if fight_result.get("is_fotn"):        earned += 50_000
