@@ -930,6 +930,56 @@ _OVERSEAS_LOCATION_STATS = {
 }
 
 
+# =============================================================
+# CONTRACT VOICE (Ship — personality-driven fighter asks)
+# 8 personalities × 3 morale/streak buckets.
+# Used by get_contract_ask to surface a quoted line from the
+# fighter when their contract is winding down.
+# =============================================================
+_CONTRACT_ASK_VOICE = {
+    'WARRIOR': {
+        'high': "I'll fight anyone you put in front of me. Let's keep going.",
+        'mid':  "Get me back in the cage. That's all I care about.",
+        'low':  "I need more fights. I'm fading without action.",
+    },
+    'HUNGRY': {
+        'high': "Every win means more to me than the last. I want this.",
+        'mid':  "I'm not done climbing. Let's extend.",
+        'low':  "Don't give up on me. I'll prove you wrong.",
+    },
+    'ELITE': {
+        'high': "I've earned this. The price reflects my résumé.",
+        'mid':  "We can deal — but the terms need to be right.",
+        'low':  "Maybe my next chapter is elsewhere. Convince me.",
+    },
+    'PROSPECT': {
+        'high': "I'm building something here. Let's keep building.",
+        'mid':  "I trust the process. Show me you trust me back.",
+        'low':  "I need a camp that believes in me — is that you?",
+    },
+    'JOURNEYMAN': {
+        'high': "I've seen worse deals. Security is what I want now.",
+        'mid':  "Long-term security. That's the conversation.",
+        'low':  "I just need to keep working. Make me an offer.",
+    },
+    'SHOWMAN': {
+        'high': "The fans love what we've built. Let's headline more.",
+        'mid':  "I bring eyes to your card. Pay accordingly.",
+        'low':  "Put me back on a main card. I need the stage.",
+    },
+    'CALCULATED': {
+        'high': "I've calculated the value of staying. Let's negotiate.",
+        'mid':  "Numbers first. Send me terms — I'll review.",
+        'low':  "I have other options being evaluated.",
+    },
+    'CONTENDER': {
+        'high': "I'm on the cusp. Let's finish this run together.",
+        'mid':  "Title shot is coming. Want me when I get there?",
+        'low':  "I might find a faster path to the belt elsewhere.",
+    },
+}
+
+
 SPONSOR_MILESTONES = {
     'aggressive': [
         {'trigger': 'ko_finish',    'bonus':  3000, 'label': 'KO Performance Bonus'},
@@ -17950,12 +18000,32 @@ class GameBridge:
 
         base_purse = contract.get('purse_per_fight', 5000)
         suggested = int(base_purse * multiplier)
+
+        # ── Personality voice ──
+        # Morale + win streak determine bucket; personality table
+        # gives the typed flavor line. Falls back to HUNGRY voice
+        # if archetype isn't in the table (defensive).
+        if morale >= 70 or win_streak >= 3:
+            bucket = 'high'
+        elif morale >= 45:
+            bucket = 'mid'
+        else:
+            bucket = 'low'
+        personality = (self._get_ai_neg_personality(fighter)
+                       if fighter else 'HUNGRY')
+        voice = _CONTRACT_ASK_VOICE.get(
+            personality,
+            _CONTRACT_ASK_VOICE['HUNGRY']
+        ).get(bucket, "Let's talk extension.")
+
         return {
-            "message":    msg,
-            "multiplier": multiplier,
-            "suggested":  suggested,
-            "morale":     morale,
-            "win_streak": win_streak,
+            "message":     msg,
+            "multiplier":  multiplier,
+            "suggested":   suggested,
+            "morale":      morale,
+            "win_streak":  win_streak,
+            "voice":       voice,
+            "personality": personality,
         }
 
     def resign_fighter(self, fighter_id: str,

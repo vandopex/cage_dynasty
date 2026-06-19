@@ -490,7 +490,8 @@
         {% if contract_status.warning or contract_status.fights_remaining <= 2 %}
         <div style="border-top:1px solid var(--border-color);padding-top:var(--spacing-md);">
 
-            {# Fighter's ask — morale + streak driven flavor #}
+            {# Fighter's ask — morale + streak driven flavor +
+               personality voice (Ship contract voice) #}
             {% if contract_ask %}
             <div style="background:var(--bg-dark);border-left:3px solid var(--gold);
                         padding:var(--spacing-sm) var(--spacing-md);
@@ -498,6 +499,20 @@
                         font-size:.85rem;color:var(--text-secondary);
                         font-style:italic;">
                 "{{ contract_ask.message }}"
+                {% if contract_ask.voice %}
+                <div style="margin-top:6px;padding-top:6px;
+                            border-top:1px solid rgba(255,255,255,.06);
+                            font-size:.78rem;color:var(--text-muted);">
+                    "{{ contract_ask.voice }}"
+                    {% if contract_ask.personality %}
+                    <span style="font-style:normal;font-size:.62rem;
+                                 color:var(--text-muted);letter-spacing:.04em;
+                                 margin-left:4px;">
+                        — {{ contract_ask.personality }}
+                    </span>
+                    {% endif %}
+                </div>
+                {% endif %}
                 {% if contract_ask.win_streak >= 3 %}
                 <div style="font-size:.72rem;color:var(--neon-green);
                             margin-top:4px;font-style:normal;">

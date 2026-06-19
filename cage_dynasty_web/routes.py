@@ -2260,6 +2260,20 @@ def register_routes(app):
         return redirect(url_for('fighter_profile',
                                 fighter_id=fighter_id))
 
+    # Personality-typed reaction appended to the morale outcome flash
+    # on successful re-sign. Combines with the existing 4-tier morale
+    # message to produce "{morale-outcome} {personality-reaction}".
+    _RESIGN_OUTCOMES = {
+        'WARRIOR':    "He just wants the next fight.",
+        'HUNGRY':     "He's grateful. He'll prove it in the cage.",
+        'ELITE':      "He signed but expects to be treated like the headliner he is.",
+        'PROSPECT':   "She's all-in on the camp's vision.",
+        'JOURNEYMAN': "He says it's the longest contract he's had — appreciates the stability.",
+        'SHOWMAN':    "She wants to know when her next main event is.",
+        'CALCULATED': "He reviewed the terms thoroughly. The math worked.",
+        'CONTENDER':  "She made it clear: title shot or she renegotiates next time.",
+    }
+
     @app.route('/fighter/<fighter_id>/resign', methods=['POST'])
     def resign_fighter(fighter_id):
         """Re-sign a player fighter to a new contract."""
@@ -2273,14 +2287,19 @@ def register_routes(app):
             contract = bridge.get_contract_status(fighter_id)
             morale = contract.get('morale', 75) if contract else 75
             if morale >= 80:
-                outcome = "They're fired up about the new deal."
+                morale_msg = "They're fired up about the new deal."
             elif morale >= 60:
-                outcome = "They accepted — a fair deal for both sides."
+                morale_msg = "They accepted — a fair deal for both sides."
             elif morale >= 40:
-                outcome = "They signed, but they want to see results."
+                morale_msg = "They signed, but they want to see results."
             else:
-                outcome = "They stayed — but they'll need to see improvement."
-            flash(f"✅ Contract extended! {outcome}", "success")
+                morale_msg = "They stayed — but they'll need to see improvement."
+            # Personality reaction — typed flavor by archetype
+            personality = bridge._contracts.get(
+                fighter_id, {}).get('personality', 'HUNGRY')
+            personality_msg = _RESIGN_OUTCOMES.get(personality, '')
+            combined = f"{morale_msg} {personality_msg}".strip()
+            flash(f"✅ Contract extended! {combined}", "success")
         else:
             flash(result.get('error', 'Could not re-sign.'), 'error')
         return redirect(url_for('fighter_profile', fighter_id=fighter_id))
