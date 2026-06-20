@@ -164,6 +164,9 @@ UPGRADE_REQUIREMENTS: Dict[str, Dict[str, int]] = {
 
 
 # Stats affected by facility caps (all trainable stats)
+# Canonical names align with FighterAttributes; legacy aliases
+# (clinch / wrestling / bjj / power / accuracy / grappling_defense)
+# removed since no engine path reads them.
 CAPPED_STATS: List[str] = [
     # Physical
     "strength",
@@ -172,18 +175,16 @@ CAPPED_STATS: List[str] = [
     # Striking
     "boxing",
     "kicks",
-    "clinch",
-    "power",
-    "accuracy",
+    "clinch_striking",
+    "clinch_control",
     # Grappling
-    "wrestling",
-    "bjj",
+    "takedowns",
     "takedown_defense",
     "top_control",
     "submissions",
+    "guard",
     # Defense
     "striking_defense",
-    "grappling_defense",
 ]
 
 # Stats NOT affected by facility caps (innate attributes)

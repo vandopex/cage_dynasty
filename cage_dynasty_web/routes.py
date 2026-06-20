@@ -977,7 +977,8 @@ def register_routes(app):
         training_groups = [
             ('STRIKING',     '🥊', 'Hands, kicks, clinch, defense',
              [('boxing','Boxing'),('kicks','Kicks'),
-              ('clinch','Clinch'),('defense','Strike Def')]),
+              ('clinch','Clinch'),('clinch_control','Clinch Ctrl'),
+              ('defense','Strike Def')]),
             ('GRAPPLING',    '🤼', 'Takedowns, control, subs, guard',
              [('takedowns','Takedowns'),('takedown_defense','TD Defense'),
               ('top_control','Top Control'),('submissions','Submissions'),
