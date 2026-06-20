@@ -5998,7 +5998,7 @@ class GameBridge:
     }
 
     _EQUIPMENT_DOMAIN_STATS = {
-        "striking":  ["boxing", "kicks", "clinch_striking", "striking_defense"],
+        "striking":  ["boxing", "kicks", "clinch_striking", "clinch_control", "striking_defense"],
         "wrestling": ["takedowns", "top_control", "takedown_defense"],
         "bjj":       ["submissions", "guard"],
         "physical":  ["strength", "speed", "cardio"],
@@ -7162,6 +7162,7 @@ class GameBridge:
                 _FOCUS_MATCH = {
                     'striking_coach': ['boxing','kicks',
                                        'clinch_striking',
+                                       'clinch_control',
                                        'striking_defense'],
                     'grappling_coach': ['takedowns','top_control',
                                         'submissions','guard',
@@ -7288,6 +7289,7 @@ class GameBridge:
                     # across 7 stats at normal per-stat rate).
                     _domain_stats = [
                         "boxing", "kicks", "clinch_striking",
+                        "clinch_control",
                         "striking_defense", "takedowns",
                         "takedown_defense", "top_control",
                         "submissions", "guard", "cardio",
@@ -11042,6 +11044,16 @@ class GameBridge:
             lines.append({"icon": "⚡", "text": f"KO artist — {ko_finishes} of {wins} wins by KO. Keep your hands up."})
         elif wins > 0 and sub_finishes / wins >= 0.5:
             lines.append({"icon": "🥋", "text": f"Submission specialist — {sub_finishes} of {wins} wins by sub. Stay off your back."})
+
+        # ── Clinch-control awareness (mutually exclusive) ──────
+        _cc = int(getattr(opponent, 'clinch_control', 50) or 50)
+        _cs = int(getattr(opponent, 'clinch_striking', 50) or 50)
+        if _cc >= 75 and _cs >= 70:
+            lines.append({"icon": "💪", "text": "Elite clinch fighter — dominant grip and dangerous in close. Don't let them tie you up."})
+        elif _cc >= 75 and _cs < 65:
+            lines.append({"icon": "🤼", "text": "Clinch specialist — will control position and drag you to the mat. Keep distance."})
+        elif _cc < 50 and _cs < 55:
+            lines.append({"icon": "↔️", "text": "Weak in the clinch — can be tied up and punished."})
 
         # ── Fight history finish timing ────────────────────────
         if history and wins > 0:

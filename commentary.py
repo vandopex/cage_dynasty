@@ -1706,12 +1706,19 @@ CLINCH_TEMPLATES = {
     "success_heavy": [
         "{actor} DOMINATES the clinch!",
         "POWERFUL clinch work from {actor}!",
-        "{actor} overwhelms {target} in the clinch!"
+        "{actor} overwhelms {target} in the clinch!",
+        "{actor} CONTROLS the clinch — {target} can't shake free.",
+        "{actor} ties up {target} — dominant position on the cage.",
+        "{actor} with the collar tie — {target} eating knees.",
+        "Elite clinch work from {actor} — {target} looks lost in there.",
+        "{actor} smothers {target} on the fence. No escape."
     ],
     "fail": [
         "{target} circles away beautifully to avoid the clinch.",
         "{target} uses excellent footwork to stay at distance.",
-        "Smart movement from {target} keeps the fight at range."
+        "Smart movement from {target} keeps the fight at range.",
+        "{target} finally breaks free of the clinch.",
+        "{target} separates — back to striking range."
     ]
 }
 

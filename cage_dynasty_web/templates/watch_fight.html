@@ -249,6 +249,19 @@
                     border-left:3px solid #4fc3f7;
                     border-radius:0 4px 4px 0;">🤼 {{ line }}</div>
 
+        {# ── TIER CLINCH: clinch control dominance — info/blue ── #}
+        {% elif 'CONTROLS the clinch' in line
+                or 'dominant position' in line
+                or 'collar tie' in line
+                or 'Elite clinch work' in line
+                or 'smothers' in line and 'fence' in line
+                or 'DOMINATES the clinch' in line %}
+        <div class="commentary-line tier-clinch" style="color:#4fc3f7;font-weight:600;font-size:.82rem;
+                    padding:3px 8px;margin:2px 0;
+                    background:rgba(79,195,247,.08);
+                    border-left:3px solid #4fc3f7;
+                    border-radius:0 4px 4px 0;">💪 {{ line }}</div>
+
         {# ── TIER 5: Dominant position secured ── #}
         {% elif 'BACK MOUNT' in line or 'Back control' in line
                 or 'back! Hooks are in' in line
@@ -389,7 +402,8 @@ function buildLineQueue() {
                 || line.classList.contains('tier-2');
             const isKey = line.classList.contains('tier-3')
                 || line.classList.contains('tier-9')
-                || line.classList.contains('tier-escape');
+                || line.classList.contains('tier-escape')
+                || line.classList.contains('tier-clinch');
             queue.push({ el: line, isFinish, isKey, delay: 0 });
         });
         if (ri < cards.length - 1) {
