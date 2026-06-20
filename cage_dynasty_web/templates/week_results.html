@@ -173,50 +173,65 @@
 </div>
 {% endif %}
 
-{# ── Player fight result (if any) ── #}
+{# ── Player fight — anti-spoiler. Headline shows matchup only;
+   result is collapsed in a <details> for opt-in reveal. The big
+   "Watch Fight" CTA is the intended primary path. ── #}
 {% if recap.player_fights %}
 {% for fight in recap.player_fights %}
 {% set player_won = fight.winner_id in player_ids %}
-<div class="card mb-lg" style="border-color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
-    <div style="height:4px;background:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};"></div>
+<div class="card mb-lg" style="border-color:var(--info);">
+    <div style="height:4px;background:var(--info);"></div>
     <div style="padding:var(--spacing-lg);display:flex;align-items:center;gap:var(--spacing-lg);
-                background:{% if player_won %}rgba(0,230,118,.05){% else %}rgba(211,47,47,.05){% endif %};">
-        <div style="font-size:3rem;">{% if player_won %}🏆{% else %}💀{% endif %}</div>
-        <div style="flex:1;">
-            <div style="font-family:var(--font-display);font-size:2rem;
-                        color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};
-                        display:flex;align-items:center;gap:10px;">
-                {% if player_won %}VICTORY{% else %}DEFEAT{% endif %}
-                {% if fight.is_fotn %}
-                <span style="font-size:.7rem;font-family:var(--font-display);
-                             padding:3px 10px;border-radius:4px;
-                             background:rgba(255,215,0,.15);
-                             color:var(--gold);
-                             border:1px solid rgba(255,215,0,.5);
-                             letter-spacing:.06em;line-height:1;">
-                    🔥 FOTN
-                </span>
-                {% endif %}
+                background:rgba(33,150,243,.04);">
+        <div style="font-size:3rem;">⚔️</div>
+        <div style="flex:1;min-width:0;">
+            <div style="font-family:var(--font-display);font-size:1.5rem;color:var(--text-bright);">
+                {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name or fight.winner_name }}</a>{% else %}{{ fight.fighter1_name or fight.winner_name }}{% endif %}
+                <span style="color:var(--text-muted);font-size:1.1rem;"> vs </span>
+                {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name or fight.loser_name }}</a>{% else %}{{ fight.fighter2_name or fight.loser_name }}{% endif %}
             </div>
-            <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-bright);margin-top:4px;">
-                {% if fight.method == 'DRAW' or fight.method == 'Draw' or fight.is_draw %}
-                {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name or fight.winner_name }}{% endif %}
-                <span style="color:var(--text-muted);padding:0 4px;">vs</span>
-                {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name or fight.loser_name }}{% endif %}
-                <span style="color:var(--warning);font-size:.75rem;margin-left:4px;">DRAW</span>
-                {% else %}
-                {% if fight.winner_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.winner_id) }}" style="color:inherit;text-decoration:none;">{{ fight.winner_name }}</a>{% else %}{{ fight.winner_name }}{% endif %} def. {% if fight.loser_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.loser_id) }}" style="color:inherit;text-decoration:none;">{{ fight.loser_name }}</a>{% else %}{{ fight.loser_name }}{% endif %}
-                {% endif %}
+            <div style="font-size:.85rem;color:var(--info);margin-top:6px;font-weight:600;">
+                Your fight is ready — watch before results are revealed
             </div>
-            <div style="font-size:.82rem;color:var(--text-muted);margin-top:2px;">
-                via {{ fight.method }}{% if fight.method not in ('DEC','UNY DEC') %} (R{{ fight.round_finished }}){% endif %}
-                &nbsp;·&nbsp; {{ fight.event_name }}{% if fight.event_city %} · 📍 {{ fight.event_city }}{% endif %}
+            <div style="font-size:.78rem;color:var(--text-muted);margin-top:2px;">
+                {{ fight.event_name }}{% if fight.event_city %} · 📍 {{ fight.event_city }}{% endif %}
             </div>
         </div>
-        <div style="text-align:center;">
-            {% set w_delta = fight.winner_rank_delta if fight.winner_id in player_ids else fight.loser_rank_delta %}
-            {% set w_new   = fight.winner_new_rank   if fight.winner_id in player_ids else fight.loser_new_rank %}
-            {{ rank_badge(w_new, w_delta) }}
+        <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;flex-shrink:0;">
+            {% if fight.fight_id %}
+            <a href="{{ url_for('watch_fight', fight_id=fight.fight_id) }}"
+               style="padding:10px 22px;background:var(--neon-green);
+                      color:var(--bg-darkest);border-radius:6px;text-decoration:none;
+                      font-family:var(--font-display);font-size:1rem;letter-spacing:.04em;
+                      white-space:nowrap;">
+                ▶ Watch Fight
+            </a>
+            {% endif %}
+            <details style="font-size:.72rem;color:var(--text-muted);cursor:pointer;text-align:right;">
+                <summary style="color:var(--text-muted);">Skip to result</summary>
+                <div style="margin-top:8px;padding:10px 12px;background:var(--bg-dark);
+                            border-radius:6px;text-align:left;min-width:240px;
+                            border-left:3px solid {% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                    <div style="font-family:var(--font-display);font-size:1rem;
+                                color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
+                        {% if player_won %}VICTORY{% else %}DEFEAT{% endif %}
+                        {% if fight.is_fotn %}<span style="color:var(--gold);margin-left:6px;font-size:.7rem;">🔥 FOTN</span>{% endif %}
+                    </div>
+                    <div style="font-size:.8rem;color:var(--text-bright);margin-top:4px;">
+                        {% if fight.method == 'DRAW' or fight.method == 'Draw' or fight.is_draw %}
+                        {{ fight.fighter1_name or fight.winner_name }} <span style="color:var(--text-muted);">vs</span> {{ fight.fighter2_name or fight.loser_name }} <span style="color:var(--warning);">DRAW</span>
+                        {% else %}
+                        {{ fight.winner_name }} def. {{ fight.loser_name }}
+                        {% endif %}
+                    </div>
+                    <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">
+                        via {{ fight.method }}{% if fight.method not in ('DEC','UNY DEC') %} (R{{ fight.round_finished }}){% endif %}
+                    </div>
+                    {% set w_delta = fight.winner_rank_delta if fight.winner_id in player_ids else fight.loser_rank_delta %}
+                    {% set w_new   = fight.winner_new_rank   if fight.winner_id in player_ids else fight.loser_new_rank %}
+                    {% if w_new is not none %}<div style="margin-top:4px;">{{ rank_badge(w_new, w_delta) }}</div>{% endif %}
+                </div>
+            </details>
         </div>
     </div>
 </div>

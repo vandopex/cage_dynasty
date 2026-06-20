@@ -14,38 +14,28 @@
   </div>
 </div>
 
-{# ── Result card ── #}
-<div class="card mb-lg" style="border-color:var(--neon-green);
-    background:linear-gradient(135deg,rgba(0,230,118,.06),transparent);">
-  <div class="card-body" style="text-align:center;padding:var(--spacing-xl);">
-    <div style="font-family:var(--font-display);font-size:2rem;
-        color:var(--neon-green);letter-spacing:.05em;">
-      {{ fight.winner_name }}
-    </div>
-    <div style="color:var(--text-muted);font-size:.8rem;
-        letter-spacing:.15em;text-transform:uppercase;
-        margin:6px 0;">defeats</div>
-    <div style="font-family:var(--font-display);font-size:1.3rem;
-        color:var(--text-secondary);">
-      {{ fight.loser_name }}
-    </div>
-    <div style="margin-top:var(--spacing-md);display:flex;
-        justify-content:center;align-items:center;gap:12px;">
-      <span style="font-family:var(--font-display);
-          color:var(--warning);font-size:1.2rem;
-          background:rgba(255,200,0,.1);
-          padding:4px 14px;border-radius:6px;
-          border:1px solid rgba(255,200,0,.3);">
-        {{ fight.method }}
-      </span>
-      {% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC','Draw') %}
-      <span style="color:var(--text-muted);font-size:.85rem;">
-        Round {{ fight.round_finished }}
-      </span>
-      {% endif %}
+{# ── Result card moved to bottom — see post-commentary block.
+   Top of page now just shows matchup header from page_header above. ── #}
+<details style="display:block;margin-bottom:var(--spacing-md);font-size:.72rem;
+                color:var(--text-muted);cursor:pointer;text-align:center;">
+  <summary style="color:var(--text-muted);">Skip to result</summary>
+  <div class="card mb-lg" style="margin-top:8px;border-color:var(--info);">
+    <div class="card-body" style="text-align:center;padding:var(--spacing-md);">
+      <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--neon-green);">
+        {{ fight.winner_name }}
+      </div>
+      <div style="color:var(--text-muted);font-size:.72rem;
+          letter-spacing:.15em;text-transform:uppercase;margin:4px 0;">defeats</div>
+      <div style="font-family:var(--font-display);font-size:.95rem;color:var(--text-secondary);">
+        {{ fight.loser_name }}
+      </div>
+      <div style="margin-top:8px;font-family:var(--font-display);
+          color:var(--warning);font-size:.9rem;">
+        {{ fight.method }}{% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC','Draw') %} · Round {{ fight.round_finished }}{% endif %}
+      </div>
     </div>
   </div>
-</div>
+</details>
 {% endif %}
 
 {# ── Commentary feed ── #}
@@ -170,6 +160,45 @@
 
 {# Close any open round card #}
 </div></div>
+
+{# ── Official result (moved from top — fires after commentary) ── #}
+{% if fight %}
+<div class="card mb-lg" style="margin-top:var(--spacing-lg);border-color:var(--neon-green);
+    background:linear-gradient(135deg,rgba(0,230,118,.06),transparent);">
+  <div class="card-body" style="text-align:center;padding:var(--spacing-xl);">
+    <div style="font-size:.65rem;letter-spacing:.2em;color:var(--text-muted);
+                text-transform:uppercase;margin-bottom:var(--spacing-sm);">
+      Official Result
+    </div>
+    <div style="font-family:var(--font-display);font-size:2rem;
+        color:var(--neon-green);letter-spacing:.05em;">
+      {{ fight.winner_name }}
+    </div>
+    <div style="color:var(--text-muted);font-size:.8rem;
+        letter-spacing:.15em;text-transform:uppercase;
+        margin:6px 0;">defeats</div>
+    <div style="font-family:var(--font-display);font-size:1.3rem;
+        color:var(--text-secondary);">
+      {{ fight.loser_name }}
+    </div>
+    <div style="margin-top:var(--spacing-md);display:flex;
+        justify-content:center;align-items:center;gap:12px;">
+      <span style="font-family:var(--font-display);
+          color:var(--warning);font-size:1.2rem;
+          background:rgba(255,200,0,.1);
+          padding:4px 14px;border-radius:6px;
+          border:1px solid rgba(255,200,0,.3);">
+        {{ fight.method }}
+      </span>
+      {% if fight.method not in ('DEC','UNY DEC','SPLIT DEC','MAJ DEC','Draw') %}
+      <span style="color:var(--text-muted);font-size:.85rem;">
+        Round {{ fight.round_finished }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
 
 {% else %}
 <div class="card">

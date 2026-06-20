@@ -737,6 +737,13 @@
                                 {{ item.camp_name or 'Camp' }} →
                             </a>
                             {% endif %}
+                            {% if item.weight_class %}
+                            <span>·</span>
+                            <a href="{{ url_for('rankings', division=item.weight_class) }}"
+                               style="color:var(--text-muted);text-decoration:none;">
+                                🪜 {{ item.weight_class }} →
+                            </a>
+                            {% endif %}
                             {% if item.fight_id %}
                             <span>·</span>
                             <a href="{{ url_for('watch_fight', fight_id=item.fight_id) }}"

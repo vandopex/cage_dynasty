@@ -73,6 +73,20 @@
                     <a href="{{ url_for('fighter_profile', fighter_id=item.amateur_id) }}"
                        style="color:var(--gold);text-decoration:none;font-size:.68rem;">🥋 Prospect →</a>
                     {% endif %}
+                    {% if item.camp_id %}
+                    <span>•</span>
+                    <a href="{{ url_for('camp_detail', camp_id=item.camp_id) }}"
+                       style="color:var(--text-muted);text-decoration:none;font-size:.68rem;">
+                        🏟️ {{ item.camp_name or 'Camp' }} →
+                    </a>
+                    {% endif %}
+                    {% if item.weight_class %}
+                    <span>•</span>
+                    <a href="{{ url_for('rankings', division=item.weight_class) }}"
+                       style="color:var(--text-muted);text-decoration:none;font-size:.68rem;">
+                        🪜 {{ item.weight_class }} →
+                    </a>
+                    {% endif %}
                     {% if item.fight_id %}
                     <a href="{{ url_for('watch_fight', fight_id=item.fight_id) }}"
                        style="font-size:.68rem;color:var(--neon-green);text-decoration:none;margin-left:8px;
