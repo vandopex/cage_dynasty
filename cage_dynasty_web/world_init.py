@@ -2715,8 +2715,24 @@ class WorldInitializer:
         # don't write it here to avoid duplicate-write churn.
         if hasattr(self.game_state, '_fighter_data') and fighter.attributes:
             _fdata = self.game_state._fighter_data.get(fighter.fighter_id, {})
+            # Canonical-name remap: world_init.generate_attributes uses
+            # non-canonical keys for 5 stats + 1 dead key. The bridge reads
+            # via canonical names and falls back to md5-seeded random if
+            # missing, so without this remap world_init's tier-aware
+            # distributions for these 5 stats are silently overridden.
+            # Pre-ship fix before clinch_control work.
+            _canonical_remap = {
+                'clinch':    'clinch_striking',
+                'wrestling': 'takedowns',
+                'bjj':       'guard',
+                'iq':        'fight_iq',
+                'accuracy':  'striking_defense',
+            }
             for _key, _val in fighter.attributes.items():
-                _fdata[_key] = int(_val)
+                if _key == 'power':
+                    continue  # dead key, no canonical analog
+                _canonical = _canonical_remap.get(_key, _key)
+                _fdata[_canonical] = int(_val)
             _fdata['age'] = int(fighter.age)
             _fdata['country'] = str(fighter.country)
             # Per-fighter potential ceiling — read by the training loop
