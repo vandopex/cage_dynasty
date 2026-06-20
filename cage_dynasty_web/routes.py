@@ -737,6 +737,7 @@ def register_routes(app):
                 ('Boxing', fighter.boxing),
                 ('Kicks', fighter.kicks),
                 ('Clinch', fighter.clinch_striking),
+                ('Clinch Ctrl', fighter.clinch_control),
                 ('Defense', fighter.striking_defense),
             ],
             'grappling': [
@@ -1115,7 +1116,7 @@ def register_routes(app):
             return jsonify({"error": "No game loaded"}), 400
         floors = {}
         for stat in [
-            'boxing','kicks','clinch_striking','striking_defense',
+            'boxing','kicks','clinch_striking','clinch_control','striking_defense',
             'takedowns','takedown_defense','top_control','submissions',
             'guard','strength','speed','cardio','chin','recovery',
             'fight_iq','composure','heart',
@@ -1783,6 +1784,7 @@ def register_routes(app):
             _stat_keys = [
                 ('Boxing', 'boxing'), ('Kicks', 'kicks'),
                 ('Clinch', 'clinch_striking'),
+                ('Clinch Ctrl', 'clinch_control'),
                 ('Striking D', 'striking_defense'),
                 ('Takedowns', 'takedowns'),
                 ('TD Defense', 'takedown_defense'),

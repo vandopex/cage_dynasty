@@ -187,6 +187,7 @@
             ('Boxing',    'boxing',            'var(--info)'),
             ('Kicks',     'kicks',             'var(--info)'),
             ('Clinch',    'clinch_striking',   'var(--info)'),
+            ('Clinch Ctrl', 'clinch_control',  'var(--info)'),
             ('Str Def',   'striking_defense',  'var(--info)'),
             ('Takedowns', 'takedowns',         'var(--neon-green)'),
             ('TD Def',    'takedown_defense',  'var(--neon-green)'),
@@ -475,7 +476,8 @@
           style="margin-top:var(--spacing-sm);">
         {% set _floor_stats = [
             ('boxing','Boxing'),('kicks','Kicks'),
-            ('clinch_striking','Clinch'),('striking_defense','Str. Def'),
+            ('clinch_striking','Clinch'),('clinch_control','Clinch Ctrl'),
+            ('striking_defense','Str. Def'),
             ('takedowns','Takedowns'),('takedown_defense','TD Def'),
             ('top_control','Top Ctrl'),('submissions','Subs'),('guard','Guard'),
             ('strength','Strength'),('speed','Speed'),('cardio','Cardio'),
@@ -600,7 +602,7 @@
         {% if _gfocus != 'maintain' %}
             {% set _gtarget = _cur_goal.target %}
             {% set _gcurval = fighter|attr(_gfocus) if _gfocus in [
-                'boxing','kicks','clinch_striking','striking_defense',
+                'boxing','kicks','clinch_striking','clinch_control','striking_defense',
                 'takedowns','takedown_defense','top_control','submissions',
                 'guard','strength','speed','cardio','chin','recovery',
                 'fight_iq','composure','heart'
@@ -695,7 +697,7 @@
             <div id="coach-rec-{{ fighter.fighter_id }}"
                  data-fid="{{ fighter.fighter_id }}"
                  data-style="{{ fighter.fighting_style }}"
-                 data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
+                 data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.clinch_control }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
                  data-fight-weeks="{% if _nf %}{{ _nf.weeks_until }}{% else %}-1{% endif %}"
                  data-fight-opp="{% if _nf and _nf.opponent %}{{ _nf.opponent }}{% endif %}"
                  style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">
@@ -707,6 +709,7 @@
                         {{ fighter.boxing }},
                         {{ fighter.kicks }},
                         {{ fighter.clinch_striking }},
+                        {{ fighter.clinch_control }},
                         {{ fighter.striking_defense }},
                         {{ fighter.takedowns }},
                         {{ fighter.takedown_defense }},
@@ -767,6 +770,7 @@
                     {% for sk, sl in [
                         ('boxing','Boxing'),('kicks','Kicks'),
                         ('clinch_striking','Clinch Striking'),
+                        ('clinch_control','Clinch Control'),
                         ('striking_defense','Striking Defense'),
                         ('takedowns','Takedowns'),
                         ('takedown_defense','Takedown Defense'),
@@ -869,6 +873,7 @@ function addQueueRow(fighterId) {
     const statOptions = [
         ['boxing','Boxing'],['kicks','Kicks'],
         ['clinch_striking','Clinch Striking'],
+        ['clinch_control','Clinch Control'],
         ['striking_defense','Striking Defense'],
         ['takedowns','Takedowns'],['takedown_defense','Takedown Defense'],
         ['top_control','Top Control'],['submissions','Submissions'],
@@ -905,7 +910,7 @@ function addQueueRow(fighterId) {
 }
 
 function buildStyleTemplates(
-    boxing, kicks, clinch, strDef, takedowns, tdDef,
+    boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
     chin, recovery, fightIq, composure, heart) {
 
@@ -928,7 +933,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:65,striking_defense:62,chin:58,
-                         speed:52,cardio:55,fight_iq:50,recovery:48},
+                         speed:52,cardio:55,fight_iq:50,recovery:48,
+                         clinch_control:50},
             },
             {
                 label: 'Body Snatcher',
@@ -940,7 +946,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:62,clinch_striking:55,strength:55,
-                         striking_defense:52,cardio:58,chin:52,fight_iq:48},
+                         striking_defense:52,cardio:58,chin:52,fight_iq:48,
+                         clinch_control:50},
             },
             {
                 label: 'Jab & Move',
@@ -952,7 +959,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:60,speed:60,fight_iq:58,
-                         striking_defense:55,cardio:60,chin:50,composure:50},
+                         striking_defense:55,cardio:60,chin:50,composure:50,
+                         clinch_control:50},
             },
             {
                 label: 'Pressure Cooker',
@@ -964,7 +972,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:62,cardio:65,strength:55,
-                         chin:55,heart:52,striking_defense:50,fight_iq:48},
+                         chin:55,heart:52,striking_defense:50,fight_iq:48,
+                         clinch_control:50},
             },
         ],
 
@@ -975,11 +984,13 @@ function buildStyleTemplates(
                 queue: [
                     {focus:'kicks', target:goal(kicks,82)},
                     {focus:'clinch_striking', target:goal(clinch,78)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,72)},
                     {focus:'cardio', target:goal(cardio,72)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {kicks:65,clinch_striking:60,cardio:62,
-                         boxing:52,strength:52,heart:55,striking_defense:50},
+                         boxing:52,strength:52,heart:55,striking_defense:50,
+                         clinch_control:60},
             },
             {
                 label: 'Teep & Check',
@@ -991,19 +1002,22 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {kicks:62,striking_defense:58,fight_iq:55,
-                         cardio:58,clinch_striking:52,composure:50,speed:50},
+                         cardio:58,clinch_striking:52,composure:50,speed:50,
+                         clinch_control:60},
             },
             {
                 label: 'Dirty Clinch',
                 desc:  'Clinch control and knees. Make it ugly.',
                 queue: [
                     {focus:'clinch_striking', target:goal(clinch,82)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,78)},
                     {focus:'top_control', target:goal(topCtrl,65)},
                     {focus:'strength', target:goal(strength,68)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:65,top_control:50,strength:58,
-                         kicks:55,cardio:60,heart:52,takedown_defense:48},
+                         kicks:55,cardio:60,heart:52,takedown_defense:48,
+                         clinch_control:65},
             },
             {
                 label: 'Heavy Hands',
@@ -1015,7 +1029,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {kicks:60,strength:62,chin:58,
-                         boxing:52,cardio:58,heart:55,clinch_striking:50},
+                         boxing:52,cardio:58,heart:55,clinch_striking:50,
+                         clinch_control:60},
             },
         ],
 
@@ -1030,7 +1045,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:60,kicks:60,cardio:62,
-                         striking_defense:55,speed:52,chin:52,fight_iq:48},
+                         striking_defense:55,speed:52,chin:52,fight_iq:48,
+                         clinch_control:50},
             },
             {
                 label: 'K-1 Pressure',
@@ -1042,7 +1058,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {kicks:65,cardio:65,strength:55,
-                         chin:55,boxing:52,heart:55,fight_iq:48},
+                         chin:55,boxing:52,heart:55,fight_iq:48,
+                         clinch_control:50},
             },
             {
                 label: 'Switch Hitter',
@@ -1054,7 +1071,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:60,speed:62,kicks:58,
-                         boxing:55,composure:52,striking_defense:50,cardio:58},
+                         boxing:55,composure:52,striking_defense:50,cardio:58,
+                         clinch_control:50},
             },
             {
                 label: 'Head Hunter',
@@ -1066,7 +1084,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {kicks:65,strength:60,chin:62,
-                         boxing:52,heart:58,cardio:55,recovery:50},
+                         boxing:52,heart:58,cardio:55,recovery:50,
+                         clinch_control:50},
             },
         ],
 
@@ -1081,7 +1100,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {speed:65,fight_iq:60,striking_defense:58,
-                         kicks:52,cardio:60,composure:52,boxing:48},
+                         kicks:52,cardio:60,composure:52,boxing:48,
+                         clinch_control:50},
             },
             {
                 label: 'Full Contact',
@@ -1093,7 +1113,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {kicks:62,chin:62,cardio:65,
-                         strength:55,heart:55,boxing:50,recovery:50},
+                         strength:55,heart:55,boxing:50,recovery:50,
+                         clinch_control:50},
             },
             {
                 label: 'Blitz Attack',
@@ -1105,7 +1126,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {speed:68,boxing:55,fight_iq:58,
-                         kicks:52,cardio:60,composure:50,striking_defense:48},
+                         kicks:52,cardio:60,composure:50,striking_defense:48,
+                         clinch_control:50},
             },
             {
                 label: 'Defensive Shell',
@@ -1117,7 +1139,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {striking_defense:65,composure:58,speed:62,
-                         fight_iq:55,kicks:50,cardio:58,boxing:48},
+                         fight_iq:55,kicks:50,cardio:58,boxing:48,
+                         clinch_control:50},
             },
         ],
 
@@ -1132,7 +1155,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:58,strength:62,chin:65,
-                         heart:60,cardio:55,clinch_striking:50,recovery:50},
+                         heart:60,cardio:55,clinch_striking:50,recovery:50,
+                         clinch_control:50},
             },
             {
                 label: 'Dirty Fighter',
@@ -1144,7 +1168,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:62,heart:62,strength:60,
-                         chin:58,boxing:52,cardio:58,takedown_defense:48},
+                         chin:58,boxing:52,cardio:58,takedown_defense:48,
+                         clinch_control:50},
             },
             {
                 label: 'Iron Chin',
@@ -1156,7 +1181,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {chin:68,heart:65,recovery:58,
-                         boxing:52,cardio:58,strength:52,composure:50},
+                         boxing:52,cardio:58,strength:52,composure:50,
+                         clinch_control:50},
             },
             {
                 label: 'Wild Swinger',
@@ -1168,7 +1194,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {strength:65,boxing:55,chin:60,
-                         heart:60,cardio:52,clinch_striking:48,recovery:50},
+                         heart:60,cardio:52,clinch_striking:48,recovery:50,
+                         clinch_control:50},
             },
         ],
 
@@ -1183,7 +1210,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {composure:65,striking_defense:62,boxing:58,
-                         chin:58,fight_iq:55,cardio:55,recovery:50},
+                         chin:58,fight_iq:55,cardio:55,recovery:50,
+                         clinch_control:50},
             },
             {
                 label: 'Surgeon',
@@ -1195,7 +1223,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:68,boxing:62,striking_defense:60,
-                         speed:55,composure:55,cardio:52,chin:50},
+                         speed:55,composure:55,cardio:52,chin:50,
+                         clinch_control:50},
             },
             {
                 label: 'Reactive',
@@ -1207,7 +1236,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:65,speed:65,composure:60,
-                         striking_defense:58,boxing:52,cardio:55,chin:50},
+                         striking_defense:58,boxing:52,cardio:55,chin:50,
+                         clinch_control:50},
             },
             {
                 label: 'Trap Setter',
@@ -1219,7 +1249,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:68,boxing:60,strength:55,
-                         composure:58,striking_defense:55,speed:52,cardio:52},
+                         composure:58,striking_defense:55,speed:52,cardio:52,
+                         clinch_control:50},
             },
         ],
 
@@ -1234,7 +1265,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {speed:70,kicks:58,striking_defense:55,
-                         cardio:62,boxing:50,fight_iq:52,composure:48},
+                         cardio:62,boxing:50,fight_iq:52,composure:48,
+                         clinch_control:50},
             },
             {
                 label: 'Touch & Go',
@@ -1246,7 +1278,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {speed:65,striking_defense:62,fight_iq:60,
-                         composure:55,kicks:50,cardio:60,boxing:48},
+                         composure:55,kicks:50,cardio:60,boxing:48,
+                         clinch_control:50},
             },
             {
                 label: 'Volume Points',
@@ -1258,7 +1291,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {cardio:68,boxing:60,fight_iq:58,
-                         speed:60,kicks:50,composure:50,striking_defense:52},
+                         speed:60,kicks:50,composure:50,striking_defense:52,
+                         clinch_control:50},
             },
             {
                 label: 'Combo Artist',
@@ -1270,7 +1304,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:62,fight_iq:62,speed:60,
-                         cardio:60,kicks:50,composure:52,striking_defense:50},
+                         cardio:60,kicks:50,composure:52,striking_defense:50,
+                         clinch_control:50},
             },
         ],
 
@@ -1285,7 +1320,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {cardio:68,strength:60,fight_iq:58,
-                         boxing:55,chin:52,heart:55,takedown_defense:48},
+                         boxing:55,chin:52,heart:55,takedown_defense:48,
+                         clinch_control:52},
             },
             {
                 label: 'Body Attack',
@@ -1297,7 +1333,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:60,clinch_striking:58,strength:60,
-                         cardio:62,chin:52,heart:52,fight_iq:48},
+                         cardio:62,chin:52,heart:52,fight_iq:48,
+                         clinch_control:52},
             },
             {
                 label: 'Chain Wrestling',
@@ -1309,7 +1346,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {cardio:65,takedowns:55,strength:58,
-                         boxing:55,chin:50,top_control:48,fight_iq:48},
+                         boxing:55,chin:50,top_control:48,fight_iq:48,
+                         clinch_control:52},
             },
             {
                 label: 'Relentless',
@@ -1321,7 +1359,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {cardio:70,boxing:60,heart:62,
-                         chin:55,strength:52,striking_defense:50,recovery:50},
+                         chin:55,strength:52,striking_defense:50,recovery:50,
+                         clinch_control:52},
             },
         ],
 
@@ -1337,7 +1376,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:70,top_control:58,strength:60,
-                         cardio:58,chin:50,heart:50,takedown_defense:52},
+                         cardio:58,chin:50,heart:50,takedown_defense:52,
+                         clinch_control:55},
             },
             {
                 label: 'Lay & Pray',
@@ -1349,7 +1389,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {top_control:68,takedowns:62,cardio:62,
-                         strength:58,chin:50,guard:48,fight_iq:50},
+                         strength:58,chin:50,guard:48,fight_iq:50,
+                         clinch_control:55},
             },
             {
                 label: 'Scrambler',
@@ -1361,7 +1402,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {top_control:62,guard:55,fight_iq:58,
-                         takedowns:58,cardio:60,heart:50,composure:48},
+                         takedowns:58,cardio:60,heart:50,composure:48,
+                         clinch_control:55},
             },
             {
                 label: 'Chain Wrestling',
@@ -1373,7 +1415,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:65,top_control:62,strength:62,
-                         cardio:58,boxing:48,chin:50,takedown_defense:52},
+                         cardio:58,boxing:48,chin:50,takedown_defense:52,
+                         clinch_control:55},
             },
         ],
 
@@ -1388,7 +1431,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {guard:70,submissions:62,fight_iq:58,
-                         top_control:52,cardio:55,composure:50,takedowns:48},
+                         top_control:52,cardio:55,composure:50,takedowns:48,
+                         clinch_control:50},
             },
             {
                 label: 'Top Control Pressure',
@@ -1400,7 +1444,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {top_control:68,takedowns:58,submissions:58,
-                         strength:55,cardio:58,guard:50,fight_iq:50},
+                         strength:55,cardio:58,guard:50,fight_iq:50,
+                         clinch_control:50},
             },
             {
                 label: 'Leg Lock System',
@@ -1412,7 +1457,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {submissions:70,guard:62,fight_iq:60,
-                         takedowns:50,top_control:50,cardio:55,composure:52},
+                         takedowns:50,top_control:50,cardio:55,composure:52,
+                         clinch_control:50},
             },
             {
                 label: 'Gi Grind',
@@ -1424,7 +1470,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {submissions:65,fight_iq:65,composure:60,
-                         guard:60,top_control:52,cardio:55,takedowns:48},
+                         guard:60,top_control:52,cardio:55,takedowns:48,
+                         clinch_control:50},
             },
         ],
 
@@ -1434,12 +1481,14 @@ function buildStyleTemplates(
                 desc:  'The hip throw. Perfect it. Land it.',
                 queue: [
                     {focus:'takedowns', target:goal(takedowns,85)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,75)},
                     {focus:'strength', target:goal(strength,72)},
                     {focus:'fight_iq', target:goal(fightIq,68)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:70,strength:60,fight_iq:55,
-                         cardio:58,top_control:50,clinch_striking:48,heart:50},
+                         cardio:58,top_control:50,clinch_striking:48,heart:50,
+                         clinch_control:60},
             },
             {
                 label: 'Sacrifice Throws',
@@ -1451,19 +1500,22 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:68,heart:62,strength:60,
-                         chin:55,cardio:58,top_control:48,fight_iq:50},
+                         chin:55,cardio:58,top_control:48,fight_iq:50,
+                         clinch_control:60},
             },
             {
                 label: 'Grip Fighting',
                 desc:  'Control before the throw. Win the grips.',
                 queue: [
                     {focus:'clinch_striking', target:goal(clinch,72)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,78)},
                     {focus:'takedowns', target:goal(takedowns,80)},
                     {focus:'fight_iq', target:goal(fightIq,70)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:55,takedowns:65,fight_iq:58,
-                         strength:58,top_control:50,cardio:58,composure:48},
+                         strength:58,top_control:50,cardio:58,composure:48,
+                         clinch_control:65},
             },
             {
                 label: 'Newaza',
@@ -1475,7 +1527,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {submissions:62,guard:58,takedowns:62,
-                         top_control:55,cardio:55,fight_iq:52,strength:50},
+                         top_control:55,cardio:55,fight_iq:52,strength:50,
+                         clinch_control:60},
             },
         ],
 
@@ -1490,7 +1543,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:55,takedowns:65,strength:60,
-                         chin:55,clinch_striking:50,top_control:52,cardio:55},
+                         chin:55,clinch_striking:50,top_control:52,cardio:55,
+                         clinch_control:55},
             },
             {
                 label: 'Leg Lock Sambo',
@@ -1502,7 +1556,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {submissions:68,guard:58,fight_iq:58,
-                         takedowns:58,top_control:50,cardio:55,composure:50},
+                         takedowns:58,top_control:50,cardio:55,composure:50,
+                         clinch_control:55},
             },
             {
                 label: 'Throws & Pins',
@@ -1514,7 +1569,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:68,top_control:65,strength:60,
-                         cardio:55,chin:50,heart:50,submissions:48},
+                         cardio:55,chin:50,heart:50,submissions:48,
+                         clinch_control:55},
             },
             {
                 label: 'Sport Sambo',
@@ -1526,7 +1582,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:65,submissions:60,top_control:60,
-                         cardio:58,strength:55,guard:50,fight_iq:50},
+                         cardio:58,strength:55,guard:50,fight_iq:50,
+                         clinch_control:55},
             },
         ],
 
@@ -1542,7 +1599,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {top_control:68,strength:62,boxing:55,
-                         takedowns:58,cardio:58,chin:52,heart:50},
+                         takedowns:58,cardio:58,chin:52,heart:50,
+                         clinch_control:50},
             },
             {
                 label: 'Hammer Fist',
@@ -1554,7 +1612,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {top_control:65,boxing:62,strength:62,
-                         takedowns:55,cardio:58,chin:52,submissions:48},
+                         takedowns:55,cardio:58,chin:52,submissions:48,
+                         clinch_control:50},
             },
             {
                 label: 'Positional GnP',
@@ -1566,7 +1625,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:65,top_control:68,takedowns:55,
-                         boxing:52,cardio:58,submissions:50,strength:55},
+                         boxing:52,cardio:58,submissions:50,strength:55,
+                         clinch_control:50},
             },
             {
                 label: 'Submission Threat GnP',
@@ -1578,7 +1638,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {submissions:60,top_control:65,boxing:55,
-                         fight_iq:58,takedowns:52,cardio:55,guard:48},
+                         fight_iq:58,takedowns:52,cardio:55,guard:48,
+                         clinch_control:50},
             },
         ],
 
@@ -1593,7 +1654,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedown_defense:70,boxing:60,cardio:62,
-                         striking_defense:55,chin:52,fight_iq:52,clinch_striking:48},
+                         striking_defense:55,chin:52,fight_iq:52,clinch_striking:48,
+                         clinch_control:50},
             },
             {
                 label: 'Counter Wrestler',
@@ -1605,7 +1667,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedown_defense:68,boxing:62,fight_iq:60,
-                         speed:55,composure:55,cardio:58,striking_defense:52},
+                         speed:55,composure:55,cardio:58,striking_defense:52,
+                         clinch_control:50},
             },
             {
                 label: 'Clinch Buster',
@@ -1617,7 +1680,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedown_defense:65,clinch_striking:58,strength:58,
-                         boxing:55,cardio:58,chin:52,fight_iq:50},
+                         boxing:55,cardio:58,chin:52,fight_iq:50,
+                         clinch_control:50},
             },
             {
                 label: 'Heavy Hands Sprawler',
@@ -1629,7 +1693,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedown_defense:65,boxing:65,strength:60,
-                         chin:55,cardio:58,heart:52,striking_defense:50},
+                         chin:55,cardio:58,heart:52,striking_defense:50,
+                         clinch_control:50},
             },
         ],
 
@@ -1639,48 +1704,56 @@ function buildStyleTemplates(
                 desc:  'Knees and elbows in close. Make it a phone booth.',
                 queue: [
                     {focus:'clinch_striking', target:goal(clinch,85)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,80)},
                     {focus:'strength', target:goal(strength,72)},
                     {focus:'heart', target:goal(heart,70)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:70,strength:60,heart:60,
-                         chin:58,cardio:60,boxing:50,takedown_defense:48},
+                         chin:58,cardio:60,boxing:50,takedown_defense:48,
+                         clinch_control:65},
             },
             {
                 label: 'Wall & Stall',
                 desc:  'Pin them on the cage. Wear them out.',
                 queue: [
                     {focus:'clinch_striking', target:goal(clinch,78)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,82)},
                     {focus:'cardio', target:goal(cardio,80)},
                     {focus:'strength', target:goal(strength,72)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:62,cardio:68,strength:62,
-                         takedown_defense:55,chin:52,heart:55,boxing:48},
+                         takedown_defense:55,chin:52,heart:55,boxing:48,
+                         clinch_control:65},
             },
             {
                 label: 'Thai Plum',
                 desc:  'Muay Thai clinch. Double collar tie, knees.',
                 queue: [
                     {focus:'clinch_striking', target:goal(clinch,82)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,78)},
                     {focus:'kicks', target:goal(kicks,70)},
                     {focus:'fight_iq', target:goal(fightIq,68)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:68,kicks:55,fight_iq:58,
-                         cardio:60,strength:55,heart:52,chin:50},
+                         cardio:60,strength:55,heart:52,chin:50,
+                         clinch_control:65},
             },
             {
                 label: 'Takedown Clinch',
                 desc:  'Use the clinch to set up slams and trips.',
                 queue: [
                     {focus:'clinch_striking', target:goal(clinch,75)},
+                    {focus:'clinch_control', target:goal(clinchCtrl,80)},
                     {focus:'takedowns', target:goal(takedowns,78)},
                     {focus:'strength', target:goal(strength,72)},
                     {focus:'maintain', target:0},
                 ],
                 floors: {clinch_striking:60,takedowns:62,strength:62,
-                         cardio:58,top_control:50,chin:50,fight_iq:48},
+                         cardio:58,top_control:50,chin:50,fight_iq:48,
+                         clinch_control:65},
             },
         ],
 
@@ -1695,7 +1768,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:60,boxing:58,takedowns:55,
-                         cardio:60,striking_defense:52,top_control:48,composure:52},
+                         cardio:60,striking_defense:52,top_control:48,composure:52,
+                         clinch_control:50},
             },
             {
                 label: 'Striker First',
@@ -1707,7 +1781,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {boxing:65,kicks:55,takedown_defense:55,
-                         cardio:58,striking_defense:52,chin:50,fight_iq:50},
+                         cardio:58,striking_defense:52,chin:50,fight_iq:50,
+                         clinch_control:50},
             },
             {
                 label: 'Grappler First',
@@ -1719,7 +1794,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {takedowns:65,top_control:58,boxing:50,
-                         cardio:58,submissions:48,chin:50,fight_iq:52},
+                         cardio:58,submissions:48,chin:50,fight_iq:52,
+                         clinch_control:50},
             },
             {
                 label: 'Chess Match',
@@ -1731,7 +1807,8 @@ function buildStyleTemplates(
                     {focus:'maintain', target:0},
                 ],
                 floors: {fight_iq:70,composure:65,striking_defense:55,
-                         boxing:50,cardio:55,chin:52,speed:48},
+                         boxing:50,cardio:55,chin:52,speed:48,
+                         clinch_control:50},
             },
         ],
 
@@ -1746,7 +1823,8 @@ function buildStyleTemplates(
                 {focus:'maintain', target:0},
             ],
             floors: {strength:62,cardio:65,recovery:60,
-                     chin:55,heart:55,speed:50,composure:48},
+                     chin:55,heart:55,speed:50,composure:48,
+                     clinch_control:50},
         },
 
         // ── LEGACY single-template fallbacks ─────────
@@ -1758,7 +1836,7 @@ function buildStyleTemplates(
                 {focus:'maintain', target:0},
             ],
             floors: {boxing:65,striking_defense:55,cardio:60,
-                     chin:55,fight_iq:55},
+                     chin:55,fight_iq:55,clinch_control:50},
         },
         'Balanced': {
             queue: [
@@ -1768,24 +1846,26 @@ function buildStyleTemplates(
                 {focus:'cardio', target:goal(cardio,70)},
                 {focus:'maintain', target:0},
             ],
-            floors: {fight_iq:62,boxing:58,takedowns:55,cardio:58},
+            floors: {fight_iq:62,boxing:58,takedowns:55,cardio:58,
+                     clinch_control:50},
         },
     };
 }
 
 function coachRecommend(
     fighterId, style,
-    boxing, kicks, clinch, strDef, takedowns, tdDef,
+    boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
     chin, recovery, fightIq, composure, heart) {
     const templates = buildStyleTemplates(
-        boxing, kicks, clinch, strDef, takedowns, tdDef,
+        boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
         topCtrl, subs, guard, strength, speed, cardio,
         chin, recovery, fightIq, composure, heart);
     let arr = templates[style];
     if (!arr) arr = templates['Hybrid'];
     if (!Array.isArray(arr) || !arr.length) return null;
     const statMap = {boxing, kicks, clinch_striking:clinch,
+        clinch_control:clinchCtrl,
         striking_defense:strDef, takedowns, takedown_defense:tdDef,
         top_control:topCtrl, submissions:subs, guard,
         strength, speed, cardio, chin, recovery,
@@ -1806,7 +1886,7 @@ function coachRecommend(
 }
 
 function loadStyleTemplate(fighterId, style,
-    boxing, kicks, clinch, strDef, takedowns, tdDef,
+    boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
     chin, recovery, fightIq, composure, heart, careerPhase) {
 
@@ -1814,7 +1894,7 @@ function loadStyleTemplate(fighterId, style,
         ? 'MODERATE' : 'INTENSE';
 
     const templates = buildStyleTemplates(
-        boxing, kicks, clinch, strDef, takedowns, tdDef,
+        boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
         topCtrl, subs, guard, strength, speed, cardio,
         chin, recovery, fightIq, composure, heart);
 
@@ -1854,6 +1934,7 @@ function applyTemplate(fighterId, tmpl, intensity) {
     const statOptions = [
         ['boxing','Boxing'],['kicks','Kicks'],
         ['clinch_striking','Clinch Striking'],
+        ['clinch_control','Clinch Control'],
         ['striking_defense','Striking Defense'],
         ['takedowns','Takedowns'],['takedown_defense','Takedown Defense'],
         ['top_control','Top Control'],['submissions','Submissions'],
@@ -2148,7 +2229,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const fid    = el.dataset.fid;
         const style  = el.dataset.style;
         const stats  = el.dataset.stats.split(',').map(Number);
-        if (stats.length !== 17 || stats.some(isNaN)) return;
+        if (stats.length !== 18 || stats.some(isNaN)) return;
         let rec;
         try {
             rec = coachRecommend(fid, style, ...stats);
