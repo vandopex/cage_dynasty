@@ -804,30 +804,33 @@ class FightEvent:
 
 @dataclass
 class FighterAttributes:
-    """Fighter attributes for the fight engine (17-attribute system)."""
+    """Fighter attributes for the fight engine (18-attribute system)."""
     fighter_id: str
     name: str
-    
+
     # Physical (5)
     strength: int = 50      # Power behind strikes, clinch control
     speed: int = 50         # Hand speed, movement, reaction time
     cardio: int = 50        # Stamina, gas tank
     chin: int = 50          # Ability to absorb damage
     recovery: int = 50      # Between-round recovery, shaking off being hurt
-    
+
     # Striking (4)
     boxing: int = 50            # Punching technique, combinations
     kicks: int = 50             # Kicking technique
     clinch_striking: int = 50   # Knees, elbows, dirty boxing
     striking_defense: int = 50  # Head movement, blocking, footwork
-    
+
     # Grappling (5)
     takedowns: int = 50         # Ability to bring fight to ground
     takedown_defense: int = 50  # Sprawl, cage wrestling defense
     top_control: int = 50       # Holding position, GnP, preventing sweeps
     submissions: int = 50       # Finishing ability - chokes/locks
     guard: int = 50             # Sweeps, guard retention, getting back up
-    
+
+    # Clinch (1) — positional dominance, separate from clinch_striking damage
+    clinch_control: int = 50    # Grip dominance, cage control, clinch entry/break
+
     # Mental (3)
     heart: int = 50         # Willingness to fight through adversity
     fight_iq: int = 50      # In-fight adjustments, strategy
@@ -876,6 +879,8 @@ class FighterAttributes:
             "top_control": self.top_control,
             "submissions": self.submissions,
             "guard": self.guard,
+            # Clinch (1)
+            "clinch_control": self.clinch_control,
             # Mental (3)
             "heart": self.heart,
             "fight_iq": self.fight_iq,
@@ -4003,6 +4008,8 @@ def quick_simulate(
         # Grappling
         takedowns=f1_overall, takedown_defense=f1_overall, top_control=f1_overall,
         submissions=f1_overall, guard=f1_overall,
+        # Clinch (1)
+        clinch_control=f1_overall,
         # Mental
         heart=f1_overall, fight_iq=f1_overall, composure=f1_overall
     )
@@ -4018,6 +4025,8 @@ def quick_simulate(
         # Grappling
         takedowns=f2_overall, takedown_defense=f2_overall, top_control=f2_overall,
         submissions=f2_overall, guard=f2_overall,
+        # Clinch (1)
+        clinch_control=f2_overall,
         # Mental
         heart=f2_overall, fight_iq=f2_overall, composure=f2_overall
     )

@@ -134,6 +134,7 @@ class Fighter:
     top_control: int = 50
     submissions: int = 50
     guard: int = 50
+    clinch_control: int = 50
     heart: int = 50
     fight_iq: int = 50
     composure: int = 50
@@ -176,7 +177,8 @@ class Fighter:
             self.strength, self.speed, self.cardio, self.chin, self.recovery,
             self.boxing, self.kicks, self.clinch_striking, self.striking_defense,
             self.takedowns, self.takedown_defense, self.top_control,
-            self.submissions, self.guard, self.heart, self.fight_iq, self.composure
+            self.submissions, self.guard, self.clinch_control,
+            self.heart, self.fight_iq, self.composure
         ]
         return int(sum(attrs) / len(attrs))
     
@@ -595,6 +597,10 @@ class MockDataGenerator:
                 top_control=rand_attr(base_skill, grappling_bonus),
                 submissions=rand_attr(base_skill, 15 if style == "BJJ Specialist" else 0),
                 guard=rand_attr(base_skill),
+                clinch_control=rand_attr(base_skill,
+                    8 if style in ("Clinch Fighter","Muay Thai","Judo",
+                                   "Sambo","Wrestler","Pressure Fighter")
+                    else 0),
                 heart=rand_attr(base_skill),
                 fight_iq=rand_attr(base_skill + (age - 25) // 2),  # Experience helps
                 composure=rand_attr(base_skill),
@@ -641,6 +647,7 @@ class MockDataGenerator:
             top_control=50,
             submissions=45,
             guard=55,
+            clinch_control=58,
             heart=82,
             fight_iq=65,
             composure=70,
@@ -1262,6 +1269,10 @@ class MockDataGenerator:
             top_control=rand_attr(grappling_bonus),
             submissions=rand_attr(15 if style == "BJJ Specialist" else 0),
             guard=rand_attr(),
+            clinch_control=rand_attr(
+                8 if style in ("Clinch Fighter","Muay Thai","Judo",
+                               "Sambo","Wrestler","Pressure Fighter")
+                else 0),
             heart=rand_attr(5),  # Young fighters have heart
             fight_iq=rand_attr(-5),  # Less experience
             composure=rand_attr(),

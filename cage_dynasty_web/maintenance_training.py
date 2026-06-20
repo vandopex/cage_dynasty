@@ -65,7 +65,8 @@ except ImportError:
     # names (clinch/accuracy/wrestling/bjj/td_defense/power) that don't
     # exist on FighterRecord, silently breaking coach-skill→stat lookups.
     SKILL_ATTRIBUTES = {
-        "striking": ["boxing", "kicks", "clinch_striking", "striking_defense"],
+        "striking": ["boxing", "kicks", "clinch_striking",
+                     "clinch_control", "striking_defense"],
         "wrestling": ["takedowns", "takedown_defense", "top_control"],
         "jiu_jitsu": ["submissions", "guard"],
         "conditioning": ["cardio", "chin", "recovery"],
@@ -192,7 +193,8 @@ MENTAL_DECAY_MULTIPLIER = 0.5
 # but setattr() silently no-op'd. Critical real stats (takedown_defense,
 # striking_defense, guard) were entirely untracked.
 PHYSICAL_STATS = {"strength", "speed", "cardio", "chin", "recovery"}
-STRIKING_STATS = {"boxing", "kicks", "clinch_striking", "striking_defense"}
+STRIKING_STATS = {"boxing", "kicks", "clinch_striking",
+                   "clinch_control", "striking_defense"}
 GRAPPLING_STATS = {"takedowns", "takedown_defense", "top_control", "submissions", "guard"}
 MENTAL_STATS = {"heart", "fight_iq", "composure"}
 
@@ -376,7 +378,8 @@ def get_decay_multiplier(stat: str) -> float:
     """
     if stat in {"strength", "speed", "cardio", "chin", "recovery", "heart"}:
         return 0.3
-    elif stat in {"boxing", "kicks", "clinch_striking", "striking_defense",
+    elif stat in {"boxing", "kicks", "clinch_striking", "clinch_control",
+                  "striking_defense",
                   "takedowns", "takedown_defense", "top_control",
                   "submissions", "guard", "fight_iq", "composure"}:
         return 1.2
@@ -1090,7 +1093,8 @@ COACH_BOOST_AMOUNT = 1  # Base boost amount
 def check_coach_specialty_match(coach_specialty: str, stat: str) -> bool:
     """Check if coach specialty matches the stat category."""
     specialty_stats = {
-        "striking": {"boxing", "kicks", "clinch_striking", "defense"},
+        "striking": {"boxing", "kicks", "clinch_striking",
+                      "clinch_control", "defense"},
         "wrestling": {"takedowns", "takedown_defense", "top_control"},
         "bjj": {"submissions", "guard", "recovery"},
         "conditioning": {"cardio", "strength", "speed", "chin"},

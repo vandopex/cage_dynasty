@@ -624,9 +624,10 @@ class WebFighter:
     top_control: int
     submissions: int
     guard: int
-    heart: int
-    fight_iq: int
-    composure: int
+    clinch_control: int = 50
+    heart: int = 50
+    fight_iq: int = 50
+    composure: int = 50
 
     # Status
     fatigue: int
@@ -919,7 +920,7 @@ OVERSEAS_CAMPS = {
 
 # Location → trained stats. Falls back to default for any unlisted city.
 _OVERSEAS_LOCATION_STATS = {
-    'Bangkok':       ['kicks', 'clinch_striking'],
+    'Bangkok':       ['kicks', 'clinch_striking', 'clinch_control'],
     'Dagestan':      ['takedowns', 'top_control'],
     'Rio de Janeiro':['submissions', 'guard'],
     'Belo Horizonte':['submissions', 'guard'],
@@ -5344,6 +5345,7 @@ class GameBridge:
             top_control=f.top_control,
             submissions=f.submissions,
             guard=f.guard,
+            clinch_control=getattr(f, 'clinch_control', 50),
             heart=f.heart,
             fight_iq=f.fight_iq,
             composure=f.composure,
@@ -5523,6 +5525,7 @@ class GameBridge:
             top_control=_a('top_control'),
             submissions=_a('submissions'),
             guard=_a('guard'),
+            clinch_control=_a('clinch_control'),
             heart=_a('heart'),
             fight_iq=_a('fight_iq'),
             composure=_a('composure'),
@@ -5791,6 +5794,7 @@ class GameBridge:
             top_control=_attr("top_control",     -4),
             submissions=_attr("submissions",     -5),
             guard=_attr("guard",                 -5),
+            clinch_control=_attr("clinch_control", -2),
             heart=_attr("heart",                 +4),
             fight_iq=_attr("fight_iq",           +2),
             composure=_attr("composure",         +1),
@@ -5841,10 +5845,10 @@ class GameBridge:
             "emphases": {
                 "boxing":    {"boxing":1.0,"kicks":0.5,"clinch_striking":0.25,"striking_defense":0.25},
                 "kicks":     {"kicks":1.0,"boxing":0.5,"clinch_striking":0.5,"striking_defense":0.25},
-                "clinch":    {"clinch_striking":1.0,"boxing":0.5,"kicks":0.25,"striking_defense":0.25},
+                "clinch":    {"clinch_striking":1.0,"clinch_control":0.5,"boxing":0.5,"kicks":0.25,"striking_defense":0.25},
                 "defense":   {"striking_defense":1.0,"boxing":0.25,"kicks":0.25,"clinch_striking":0.25},
             },
-            "domain": ["boxing","kicks","clinch_striking","striking_defense","chin","composure","fight_iq"],
+            "domain": ["boxing","kicks","clinch_striking","clinch_control","striking_defense","chin","composure","fight_iq"],
         },
         "GRAPPLING": {
             "emphases": {
@@ -5886,6 +5890,7 @@ class GameBridge:
         "boxing":           ("STRIKING",     "boxing"),
         "kicks":            ("STRIKING",     "kicks"),
         "clinch_striking":  ("STRIKING",     "clinch"),
+        "clinch_control":   ("STRIKING",     "clinch"),
         "striking_defense": ("STRIKING",     "defense"),
         "muay_thai":        ("STRIKING",     "kicks"),
         "wrestling":        ("GRAPPLING",    "takedowns"),
@@ -6009,13 +6014,13 @@ class GameBridge:
     # current behavior preserved). Stats not listed in a style's dict
     # default to 1.0.
     _STYLE_OVR_WEIGHTS = {
-        "Striker":         {"boxing":2.2,"kicks":1.8,"clinch_striking":1.4,
+        "Striker":         {"boxing":2.2,"kicks":1.8,"clinch_striking":1.4,"clinch_control":0.7,
                             "striking_defense":1.8,"speed":1.6,"fight_iq":1.2,
                             "composure":1.2,"chin":1.1,"cardio":1.1,
                             "takedowns":0.6,"takedown_defense":0.8,
                             "top_control":0.5,"submissions":0.4,"guard":0.5,
                             "strength":0.9,"recovery":1.0,"heart":1.0},
-        "Muay Thai":       {"boxing":1.8,"kicks":2.2,"clinch_striking":2.0,
+        "Muay Thai":       {"boxing":1.8,"kicks":2.2,"clinch_striking":2.0,"clinch_control":1.6,
                             "striking_defense":1.6,"speed":1.4,"fight_iq":1.2,
                             "composure":1.2,"chin":1.2,"cardio":1.3,
                             "takedowns":0.7,"takedown_defense":0.9,
@@ -6023,48 +6028,48 @@ class GameBridge:
                             "strength":1.0,"recovery":1.0,"heart":1.1},
         "Karate":          {"boxing":1.6,"kicks":2.0,"striking_defense":2.0,
                             "speed":2.0,"fight_iq":1.4,"composure":1.4,
-                            "clinch_striking":1.0,"chin":1.0,"cardio":1.1,
+                            "clinch_striking":1.0,"clinch_control":0.4,"chin":1.0,"cardio":1.1,
                             "takedowns":0.5,"takedown_defense":0.8,
                             "top_control":0.4,"submissions":0.4,"guard":0.5,
                             "strength":0.8,"recovery":1.0,"heart":1.0},
         "Counter Striker": {"fight_iq":2.2,"composure":2.0,"striking_defense":2.0,
                             "speed":1.8,"boxing":1.6,"kicks":1.2,
-                            "clinch_striking":0.8,"chin":1.2,"cardio":1.1,
+                            "clinch_striking":0.8,"clinch_control":0.5,"chin":1.2,"cardio":1.1,
                             "takedowns":0.5,"takedown_defense":0.8,
                             "top_control":0.4,"submissions":0.4,"guard":0.5,
                             "strength":0.8,"recovery":1.0,"heart":1.1},
         "Point Fighter":   {"fight_iq":2.0,"composure":1.8,"speed":2.2,
                             "striking_defense":1.8,"boxing":1.6,"kicks":1.4,
-                            "clinch_striking":0.7,"chin":0.9,"cardio":1.2,
+                            "clinch_striking":0.7,"clinch_control":0.5,"chin":0.9,"cardio":1.2,
                             "takedowns":0.5,"takedown_defense":0.7,
                             "top_control":0.4,"submissions":0.4,"guard":0.5,
                             "strength":0.7,"recovery":1.0,"heart":1.0},
         "BJJ Specialist":  {"submissions":2.4,"guard":2.2,"top_control":1.6,
                             "takedowns":1.4,"takedown_defense":1.2,
                             "fight_iq":1.3,"composure":1.2,"cardio":1.1,
-                            "boxing":0.7,"kicks":0.5,"clinch_striking":0.8,
+                            "boxing":0.7,"kicks":0.5,"clinch_striking":0.8,"clinch_control":0.6,
                             "striking_defense":0.8,"chin":1.0,
                             "strength":1.0,"speed":0.9,"recovery":1.0,"heart":1.1},
         "Wrestler":        {"takedowns":2.2,"takedown_defense":2.0,"top_control":1.8,
                             "strength":1.6,"cardio":1.3,"heart":1.2,
                             "submissions":0.9,"guard":0.8,"fight_iq":1.1,
-                            "boxing":0.8,"kicks":0.5,"clinch_striking":1.0,
+                            "boxing":0.8,"kicks":0.5,"clinch_striking":1.0,"clinch_control":1.4,
                             "striking_defense":0.8,"composure":1.0,
                             "speed":1.0,"chin":1.1,"recovery":1.1},
         "Ground & Pound":  {"takedowns":2.0,"top_control":1.8,"strength":2.0,
                             "boxing":1.6,"chin":1.2,"heart":1.3,"cardio":1.2,
                             "takedown_defense":1.4,"submissions":0.7,"guard":0.7,
-                            "kicks":0.6,"clinch_striking":1.0,
+                            "kicks":0.6,"clinch_striking":1.0,"clinch_control":1.0,
                             "striking_defense":0.9,"composure":1.0,
                             "speed":0.9,"fight_iq":1.0,"recovery":1.1},
         "Sprawl & Brawl":  {"takedown_defense":2.2,"boxing":1.8,"chin":1.4,
                             "heart":1.4,"strength":1.4,"striking_defense":1.6,
                             "cardio":1.2,"takedowns":0.8,"top_control":0.8,
                             "submissions":0.6,"guard":0.7,"kicks":1.0,
-                            "clinch_striking":1.1,"composure":1.1,
+                            "clinch_striking":1.1,"clinch_control":1.2,"composure":1.1,
                             "speed":1.0,"fight_iq":1.1,"recovery":1.1},
         "Judo":            {"takedowns":2.0,"top_control":1.8,"takedown_defense":1.6,
-                            "clinch_striking":1.4,"strength":1.4,"guard":1.2,
+                            "clinch_striking":1.4,"clinch_control":2.0,"strength":1.4,"guard":1.2,
                             "submissions":1.2,"heart":1.1,"cardio":1.1,
                             "boxing":0.8,"kicks":0.6,"striking_defense":0.9,
                             "composure":1.0,"fight_iq":1.0,
@@ -6072,16 +6077,16 @@ class GameBridge:
         "Sambo":           {"takedowns":1.8,"submissions":1.8,"top_control":1.6,
                             "strength":1.4,"takedown_defense":1.4,"guard":1.2,
                             "boxing":1.2,"heart":1.2,"cardio":1.1,
-                            "kicks":0.8,"clinch_striking":1.0,
+                            "kicks":0.8,"clinch_striking":1.0,"clinch_control":1.4,
                             "striking_defense":0.9,"composure":1.0,
                             "fight_iq":1.1,"speed":0.9,"chin":1.0,"recovery":1.0},
         "Pressure Fighter":{"chin":2.0,"heart":2.0,"cardio":1.8,"strength":1.6,
-                            "boxing":1.6,"clinch_striking":1.4,"recovery":1.3,
+                            "boxing":1.6,"clinch_striking":1.4,"clinch_control":1.4,"recovery":1.3,
                             "takedowns":0.9,"takedown_defense":1.0,
                             "top_control":0.7,"submissions":0.6,"guard":0.7,
                             "kicks":0.8,"striking_defense":1.0,"composure":1.2,
                             "speed":0.9,"fight_iq":1.0},
-        "Clinch Fighter":  {"clinch_striking":2.2,"takedowns":1.6,"top_control":1.6,
+        "Clinch Fighter":  {"clinch_striking":2.2,"clinch_control":2.2,"takedowns":1.6,"top_control":1.6,
                             "strength":1.6,"chin":1.4,"heart":1.4,"cardio":1.4,
                             "takedown_defense":1.2,"boxing":1.2,"guard":0.9,
                             "submissions":0.9,"kicks":0.8,"striking_defense":1.0,
@@ -6144,7 +6149,7 @@ class GameBridge:
             "strength","speed","cardio","chin","recovery",
             "boxing","kicks","clinch_striking","striking_defense",
             "takedowns","takedown_defense","top_control","submissions",
-            "guard","heart","fight_iq","composure",
+            "guard","clinch_control","heart","fight_iq","composure",
         ]
 
         # Legacy-save guard: count stats with real data.
@@ -6183,7 +6188,8 @@ class GameBridge:
     _TECHNICAL_STATS = {
         "boxing", "kicks", "clinch_striking", "striking_defense",
         "takedowns", "takedown_defense", "top_control",
-        "submissions", "guard", "fight_iq", "composure"
+        "submissions", "guard", "clinch_control",
+        "fight_iq", "composure"
     }
 
     # Per-archetype passive-boost multiplier. sc_coach compensates for the
@@ -6357,7 +6363,8 @@ class GameBridge:
                                        "takedowns":1.1,"boxing":0.85},
                     "Ground & Pound": {"takedowns":1.3,"top_control":1.25,"boxing":1.2,
                                        "submissions":0.85},
-                    "Pressure Fighter":{"boxing":1.2,"clinch_striking":1.25,"chin":1.1,
+                    "Pressure Fighter":{"boxing":1.2,"clinch_striking":1.25,
+                                        "clinch_control":1.2,"chin":1.1,
                                         "cardio":1.15,"takedown_defense":1.1},
                     "Counter Striker":{"striking_defense":1.3,"fight_iq":1.25,"composure":1.2,
                                        "boxing":1.1,"takedowns":0.8},
@@ -6381,6 +6388,7 @@ class GameBridge:
                                 "boxing":           "striking",
                                 "kicks":            "striking",
                                 "clinch_striking":  "striking",
+                                "clinch_control":   "striking",
                                 "striking_defense": "striking",
                                 "muay_thai":        "striking",
                                 "wrestling":        "wrestling",
@@ -7051,7 +7059,8 @@ class GameBridge:
 
             # Per-archetype attrs (which stats each archetype trains)
             _COACH_ATTRS = {
-                "striking_coach":  ["boxing", "kicks", "clinch_striking", "striking_defense"],
+                "striking_coach":  ["boxing", "kicks", "clinch_striking",
+                                    "clinch_control", "striking_defense"],
                 "grappling_coach": ["takedowns", "takedown_defense", "top_control",
                                     "submissions", "guard"],
                 "sc_coach":        ["strength", "speed", "cardio", "chin",
@@ -7063,7 +7072,7 @@ class GameBridge:
             _GRAPPLING_ATTRS    = {'takedowns','takedown_defense',
                                     'top_control','submissions','guard'}
             _STRIKING_ATTRS     = {'boxing','kicks','clinch_striking',
-                                    'striking_defense'}
+                                    'clinch_control','striking_defense'}
             _CONDITIONING_ATTRS = {'cardio','recovery','chin'}
             _FINISHER_ATTRS     = {'boxing','kicks','clinch_striking',
                                     'submissions'}
@@ -9373,6 +9382,7 @@ class GameBridge:
                 "boxing":           "striking",
                 "kicks":            "striking",
                 "clinch_striking":  "striking",
+                "clinch_control":   "striking",
                 "clinch":           "striking",
                 "striking_defense": "striking",
                 "takedowns":        "wrestling",
@@ -9432,6 +9442,7 @@ class GameBridge:
                     "bjj": "ground game", "jiu_jitsu": "ground game",
                     "boxing": "boxing", "kicks": "kicks",
                     "clinch_striking": "clinch striking",
+                    "clinch_control": "clinch control",
                     "striking_defense": "striking defense",
                     "takedowns": "takedowns", "takedown_defense": "takedown defense",
                     "top_control": "top control", "submissions": "submissions",
@@ -9508,12 +9519,12 @@ class GameBridge:
 
         _STYLE_FOCUS = {
             "Orthodox Boxer":   ["boxing","striking_defense","cardio"],
-            "Muay Thai":        ["kicks","clinch_striking","cardio"],
+            "Muay Thai":        ["kicks","clinch_striking","clinch_control"],
             "Kickboxer":        ["kicks","boxing","striking_defense"],
             "Wrestler":         ["takedowns","top_control","strength"],
             "BJJ Specialist":   ["submissions","guard","takedowns"],
             "Ground & Pound":   ["top_control","takedowns","boxing"],
-            "Clinch Fighter":   ["clinch_striking","top_control","strength"],
+            "Clinch Fighter":   ["clinch_striking","clinch_control","takedowns"],
             "Counter Striker":  ["striking_defense","fight_iq","boxing"],
             "Pressure Fighter": ["boxing","cardio","clinch_striking"],
             "Sambo":            ["takedowns","submissions","strength"],
@@ -10888,6 +10899,7 @@ class GameBridge:
                             "boxing":            wf.boxing,
                             "kicks":             wf.kicks,
                             "clinch":            wf.clinch_striking,
+                            "clinch_control":    wf.clinch_control,
                             "wrestling":         wf.takedowns,
                             "bjj":               wf.submissions,
                             "guard":             wf.guard,
@@ -11175,9 +11187,9 @@ class GameBridge:
             "Striker":         [("striking_defense", "boxing"),     ("chin",           "power shots")],
             "Counter Striker": [("striking_defense", "counters"),   ("composure",      "composure under fire")],
             "Pressure Fighter":[("cardio",           "pace"),       ("chin",           "volume")],
-            "Muay Thai":       [("striking_defense", "kicks"),      ("clinch_striking","Thai clinch")],
+            "Muay Thai":       [("striking_defense", "kicks"),      ("clinch_control","Thai clinch tie-up"), ("clinch_striking","knees & elbows")],
             "Point Fighter":   [("striking_defense", "footwork"),   ("fight_iq",       "IQ")],
-            "Clinch Fighter":  [("takedown_defense", "cage control"),("clinch_striking","dirty boxing")],
+            "Clinch Fighter":  [("takedown_defense", "cage control"),("clinch_control","grip dominance"), ("clinch_striking","dirty boxing")],
             "Sprawl & Brawl":  [("boxing",           "standup"),    ("striking_defense","counters")],
             "Balanced":        [("fight_iq",         "adaptability"),("striking_defense","all-around game")],
         }
@@ -11223,6 +11235,7 @@ class GameBridge:
         DISPLAY = {
             "boxing": "boxing",          "kicks": "kicking",
             "clinch_striking": "clinch", "striking_defense": "defense",
+            "clinch_control": "clinch control",
             "takedowns": "wrestling",    "takedown_defense": "takedown defense",
             "top_control": "top control","submissions": "submissions",
             "guard": "guard work",       "cardio": "cardio",
@@ -14798,6 +14811,7 @@ class GameBridge:
             top_control         = _a("top_control",     -5),
             submissions         = _a("submissions",     -4),
             guard               = _a("guard",           -5),
+            clinch_control      = _a("clinch_control",  -2),
             heart               = _a("heart",           +2),
             fight_iq            = _a("fight_iq"),
             composure           = _a("composure"),

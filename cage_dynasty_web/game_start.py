@@ -221,6 +221,9 @@ class StartingProspect:
     top_control: int = 55       # Holding position, GnP, preventing sweeps
     submissions: int = 55       # Finishing ability - chokes/locks
     guard: int = 55             # Sweeps, guard retention, getting back up
+
+    # Clinch (1) — positional, separate from clinch_striking damage
+    clinch_control: int = 55    # Grip dominance, cage control
     
     # Mental Attributes (3)
     heart: int = 65         # Willingness to fight through adversity
@@ -265,6 +268,8 @@ class StartingProspect:
             "top_control": self.top_control,
             "submissions": self.submissions,
             "guard": self.guard,
+            # Clinch (1)
+            "clinch_control": self.clinch_control,
             # Mental (3)
             "heart": self.heart,
             "fight_iq": self.fight_iq,
@@ -443,7 +448,7 @@ def generate_prospect_attributes(
     def vary(base: int, variance: int = 8) -> int:
         return max(40, min(95, base + random.randint(-variance, variance)))
     
-    # Start with base attributes (17 total)
+    # Start with base attributes (18 total)
     attrs = {
         # Physical (5)
         "strength": vary(overall),
@@ -462,6 +467,8 @@ def generate_prospect_attributes(
         "top_control": vary(overall - 5),
         "submissions": vary(overall - 5),
         "guard": vary(overall - 5),
+        # Clinch (1)
+        "clinch_control": vary(overall - 5),
         # Mental (3)
         "heart": vary(overall + 2),
         "fight_iq": vary(overall - 5),
@@ -474,10 +481,12 @@ def generate_prospect_attributes(
             "boxing": 12, "striking_defense": 8, "speed": 5
         },
         "Muay Thai": {
-            "kicks": 12, "clinch_striking": 10, "striking_defense": 5
+            "kicks": 12, "clinch_striking": 10, "striking_defense": 5,
+            "clinch_control": 6
         },
         "Wrestler": {
-            "takedowns": 15, "top_control": 12, "takedown_defense": 8
+            "takedowns": 15, "top_control": 12, "takedown_defense": 8,
+            "clinch_control": 4
         },
         "BJJ Specialist": {
             "submissions": 15, "guard": 12, "takedown_defense": 5
@@ -659,6 +668,8 @@ def generate_starting_prospects(
             top_control=attrs["top_control"],
             submissions=attrs["submissions"],
             guard=attrs["guard"],
+            # Clinch (1)
+            clinch_control=attrs["clinch_control"],
             # Mental (3)
             heart=attrs["heart"],
             fight_iq=attrs["fight_iq"],

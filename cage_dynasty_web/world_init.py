@@ -929,6 +929,7 @@ class FighterGenerator:
         
         low, high = tier_ranges.get(skill_tier, (40, 65))
         
+        _clinch_val = random.randint(low, high)
         attributes = {
             # Physical
             "strength": random.randint(low, high),
@@ -936,27 +937,33 @@ class FighterGenerator:
             "cardio": random.randint(low, high),
             "chin": random.randint(low, high),
             "recovery": random.randint(low, high),
-            
+
             # Striking
             "boxing": random.randint(low, high),
             "kicks": random.randint(low, high),
-            "clinch": random.randint(low, high),
+            "clinch": _clinch_val,
             "power": random.randint(low, high),
             "accuracy": random.randint(low, high),
-            
+
             # Grappling
             "wrestling": random.randint(low, high),
             "bjj": random.randint(low, high),
             "takedown_defense": random.randint(low, high),
             "top_control": random.randint(low, high),
             "submissions": random.randint(low, high),
-            
+
+            # Clinch (1) — positional control, separate from clinch
+            # striking. Bound near _clinch_val ±8 so a fighter naturally
+            # good in the clinch tends to be good at both.
+            "clinch_control": max(20, min(95,
+                _clinch_val + random.randint(-8, 8))),
+
             # Mental
             "heart": random.randint(low, high),
             "iq": random.randint(low, high),
             "composure": random.randint(low, high),
         }
-        
+
         return attributes
     
     def generate_fighter(
@@ -2733,6 +2740,22 @@ class WorldInitializer:
                     continue  # dead key, no canonical analog
                 _canonical = _canonical_remap.get(_key, _key)
                 _fdata[_canonical] = int(_val)
+            # Style-based clinch_control bonus (Ship A — clinch_control as
+            # 18th stat). Fighters whose style centers on grip dominance
+            # start with above-baseline clinch_control.
+            _style_clinch_bonus = {
+                'Clinch Fighter':   8,
+                'Muay Thai':        6,
+                'Judo':             6,
+                'Sambo':            5,
+                'Wrestler':         4,
+                'Pressure Fighter': 4,
+            }
+            _bonus = _style_clinch_bonus.get(
+                getattr(fighter, 'fighting_style', ''), 0)
+            if _bonus and 'clinch_control' in _fdata:
+                _fdata['clinch_control'] = min(95,
+                    _fdata['clinch_control'] + _bonus)
             _fdata['age'] = int(fighter.age)
             _fdata['country'] = str(fighter.country)
             # Per-fighter potential ceiling — read by the training loop

@@ -610,6 +610,7 @@ def generate_amateur_attributes(
         "wrestling": random.randint(base_min, base_max) + age_modifier,
         "bjj": random.randint(base_min, base_max) + age_modifier,
         "clinch_striking": random.randint(base_min, base_max) + age_modifier,
+        "clinch_control": random.randint(base_min, base_max) + age_modifier,
         "striking_defense": random.randint(base_min, base_max) + age_modifier,
         "takedown_defense": random.randint(base_min, base_max) + age_modifier,
         "strength": random.randint(base_min + 5, base_max + 10) + age_modifier,
@@ -643,6 +644,10 @@ def generate_amateur_attributes(
     elif style_name in ["kickboxer", "muay_thai"]:
         attrs["kicks"] += random.randint(4, 8)
         attrs["clinch_striking"] += random.randint(2, 5)
+        attrs["clinch_control"] += random.randint(3, 6)
+    # Style bonus: dedicated clinch and grappling-with-clinch styles
+    if style_name in ["wrestler", "sambo"]:
+        attrs["clinch_control"] += random.randint(3, 6)
     elif style_name == "athletic_striker":
         attrs["speed"] += random.randint(3, 6)
         attrs["boxing"] += random.randint(2, 5)
@@ -1080,7 +1085,8 @@ class AmateurSystem:
         """
         a = fighter.attributes
         striking  = (a.get("boxing", 50) * 2 + a.get("kicks", 50) +
-                     a.get("clinch_striking", 50) + a.get("striking_defense", 50)) / 5
+                     a.get("clinch_striking", 50) + a.get("striking_defense", 50) +
+                     a.get("clinch_control", 50) * 0.5) / 5.5
         grappling = (a.get("wrestling", 50) * 2 + a.get("bjj", 50) +
                      a.get("takedown_defense", 50)) / 4
         physical  = (a.get("strength", 50) + a.get("speed", 50) +
@@ -1606,6 +1612,7 @@ class AmateurSystem:
             "boxing":            a.get("boxing", 50),
             "kicks":             a.get("kicks", 50),
             "clinch_striking":   a.get("clinch_striking", 50),
+            "clinch_control":    a.get("clinch_control", 50),
             "striking_defense":  a.get("striking_defense", 50),
             # Grappling — translate wrestling/bjj
             "takedowns":         wrestling,

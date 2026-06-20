@@ -1826,8 +1826,10 @@ def quick_narrated_fight(
         boxing=f1_overall, kicks=f1_overall, clinch_striking=f1_overall,
         striking_defense=f1_overall,
         # Grappling (5)
-        takedowns=f1_overall, takedown_defense=f1_overall, 
+        takedowns=f1_overall, takedown_defense=f1_overall,
         top_control=f1_overall, submissions=f1_overall, guard=f1_overall,
+        # Clinch (1)
+        clinch_control=f1_overall,
         # Mental (3)
         heart=f1_overall, fight_iq=f1_overall, composure=f1_overall,
         fighting_style=f1_style
@@ -1843,8 +1845,10 @@ def quick_narrated_fight(
         boxing=f2_overall, kicks=f2_overall, clinch_striking=f2_overall,
         striking_defense=f2_overall,
         # Grappling (5)
-        takedowns=f2_overall, takedown_defense=f2_overall, 
+        takedowns=f2_overall, takedown_defense=f2_overall,
         top_control=f2_overall, submissions=f2_overall, guard=f2_overall,
+        # Clinch (1)
+        clinch_control=f2_overall,
         # Mental (3)
         heart=f2_overall, fight_iq=f2_overall, composure=f2_overall,
         fighting_style=f2_style
