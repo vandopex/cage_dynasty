@@ -1150,7 +1150,7 @@ def detect_fighter_style(fighter: FighterAttributes) -> str:
     striking_score    = (fighter.boxing * 2 + fighter.kicks) / 3
     wrestling_score   = (fighter.takedowns + fighter.top_control) / 2
     bjj_score         = (fighter.submissions + fighter.guard) / 2
-    clinch_score      = fighter.clinch_striking
+    clinch_score      = (fighter.clinch_striking + fighter.clinch_control) / 2
     defense_score     = (fighter.striking_defense + fighter.composure) / 2
     pressure_score    = (fighter.cardio + fighter.heart + fighter.chin) / 3
 
@@ -1282,10 +1282,15 @@ def is_grappler(fighter: FighterAttributes) -> bool:
 
 
 def is_clinch_fighter(fighter: FighterAttributes) -> bool:
-    """Check if fighter excels in clinch (Muay Thai, Sambo, Dirty Boxing)."""
+    """Check if fighter excels in clinch (Muay Thai, Sambo, Dirty Boxing).
+    Requires BOTH damage (clinch_striking) and positional dominance
+    (clinch_control). A pure striker with one but not the other is not
+    a true clinch fighter."""
     wrestling_ability = (fighter.takedowns + fighter.top_control) / 2
     bjj_ability = (fighter.submissions + fighter.guard) / 2
-    return fighter.clinch_striking >= 70 or (wrestling_ability >= 70 and bjj_ability >= 65)
+    has_clinch_skill = (fighter.clinch_striking >= 65
+                        and fighter.clinch_control >= 65)
+    return has_clinch_skill or (wrestling_ability >= 70 and bjj_ability >= 65)
 
 
 # ============================================================================
@@ -1880,10 +1885,12 @@ def select_grappling_action(
             weight += fighter.top_control // 4
         
         # Clinch entry - wrestlers and Muay Thai fighters
+        # Uses clinch_control (positional grappling), not clinch_striking
+        # (damage). Entering the clinch is a control action.
         elif action == GrapplingAction.CLINCH_ENTRY:
-            weight += (fighter.takedowns + fighter.clinch_striking) // 6
-            if fighter.clinch_striking >= 70:
-                weight += 15  # Muay Thai bonus
+            weight += (fighter.takedowns + fighter.clinch_control) // 6
+            if fighter.clinch_control >= 70:
+                weight += 15  # Clinch specialist bonus
         
         # Stand up attempts (guard + explosiveness)
         elif action == GrapplingAction.STAND_UP:
@@ -2186,10 +2193,11 @@ def calculate_grappling_success(
             base_chance -= 0.04
             
     elif action == GrapplingAction.CLINCH_ENTRY:
-        # CLINCH ENTRY: (takedowns + clinch_striking)/2 vs striking_defense
-        # Both wrestlers AND Muay Thai fighters can close distance
-        # But strikers use footwork to maintain range - this is HARD
-        offense = (attacker.takedowns + attacker.clinch_striking) // 2
+        # CLINCH ENTRY: (takedowns + clinch_control)/2 vs striking_defense
+        # Both wrestlers AND clinch specialists can close distance.
+        # Uses clinch_control (positional grappling) rather than clinch_striking
+        # (damage) — entering the clinch is a control action.
+        offense = (attacker.takedowns + attacker.clinch_control) // 2
         defense = defender.striking_defense + defender.speed // 3  # Speed helps avoid clinch
         
         base_chance = 0.20  # LOW base - closing distance is hard
@@ -2807,17 +2815,17 @@ def simulate_exchange(
         f1_initiative += fighter1.takedowns // 6  # Up to +15 for 95 takedowns
         f2_initiative += fighter2.takedowns // 6
         
-        # MUAY THAI CLINCH MASTERY: Clinch strikers DOMINATE clinch initiative
-        # This is crucial - Muay Thai's whole game IS the clinch
-        # They should be the kings of clinch fighting
-        f1_initiative += fighter1.clinch_striking // 5  # Up to +18 for 90 clinch striking
-        f2_initiative += fighter2.clinch_striking // 5
-        
-        # ELITE CLINCH STRIKER BONUS: True specialists get extra
-        if fighter1.clinch_striking >= 85:
-            f1_initiative += 10  # INCREASED from 8 - Elite Thai clinch
-        if fighter2.clinch_striking >= 85:
-            f2_initiative += 10  # INCREASED from 8
+        # CLINCH MASTERY: clinch_control drives positional initiative.
+        # The fighter with grip dominance dictates what happens in the
+        # clinch — they decide whether to strike, takedown, or break.
+        f1_initiative += fighter1.clinch_control // 5  # Up to +18 for 90 clinch_control
+        f2_initiative += fighter2.clinch_control // 5
+
+        # ELITE CLINCH CONTROLLER BONUS: True specialists get extra
+        if fighter1.clinch_control >= 85:
+            f1_initiative += 10  # Elite grip dominance
+        if fighter2.clinch_control >= 85:
+            f2_initiative += 10
         
         # MUAY THAI VS WRESTLER IN CLINCH: Huge advantage for Thai fighters
         # Wrestlers struggle against the Thai plum and devastating knees
@@ -3271,18 +3279,24 @@ def simulate_exchange(
             # This is especially important for Muay Thai vs Wrestlers
             if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG,
                          GrapplingAction.CLINCH_ENTRY, GrapplingAction.BODY_LOCK_TAKEDOWN}:
-                # Clinch strikers punish failed entries with knees
+                # Clinch fighters punish failed entries with knees.
+                # Counter requires BOTH strike skill (clinch_striking) and
+                # positional awareness (clinch_control) — averaged so a
+                # pure wrestler can't throw devastating knees they can't
+                # actually land, and a pure striker without grip can't
+                # capitalize on the position.
                 if fight_state.position in STANDING_POSITIONS or fight_state.position in CLINCH_POSITIONS:
                     counter_damage = 0
-                    
-                    # High clinch striking = DEVASTATING counter strikes
-                    # This is how Muay Thai fighters stop wrestlers
-                    if defender.clinch_striking >= 85:
-                        counter_damage = random.uniform(5, 10)  # INCREASED - Elite Muay Thai knee
-                    elif defender.clinch_striking >= 75:
-                        counter_damage = random.uniform(3, 7)  # INCREASED
-                    elif defender.clinch_striking >= 65:
-                        counter_damage = random.uniform(2, 5)  # INCREASED
+                    clinch_skill = (defender.clinch_striking
+                                    + defender.clinch_control) / 2
+
+                    # High clinch skill = DEVASTATING counter strikes
+                    if clinch_skill >= 85:
+                        counter_damage = random.uniform(5, 10)  # Elite Muay Thai knee
+                    elif clinch_skill >= 75:
+                        counter_damage = random.uniform(3, 7)
+                    elif clinch_skill >= 65:
+                        counter_damage = random.uniform(2, 5)
                     
                     # Good boxing also counters failed takedowns
                     elif defender.boxing >= 80:
