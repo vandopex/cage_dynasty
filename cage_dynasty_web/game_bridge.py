@@ -629,19 +629,19 @@ class WebFighter:
     fight_iq: int = 50
     composure: int = 50
 
-    # Status
-    fatigue: int
-    morale: int
-    condition_status: str
-    condition_color: str
+    # Status (defaults required — clinch_control above is defaulted)
+    fatigue: int = 0
+    morale: int = 50
+    condition_status: str = ""
+    condition_color: str = ""
 
     # Streaks
-    win_streak: int
-    lose_streak: int
+    win_streak: int = 0
+    lose_streak: int = 0
 
     # Traits & history
-    traits: List[str]
-    fight_history: List[Dict[str, Any]]
+    traits: List[str] = field(default_factory=list)
+    fight_history: List[Dict[str, Any]] = field(default_factory=list)
 
     # ── Fields with defaults must come LAST ─────────────────────────────
     momentum_tag:     str  = ""
