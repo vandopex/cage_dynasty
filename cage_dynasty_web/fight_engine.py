@@ -1283,13 +1283,16 @@ def is_grappler(fighter: FighterAttributes) -> bool:
 
 def is_clinch_fighter(fighter: FighterAttributes) -> bool:
     """Check if fighter excels in clinch (Muay Thai, Sambo, Dirty Boxing).
-    Requires BOTH damage (clinch_striking) and positional dominance
-    (clinch_control). A pure striker with one but not the other is not
-    a true clinch fighter."""
+    True specialists in either dimension qualify: elite striker (high
+    clinch_striking, e.g. classic Muay Thai) OR elite controller (high
+    clinch_control, e.g. cage-pressure Sambo). Combined-average gate
+    filters out fighters who are merely average at both."""
     wrestling_ability = (fighter.takedowns + fighter.top_control) / 2
     bjj_ability = (fighter.submissions + fighter.guard) / 2
-    has_clinch_skill = (fighter.clinch_striking >= 65
-                        and fighter.clinch_control >= 65)
+    has_clinch_skill = (
+        (fighter.clinch_striking >= 70 or fighter.clinch_control >= 70)
+        and (fighter.clinch_striking + fighter.clinch_control) / 2 >= 62
+    )
     return has_clinch_skill or (wrestling_ability >= 70 and bjj_ability >= 65)
 
 
@@ -3280,15 +3283,14 @@ def simulate_exchange(
             if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG,
                          GrapplingAction.CLINCH_ENTRY, GrapplingAction.BODY_LOCK_TAKEDOWN}:
                 # Clinch fighters punish failed entries with knees.
-                # Counter requires BOTH strike skill (clinch_striking) and
-                # positional awareness (clinch_control) — averaged so a
-                # pure wrestler can't throw devastating knees they can't
-                # actually land, and a pure striker without grip can't
-                # capitalize on the position.
+                # Max() preserves Muay Thai's identity: elite strike skill
+                # alone qualifies for devastating counter knees. Position
+                # dominance (clinch_control) is tracked separately in
+                # initiative/entry calcs — this gate is about damage.
                 if fight_state.position in STANDING_POSITIONS or fight_state.position in CLINCH_POSITIONS:
                     counter_damage = 0
-                    clinch_skill = (defender.clinch_striking
-                                    + defender.clinch_control) / 2
+                    clinch_skill = max(defender.clinch_striking,
+                                       defender.clinch_control)
 
                     # High clinch skill = DEVASTATING counter strikes
                     if clinch_skill >= 85:
