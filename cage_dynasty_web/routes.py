@@ -2052,6 +2052,7 @@ def register_routes(app):
                     ("STRIKING:boxing",   "Boxing",    "🥊", "Punching technique, combos, distance"),
                     ("STRIKING:kicks",    "Kicking",   "🦵", "Leg, body, and head kicks"),
                     ("STRIKING:clinch",   "Clinch",    "👊", "Knees, elbows, dirty boxing"),
+                    ("STRIKING:clinch_control", "Clinch Ctrl", "🤼", "Grip dominance, cage control, clinch entries"),
                     ("STRIKING:defense",  "Defense",   "🛡", "Head movement, blocking, footwork"),
                 ],
             },

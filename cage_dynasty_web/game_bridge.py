@@ -5846,6 +5846,7 @@ class GameBridge:
                 "boxing":    {"boxing":1.0,"kicks":0.5,"clinch_striking":0.25,"striking_defense":0.25},
                 "kicks":     {"kicks":1.0,"boxing":0.5,"clinch_striking":0.5,"striking_defense":0.25},
                 "clinch":    {"clinch_striking":1.0,"clinch_control":0.5,"boxing":0.5,"kicks":0.25,"striking_defense":0.25},
+                "clinch_control": {"clinch_control":1.0,"clinch_striking":0.3,"takedowns":0.2},
                 "defense":   {"striking_defense":1.0,"boxing":0.25,"kicks":0.25,"clinch_striking":0.25},
             },
             "domain": ["boxing","kicks","clinch_striking","clinch_control","striking_defense","chin","composure","fight_iq"],
@@ -5890,7 +5891,7 @@ class GameBridge:
         "boxing":           ("STRIKING",     "boxing"),
         "kicks":            ("STRIKING",     "kicks"),
         "clinch_striking":  ("STRIKING",     "clinch"),
-        "clinch_control":   ("STRIKING",     "clinch"),
+        "clinch_control":   ("STRIKING",     "clinch_control"),
         "striking_defense": ("STRIKING",     "defense"),
         "muay_thai":        ("STRIKING",     "kicks"),
         "wrestling":        ("GRAPPLING",    "takedowns"),
@@ -9725,6 +9726,37 @@ class GameBridge:
                         self._game_state._fighter_data[fid][
                             focus_attr] = round(
                             min(100.0, current + effective), 2)
+
+                # Clinch_control secondary training — clinch-relevant
+                # styles develop grip work alongside primary focus at
+                # 0.8x rate; all others get 0.3x maintenance so the
+                # stat doesn't decay to floor. Skipped when this week's
+                # rotation already trained clinch_control (avoids
+                # double-train for Muay Thai / Clinch Fighter).
+                if focus_attr != 'clinch_control':
+                    _clinch_styles = {
+                        'Clinch Fighter', 'Muay Thai', 'Wrestler',
+                        'Judo', 'Sambo', 'Pressure Fighter',
+                    }
+                    _cc_rate = 0.8 if style in _clinch_styles else 0.3
+                    _cc_cur = float(getattr(
+                        fighter, 'clinch_control', 60))
+                    _cc_cap_mod = 1.0
+                    if _cc_cur >= effective_cap:
+                        _cc_cap_mod = max(0.05,
+                            1 - (_cc_cur - effective_cap) * 0.15)
+                    elif _cc_cur >= effective_cap - 5:
+                        _cc_cap_mod = 0.4
+                    _cc_gain = (base_gain * age_gain_mult
+                                * _coach_gain_mult
+                                * _cc_cap_mod * _cc_rate)
+                    if _cc_gain > 0.02 and hasattr(
+                            fighter, 'clinch_control'):
+                        _cc_new = min(100.0, _cc_cur + _cc_gain)
+                        setattr(fighter, 'clinch_control', _cc_new)
+                        if fid in self._game_state._fighter_data:
+                            self._game_state._fighter_data[fid][
+                                'clinch_control'] = round(_cc_new, 2)
 
                 # Style-weighted OVR
                 fighter.overall_rating = self._compute_ovr(fighter)
