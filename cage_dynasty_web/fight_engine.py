@@ -1009,16 +1009,24 @@ def get_available_grappling_actions(
     my_style_hint = detect_fighter_style(fighter_attrs)
 
     if position in STANDING_POSITIONS:
-        actions.extend([
-            GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG,
-            GrapplingAction.CLINCH_ENTRY
-        ])
+        actions.append(GrapplingAction.CLINCH_ENTRY)
+        # Distance shots + snap-down gated on style — pure strikers
+        # don't shoot double legs. Clinch trip path still available
+        # via CLINCH_ENTRY → BODY_LOCK_TAKEDOWN.
+        _striker_styles = ("muay_thai", "striker", "kickboxer",
+                           "brawler", "counter_striker",
+                           "point_fighter", "sprawl_and_brawl")
+        if my_style_hint not in _striker_styles:
+            actions.extend([
+                GrapplingAction.SINGLE_LEG,
+                GrapplingAction.DOUBLE_LEG,
+            ])
+            if fighter_attrs.takedowns >= 50:
+                actions.append(GrapplingAction.SNAP_DOWN)
         if fighter_attrs.takedowns >= 60:
             actions.append(GrapplingAction.HIP_TOSS)
         if fighter_attrs.guard >= 70:  # Guard players can Imanari roll
             actions.append(GrapplingAction.IMANARI_ROLL)
-        if fighter_attrs.takedowns >= 50:
-            actions.append(GrapplingAction.SNAP_DOWN)
         # BJJ fighters with low takedowns can pull guard from standing
         if my_style_hint == "bjj" and fighter_attrs.takedowns < 62:
             actions.append(GrapplingAction.GUARD_PULL)
