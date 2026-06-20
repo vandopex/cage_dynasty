@@ -2756,6 +2756,20 @@ class WorldInitializer:
             if _bonus and 'clinch_control' in _fdata:
                 _fdata['clinch_control'] = min(95,
                     _fdata['clinch_control'] + _bonus)
+            # Style-based takedown_defense bonus. Muay Thai needs TDD so
+            # their counter-knee superpower on failed shots actually fires;
+            # without it wrestlers complete takedowns before the clinch
+            # game develops.
+            _style_tdd_bonus = {
+                'Muay Thai':        6,
+                'Sprawl & Brawl':   4,
+                'Karate':           3,
+            }
+            _tdd_bonus = _style_tdd_bonus.get(
+                getattr(fighter, 'fighting_style', ''), 0)
+            if _tdd_bonus and 'takedown_defense' in _fdata:
+                _fdata['takedown_defense'] = min(95,
+                    _fdata['takedown_defense'] + _tdd_bonus)
             _fdata['age'] = int(fighter.age)
             _fdata['country'] = str(fighter.country)
             # Per-fighter potential ceiling — read by the training loop

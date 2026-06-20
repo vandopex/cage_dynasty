@@ -482,7 +482,7 @@ def generate_prospect_attributes(
         },
         "Muay Thai": {
             "kicks": 12, "clinch_striking": 10, "striking_defense": 5,
-            "clinch_control": 6
+            "clinch_control": 6, "takedown_defense": 6
         },
         "Wrestler": {
             "takedowns": 15, "top_control": 12, "takedown_defense": 8,

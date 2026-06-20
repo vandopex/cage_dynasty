@@ -129,7 +129,7 @@ STYLE_DEFINITIONS: Dict[FightingStyle, StyleDefinition] = {
         description="Kicks, knees, elbows, and Thai clinch mastery",
         examples=["Jose Aldo", "Valentina Shevchenko", "Petr Yan"],
         attribute_requirements={"kicks": 70, "clinch_striking": 70},
-        attribute_bonuses={"kicks": 8, "clinch_striking": 8, "boxing": 3, "wrestling": -4},
+        attribute_bonuses={"kicks": 8, "clinch_striking": 8, "boxing": 3, "wrestling": -4, "takedown_defense": 6},
         ko_rate=0.40, sub_rate=0.05, dec_rate=0.55,
         generation_weight=0.85,
         special_traits=["Knockout Artist", "Body Snatcher"]
