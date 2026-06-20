@@ -718,23 +718,58 @@
                                     line-height:1.4;{% if is_major %}font-family:var(--font-display);{% endif %}">
                             {{ item.headline }}
                         </div>
-                        <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;display:flex;gap:6px;">
+                        {# ── Comprehensive aux links — mirrors news.html.
+                           Every metadata field becomes a navigable link.
+                           Labels prefer item.*_name; fall back to generic
+                           nouns. Never show "Roster →" — fighter_id always
+                           points to /fighter/ regardless of player status. ── #}
+                        <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;">
                             <span>Week {{ item.week }}</span>
                             {% if item.winner_id %}
                             <span>·</span>
                             <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
-                               style="color:var(--neon-green);text-decoration:none;">Profile →</a>
+                               style="color:var(--neon-green);text-decoration:none;">
+                                🏆 {{ item.winner_name or 'Winner' }} →
+                            </a>
+                            {% endif %}
+                            {% if item.loser_id %}
+                            <a href="{{ url_for('fighter_profile', fighter_id=item.loser_id) }}"
+                               style="color:var(--text-muted);text-decoration:none;">
+                                💀 {{ item.loser_name or 'Loser' }} →
+                            </a>
                             {% endif %}
                             {% if item.fighter_id and not item.winner_id %}
                             <span>·</span>
                             <a href="{{ url_for('fighter_profile', fighter_id=item.fighter_id) }}"
-                               style="color:var(--info);text-decoration:none;">Profile →</a>
+                               style="color:var(--info);text-decoration:none;">
+                                🥊 {{ item.fighter_name or 'Fighter' }} →
+                            </a>
+                            {% endif %}
+                            {% if item.fighter1_id %}
+                            <span>·</span>
+                            <a href="{{ url_for('fighter_profile', fighter_id=item.fighter1_id) }}"
+                               style="color:var(--info);text-decoration:none;">
+                                🥊 {{ item.fighter1_name or 'Fighter 1' }} →
+                            </a>
+                            {% endif %}
+                            {% if item.fighter2_id %}
+                            <a href="{{ url_for('fighter_profile', fighter_id=item.fighter2_id) }}"
+                               style="color:var(--info);text-decoration:none;">
+                                🥊 {{ item.fighter2_name or 'Fighter 2' }} →
+                            </a>
+                            {% endif %}
+                            {% if item.amateur_id %}
+                            <span>·</span>
+                            <a href="{{ url_for('fighter_profile', fighter_id=item.amateur_id) }}"
+                               style="color:var(--gold);text-decoration:none;">
+                                🥋 {{ item.amateur_name or 'Prospect' }} →
+                            </a>
                             {% endif %}
                             {% if item.camp_id %}
                             <span>·</span>
                             <a href="{{ url_for('camp_detail', camp_id=item.camp_id) }}"
                                style="color:var(--text-muted);text-decoration:none;">
-                                {{ item.camp_name or 'Camp' }} →
+                                🏟️ {{ item.camp_name or 'Camp' }} →
                             </a>
                             {% endif %}
                             {% if item.weight_class %}
@@ -749,23 +784,25 @@
                             <a href="{{ url_for('watch_fight', fight_id=item.fight_id) }}"
                                style="color:var(--neon-green);text-decoration:none;">▶ Watch →</a>
                             {% endif %}
-                            {% if not item.winner_id and not item.fighter_id and not item.camp_id and not item.fight_id %}
-                                {% if item.category in ('fotn','fight','player_result') %}
-                                <span>·</span>
-                                <a href="{{ url_for('news_feed') }}"
-                                   style="color:var(--text-muted);text-decoration:none;">News →</a>
-                                {% elif item.category in ('title','champion') %}
+                            {% if item.event_id %}
+                            <a href="{{ url_for('event_detail', event_id=item.event_id) }}"
+                               style="color:var(--text-muted);text-decoration:none;margin-left:4px;">
+                                📅 Event →
+                            </a>
+                            {% endif %}
+                            {# Category-specific fallback nav when item has zero ids #}
+                            {% if not item.winner_id and not item.loser_id
+                                  and not item.fighter_id and not item.fighter1_id
+                                  and not item.camp_id and not item.fight_id
+                                  and not item.event_id %}
+                                {% if item.category in ('title','champion') %}
                                 <span>·</span>
                                 <a href="{{ url_for('champions') }}"
                                    style="color:var(--gold);text-decoration:none;">Champions →</a>
-                                {% elif item.category in ('signing','contract','free_agent') %}
+                                {% else %}
                                 <span>·</span>
-                                <a href="{{ url_for('roster') }}"
-                                   style="color:var(--text-muted);text-decoration:none;">Roster →</a>
-                                {% elif item.category in ('injury',) %}
-                                <span>·</span>
-                                <a href="{{ url_for('roster') }}"
-                                   style="color:var(--blood-red);text-decoration:none;">Roster →</a>
+                                <a href="{{ url_for('news_feed') }}"
+                                   style="color:var(--text-muted);text-decoration:none;">News →</a>
                                 {% endif %}
                             {% endif %}
                         </div>

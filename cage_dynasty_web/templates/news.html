@@ -41,37 +41,55 @@
                 <div style="color:var(--text-bright);font-size:.9rem;line-height:1.4;">
                     {{ item.headline }}
                 </div>
+                {# ── Comprehensive aux links — every metadata field
+                   on the news item becomes a navigable link. Labels
+                   prefer item.*_name when present, fall back to a
+                   generic noun. Never show "Roster →" — fighter_id
+                   points to /fighter/ for both player and AI fighters. ── #}
                 <div class="text-muted" style="font-size:.72rem;margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                     <span>Week {{ item.week }}</span>
                     <span>•</span>
                     <span style="text-transform:capitalize;color:var(--text-secondary);">{{ item.category }}</span>
+
                     {% if item.winner_id %}
                     <span>•</span>
                     <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
-                       style="color:var(--neon-green);text-decoration:none;font-size:.68rem;">Winner →</a>
+                       style="color:var(--neon-green);text-decoration:none;font-size:.68rem;">
+                        🏆 {{ item.winner_name or 'Winner' }} →
+                    </a>
                     {% endif %}
                     {% if item.loser_id %}
                     <a href="{{ url_for('fighter_profile', fighter_id=item.loser_id) }}"
-                       style="color:var(--text-muted);text-decoration:none;font-size:.68rem;">Loser →</a>
+                       style="color:var(--text-muted);text-decoration:none;font-size:.68rem;">
+                        💀 {{ item.loser_name or 'Loser' }} →
+                    </a>
                     {% endif %}
                     {% if item.fighter_id %}
                     <span>•</span>
                     <a href="{{ url_for('fighter_profile', fighter_id=item.fighter_id) }}"
-                       style="color:var(--info);text-decoration:none;font-size:.68rem;">Profile →</a>
+                       style="color:var(--info);text-decoration:none;font-size:.68rem;">
+                        🥊 {{ item.fighter_name or 'Fighter' }} →
+                    </a>
                     {% endif %}
                     {% if item.fighter1_id %}
                     <span>•</span>
                     <a href="{{ url_for('fighter_profile', fighter_id=item.fighter1_id) }}"
-                       style="color:var(--info);text-decoration:none;font-size:.68rem;">Fighter 1 →</a>
+                       style="color:var(--info);text-decoration:none;font-size:.68rem;">
+                        🥊 {{ item.fighter1_name or 'Fighter 1' }} →
+                    </a>
                     {% endif %}
                     {% if item.fighter2_id %}
                     <a href="{{ url_for('fighter_profile', fighter_id=item.fighter2_id) }}"
-                       style="color:var(--info);text-decoration:none;font-size:.68rem;">Fighter 2 →</a>
+                       style="color:var(--info);text-decoration:none;font-size:.68rem;">
+                        🥊 {{ item.fighter2_name or 'Fighter 2' }} →
+                    </a>
                     {% endif %}
                     {% if item.amateur_id %}
                     <span>•</span>
                     <a href="{{ url_for('fighter_profile', fighter_id=item.amateur_id) }}"
-                       style="color:var(--gold);text-decoration:none;font-size:.68rem;">🥋 Prospect →</a>
+                       style="color:var(--gold);text-decoration:none;font-size:.68rem;">
+                        🥋 {{ item.amateur_name or 'Prospect' }} →
+                    </a>
                     {% endif %}
                     {% if item.camp_id %}
                     <span>•</span>
@@ -92,13 +110,13 @@
                        style="font-size:.68rem;color:var(--neon-green);text-decoration:none;margin-left:8px;
                               padding:2px 8px;background:rgba(0,230,118,.1);
                               border:1px solid var(--neon-green);border-radius:3px;">
-                        ▶ Watch Fight
+                        ▶ Watch →
                     </a>
                     {% endif %}
                     {% if item.event_id %}
                     <a href="{{ url_for('event_detail', event_id=item.event_id) }}"
                        style="font-size:.68rem;color:var(--text-muted);text-decoration:none;margin-left:8px;">
-                        📅 View event
+                        📅 Event →
                     </a>
                     {% endif %}
                 </div>
