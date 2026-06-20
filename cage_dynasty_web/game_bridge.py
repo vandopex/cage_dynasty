@@ -754,7 +754,10 @@ class WebNewsItem:
 # Shared between _build_card_for_week's target count, Phase 2 capacity gate
 # in _top_up_pipeline, and load-time auto-truncate in from_dict.
 # ============================================================================
-CARD_TARGET_FIGHTS = 9
+CARD_TARGET_FIGHTS = 11
+# Floor — cards should not go live with fewer than this. Used by
+# top-up gates; below this count the pipeline keeps building.
+MIN_CARD_FIGHTS = 8
 
 # ============================================================================
 # PIPELINE WINDOW CONSTANT (Ship D2)
@@ -14326,6 +14329,34 @@ class GameBridge:
             used_in_candidates.add(f2.fighter_id)
             all_booked.add(f1.fighter_id)
             all_booked.add(f2.fighter_id)
+
+        # ── Main event + co-main guarantee ──
+        # SLOT_LIMITS[MAIN_EVENT]=1 is a cap, not a floor. If the
+        # cascade finished without filling these headline slots,
+        # promote the strongest existing fight so the card always
+        # has a headline structure. Sort key: existing slot tier
+        # (titles + ME first), then matchup_score if computable.
+        _slot_tier = {"main_event": 0, "co_main": 1, "main_card": 2,
+                      "prelim": 3, "early_prelim": 4}
+
+        def _promo_key(f):
+            return (
+                0 if f.get("is_title_fight") else 1,
+                _slot_tier.get(f.get("card_slot", "prelim"), 5),
+            )
+
+        _fights = card.get("fights", [])
+        _has_me = any(f.get("card_slot") == "main_event" for f in _fights)
+        if not _has_me and _fights:
+            _best = min(_fights, key=_promo_key)
+            _best["card_slot"] = "main_event"
+        _has_co = any(f.get("card_slot") == "co_main" for f in _fights)
+        if not _has_co and len(_fights) >= 2:
+            _candidates = [f for f in _fights
+                           if f.get("card_slot") != "main_event"]
+            if _candidates:
+                _best_co = min(_candidates, key=_promo_key)
+                _best_co["card_slot"] = "co_main"
 
         # ── Terminal summary ── Ship CB1: structured by slot
         self._print_event_card(card, event_name, target_week)

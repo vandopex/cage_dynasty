@@ -227,6 +227,23 @@ class MatchupScore:
 # FIGHTER INFO PROTOCOL
 # ============================================================================
 
+def _match_strength(fighter) -> float:
+    """Derive a match-strength proxy from per-attribute stats.
+    Used INSTEAD of overall_rating so OVR stays player-facing only
+    (see memory/principle_OVR_player_facing_only.md). Weights
+    striking, grappling, and physical roughly equally."""
+    striking  = (getattr(fighter, 'boxing', 50) +
+                 getattr(fighter, 'kicks', 50) +
+                 getattr(fighter, 'clinch_striking', 50)) / 3
+    grappling = (getattr(fighter, 'takedowns', 50) +
+                 getattr(fighter, 'top_control', 50) +
+                 getattr(fighter, 'submissions', 50)) / 3
+    physical  = (getattr(fighter, 'strength', 50) +
+                 getattr(fighter, 'cardio', 50) +
+                 getattr(fighter, 'chin', 50)) / 3
+    return (striking + grappling + physical) / 3
+
+
 @dataclass
 class FighterMatchInfo:
     """
@@ -247,10 +264,14 @@ class FighterMatchInfo:
     recent_opponents: List[str]  # Last 3-5 opponent IDs
     rivalry_ids: List[str]  # Fighter IDs they have rivalries with
     style_tags: List[str] = field(default_factory=list)  # "striker", "grappler", etc.
-    
+
     # New fields for cooldown system
     last_fight_week: int = 0  # Week number of last fight
     camp_id: Optional[str] = None  # Camp ID to avoid same-camp fights
+    # Derived match-strength — populated by factory from per-attribute
+    # stats. Used by matchmaking decisions instead of overall_rating
+    # so OVR remains player-facing only.
+    match_strength: float = 50.0
     
     @property
     def is_available(self) -> bool:
@@ -551,8 +572,8 @@ def calculate_skill_score(
     
     Competitive fights are more interesting.
     """
-    rating_diff = abs(fighter1.overall_rating - fighter2.overall_rating)
-    
+    rating_diff = abs(fighter1.match_strength - fighter2.match_strength)
+
     if rating_diff <= 5:
         return max_score  # Very evenly matched
     elif rating_diff <= 10:
@@ -913,7 +934,7 @@ class MatchmakingEngine:
                 continue
             fighters.append(f)
         
-        fighters.sort(key=lambda f: -f.overall_rating)
+        fighters.sort(key=lambda f: -f.match_strength)
         return fighters
     
     def score_matchup(
@@ -1140,8 +1161,9 @@ class MatchmakingEngine:
                 if f1.camp_id and f2.camp_id and f1.camp_id == f2.camp_id:
                     continue
                 
-                # Rating proximity check
-                if abs(f1.overall_rating - f2.overall_rating) > 20:
+                # Rating proximity check (uses derived match_strength,
+                # not OVR — per principle_OVR_player_facing_only)
+                if abs(f1.match_strength - f2.match_strength) > 20:
                     continue
                 
                 matchup = self.score_matchup(f1, f2)
@@ -1182,8 +1204,9 @@ class MatchmakingEngine:
                     if r_fighter.camp_id == u_fighter.camp_id:
                         continue
                 
-                # Rating proximity
-                if abs(r_fighter.overall_rating - u_fighter.overall_rating) > 15:
+                # Rating proximity (uses derived match_strength,
+                # not OVR — per principle_OVR_player_facing_only)
+                if abs(r_fighter.match_strength - u_fighter.match_strength) > 15:
                     continue
                 
                 matchup = self.score_matchup(r_fighter, u_fighter)
@@ -1594,6 +1617,7 @@ def create_fighter_match_info(
         rivalry_ids=rivalry_ids or [],
         camp_id=getattr(fighter, 'camp_id', None),
         last_fight_week=last_fight_week,
+        match_strength=_match_strength(fighter),
     )
 
 
