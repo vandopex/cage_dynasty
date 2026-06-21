@@ -95,6 +95,10 @@ class EventCardState:
     
     # Title fight tracking (main event is reserved for titles)
     has_title_fight: bool = False
+    # Ship Smart-Card: hard cap on title fights per card. 3rd+ title
+    # fight on a card is demoted to a regular MAIN_CARD slot without
+    # the is_title flag — too many title bouts crowds the card.
+    title_fight_count: int = 0
     
     @property
     def total_fights(self) -> int:
@@ -168,8 +172,9 @@ class EventCardState:
             "prelim_count": self.prelim_count,
             "early_prelim_count": self.early_prelim_count,
             "has_title_fight": self.has_title_fight,
+            "title_fight_count": self.title_fight_count,
         }
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EventCardState":
         return cls(
@@ -181,6 +186,7 @@ class EventCardState:
             prelim_count=data.get("prelim_count", 0),
             early_prelim_count=data.get("early_prelim_count", 0),
             has_title_fight=data.get("has_title_fight", False),
+            title_fight_count=data.get("title_fight_count", 0),
         )
 
 
@@ -236,10 +242,11 @@ class CardBuilder:
                 slot = CardSlot.PRELIM
             
             state.add_fight(slot)
-            
+
             if fight.get("is_title_fight"):
                 state.has_title_fight = True
-        
+                state.title_fight_count += 1
+
         self._card_states[event_name] = state
         return state
     
@@ -359,21 +366,31 @@ class CardBuilder:
         state = self.get_or_create_card_state(event_name, weeks_until)
 
         # Title fights ALWAYS get headline placement — Ship CB2: explicit
-        # never-prelim guarantee. Title cascade ME → CO_MAIN → MAIN_CARD;
-        # 3rd+ title fight on a card stays at MAIN_CARD (overflowing the
-        # 3-cap if needed) but NEVER falls to prelim/early-prelim.
+        # never-prelim guarantee. Title cascade ME → CO_MAIN.
+        # Ship Smart-Card: hard cap at 2 title fights per card. 3rd+
+        # title fight is demoted to MAIN_CARD AND loses is_title status
+        # so it's treated as a regular ranked matchup. Caller should
+        # respect the returned is_title=False on the demoted case.
         if is_title_fight:
+            if state.title_fight_count >= 2:
+                # Card already has 2 title fights — demote
+                state.add_fight(CardSlot.MAIN_CARD)
+                return CardSlot.MAIN_CARD, False
             if state.main_event_available:
                 state.add_fight(CardSlot.MAIN_EVENT)
                 state.has_title_fight = True
+                state.title_fight_count += 1
                 return CardSlot.MAIN_EVENT, True
             elif state.co_main_available:
                 state.add_fight(CardSlot.CO_MAIN)
+                state.has_title_fight = True
+                state.title_fight_count += 1
                 return CardSlot.CO_MAIN, True
             else:
-                # 3rd+ title fight — stays on card as MAIN_CARD,
-                # never goes to prelim or early-prelim.
+                # Both headline slots filled by non-title fights;
+                # title still keeps its slot but goes to MAIN_CARD.
                 state.add_fight(CardSlot.MAIN_CARD)
+                state.title_fight_count += 1
                 return CardSlot.MAIN_CARD, True
 
         # Non-title fights: assign by score with optional floor

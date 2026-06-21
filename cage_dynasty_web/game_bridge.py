@@ -906,7 +906,7 @@ class WebNewsItem:
 # Shared between _build_card_for_week's target count, Phase 2 capacity gate
 # in _top_up_pipeline, and load-time auto-truncate in from_dict.
 # ============================================================================
-CARD_TARGET_FIGHTS = 11
+CARD_TARGET_FIGHTS = 12
 # Floor — cards should not go live with fewer than this. Used by
 # top-up gates; below this count the pipeline keeps building.
 MIN_CARD_FIGHTS = 8

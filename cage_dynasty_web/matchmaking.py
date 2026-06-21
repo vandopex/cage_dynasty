@@ -231,7 +231,10 @@ def _match_strength(fighter) -> float:
     """Derive a match-strength proxy from per-attribute stats.
     Used INSTEAD of overall_rating so OVR stays player-facing only
     (see memory/principle_OVR_player_facing_only.md). Weights
-    striking, grappling, and physical roughly equally."""
+    striking, grappling, and physical roughly equally.
+
+    Kept for back-compat; matchmaking decisions now prefer
+    _competitive_fitness below (signals-based, richer)."""
     striking  = (getattr(fighter, 'boxing', 50) +
                  getattr(fighter, 'kicks', 50) +
                  getattr(fighter, 'clinch_striking', 50)) / 3
@@ -242,6 +245,130 @@ def _match_strength(fighter) -> float:
                  getattr(fighter, 'cardio', 50) +
                  getattr(fighter, 'chin', 50)) / 3
     return (striking + grappling + physical) / 3
+
+
+def _competitive_fitness(fighter, current_week: int = 0) -> float:
+    """Competitive fitness score — replaces overall_rating AND
+    match_strength in matchmaking decisions. Uses real signals
+    (recent form, finish quality, activity, ranking, traits)
+    instead of any attribute average. Never reads overall_rating.
+
+    Range: roughly 30-90 in practice; theoretical 0-120.
+    Pass current_week to enable the activity bonus/penalty;
+    omit for baseline scoring."""
+    score = 50.0  # baseline
+
+    # 1. Recent form — last 3 fights, most recent weighted most
+    history = getattr(fighter, 'fight_history', []) or []
+    recent = history[-3:] if len(history) >= 3 else history
+    weights = [0.5, 0.3, 0.2]  # most recent first
+    recent_rev = list(reversed(recent))
+    for i, fight in enumerate(recent_rev[:3]):
+        w = weights[i]
+        result = fight.get('result', '') if isinstance(fight, dict) else ''
+        method = (str(fight.get('method', '') or '').upper()
+                  if isinstance(fight, dict) else '')
+        if result == 'W':
+            base = 8.0
+            if 'KO' in method or 'TKO' in method:
+                base += 4.0
+            elif 'SUB' in method or 'SUBMISSION' in method:
+                base += 3.0
+            score += base * w
+        elif result == 'L':
+            score -= 6.0 * w
+        # Draw: no change
+
+    # 2. Win streak bonus
+    wins_streak = getattr(fighter, 'win_streak', 0) or 0
+    score += min(wins_streak * 2.5, 12.0)
+
+    # 3. Activity — penalize long inactivity, small bonus if fresh
+    last_fight_week = 0
+    if recent:
+        _last = recent[-1]
+        last_fight_week = (_last.get('week', 0) or 0
+                           if isinstance(_last, dict) else 0)
+    if current_week and last_fight_week:
+        idle_weeks = current_week - last_fight_week
+        if idle_weeks > 20:
+            score -= min((idle_weeks - 20) * 0.3, 8.0)
+        elif idle_weeks < 6:
+            score += 3.0
+
+    # 4. Ranking bonus — top contenders get prominence
+    rank = getattr(fighter, 'ranking', None)
+    if rank:
+        score += max(0, (16 - rank) * 1.2)
+
+    # 5. Early-career finisher bonus — exciting prospects
+    wins = getattr(fighter, 'wins', 0) or 0
+    losses = getattr(fighter, 'losses', 0) or 0
+    total = wins + losses
+    if total <= 6 and wins > 0:
+        finish_wins = sum(
+            1 for f in history
+            if isinstance(f, dict)
+            and f.get('result') == 'W'
+            and any(x in str(f.get('method', '')).upper()
+                    for x in ('KO', 'TKO', 'SUB', 'SUBMISSION'))
+        )
+        finish_rate = finish_wins / max(wins, 1)
+        if finish_rate >= 0.75:
+            score += 8.0
+
+    # 6. Exciting traits
+    traits = getattr(fighter, 'traits', []) or []
+    exciting_traits = {'Killer Instinct', 'Knockout Artist',
+                       'Submission Ace', 'Never Quit', 'Explosive'}
+    score += len(set(traits) & exciting_traits) * 2.0
+
+    return round(score, 2)
+
+
+def _is_early_prelim_eligible(fighter, game_state=None) -> bool:
+    """Soft preference filter for EARLY_PRELIM slot selection.
+    Returns True if a fighter is a NATURAL fit for early prelims
+    (unranked, low-ranked, exciting prospect, or active finisher).
+
+    Used as a PREFERENCE not a hard rule — ranked fighters with
+    exciting credentials can still appear in early prelims when
+    eligible. Wiring this into the live slot assignment is a
+    later ship; today this is data foundation."""
+    rank = getattr(fighter, 'ranking', None)
+    wins = getattr(fighter, 'wins', 0) or 0
+    losses = getattr(fighter, 'losses', 0) or 0
+    total = wins + losses
+
+    # Primary: unranked or ranked 11+
+    if rank is None or rank >= 11:
+        return True
+
+    # Soft exceptions for ranked fighters
+    # a) win streak
+    if (getattr(fighter, 'win_streak', 0) or 0) >= 3:
+        return True
+
+    # b) early-career finisher
+    if total <= 6 and wins > 0:
+        history = getattr(fighter, 'fight_history', []) or []
+        finish_wins = sum(
+            1 for f in history
+            if isinstance(f, dict)
+            and f.get('result') == 'W'
+            and any(x in str(f.get('method', '')).upper()
+                    for x in ('KO', 'TKO', 'SUB'))
+        )
+        if finish_wins / max(wins, 1) >= 0.75:
+            return True
+
+    # c) exciting traits
+    traits = set(getattr(fighter, 'traits', []) or [])
+    if traits & {'Killer Instinct', 'Knockout Artist',
+                  'Submission Ace', 'Never Quit', 'Explosive'}:
+        return True
+
+    return False
 
 
 @dataclass
@@ -269,9 +396,13 @@ class FighterMatchInfo:
     last_fight_week: int = 0  # Week number of last fight
     camp_id: Optional[str] = None  # Camp ID to avoid same-camp fights
     # Derived match-strength — populated by factory from per-attribute
-    # stats. Used by matchmaking decisions instead of overall_rating
-    # so OVR remains player-facing only.
+    # stats. Kept for back-compat; matchmaking now uses
+    # competitive_fitness below for richer signals.
     match_strength: float = 50.0
+    # Derived competitive fitness — signals-based score (form,
+    # finish quality, streaks, traits, activity, ranking). The
+    # canonical matchmaking input. Never reads overall_rating.
+    competitive_fitness: float = 50.0
     
     @property
     def is_available(self) -> bool:
@@ -572,7 +703,9 @@ def calculate_skill_score(
     
     Competitive fights are more interesting.
     """
-    rating_diff = abs(fighter1.match_strength - fighter2.match_strength)
+    # Ship Smart-Card: uses competitive_fitness (signals-based)
+    # instead of match_strength (attribute-average) or OVR.
+    rating_diff = abs(fighter1.competitive_fitness - fighter2.competitive_fitness)
 
     if rating_diff <= 5:
         return max_score  # Very evenly matched
@@ -934,7 +1067,8 @@ class MatchmakingEngine:
                 continue
             fighters.append(f)
         
-        fighters.sort(key=lambda f: -f.match_strength)
+        # Ship Smart-Card: sort by competitive fitness, not raw attrs
+        fighters.sort(key=lambda f: -f.competitive_fitness)
         return fighters
     
     def score_matchup(
@@ -1161,9 +1295,9 @@ class MatchmakingEngine:
                 if f1.camp_id and f2.camp_id and f1.camp_id == f2.camp_id:
                     continue
                 
-                # Rating proximity check (uses derived match_strength,
-                # not OVR — per principle_OVR_player_facing_only)
-                if abs(f1.match_strength - f2.match_strength) > 20:
+                # Rating proximity check (Ship Smart-Card: uses
+                # competitive_fitness — signals-based, not raw attrs)
+                if abs(f1.competitive_fitness - f2.competitive_fitness) > 22:
                     continue
                 
                 matchup = self.score_matchup(f1, f2)
@@ -1204,9 +1338,9 @@ class MatchmakingEngine:
                     if r_fighter.camp_id == u_fighter.camp_id:
                         continue
                 
-                # Rating proximity (uses derived match_strength,
-                # not OVR — per principle_OVR_player_facing_only)
-                if abs(r_fighter.match_strength - u_fighter.match_strength) > 15:
+                # Rating proximity (Ship Smart-Card: uses
+                # competitive_fitness — signals-based, not raw attrs)
+                if abs(r_fighter.competitive_fitness - u_fighter.competitive_fitness) > 18:
                     continue
                 
                 matchup = self.score_matchup(r_fighter, u_fighter)
@@ -1618,6 +1752,7 @@ def create_fighter_match_info(
         camp_id=getattr(fighter, 'camp_id', None),
         last_fight_week=last_fight_week,
         match_strength=_match_strength(fighter),
+        competitive_fitness=_competitive_fitness(fighter, current_week),
     )
 
 
