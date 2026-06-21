@@ -893,12 +893,38 @@ class WebFightOffer:
 
 @dataclass
 class WebNewsItem:
-    """News item formatted for web templates"""
+    """News item formatted for web templates.
+
+    Ship News-Meta: carries metadata IDs + auto-resolved names so
+    aux links in news.html / dashboard.html can render specific
+    fighter/camp/division/event links instead of generic "Fighter →"
+    labels. Names auto-resolved in get_news_feed; raw dict creation
+    sites only need to set IDs."""
     news_id: str
     headline: str
     category: str
     week: int
     icon: str
+    # Aux-link metadata — all defaulted so creation sites without
+    # this data don't break. Names auto-populated from IDs by
+    # get_news_feed when the raw dict provides only the ID.
+    fighter_id:     str = ""
+    fighter_name:   str = ""
+    fighter1_id:    str = ""
+    fighter1_name:  str = ""
+    fighter2_id:    str = ""
+    fighter2_name:  str = ""
+    winner_id:      str = ""
+    winner_name:    str = ""
+    loser_id:       str = ""
+    loser_name:     str = ""
+    amateur_id:     str = ""
+    amateur_name:   str = ""
+    camp_id:        str = ""
+    camp_name:      str = ""
+    fight_id:       str = ""
+    event_id:       str = ""
+    weight_class:   str = ""
 
 
 # ============================================================================
@@ -5006,16 +5032,80 @@ class GameBridge:
             key=lambda x: x.get("week", 0),
             reverse=True,
         )
-        return [
-            WebNewsItem(
+
+        # Ship News-Meta: helper to resolve a fighter_id → name.
+        # Tries game_state.get_fighter first (active roster), then
+        # falls back to amateur system (graduates / amateurs).
+        # Returns '' if no lookup succeeds — caller can fall back
+        # to generic label in template.
+        def _fname(fid: str) -> str:
+            if not fid or not self._game_state:
+                return ''
+            try:
+                f = self._game_state.get_fighter(fid)
+                if f and getattr(f, 'name', None):
+                    return f.name
+            except Exception:
+                pass
+            # Amateur fallback
+            try:
+                am = self._get_amateur_system() if hasattr(
+                    self, '_get_amateur_system') else None
+                if am:
+                    a = am.amateurs.get(fid)
+                    if a:
+                        return getattr(a, 'name', '')
+            except Exception:
+                pass
+            return ''
+
+        def _cname(cid: str) -> str:
+            if not cid or not self._game_state:
+                return ''
+            try:
+                c = self._game_state.camps.get(cid)
+                if c:
+                    return getattr(c, 'name', '')
+            except Exception:
+                pass
+            return ''
+
+        result: List[WebNewsItem] = []
+        for i, n in enumerate(sorted_items[:limit]):
+            # Auto-resolve names from IDs — uses stored name if
+            # creation site provided one, else looks up via state.
+            _fid  = n.get("fighter_id", "")
+            _f1id = n.get("fighter1_id", "")
+            _f2id = n.get("fighter2_id", "")
+            _wid  = n.get("winner_id", "")
+            _lid  = n.get("loser_id", "")
+            _aid  = n.get("amateur_id", "")
+            _cid  = n.get("camp_id", "")
+            result.append(WebNewsItem(
                 news_id=f"news_{i}",
                 headline=n["headline"],
                 category=n.get("category", "general"),
                 week=n.get("week", 1),
                 icon=icons.get(n.get("category", ""), "📰"),
-            )
-            for i, n in enumerate(sorted_items[:limit])
-        ]
+                fighter_id=_fid,
+                fighter_name=n.get("fighter_name", "") or _fname(_fid),
+                fighter1_id=_f1id,
+                fighter1_name=n.get("fighter1_name", "") or _fname(_f1id),
+                fighter2_id=_f2id,
+                fighter2_name=n.get("fighter2_name", "") or _fname(_f2id),
+                winner_id=_wid,
+                winner_name=n.get("winner_name", "") or _fname(_wid),
+                loser_id=_lid,
+                loser_name=n.get("loser_name", "") or _fname(_lid),
+                amateur_id=_aid,
+                amateur_name=n.get("amateur_name", "") or _fname(_aid),
+                camp_id=_cid,
+                camp_name=n.get("camp_name", "") or _cname(_cid),
+                fight_id=n.get("fight_id", ""),
+                event_id=n.get("event_id", ""),
+                weight_class=n.get("weight_class", ""),
+            ))
+        return result
     
     def accept_fight_offer(self, offer_id: str) -> Dict[str, Any]:
         """Accept a fight offer and schedule the fight"""
