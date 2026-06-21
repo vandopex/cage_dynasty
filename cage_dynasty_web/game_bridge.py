@@ -2522,9 +2522,19 @@ class GameBridge:
             training_report = self._apply_weekly_training()
 
             # ── Simulate this week's pre-built card ──────────────────
+            # Ship Cadence: skip AI card sim every 3rd week → ~35
+            # events/year vs 52. Player fights already simulated above
+            # so they still fire on skip weeks. Training, contracts,
+            # sponsors, news feed, pipeline build all continue.
+            # Cards still popped on skip weeks to prevent queue bloat.
             current_week = self._game_state.week_number
             ai_event = None
             card = self._upcoming_cards.pop(current_week, None)
+            _is_off_week = (current_week % 3 == 0)
+            if _is_off_week and card:
+                print(f"  🏖️  [OFF WEEK] Week {current_week} — no DFC event "
+                      f"(skipped {len(card.get('fights', []))} AI fights)")
+                card = None  # discard; player fights already handled
             if card and card["fights"]:
                 # Only simulate AI fights (player fights already handled above)
                 ai_fights_this_week = [
@@ -10339,24 +10349,26 @@ class GameBridge:
     # =========================================================================
 
     def _weeks_out_for_fight(self, fighter_rank: Optional[int], opponent_rank: Optional[int]) -> int:
-        """Calculate weeks of fight prep based on the best rank involved."""
+        """Calculate weeks of fight prep based on the best rank involved.
+        Ship Cadence: tuned up across all bands to give proper camp
+        time. Title fights 10-12w, top 3 8-10w, unranked 5-6w."""
         import random
         ranks = [r for r in [fighter_rank, opponent_rank] if r is not None]
         if not ranks:
-            return random.randint(3, 4)     # Unranked debut
+            return random.randint(5, 6)     # Unranked debut
         best = min(ranks)
         if best == 0:                        # Title fight
-            return random.randint(8, 12)
-        elif best <= 3:
+            return random.randint(10, 12)
+        elif best <= 3:                      # Top 3
+            return random.randint(8, 10)
+        elif best <= 5:                      # Top 5
             return random.randint(7, 9)
-        elif best <= 5:
-            return random.randint(6, 8)
-        elif best <= 10:
-            return random.randint(5, 7)
-        elif best <= 15:
-            return random.randint(4, 6)
-        else:
-            return random.randint(3, 5)
+        elif best <= 10:                     # Top 10
+            return random.randint(7, 8)
+        elif best <= 15:                     # Top 15
+            return random.randint(6, 7)
+        else:                                # Unranked
+            return random.randint(5, 6)
 
     # =========================================================================
     # NEGOTIATION ENGINE
@@ -14134,6 +14146,29 @@ class GameBridge:
             combined_rating=combined_rating,
             min_slot=min_slot,
         )
+
+        # Ship Cadence: early-prelim preference. If score routing
+        # parked this matchup in EARLY_PRELIM but NEITHER fighter is
+        # a natural early-prelim candidate (both ranked 1-10 with no
+        # exciting credentials), bump up to PRELIM — these fighters
+        # have earned the visibility.
+        if slot == CardSlot.EARLY_PRELIM and (f1 or f2):
+            try:
+                from matchmaking import _is_early_prelim_eligible
+                _f1_ok = _is_early_prelim_eligible(f1) if f1 else True
+                _f2_ok = _is_early_prelim_eligible(f2) if f2 else True
+                if not _f1_ok and not _f2_ok and self._card_builder \
+                        ._card_states.get(event_name) \
+                        and self._card_builder._card_states[event_name] \
+                            .prelim_available:
+                    # Re-bucket: undo the early_prelim count, add prelim
+                    _st = self._card_builder._card_states[event_name]
+                    _st.early_prelim_count = max(0, _st.early_prelim_count - 1)
+                    _st.prelim_count += 1
+                    slot = CardSlot.PRELIM
+            except Exception:
+                pass  # defensive — never block slot assignment
+
         return slot.value
 
     def _print_event_card(
