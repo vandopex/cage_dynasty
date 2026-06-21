@@ -1844,10 +1844,26 @@ class GameBridge:
         return _evr.Random(seed).choice(self._GLOBAL_CITIES)
 
     def _dfc_label(self, week: int) -> str:
-        """Ship C: format DFC event name with the world-gen offset applied.
-        week=1 + offset=130 → "DFC 131". offset=0 (legacy saves) preserves
-        the original labels."""
-        return f"{PROMOTION_NAME} {week + self._dfc_event_offset}"
+        """Format live event name with sequential numbering that
+        skips off-week gaps (Ship Cadence: every 3rd week is an
+        off week, week % 3 == 0). offset = highest pre-gen event
+        number, so live events continue from there.
+
+        Formula: event_num = (week - week // 3) + offset.
+        - week 1: 1 - 0 = 1
+        - week 2: 2 - 0 = 2
+        - week 3 (off): 3 - 1 = 2 (collides; off weeks have no event
+          so callers shouldn't request a label for them)
+        - week 4: 4 - 1 = 3
+        - week 5: 5 - 1 = 4
+        - week 7: 7 - 2 = 5
+
+        Existing saves with stored event names keep them — only
+        new event labels use this formula."""
+        if week <= 0:
+            return f"{PROMOTION_NAME} {self._dfc_event_offset}"
+        event_num = (week - (week // 3)) + self._dfc_event_offset
+        return f"{PROMOTION_NAME} {event_num}"
 
     def web_save(self, slot: str = "autosave") -> Dict[str, Any]:
         """
@@ -2532,7 +2548,7 @@ class GameBridge:
             card = self._upcoming_cards.pop(current_week, None)
             _is_off_week = (current_week % 3 == 0)
             if _is_off_week and card:
-                print(f"  🏖️  [OFF WEEK] Week {current_week} — no DFC event "
+                print(f"  🏖️  [OFF WEEK] Week {current_week} — no Cage Dynasty event "
                       f"(skipped {len(card.get('fights', []))} AI fights)")
                 card = None  # discard; player fights already handled
             if card and card["fights"]:

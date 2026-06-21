@@ -6,7 +6,7 @@
 # - AI camps at various tiers
 # - Coaches for all camps (based on tier)
 # - Fighters for all weight classes (~30 per division)
-# - 2-3 years of simulated fight history with REAL EVENTS (DFC 1, DFC 2, etc.)
+# - 2-3 years of simulated fight history with REAL EVENTS (Cage Dynasty 1, 2, etc.)
 # - Established champions and rankings
 # - Popularity system integrated from start
 
@@ -16,7 +16,7 @@ Cage Dynasty - World Initialization
 This module creates a living, breathing MMA world with history:
 - Generates 20-30 AI training camps
 - Creates ~270 fighters across all weight classes (~30 per division)
-- Simulates 2-3 years of fight history as ACTUAL EVENTS (DFC 1 through DFC ~105)
+- Simulates 2-3 years of fight history as ACTUAL EVENTS (Cage Dynasty 1 through Cage Dynasty ~105)
 - Establishes champions, rankings, and records
 - Tracks popularity that carries into gameplay
 
@@ -360,7 +360,7 @@ class SimulatedFight:
     method: str  # KO, TKO, SUB, DEC
     round_ended: int
     was_title_fight: bool = False
-    event_name: str = ""           # e.g., "DFC 47"
+    event_name: str = ""           # e.g., "Cage Dynasty 47"
     event_number: int = 0          # e.g., 47
     card_slot: str = "prelim"      # main_event, co_main, main_card, prelim, early_prelim
     weight_class: str = ""
@@ -380,8 +380,8 @@ class SimulatedEvent:
     - Prelims (4): Lower ranked
     - Early Prelims (3): Unranked prospects
     """
-    event_number: int              # DFC event number (1, 2, 3, ...)
-    event_name: str                # "DFC 1", "DFC 2", etc.
+    event_number: int              # Cage Dynasty event number (1, 2, 3, ...)
+    event_name: str                # "Cage Dynasty 1", "Cage Dynasty 2", etc.
     week_number: int               # Week in simulation when this occurred
     
     # Fights organized by card position
@@ -454,7 +454,7 @@ class BeltReign:
     
     # Reign timeline
     won_week: int                    # Week number belt was won
-    won_event: str                   # Event name (e.g., "DFC 15")
+    won_event: str                   # Event name (e.g., "Cage Dynasty 15")
     won_from: Optional[str] = None   # Fighter ID of previous champion (None = inaugural)
     won_from_name: Optional[str] = None
     won_method: str = ""             # How they won the belt
@@ -1144,7 +1144,7 @@ class HistorySimulator:
     """
     Simulates years of fight history with ACTUAL EVENTS.
     
-    Creates DFC 1, DFC 2, etc. with proper card structure.
+    Creates Cage Dynasty 1, 2, etc. with proper card structure.
     Each event has Main Event, Co-Main, Main Card, Prelims, Early Prelims.
     
     Fight history is saved to each fighter for viewing in their profile.
@@ -1238,10 +1238,10 @@ class HistorySimulator:
             # Track in title_holders
             self.title_holders[weight_class] = champion.fighter_id
             
-            # Record in belt history. Event name slots into DFC
+            # Record in belt history. Event name slots into Cage Dynasty
             # universe; won_method keeps "Inaugural" substring so
             # champions.html:96 branch detects inaugural reigns.
-            _founding_event = f"DFC Founding — {weight_class} Championship"
+            _founding_event = f"Cage Dynasty Founding — {weight_class} Championship"
             self.belt_history.crown_initial_champion(
                 fighter_id=champion.fighter_id,
                 fighter_name=champion.name,
@@ -1769,7 +1769,7 @@ class HistorySimulator:
         """
         event_number = self.next_event_number
         self.next_event_number += 1
-        event_name = f"DFC {event_number}"
+        event_name = f"Cage Dynasty {event_number}"
         
         event = SimulatedEvent(
             event_number=event_number,
