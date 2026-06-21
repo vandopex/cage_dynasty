@@ -15520,6 +15520,16 @@ class GameBridge:
         from corner_advice import _round_score
         cumulative_gap = 0.0
 
+        # Ship Corner-IQ: best fight_iq across staff drives text
+        # tier. Elite coaches give specific tactical reads, basic
+        # coaches give generic motivation. Falls back to legacy
+        # single-coach value if staff is empty.
+        _best_corner_iq = max(
+            (_sc.get('fight_iq', 60)
+             for _sc in (self._coaching_staff or [])),
+            default=int(self._coach.get('fight_iq', 60))
+                    if self._coach else 60)
+
         # Build advice per between-round boundary (after R1, after R2, ...).
         # Skip after the last completed round (no "next round").
         n_rounds_completed = len(p_stats_list)
@@ -15556,6 +15566,7 @@ class GameBridge:
                 round_num              = r_idx + 1,   # 1-based round just completed
                 total_rounds           = total_rounds,
                 seen_templates         = _seen_templates,
+                coach_iq               = _best_corner_iq,
             )
             if adv:
                 advice_by_round[r_idx + 1] = adv

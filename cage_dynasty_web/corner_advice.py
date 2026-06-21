@@ -994,6 +994,57 @@ def _pick_template(
     return None
 
 
+# ── Ship Corner-IQ: text pools tiered by best coach fight_iq ──
+# Used when caller passes coach_iq parameter. Replaces archetype/
+# situation template pick with simpler tier-based selection.
+# Mirrors COACH_IQ_*_THRESHOLD constants in game_bridge.py.
+CORNER_IQ_ELITE_THRESHOLD = 88
+CORNER_IQ_GOOD_THRESHOLD  = 75
+
+CORNER_ADVICE_ELITE = [
+    "He's dropping his right hand after the jab — time the counter left hook.",
+    "Every time you clinch he's trying to underhook. Get your wrist control first, then knee to the body.",
+    "He's gassing — keep the pressure high, don't let him reset on the fence.",
+    "That leg kick is setting up the takedown. Check it and stay square.",
+    "He doesn't like the body work. Go downstairs every combination.",
+    "You're winning on the feet. Don't let him drag you down — every scramble, get back up immediately.",
+    "Watch the overhand right — he throws it wide. Duck under and take his back.",
+    "He's loading up on that lead hook. Counter with the straight right down the pipe.",
+    "When he shoots, his head drops to the outside. Frame the knee, sprawl, take his back.",
+    "He's circling into your power side. Cut him off, force him into the jab.",
+    "His hips are heavy. Get the underhook, walk him to the cage, work knees.",
+    "He's loading up. Make him miss, make him pay. Two-piece every time he overcommits.",
+]
+
+CORNER_ADVICE_GOOD = [
+    "Keep working the body — he's slowing down.",
+    "Stay patient. Your combinations are landing clean, don't rush it.",
+    "Watch the clinch — he's trying to get you against the fence.",
+    "You're faster than him. Stay on the outside and pick your shots.",
+    "Take him down early next round — he's dangerous on the feet.",
+    "Trust your jab. It's working. Set everything up behind it.",
+    "Don't get into a brawl. Move, reset, pick your spots.",
+    "You're ahead on the cards. Don't take unnecessary risks.",
+    "Keep the head movement. He's looking for that one shot.",
+    "Pressure him. He throws less when he's moving backwards.",
+    "Mix in the kicks. He's slow to check them.",
+    "Push the pace. Cardio's on your side.",
+]
+
+CORNER_ADVICE_BASIC = [
+    "Keep your hands up and keep moving.",
+    "You've got this. Stay focused.",
+    "Work your game plan.",
+    "Stay busy, don't let him breathe.",
+    "Good round. Keep doing what you're doing.",
+    "Protect yourself at all times.",
+    "You're in shape. Outwork him.",
+    "Breathe. Reset. Go.",
+    "Trust your training.",
+    "One round at a time.",
+]
+
+
 def generate_corner_advice(
     coach_dict: Dict[str, Any],
     fighter_name: str,
@@ -1007,6 +1058,7 @@ def generate_corner_advice(
     round_num: int,
     total_rounds: int,
     seen_templates: Optional[set] = None,
+    coach_iq: int = 0,
 ) -> Optional[Dict[str, Any]]:
     """
     Build corner advice for a single between-round moment.
@@ -1039,18 +1091,42 @@ def generate_corner_advice(
         cumulative_score_gap, round_num, total_rounds,
     )
 
-    pick = _pick_template(archetype, situations, tier, rating, seen_templates)
-    if not pick:
-        return None
-    chosen_situation, template = pick
-    # Record so caller's future picks avoid this template.
-    if seen_templates is not None:
-        seen_templates.add(template)
-
-    line = template.format(
-        fighter_name=fighter_name,
-        opponent_name=opponent_name,
-    )
+    # ── Ship Corner-IQ: tier-based pool replacement ──
+    # When caller passes coach_iq, swap the archetype/situation
+    # template pick for a tiered text pool. Elite coaches give
+    # specific tactical reads, basic coaches give generic
+    # motivation. Preserves seen_templates dedup across rounds.
+    if coach_iq:
+        if coach_iq >= CORNER_IQ_ELITE_THRESHOLD:
+            _pool = CORNER_ADVICE_ELITE
+            chosen_situation = "elite_tactical"
+        elif coach_iq >= CORNER_IQ_GOOD_THRESHOLD:
+            _pool = CORNER_ADVICE_GOOD
+            chosen_situation = "good_directional"
+        else:
+            _pool = CORNER_ADVICE_BASIC
+            chosen_situation = "basic_motivational"
+        # Filter out templates already used this fight
+        _unused = ([t for t in _pool if t not in seen_templates]
+                   if seen_templates is not None else list(_pool))
+        if not _unused:
+            _unused = list(_pool)  # all used — recycle
+        template = random.choice(_unused)
+        if seen_templates is not None:
+            seen_templates.add(template)
+        line = template  # pools are bare strings, no .format() needed
+    else:
+        pick = _pick_template(archetype, situations, tier, rating, seen_templates)
+        if not pick:
+            return None
+        chosen_situation, template = pick
+        # Record so caller's future picks avoid this template.
+        if seen_templates is not None:
+            seen_templates.add(template)
+        line = template.format(
+            fighter_name=fighter_name,
+            opponent_name=opponent_name,
+        )
 
     bonus_amount = CORNER_BONUS_BASE + max(0, rating - 60) * CORNER_BONUS_PER_RATING_POINT
     bonus_type = BONUS_TYPE_MAP.get(archetype, "composure_bonus")
