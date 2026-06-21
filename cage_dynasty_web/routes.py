@@ -2528,6 +2528,14 @@ def register_routes(app):
                 'overseas_opts': bridge.get_overseas_options(f.fighter_id),
             })
 
+        # Ship Coach-1: surface player fighter styles so the facility
+        # template can render the "✓ Style Match" indicator on each
+        # coach card without making it look up fighters itself.
+        player_fighter_styles = {
+            getattr(f, 'fighting_style', '') for f in player_fighters
+            if getattr(f, 'fighting_style', None)
+        }
+
         return render_template('facility.html',
             week=bridge.week_number,
             facility=fdata,
@@ -2535,6 +2543,7 @@ def register_routes(app):
             medical_options=MEDICAL_STAFF_OPTIONS,
             overseas_camps=OVERSEAS_CAMPS,
             fighter_intel=fighter_intel,
+            player_fighter_styles=player_fighter_styles,
         )
 
     @app.route('/medical/hire/<fighter_id>', methods=['POST'])

@@ -392,13 +392,165 @@ COACH_TIER_CONTRACT_OPTIONS = {
     "ELITE":    [52, 78, 104],
 }
 # Ship MC1b: max coaching staff size per tier
+# (Ship Coach-1: NATIONAL 4→5, ELITE 5→7 to support specialist build-outs)
 COACH_TIER_STAFF_SLOTS = {
     "GARAGE":   1,
     "LOCAL":    2,
     "REGIONAL": 3,
-    "NATIONAL": 4,
-    "ELITE":    5,
+    "NATIONAL": 5,
+    "ELITE":    7,
 }
+
+# ── Ship Coach-1: 7 specialist coach types ─────────────────────────
+# Data-only foundation. Engine integration (style fit bonus, decay
+# protection, corner advice quality, fatigue tolerance, morale
+# stabilization, fight camp game plan bonus) deferred to Ships 2-3.
+COACH_TYPES = {
+    'boxing_coach': {
+        'name':        'Boxing Coach',
+        'icon':        '🥊',
+        'primary':     ['boxing', 'striking_defense'],
+        'secondary':   ['chin', 'speed'],
+        'style_match': ['Orthodox Boxer', 'Counter Striker',
+                        'Brawler', 'Pressure Fighter'],
+        'desc':        'Hands, combinations, defensive boxing.',
+    },
+    'muay_thai_coach': {
+        'name':        'Muay Thai Kru',
+        'icon':        '🦵',
+        'primary':     ['kicks', 'clinch_striking', 'clinch_control'],
+        'secondary':   ['cardio', 'chin'],
+        'style_match': ['Muay Thai', 'Kickboxer', 'Clinch Fighter'],
+        'desc':        'Eight limbs. Clinch dominance and Thai weapons.',
+    },
+    'kickboxing_coach': {
+        'name':        'Kickboxing Coach',
+        'icon':        '⚡',
+        'primary':     ['boxing', 'kicks', 'striking_defense'],
+        'secondary':   ['speed', 'cardio'],
+        'style_match': ['Kickboxer', 'Karate', 'Point Fighter'],
+        'desc':        'Combination striking and distance management.',
+    },
+    'wrestling_coach': {
+        'name':        'Wrestling Coach',
+        'icon':        '🤼',
+        'primary':     ['takedowns', 'takedown_defense', 'top_control'],
+        'secondary':   ['strength', 'cardio'],
+        'style_match': ['Wrestler', 'Ground & Pound', 'Sprawl & Brawl'],
+        'desc':        'Takedowns, cage wrestling, ground control.',
+    },
+    'bjj_coach': {
+        'name':        'BJJ Coach',
+        'icon':        '🥋',
+        'primary':     ['submissions', 'guard'],
+        'secondary':   ['recovery', 'composure'],
+        'style_match': ['BJJ Specialist'],
+        'desc':        'Submissions, guard work, ground defense.',
+    },
+    'clinch_coach': {
+        'name':        'Clinch & Judo Coach',
+        'icon':        '💪',
+        'primary':     ['clinch_control', 'takedowns', 'top_control'],
+        'secondary':   ['strength', 'heart'],
+        'style_match': ['Judo', 'Sambo', 'Clinch Fighter', 'Pressure Fighter'],
+        'desc':        'Grip dominance, throws, clinch control.',
+    },
+    'sc_coach': {
+        'name':        'S&C Coach',
+        'icon':        '🏋️',
+        'primary':     ['strength', 'cardio', 'recovery', 'chin'],
+        'secondary':   ['speed', 'heart'],
+        'style_match': [],  # Universal — no style penalty
+        'desc':        'Physical conditioning. Universal benefit.',
+    },
+}
+
+# Legacy specialty → coach_type migration. Handles capitalized
+# game_start values ("Striking"/"Wrestling"/"BJJ"/"Conditioning"/
+# "Strength"/"Cornering"), lowercase archetype strings
+# ("striking"/"grappling"/"sc"/"mma"), and legacy suffixed forms
+# ("striking_coach"/"grappling_coach"/etc.). Normalized to lowercase.
+COACH_TYPE_MIGRATION = {
+    'striking':         'boxing_coach',
+    'striking_coach':   'boxing_coach',
+    'boxing':           'boxing_coach',
+    'boxing_coach':     'boxing_coach',
+    'muay thai':        'muay_thai_coach',
+    'muay_thai':        'muay_thai_coach',
+    'muay_thai_coach':  'muay_thai_coach',
+    'kickboxing':       'kickboxing_coach',
+    'kickboxing_coach': 'kickboxing_coach',
+    'wrestling':        'wrestling_coach',
+    'wrestling_coach':  'wrestling_coach',
+    'grappling':        'wrestling_coach',
+    'grappling_coach':  'wrestling_coach',
+    'bjj':              'bjj_coach',
+    'bjj_coach':        'bjj_coach',
+    'jiu-jitsu':        'bjj_coach',
+    'jiu_jitsu':        'bjj_coach',
+    'judo':             'clinch_coach',
+    'sambo':            'clinch_coach',
+    'clinch':           'clinch_coach',
+    'clinch_coach':     'clinch_coach',
+    'conditioning':     'sc_coach',
+    'strength':         'sc_coach',
+    'sc':               'sc_coach',
+    's&c':              'sc_coach',
+    'sc_coach':         'sc_coach',
+    'cornering':        'boxing_coach',  # generalist → boxing default
+    'mma':              'boxing_coach',
+    'mma_coach':        'boxing_coach',
+    'mma_head':         'boxing_coach',
+}
+
+# fight_iq/composure/heart generation ranges by tier
+COACH_ATTR_RANGES = {
+    'GARAGE':    (45, 65),
+    'LOCAL':     (50, 68),
+    'REGIONAL':  (58, 75),
+    'NATIONAL':  (68, 85),
+    'ELITE':     (75, 92),
+    'LEGENDARY': (82, 95),
+}
+
+# Engine-integration constants — defined now for Ship 2/3 reads.
+# Not yet read by any engine path.
+COACH_STYLE_FIT_BONUS    = 0.15  # +15% gains on primary stats when style matches
+COACH_DECAY_PROTECTION   = 0.15  # 15% slower decay on coach-primary stats
+COACH_IQ_BONUS_THRESHOLD = 75    # fight_iq ≥ this → corner +2 / camp +2
+COACH_IQ_ELITE_THRESHOLD = 88    # fight_iq ≥ this → corner +3 / camp +3
+def _coach_type_from_specialty(specialty: Any) -> str:
+    """Map any specialty value (capitalized, lowercase, suffixed)
+    to a canonical coach_type key. Falls back to boxing_coach if
+    nothing recognizable. Ship Coach-1."""
+    _key = str(specialty or '').strip().lower()
+    return COACH_TYPE_MIGRATION.get(_key, 'boxing_coach')
+
+
+def _assign_coach_attrs_if_missing(coach: Dict[str, Any], tier: str) -> bool:
+    """Migrate a coach dict to include coach_type + personal attrs.
+    Idempotent — only fills missing fields. Returns True if anything
+    was actually added. Ship Coach-1."""
+    import random as _rnd
+    changed = False
+    if 'coach_type' not in coach:
+        coach['coach_type'] = _coach_type_from_specialty(
+            coach.get('specialty', ''))
+        changed = True
+    _tier = str(tier or 'LOCAL').upper()
+    lo, hi = COACH_ATTR_RANGES.get(_tier, (50, 68))
+    if 'fight_iq' not in coach:
+        coach['fight_iq'] = _rnd.randint(lo, hi)
+        changed = True
+    if 'composure' not in coach:
+        coach['composure'] = _rnd.randint(lo, hi)
+        changed = True
+    if 'heart' not in coach:
+        coach['heart'] = _rnd.randint(lo, hi)
+        changed = True
+    return changed
+
+
 # Placeholder when no coach hired — keeps existing read sites safe
 COACH_VACANT_PLACEHOLDER = {
     "name":      "Vacant",
@@ -1900,6 +2052,29 @@ class GameBridge:
             _legacy_entry["contract"] = dict(self._coach_contract or {})
             self._coaching_staff = [_legacy_entry]
             self._head_coach_id = _cid
+
+        # Ship Coach-1: backfill coach_type + fight_iq/composure/heart
+        # for legacy coaches that predate the specialist system. Use
+        # current camp tier for attribute generation range.
+        _coach_mig_tier = self._get_camp_tier() if hasattr(
+            self, '_get_camp_tier') else 'LOCAL'
+        _coach_migrated_any = False
+        for _c in self._coaching_staff:
+            if _assign_coach_attrs_if_missing(_c, _coach_mig_tier):
+                _coach_migrated_any = True
+        # Mirror to legacy _coach if present
+        if self._coach and isinstance(self._coach, dict):
+            if _assign_coach_attrs_if_missing(self._coach, _coach_mig_tier):
+                _coach_migrated_any = True
+        # Fire a single news item on first load after migration
+        if _coach_migrated_any:
+            self._news_items.insert(0, {
+                "headline": ("🏋️ Your coaching staff has been updated — "
+                             "visit the Facility to review specializations."),
+                "category": "coach",
+                "week":     (self._game_state.week_number
+                             if self._game_state else 0),
+            })
         self._scheduled_fights        = data.get("scheduled_fights", [])
         self._ai_deferred_bookings    = data.get("ai_deferred_bookings", [])
 
@@ -16915,6 +17090,9 @@ class GameBridge:
                 _td.get(t, (t.replace('_', ' ').title(), 'personality'))
                 for t in traits
             ]
+            # Ship Coach-1: surface coach_type + personal attrs.
+            _ct_key = c.get('coach_type', 'boxing_coach')
+            _ct_def = COACH_TYPES.get(_ct_key, COACH_TYPES['boxing_coach'])
             result.append({
                 "coach_id":        c.get('coach_id'),
                 "name":            c.get('name', 'Coach'),
@@ -16934,6 +17112,17 @@ class GameBridge:
                 "reputation":      (int(self._coach.get('reputation', 0) or 0)
                                     if c.get('coach_id') == self._head_coach_id
                                     else 0),
+                # Ship Coach-1 — specialist coach surface
+                "coach_type":      _ct_key,
+                "type_name":       _ct_def.get('name', 'Coach'),
+                "type_icon":       _ct_def.get('icon', '👤'),
+                "type_desc":       _ct_def.get('desc', ''),
+                "primary_stats":   list(_ct_def.get('primary', [])),
+                "secondary_stats": list(_ct_def.get('secondary', [])),
+                "style_match":     list(_ct_def.get('style_match', [])),
+                "fight_iq":        c.get('fight_iq', 65),
+                "composure":       c.get('composure', 65),
+                "heart":           c.get('heart', 65),
             })
         return result
 
@@ -17005,6 +17194,13 @@ class GameBridge:
             "archetype": archetype,
             "contract":  contract,
         }
+        # Ship Coach-1: assign coach_type + personal attrs at hire.
+        # Prefer explicit coach_type from coach_data; else derive from
+        # specialty via migration map. Personal attrs generated by tier.
+        _explicit_type = str(coach_data.get('coach_type', '') or '').strip()
+        if _explicit_type and _explicit_type in COACH_TYPES:
+            staff_entry['coach_type'] = _explicit_type
+        _assign_coach_attrs_if_missing(staff_entry, tier)
         self._coaching_staff.append(staff_entry)
 
         # Designate as head if first on staff
@@ -17111,7 +17307,7 @@ class GameBridge:
                          or getattr(c, 'salary', None)
                          or (c.get('salary') if isinstance(c, dict) else 800)
                          or 800)
-            pool.append({
+            _entry = {
                 "coach_id": str(_uuid.uuid4())[:12],
                 "name":      name,
                 "specialty": specialty,
@@ -17119,7 +17315,11 @@ class GameBridge:
                 "salary":    salary,
                 "traits":    traits,
                 "archetype": self._specialty_to_archetype(specialty),
-            })
+            }
+            # Ship Coach-1: enrich market candidates with coach_type +
+            # personal attrs so hire pages can preview the data.
+            _assign_coach_attrs_if_missing(_entry, self._get_camp_tier())
+            pool.append(_entry)
             if len(pool) >= 6:
                 break
         return pool

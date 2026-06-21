@@ -55,8 +55,15 @@
                                  color:var(--text-bright);">
                         {{ coach.name }}
                     </span>
+                    {# Ship Coach-1: specialist type label #}
+                    {% if coach.type_name %}
+                    <span style="font-size:.72rem;color:var(--info);
+                                 font-family:var(--font-display);">
+                        {{ coach.type_icon }} {{ coach.type_name }}
+                    </span>
+                    {% endif %}
                     <span style="font-size:.72rem;color:var(--text-muted);">
-                        {{ coach.specialty | title }} · {{ coach.rating }} RTG
+                        {{ coach.rating }} RTG
                         {% if coach.potential %}
                         <span style="color:{% if coach.potential == 'Legendary' %}var(--gold){% elif coach.potential == 'Elite' %}var(--neon-green){% elif coach.potential == 'High' %}var(--info){% else %}var(--text-muted){% endif %};
                                      margin-left:6px;font-weight:600;">
@@ -107,6 +114,79 @@
                 {{ label }}
             </span>
             {% endfor %}
+            </div>
+            {% endif %}
+            {# Ship Coach-1: specialist detail block — description, stat
+               domains, personal attrs, style match indicator. #}
+            {% if coach.type_desc %}
+            <div style="font-size:.68rem;color:var(--text-secondary);
+                        font-style:italic;margin-bottom:4px;line-height:1.4;">
+                {{ coach.type_desc }}
+            </div>
+            {% endif %}
+            {% if coach.primary_stats or coach.secondary_stats %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;
+                        align-items:center;">
+                {% for s in coach.primary_stats %}
+                <span style="font-size:.58rem;padding:1px 6px;border-radius:3px;
+                             background:rgba(33,150,243,.15);color:var(--info);
+                             border:1px solid rgba(33,150,243,.4);font-weight:600;">
+                    {{ s | replace('_', ' ') | title }}
+                </span>
+                {% endfor %}
+                {% for s in coach.secondary_stats %}
+                <span style="font-size:.55rem;padding:1px 5px;border-radius:3px;
+                             background:rgba(255,255,255,.04);
+                             color:var(--text-muted);
+                             border:1px solid rgba(255,255,255,.1);">
+                    {{ s | replace('_', ' ') | title }}
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {# Personal attribute pills — Ship Coach-1 #}
+            <div style="display:flex;gap:8px;margin-bottom:4px;
+                        font-size:.62rem;color:var(--text-muted);">
+                <span title="Game IQ — corner advice quality + fight camp game plan (Ships 2-3)">
+                    🧠 Game IQ
+                    <span style="color:{% if coach.fight_iq >= 88 %}var(--gold){% elif coach.fight_iq >= 75 %}var(--neon-green){% elif coach.fight_iq >= 60 %}var(--info){% else %}var(--text-muted){% endif %};
+                                 font-family:var(--font-display);margin-left:2px;">
+                        {{ coach.fight_iq }}
+                    </span>
+                </span>
+                <span title="Composure — morale stabilization (Ship 2)">
+                    🧘 Composure
+                    <span style="color:{% if coach.composure >= 80 %}var(--neon-green){% elif coach.composure >= 65 %}var(--info){% else %}var(--text-muted){% endif %};
+                                 font-family:var(--font-display);margin-left:2px;">
+                        {{ coach.composure }}
+                    </span>
+                </span>
+                <span title="Heart — training fatigue tolerance (Ship 2)">
+                    🔥 Heart
+                    <span style="color:{% if coach.heart >= 80 %}var(--neon-green){% elif coach.heart >= 65 %}var(--info){% else %}var(--text-muted){% endif %};
+                                 font-family:var(--font-display);margin-left:2px;">
+                        {{ coach.heart }}
+                    </span>
+                </span>
+            </div>
+            {# Style match indicator — Ship Coach-1 #}
+            {% set _style_hits = [] %}
+            {% if coach.style_match and player_fighter_styles %}
+                {% for s in coach.style_match %}
+                    {% if s in player_fighter_styles %}{{ _style_hits.append(s) or '' }}{% endif %}
+                {% endfor %}
+            {% endif %}
+            {% if _style_hits %}
+            <div style="font-size:.62rem;color:var(--neon-green);margin-bottom:4px;">
+                ✓ Style Match — {{ _style_hits | join(', ') }}
+            </div>
+            {% elif coach.coach_type == 'sc_coach' %}
+            <div style="font-size:.62rem;color:var(--gold);margin-bottom:4px;">
+                ✓ Universal — benefits all fighters
+            </div>
+            {% elif coach.style_match %}
+            <div style="font-size:.62rem;color:var(--text-muted);margin-bottom:4px;">
+                ◌ No style match in current roster
             </div>
             {% endif %}
             {# Contract + morale #}
