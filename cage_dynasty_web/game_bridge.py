@@ -519,6 +519,62 @@ COACH_STYLE_FIT_BONUS    = 0.15  # +15% gains on primary stats when style matche
 COACH_DECAY_PROTECTION   = 0.15  # 15% slower decay on coach-primary stats
 COACH_IQ_BONUS_THRESHOLD = 75    # fight_iq ≥ this → corner +2 / camp +2
 COACH_IQ_ELITE_THRESHOLD = 88    # fight_iq ≥ this → corner +3 / camp +3
+def _is_nickname_earned(fighter) -> bool:
+    """Ship Nickname-Tier: tiered earned-nickname gate. Returns True
+    if a fighter qualifies via ANY tier. Used by both the earn-on-win
+    flow and the load-time backfill so the criteria stay consistent.
+
+    Tiers (any one passes):
+      1. CHAMPION: currently holds a belt AND has ≥5 wins
+      2. TOP-5: ranked top 5 AND ≥6 wins AND (40% finish OR 3-win streak)
+      3. VETERAN: ≥20 total fights AND winning record (wins > losses)
+      4. DEFAULT: ≥10 wins AND ≥15 total AND (55% finish OR 5-win streak)
+
+    Hard floor: <4 wins NEVER earns a nickname regardless of tier.
+    Target rate: 25-35% of active fighters."""
+    wins   = getattr(fighter, 'wins', 0) or 0
+    losses = getattr(fighter, 'losses', 0) or 0
+    draws  = getattr(fighter, 'draws', 0) or 0
+    total  = wins + losses + draws
+    if wins < 4:
+        return False  # hard floor
+
+    history = getattr(fighter, 'fight_history', []) or []
+    finishes = sum(
+        1 for f in history
+        if isinstance(f, dict)
+        and f.get('method') in ('KO', 'TKO', 'SUB')
+        and f.get('result') == 'W'
+    )
+    finish_rate = finishes / max(wins, 1)
+
+    # Current win streak
+    streak = 0
+    for _f in reversed(history):
+        if isinstance(_f, dict) and _f.get('result') == 'W':
+            streak += 1
+        else:
+            break
+
+    # Tier 1 — Champion
+    if getattr(fighter, 'is_champion', False) and wins >= 5:
+        return True
+    # Tier 2 — Top-5 ranked
+    rank = getattr(fighter, 'ranking', None)
+    if (rank and rank <= 5 and wins >= 6
+            and (finish_rate >= 0.40 or streak >= 3)):
+        return True
+    # Tier 3 — Veteran longevity
+    if total >= 20 and wins > losses:
+        return True
+    # Tier 4 — Default earned
+    if (wins >= 10 and total >= 15
+            and (finish_rate >= 0.55 or streak >= 5)):
+        return True
+
+    return False
+
+
 def _coach_type_from_specialty(specialty: Any) -> str:
     """Map any specialty value (capitalized, lowercase, suffixed)
     to a canonical coach_type key. Falls back to boxing_coach if
@@ -2254,10 +2310,11 @@ class GameBridge:
         self._completed_events = data.get("completed_events", [])
 
         # ── Nickname backfill — one-shot for legacy saves ──────────────
-        # Fighters who already meet the earned-nickname threshold (≥2 wins
-        # AND ≥3 total fights) but lack a nickname get one assigned on load.
-        # Raw prospects (<3 fights or <2 wins) stay nameless until they
-        # earn it through performance. Idempotent.
+        # Ship Nickname-Tier: tightened gate to make nicknames feel
+        # earned. Old "≥2W + ≥3F" was too loose — virtually all pre-gen
+        # fighters with any career qualified. New tiered gate (see
+        # _is_nickname_earned) caps active-nickname rate ~25-35%.
+        # Idempotent — existing nicknames are never stripped.
         try:
             from game_state import NICKNAMES_POOL as _NK_POOL
             import random as _nk_rand
@@ -2265,9 +2322,7 @@ class GameBridge:
                 _backfilled = 0
                 for _f in self._game_state.fighters.values():
                     if not getattr(_f, 'nickname', None):
-                        _wins  = getattr(_f, 'wins', 0) or 0
-                        _total = _wins + (getattr(_f, 'losses', 0) or 0) + (getattr(_f, 'draws', 0) or 0)
-                        if _wins >= 2 and _total >= 3:
+                        if _is_nickname_earned(_f):
                             _f.nickname = _nk_rand.choice(_NK_POOL)
                             _backfilled += 1
                 if _backfilled:
@@ -3598,39 +3653,20 @@ class GameBridge:
             ftr = self._game_state.get_fighter(fid)
             if not ftr:
                 continue
-            # Earn nickname on win when threshold crossed:
-            # 5 wins, 7 fights, AND (≥40% finish rate OR ≥3-fight streak).
-            # Backfill in web_load keeps the looser legacy gate so old saves
-            # don't strip veterans of their nicknames on load.
+            # Earn nickname on win — tiered gate (see _is_nickname_earned).
+            # Champion/top-5/veteran-longevity/default tiers; <4 wins
+            # never qualifies. Same gate used by load-time backfill so
+            # the criteria stay consistent across both surfaces.
             if is_win and not getattr(ftr, 'nickname', None):
-                _total_fights = (ftr.wins or 0) + (ftr.losses or 0) + (ftr.draws or 0)
-                _finish_rate = 0.0
-                if _total_fights > 0:
-                    _finishes = sum(
-                        1 for f in (getattr(ftr, 'fight_history', []) or [])
-                        if isinstance(f, dict)
-                        and f.get('method') in ('KO', 'TKO', 'SUB')
-                        and f.get('result') == 'W'
-                    )
-                    _finish_rate = _finishes / _total_fights
-                _win_streak = 0
-                _fh = list(getattr(ftr, 'fight_history', []) or [])
-                for _fh_entry in reversed(_fh):
-                    if not isinstance(_fh_entry, dict):
-                        break
-                    if _fh_entry.get('result') == 'W':
-                        _win_streak += 1
-                    else:
-                        break
-                _perf_gate = (_finish_rate >= 0.40 or _win_streak >= 3)
-                if ftr.wins >= 5 and _total_fights >= 7 and _perf_gate:
+                if _is_nickname_earned(ftr):
                     from game_state import NICKNAMES_POOL as _NK_POOL
                     import random as _nk_random
                     ftr.nickname = _nk_random.choice(_NK_POOL)
                     self._news_items.insert(0, {
                         "headline": f"📢 {ftr.name} adopts the nickname \"{ftr.nickname}\".",
-                        "category": "fighter",
-                        "week": self._game_state.week_number if self._game_state else 1,
+                        "category":   "fighter",
+                        "week":       self._game_state.week_number if self._game_state else 1,
+                        "fighter_id": ftr.fighter_id,
                     })
                     print(f"  📢 [NICKNAME] {ftr.name} → \"{ftr.nickname}\" "
                           f"({ftr.wins}-{ftr.losses}{f'-{ftr.draws}' if ftr.draws else ''})")
