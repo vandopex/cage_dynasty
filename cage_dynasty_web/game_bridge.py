@@ -14016,6 +14016,49 @@ class GameBridge:
             return max(0, 70 - gap * 4)
         return 20.0
 
+    def _is_exceptional_amateur(self, fighter) -> bool:
+        """Ship Smart-Card debut-cap exception: amateurs with 8+
+        amateur wins OR 4+ undefeated record graduate to PRELIM
+        instead of EARLY_PRELIM. Reads from amateur system and
+        _amateur_graduates list defensively (returns False on
+        any lookup failure)."""
+        if not fighter:
+            return False
+        fid = getattr(fighter, 'fighter_id', None)
+        if not fid:
+            return False
+        # Try live amateur system first
+        try:
+            sys = self._get_amateur_system() if hasattr(
+                self, '_get_amateur_system') else None
+            if sys:
+                am = sys.amateurs.get(fid)
+                if am:
+                    _w = getattr(am, 'wins', 0) or 0
+                    _l = getattr(am, 'losses', 0) or 0
+                    if _w >= 8:
+                        return True
+                    if _w >= 4 and _l == 0:
+                        return True
+        except Exception:
+            pass
+        # Fall back to graduates list
+        try:
+            for g in (self._amateur_graduates or []):
+                if g.get('fighter_id') == fid:
+                    _w = int(g.get('amateur_wins',
+                                   g.get('wins', 0)) or 0)
+                    _l = int(g.get('amateur_losses',
+                                   g.get('losses', 0)) or 0)
+                    if _w >= 8:
+                        return True
+                    if _w >= 4 and _l == 0:
+                        return True
+                    break
+        except Exception:
+            pass
+        return False
+
     def _assign_card_slot(self, event_name: str, score: float,
                            is_title: bool, combined_rating: int,
                            f1_rank: Optional[int] = None,
@@ -14029,6 +14072,40 @@ class GameBridge:
         """
         if not CARD_BUILDER_AVAILABLE:
             return "prelim"
+
+        # ── Ship Smart-Card debut-cap ──
+        # A debut fighter (0-0, no history) is never placed above
+        # PRELIM. Exceptional amateurs (8+ amateur wins OR 4+ wins
+        # undefeated) get PRELIM; everyone else gets EARLY_PRELIM.
+        # Fires before the rank-based floor so it can't be overridden
+        # by a top-5 opponent dragging the fight up. Card builder
+        # state still tracks the slot via assign_slot below.
+        def _is_debut(f):
+            if not f:
+                return False
+            _hist = getattr(f, 'fight_history', []) or []
+            _w = getattr(f, 'wins', 0) or 0
+            _l = getattr(f, 'losses', 0) or 0
+            return _w == 0 and _l == 0 and not _hist
+        if _is_debut(f1) or _is_debut(f2):
+            _debut_target = (CardSlot.PRELIM
+                             if self._is_exceptional_amateur(f1)
+                                or self._is_exceptional_amateur(f2)
+                             else CardSlot.EARLY_PRELIM)
+            _slot, _ = self._card_builder.assign_slot(
+                event_name=event_name,
+                weeks_until=4,
+                matchup_score=0,
+                is_title_fight=False,
+                combined_rating=combined_rating,
+                min_slot=_debut_target,
+            )
+            # Cap: if cascade overflowed back up (PRELIM full and
+            # min_slot enforcement weak), clamp to early_prelim.
+            if _slot in (CardSlot.MAIN_EVENT, CardSlot.CO_MAIN,
+                         CardSlot.MAIN_CARD):
+                return CardSlot.PRELIM.value
+            return _slot.value
 
         ranks = [r for r in [f1_rank, f2_rank] if r is not None]
         top_rank = min(ranks) if ranks else None
