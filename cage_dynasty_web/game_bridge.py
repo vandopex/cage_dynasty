@@ -17021,7 +17021,7 @@ class GameBridge:
         current_week = self._game_state.week_number if self._game_state else 0
 
         if reason == 'quit_underpaid':
-            headline = f"💼 {name} quit — said you weren't paying him what he's worth"
+            headline = f"💼 {name} quit — said you weren't paying them what they're worth"
         elif reason == 'quit_skipped_pay':
             headline = f"💼 {name} walked out — too many missed paychecks"
         elif reason == 'contract_expired':

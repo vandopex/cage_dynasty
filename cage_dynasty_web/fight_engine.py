@@ -1349,37 +1349,54 @@ def select_action(
             _secure_threshold = 5
         position_secured = fight_state.position_duration >= _secure_threshold
     
-    # Filter submissions by BJJ skill
+    # Detect styles (hoisted above the sub filter so style is available
+    # for the grappler-family gate on exotic subs).
+    my_style = detect_fighter_style(fighter_attrs)
+    opp_style = detect_fighter_style(opponent_attrs)
+
+    # Filter submissions by skill + style. Exotic subs are gated behind
+    # grappler-family styles (BJJ/Sambo) OR very-elite submissions skill.
+    # Prevents Ground & Pound / Striker fighters from busting out
+    # Calf Slicers and Twisters with mid-tier sub stats.
     if submissions:
-        advanced_subs = {
-            SubmissionType.TWISTER, SubmissionType.GOGOPLATA, 
+        exotic_subs = {
+            SubmissionType.TWISTER, SubmissionType.GOGOPLATA,
             SubmissionType.HEEL_HOOK, SubmissionType.CALF_SLICER,
-            SubmissionType.OMOPLATA, SubmissionType.DARCE_CHOKE,
+            SubmissionType.NECK_CRANK, SubmissionType.DARCE_CHOKE,
             SubmissionType.ANACONDA_CHOKE, SubmissionType.BULLDOG_CHOKE,
+            SubmissionType.OMOPLATA,
         }
         intermediate_subs = {
-            SubmissionType.TRIANGLE_CHOKE, SubmissionType.ARM_TRIANGLE,
+            SubmissionType.ARM_TRIANGLE,
             SubmissionType.KIMURA, SubmissionType.KNEEBAR,
             SubmissionType.ANKLE_LOCK, SubmissionType.TOE_HOLD,
             SubmissionType.NORTH_SOUTH_CHOKE,
         }
-        
+        standard_subs = {
+            SubmissionType.REAR_NAKED_CHOKE, SubmissionType.ARMBAR,
+            SubmissionType.TRIANGLE_CHOKE, SubmissionType.GUILLOTINE,
+        }
+
+        _grappler_family = {"bjj", "sambo"}
+        _is_grappler = my_style in _grappler_family
+        _sub_skill = fighter_attrs.submissions
+
         filtered_subs = []
         for sub in submissions:
-            if sub in advanced_subs:
-                if fighter_attrs.submissions >= 70:
+            if sub in exotic_subs:
+                # Grappler with decent subs OR elite subs (any style)
+                if (_is_grappler and _sub_skill >= 75) or _sub_skill >= 85:
                     filtered_subs.append(sub)
             elif sub in intermediate_subs:
-                if fighter_attrs.submissions >= 55:
+                if _sub_skill >= 55:
+                    filtered_subs.append(sub)
+            elif sub in standard_subs:
+                if _sub_skill >= 60:
                     filtered_subs.append(sub)
             else:
                 filtered_subs.append(sub)
         submissions = filtered_subs
-    
-    # Detect styles
-    my_style = detect_fighter_style(fighter_attrs)
-    opp_style = detect_fighter_style(opponent_attrs)
-    
+
     # Base weights - TUNED for realistic action distribution
     # Real MMA: ~70% standing exchanges, ~20% grappling, ~10% ground
     # Subs should be RARE but DANGEROUS - now more accessible

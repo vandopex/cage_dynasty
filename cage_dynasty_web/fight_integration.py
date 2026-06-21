@@ -1298,10 +1298,14 @@ class NarratedFightSimulator:
             # custom stage routes to the right pool. Append to log
             # manually since log_event's routing doesn't know about
             # stage-tiered escapes.
+            # Templates use {actor}=submission attempter, {target}=the
+            # one defending/escaping ("{target} defends ... brilliantly").
+            # Pass attacker.name as actor and defender.name as target so
+            # the commentary names the right fighter as the escaper.
             try:
                 _escape_text = self.commentary.generate_submission_commentary(
-                    actor=defender.name,
-                    target=attacker.name,
+                    actor=attacker.name,
+                    target=defender.name,
                     move=_sub_name,
                     stage=_stage,
                 )
@@ -1314,8 +1318,8 @@ class NarratedFightSimulator:
             try:
                 self.commentary.log_event(
                     action_type=ActionType.ESCAPE,
-                    actor=defender.name,
-                    target=attacker.name,
+                    actor=attacker.name,
+                    target=defender.name,
                     action=f"escape_{_sub_name}",
                     success=True,
                     damage=0.0,

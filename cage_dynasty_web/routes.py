@@ -2433,15 +2433,19 @@ def register_routes(app):
     # Personality-typed reaction appended to the morale outcome flash
     # on successful re-sign. Combines with the existing 4-tier morale
     # message to produce "{morale-outcome} {personality-reaction}".
+    # Gender-neutral by default — no `gender` field on fighters today.
+    # CONTENDER line was reworded to drop the implied "guaranteed title
+    # shot" commitment, which no system enforces (would auto-create
+    # player obligation without a decision point).
     _RESIGN_OUTCOMES = {
-        'WARRIOR':    "He just wants the next fight.",
-        'HUNGRY':     "He's grateful. He'll prove it in the cage.",
-        'ELITE':      "He signed but expects to be treated like the headliner he is.",
-        'PROSPECT':   "She's all-in on the camp's vision.",
-        'JOURNEYMAN': "He says it's the longest contract he's had — appreciates the stability.",
-        'SHOWMAN':    "She wants to know when her next main event is.",
-        'CALCULATED': "He reviewed the terms thoroughly. The math worked.",
-        'CONTENDER':  "She made it clear: title shot or she renegotiates next time.",
+        'WARRIOR':    "They just want the next fight.",
+        'HUNGRY':     "They're grateful. They'll prove it in the cage.",
+        'ELITE':      "They signed but expect to be treated like the headliner they are.",
+        'PROSPECT':   "They're all-in on the camp's vision.",
+        'JOURNEYMAN': "They say it's the longest contract they've had — they appreciate the stability.",
+        'SHOWMAN':    "They want to know when their next main event is.",
+        'CALCULATED': "They reviewed the terms thoroughly. The math worked.",
+        'CONTENDER':  "They want a real climb up the rankings — book quality opposition.",
     }
 
     @app.route('/fighter/<fighter_id>/resign', methods=['POST'])

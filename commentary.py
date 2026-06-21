@@ -3295,7 +3295,8 @@ class FightCommentarySystem:
             templates = PASS_GUARD_TEMPLATES
         # Escapes
         elif action_lower in ("escape", "reguard", "pop_head_out", "escape_legs",
-                             "granby_roll"):
+                             "granby_roll", "shrimp_escape", "bridge_escape",
+                             "elbow_escape"):
             templates = ESCAPE_TEMPLATES
         # Back takes
         elif action_lower in ("back_take", "back_control", "take_back"):
