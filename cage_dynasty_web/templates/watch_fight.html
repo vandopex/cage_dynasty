@@ -85,6 +85,14 @@
             {{ label }}
         </button>
         {% endfor %}
+        <button onclick="simToEnd()"
+                style="font-size:.62rem;padding:3px 10px;margin-left:6px;
+                       background:rgba(255,165,0,.08);
+                       border:1px solid rgba(255,165,0,.3);
+                       border-radius:3px;color:var(--gold);
+                       cursor:pointer;">
+            ⏩ Sim to End
+        </button>
     </div>
 
     <div id="live-hint"
@@ -293,6 +301,14 @@
 {% endfor %}
 </div>
 
+{# ── Anti-spoiler reveal wrapper — hidden until Watch Live completes
+   or Sim to End is clicked. Holds result card, FOTN banner,
+   scorecard, and nav buttons so players can't accidentally see
+   the result or navigate away mid-fight. Use the "Skip to result"
+   toggle at the top of the page for a quick spoiler.
+   Auto-shows when no commentary is available (player not stuck). ── #}
+<div id="result-reveal" style="display:{% if rounds %}none{% else %}block{% endif %};">
+
 {# ── Result reveal (moved from top — fires after all rounds render) ── #}
 <div class="card mb-lg" style="margin-top:var(--spacing-lg);
             border-color:{% if is_finish %}var(--blood-red){% else %}var(--info){% endif %};">
@@ -404,7 +420,7 @@
 </div>
 {% endif %}
 
-{# ── Navigation ── #}
+{# ── Navigation (inside result-reveal — appears after fight ends) ── #}
 <div style="display:flex;justify-content:space-between;align-items:center;
             padding:var(--spacing-lg) 0 var(--spacing-xl);">
     <a href="{{ url_for('dashboard') }}" class="btn btn-outline">← Dashboard</a>
@@ -418,13 +434,18 @@
     <a href="{{ url_for('archives') }}" class="btn btn-outline">Archives</a>
 </div>
 
+</div>{# /#result-reveal — wrapper closed here #}
+
 </div>
 <script>
 // ── Live playback engine ─────────────────────────────
+// Ship Faster-Sim: speeds halved across the board. Fast is now
+// genuinely fast (300ms base), normal feels brisk, slow is what
+// the old normal felt like. Cinematic kept for storytelling pace.
 const SPEEDS = {
-    fast:      { base: 600,  pause: 2000, round_pause: 3000  },
-    normal:    { base: 1200, pause: 3500, round_pause: 5000  },
-    slow:      { base: 2000, pause: 5000, round_pause: 7000  },
+    fast:      { base: 300,  pause: 700,  round_pause: 600  },
+    normal:    { base: 800,  pause: 1800, round_pause: 1500 },
+    slow:      { base: 2000, pause: 4500, round_pause: 4000 },
     cinematic: { base: 3500, pause: 8000, round_pause: 12000 },
 };
 
@@ -549,6 +570,42 @@ function finishLive() {
     btn.style.borderColor = 'var(--info)';
     btn.style.color = 'var(--info)';
     document.getElementById('live-status').style.display = 'none';
+    // Ship Reveal: show result card + FOTN + scorecard + nav now
+    // that the fight has played to its conclusion.
+    const reveal = document.getElementById('result-reveal');
+    if (reveal) reveal.style.display = 'block';
+}
+
+// Ship Sim-to-End: skip the rest of the animation. Cancels any
+// pending timeouts, instantly reveals every commentary line, then
+// shows the result reveal block. Players who get bored mid-fight
+// or just want to see the outcome can fast-forward without losing
+// the played commentary above.
+function simToEnd() {
+    if (playbackTimer) clearTimeout(playbackTimer);
+    isPlaying = false;
+    const container = document.getElementById('commentary-container');
+    if (container) {
+        container.querySelectorAll(
+            '.commentary-line, .round-header'
+        ).forEach(el => { el.style.opacity = '1'; });
+    }
+    const reveal = document.getElementById('result-reveal');
+    if (reveal) {
+        reveal.style.display = 'block';
+        reveal.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    // Reset Watch Live button so user can replay if they want
+    const btn = document.getElementById('live-btn');
+    if (btn) {
+        btn.textContent = '↺ Watch Again';
+        btn.onclick = () => { startLiveMode(); };
+        btn.style.background = 'rgba(99,179,237,.15)';
+        btn.style.borderColor = 'var(--info)';
+        btn.style.color = 'var(--info)';
+    }
+    const status = document.getElementById('live-status');
+    if (status) status.style.display = 'none';
 }
 </script>
 
