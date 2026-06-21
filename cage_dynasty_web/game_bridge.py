@@ -6515,6 +6515,20 @@ class GameBridge:
                     _effective_delta = min(0,
                         _effective_delta - _sc_rest_bonus)
 
+            # ── Ship Coach-2: heart-attribute fatigue tolerance ──
+            # Best heart across coaching staff softens training fatigue
+            # (positive delta only — REST recovery unchanged here, S&C
+            # rating block above already handles REST acceleration).
+            if _effective_delta > 0:
+                _best_heart = max(
+                    (_sc.get('heart', 60)
+                     for _sc in (self._coaching_staff or [])),
+                    default=60)
+                if _best_heart >= 80:
+                    _effective_delta = round(_effective_delta * 0.85)
+                elif _best_heart >= 65:
+                    _effective_delta = round(_effective_delta * 0.92)
+
             _new_fatigue = max(0, min(100, _current_fatigue + _effective_delta))
             _fdata_fat['fatigue'] = _new_fatigue
             _ftr_sync = self._game_state.get_fighter(fighter_id)
@@ -6591,6 +6605,38 @@ class GameBridge:
                                 effective = effective * _eq_bonus
                     except Exception:
                         pass
+
+                    # ── Ship Coach-2: style fit bonus + coverage gate ──
+                    # Iterate _coaching_staff for any coach whose primary
+                    # covers this stat AND whose style_match contains the
+                    # fighter's style → +15% gains. S&C coaches grant
+                    # half-bonus universally (no style requirement). If
+                    # NO coach has this stat in primary OR secondary,
+                    # apply 0.85x coverage penalty.
+                    _style_bonus = 1.0
+                    _has_coverage = False
+                    for _sc in (self._coaching_staff or []):
+                        _ct_def = COACH_TYPES.get(
+                            _sc.get('coach_type', ''), {})
+                        _ct_primary = _ct_def.get('primary', [])
+                        _ct_secondary = _ct_def.get('secondary', [])
+                        if stat in _ct_primary or stat in _ct_secondary:
+                            _has_coverage = True
+                        if (_style_bonus == 1.0
+                                and stat in _ct_primary):
+                            _fstyle = _style
+                            _match = _ct_def.get('style_match', [])
+                            if _fstyle in _match:
+                                _style_bonus = 1 + COACH_STYLE_FIT_BONUS
+                            elif not _match:
+                                # S&C — universal, half bonus
+                                _style_bonus = 1 + (
+                                    COACH_STYLE_FIT_BONUS * 0.5)
+                    if not _has_coverage and (self._coaching_staff or []):
+                        # No coach covers this stat — gains suffer
+                        effective *= 0.85
+                    effective *= _style_bonus
+
                     if effective > 0.01:
                         if fighter_id in self._game_state._fighter_data:
                             _fdata_ref = self._game_state._fighter_data[fighter_id]
@@ -9605,6 +9651,27 @@ class GameBridge:
                             if _reduction < 1.0 and _rnd_eq_decay.random() > _reduction:
                                 _absorbed_decays.add((decay.fighter_id, decay.stat))
                                 continue
+                except Exception:
+                    pass
+
+                # ── Ship Coach-2: coach decay protection ──
+                # Any staff coach whose primary covers this stat absorbs
+                # a fraction of decay events. Stacks multiplicatively with
+                # equipment reduction above.
+                try:
+                    _coach_protected = False
+                    for _sc in (self._coaching_staff or []):
+                        _ct_def = COACH_TYPES.get(
+                            _sc.get('coach_type', ''), {})
+                        if decay.stat in _ct_def.get('primary', []):
+                            _coach_protected = True
+                            break
+                    if (_coach_protected
+                            and _rnd_eq_decay.random()
+                            < COACH_DECAY_PROTECTION):
+                        _absorbed_decays.add(
+                            (decay.fighter_id, decay.stat))
+                        continue
                 except Exception:
                     pass
                 if ftr and hasattr(ftr, decay.stat):
@@ -16740,6 +16807,17 @@ class GameBridge:
                             "CONTENDER":  12 + ls * 3,
                             "ELITE":      14 + ls * 4,
                         }.get(pers, 10 + ls * 3)
+                        # ── Ship Coach-2: composure-attribute morale buffer ──
+                        # Best composure across staff stabilizes the locker
+                        # room. Slows the spiral; doesn't restore morale.
+                        _best_composure = max(
+                            (_sc.get('composure', 60)
+                             for _sc in (self._coaching_staff or [])),
+                            default=60)
+                        if _best_composure >= 80:
+                            loss_hit = int(loss_hit * 0.80)
+                        elif _best_composure >= 65:
+                            loss_hit = int(loss_hit * 0.90)
                         # Founder floor still applies as safety net.
                         contract['morale'] = max(morale_floor,
                             contract.get('morale', 75) - loss_hit)
