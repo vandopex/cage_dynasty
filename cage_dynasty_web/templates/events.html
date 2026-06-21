@@ -33,6 +33,53 @@
 
 {% for event in events %}
 {% set weeks_out = event.week - week %}
+
+{# Ship Amateur-Events: amateur tournaments render with their own
+   compact card — bracket-based, no slot grid. Pro events fall
+   through to the existing render below. #}
+{% if event.event_type == 'amateur' %}
+<div class="card mb-lg" style="border-color:rgba(184,134,11,.4);
+                                background:rgba(255,215,0,.02);">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+            <h3 style="margin:0;color:var(--gold);">
+                🥋 {{ event.event_name }}
+            </h3>
+            <div style="font-size:.72rem;color:var(--text-muted);margin-top:2px;">
+                Amateur Tournament
+                {% if event.weight_class %} · {{ event.weight_class }}{% endif %}
+                {% if event.event_city %} · 📍 {{ event.event_city }}{% endif %}
+            </div>
+        </div>
+        <span class="badge {% if weeks_out == 1 %}badge-warning{% else %}badge-info{% endif %}">
+            {% if weeks_out == 1 %}NEXT WEEK{% else %}{{ weeks_out }} weeks away{% endif %}
+        </span>
+    </div>
+    <div style="padding:var(--spacing-md);
+                display:flex;align-items:center;justify-content:space-between;gap:var(--spacing-md);">
+        <div style="font-size:.82rem;color:var(--text-secondary);">
+            🥊 <strong style="color:var(--text-bright);">{{ event.fighter_count or event.bracket_size }}</strong>
+            fighter bracket
+            {% if event.bracket_size and event.bracket_size != event.fighter_count %}
+            <span style="color:var(--text-muted);font-size:.72rem;">
+                ({{ event.bracket_size }}-slot)
+            </span>
+            {% endif %}
+            <span style="color:var(--text-muted);font-size:.72rem;
+                         margin-left:8px;">
+                Single-elimination · winner crowned in one day
+            </span>
+        </div>
+        <a href="{{ url_for('amateur_circuit') }}"
+           style="font-size:.72rem;padding:4px 12px;
+                  background:rgba(255,215,0,.1);color:var(--gold);
+                  text-decoration:none;border:1px solid rgba(255,215,0,.3);
+                  border-radius:4px;white-space:nowrap;">
+            Amateur Circuit →
+        </a>
+    </div>
+</div>
+{% else %}
 <div class="card mb-lg" {% if event.player_has_fight %}style="border-color:rgba(255,215,0,.25);"{% endif %}>
     <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
         <div>
@@ -102,5 +149,6 @@
         {% endfor %}
     </div>
 </div>
+{% endif %}
 {% endfor %}
 {% endblock %}

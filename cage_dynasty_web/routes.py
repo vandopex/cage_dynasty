@@ -1586,9 +1586,35 @@ def register_routes(app):
     
     @app.route('/events')
     def upcoming_events():
-        """Upcoming events view."""
+        """Upcoming events view — pro cards + amateur tournaments."""
         bridge = get_bridge()
-        events = bridge.get_upcoming_events()
+        events = list(bridge.get_upcoming_events() or [])
+
+        # Ship Amateur-Events: surface upcoming amateur tournaments
+        # alongside pro cards. Tournament dicts carry event_type='amateur'
+        # so the template can render them with distinct styling.
+        try:
+            am_sys = bridge._get_amateur_system() if hasattr(
+                bridge, '_get_amateur_system') else None
+            if am_sys and bridge._game_state:
+                cur_wk = bridge._game_state.week_number
+                for t in am_sys.get_upcoming_tournaments(cur_wk, weeks_ahead=8):
+                    events.append({
+                        'event_type':       'amateur',
+                        'event_name':       getattr(t, 'name', 'Amateur Tournament'),
+                        'event_city':       getattr(t, 'region', ''),
+                        'week':             getattr(t, 'week', cur_wk),
+                        'weight_class':     getattr(t, 'weight_class', ''),
+                        'bracket_size':     getattr(t, 'bracket_size', 0),
+                        'fighter_count':    len(getattr(t, 'fighters', []) or []),
+                        'tournament_id':    getattr(t, 'tournament_id', ''),
+                        'fights':           [],  # bracket, not slot-based
+                        'player_has_fight': False,
+                    })
+                # Sort combined list by week ascending (soonest first)
+                events.sort(key=lambda e: e.get('week', 99))
+        except Exception:
+            pass  # defensive — never block the events page
 
         # Build rankings as plain dicts so templates can use .get()
         rankings = {}
