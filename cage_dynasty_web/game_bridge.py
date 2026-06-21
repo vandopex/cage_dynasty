@@ -12742,13 +12742,18 @@ class GameBridge:
             # Notable finishes → news
             if method in ("KO", "TKO", "SUB"):
                 icon = "💥" if method in ("KO", "TKO") else "🔒"
+                # Fix: no `fight` dict in scope — rebuild fight_id from
+                # f1/f2/week to match the format used at line ~12512
+                # ("ai_fight_{week}_{f1_id}_{f2_id}"). Latent pre-existing
+                # bug exposed by off-week ship: fallback now fires more
+                # often, surfacing this NameError on every off week.
                 self._news_items.append({
                     "headline":  f"{icon} {winner.name} def. {loser.name} by {method} (R{rnd}) at {event_name}",
                     "category":  "fight",
                     "week":      week,
                     "winner_id": winner.fighter_id,
                     "loser_id":  loser.fighter_id,
-                    "fight_id":  fight.get("fight_id", ""),
+                    "fight_id":  f"ai_fight_{week}_{f1.fighter_id}_{f2.fighter_id}",
                     "event_id":  event.get("event_id", ""),
                 })
 
