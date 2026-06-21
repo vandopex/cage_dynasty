@@ -59,18 +59,32 @@ _ARCHETYPE_LABEL = {
 def _enrich_market_entry(c):
     """Adapt a bridge market dict to the shape templates expect.
     Adds: id (alias to coach_id), label, icon, description, trait_display.
-    Ship MC1b — bridge owns data, routes own presentation."""
+    Ship MC1b — bridge owns data, routes own presentation.
+    Ship Coach-3 — surfaces type_name/type_icon/primary_stats from
+    COACH_TYPES so setup_coach.html can show specialist labels."""
     archetype = c.get('archetype', 'mma_head')
     label, icon = _ARCHETYPE_LABEL.get(archetype, ('Head Coach', '🧠'))
     traits = c.get('traits', []) or []
+    # Ship Coach-3 — resolve coach_type (added at market gen in Ship 1)
+    from game_bridge import COACH_TYPES
+    ct_key = c.get('coach_type', 'boxing_coach')
+    ct_def = COACH_TYPES.get(ct_key, COACH_TYPES.get('boxing_coach', {}))
+    type_name = ct_def.get('name', label)
+    type_icon = ct_def.get('icon', icon)
     return {
         **c,
-        'id':            c.get('coach_id'),
-        'label':         label,
-        'icon':          icon,
-        'description':   f"{c.get('rating', 60)} rating · ${c.get('salary', 800):,}/wk",
-        'trait_display': [_TRAIT_DISPLAY.get(t, (t.replace('_', ' ').title(), 'personality'))
-                          for t in traits],
+        'id':              c.get('coach_id'),
+        'label':           label,
+        'icon':            type_icon,  # prefer specialist icon
+        'description':     f"{c.get('rating', 60)} rating · ${c.get('salary', 800):,}/wk",
+        'trait_display':   [_TRAIT_DISPLAY.get(t, (t.replace('_', ' ').title(), 'personality'))
+                            for t in traits],
+        # Ship Coach-3 specialist surface
+        'type_name':       type_name,
+        'type_icon':       type_icon,
+        'type_desc':       ct_def.get('desc', ''),
+        'primary_stats':   list(ct_def.get('primary', [])),
+        'secondary_stats': list(ct_def.get('secondary', [])),
     }
 
 

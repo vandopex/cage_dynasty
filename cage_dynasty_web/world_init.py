@@ -346,6 +346,10 @@ class GeneratedCamp:
     balance: int
     fighter_ids: List[str] = field(default_factory=list)
     coach_ids: List[str] = field(default_factory=list)
+    # Ship Coach-3: dominant coach_type derived from camp's fighter
+    # styles. Empty until generate_coaches() runs. Read by future
+    # AI training paths; pure data field today.
+    dominant_coach_type: str = ""
 
 
 @dataclass 
@@ -2498,7 +2502,40 @@ class WorldInitializer:
         
         self._coach_system = CoachSystem()
         total_coaches = 0
-        
+
+        # Ship Coach-3: lazy import COACH_TYPES from game_bridge for
+        # dominant coach_type assignment. game_bridge imports world_init,
+        # so module-level import would be circular. None if unavailable.
+        try:
+            from game_bridge import COACH_TYPES as _CT
+        except ImportError:
+            _CT = None
+
+        def _dominant_coach_type(camp_obj) -> str:
+            """Pick the coach_type whose style_match list best covers
+            this camp's fighters. Ties broken by COACH_TYPES order."""
+            if not _CT or not camp_obj.fighter_ids:
+                return "boxing_coach"
+            from collections import Counter
+            _styles = Counter()
+            for _fid in camp_obj.fighter_ids:
+                _f = self.fighters.get(_fid)
+                if _f and getattr(_f, 'fighting_style', None):
+                    _styles[_f.fighting_style] += 1
+            if not _styles:
+                return "boxing_coach"
+            best_type = "boxing_coach"
+            best_score = -1
+            for _ck, _cd in _CT.items():
+                _match_list = _cd.get('style_match', [])
+                if not _match_list:
+                    continue  # skip universal S&C
+                _score = sum(_styles.get(_s, 0) for _s in _match_list)
+                if _score > best_score:
+                    best_score = _score
+                    best_type = _ck
+            return best_type
+
         for camp in self.camps.values():
             config = COACH_CONFIG[camp.tier]
             camp_id = camp.camp_id
@@ -2536,7 +2573,10 @@ class WorldInitializer:
                 camp.coach_ids.append(assistant.coach_id)
                 self._coach_system._camp_coaches[camp_id].append(assistant.coach_id)
                 total_coaches += 1
-        
+
+            # Ship Coach-3: assign dominant coach_type from fighter styles
+            camp.dominant_coach_type = _dominant_coach_type(camp)
+
         print(f"Generated {total_coaches} coaches for {len(self.camps)} camps")
     
     def get_coach_system(self):

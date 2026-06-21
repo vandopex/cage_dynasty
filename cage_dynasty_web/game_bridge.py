@@ -15167,6 +15167,40 @@ class GameBridge:
             setattr(fa, attr, min(99, int(cur + buff["amount"])))
         return buff
 
+    def _apply_coach_iq_prefight_buff(self, fa) -> Optional[Dict[str, Any]]:
+        """Ship Coach-3: corner advice quality + fight camp game plan
+        bonus, combined. Best fight_iq across the player's coaching
+        staff adds a temporary fight_iq boost to the player's
+        FighterAttributes for this bout — represents both the coach's
+        pre-fight game plan and their corner reads. Fires once per
+        fight; engine has no round-by-round stat modifier hook so the
+        full bonus is front-loaded. fa is the throwaway _FighterAttributes
+        instance from _make_fighter_attrs — mutation-safe."""
+        if not self._coaching_staff:
+            return None
+        _best_iq = max(
+            (_sc.get('fight_iq', 60) for _sc in self._coaching_staff),
+            default=60,
+        )
+        if _best_iq >= COACH_IQ_ELITE_THRESHOLD:
+            _bonus = 3
+            _tier = 'elite'
+        elif _best_iq >= COACH_IQ_BONUS_THRESHOLD:
+            _bonus = 2
+            _tier = 'good'
+        else:
+            return None
+        _cur = getattr(fa, 'fight_iq', None)
+        if _cur is None:
+            return None
+        setattr(fa, 'fight_iq', min(99, int(_cur + _bonus)))
+        return {
+            "amount":    _bonus,
+            "tier":      _tier,
+            "best_iq":   _best_iq,
+            "stat":      "fight_iq",
+        }
+
     def _apply_sponsor_boost(self, fa, fighter) -> None:
         """Apply active sponsor attribute boosts to FighterAttributes
         before engine call. Mirrors the corner-advice buff pattern.
@@ -15628,8 +15662,17 @@ class GameBridge:
         _player_is_f2 = f2_id in _player_ids_k1
         if _player_is_f1:
             self._apply_corner_prefight_buff(fa1)
+            # Ship Coach-3: stack the multi-coach IQ buff
+            _iq_buff = self._apply_coach_iq_prefight_buff(fa1)
+            if _iq_buff:
+                print(f"  🧠 [COACH IQ] {fighter1.name} +{_iq_buff['amount']} fight_iq "
+                      f"(staff best={_iq_buff['best_iq']}, tier={_iq_buff['tier']})")
         elif _player_is_f2:
             self._apply_corner_prefight_buff(fa2)
+            _iq_buff = self._apply_coach_iq_prefight_buff(fa2)
+            if _iq_buff:
+                print(f"  🧠 [COACH IQ] {fighter2.name} +{_iq_buff['amount']} fight_iq "
+                      f"(staff best={_iq_buff['best_iq']}, tier={_iq_buff['tier']})")
 
         # Ship S1: sponsor fight-night attribute boost (both fighters)
         self._apply_sponsor_boost(fa1, fighter1)

@@ -16,14 +16,18 @@
     </p>
 </div>
 
-{# Archetype legend #}
+{# Ship Coach-3: 7 specialist type legend #}
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
             margin-bottom:var(--spacing-lg);">
     {% for label, icon, color, desc in [
-        ('Striking Coach',  '🥊', 'var(--blood-red)',   'Boxing · Kicks · Clinch · Defense'),
-        ('Grappling Coach', '🤼', 'var(--info)',         'Takedowns · TD Def · Subs · Guard'),
-        ('S&C Coach',       '💪', 'var(--neon-green)',   'Strength &amp; Conditioning — builds physical durability'),
-        ('Head Coach',      '🧠', 'var(--gold)',         'Fight IQ · Composure · Heart'),
+        ('Boxing',        '🥊', 'var(--blood-red)',  'Hands · Defense · Chin'),
+        ('Muay Thai',     '🦵', 'var(--blood-red)',  'Kicks · Clinch · Knees'),
+        ('Kickboxing',    '⚡', 'var(--warning)',    'Boxing · Kicks · Distance'),
+        ('Wrestling',     '🤼', 'var(--info)',       'Takedowns · TD Def · Top Ctrl'),
+        ('BJJ',           '🥋', 'var(--info)',       'Subs · Guard · Composure'),
+        ('Clinch & Judo', '💪', 'var(--violet, #9c27b0)', 'Grip · Throws · Top Ctrl'),
+        ('S&C',           '🏋️', 'var(--neon-green)', 'Strength · Cardio · Recovery'),
+        ('Mixed Staff',   '🧠', 'var(--gold)',       'Hire multiple — coverage matters'),
     ] %}
     <div style="padding:var(--spacing-sm);background:var(--bg-dark);border-radius:6px;
                 border:1px solid rgba(255,255,255,.06);text-align:center;">
@@ -101,8 +105,44 @@
                     {{ coach.description }}
                 </div>
 
-                {# Stats trained #}
-                {% if coach.focus %}
+                {# Ship Coach-3: specialist type detail #}
+                {% if coach.type_name %}
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;
+                            padding:6px 10px;background:rgba(33,150,243,.08);
+                            border-left:3px solid var(--info);border-radius:0 4px 4px 0;">
+                    <span style="font-size:1rem;">{{ coach.type_icon }}</span>
+                    <span style="font-family:var(--font-display);font-size:.78rem;
+                                 color:var(--info);">{{ coach.type_name }}</span>
+                </div>
+                {% if coach.type_desc %}
+                <div style="font-size:.68rem;color:var(--text-muted);font-style:italic;
+                            margin-bottom:6px;line-height:1.4;">
+                    {{ coach.type_desc }}
+                </div>
+                {% endif %}
+                {% if coach.primary_stats or coach.secondary_stats %}
+                <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:var(--spacing-md);">
+                    {% for s in coach.primary_stats %}
+                    <span style="font-size:.58rem;padding:1px 6px;border-radius:3px;
+                                 background:rgba(33,150,243,.15);color:var(--info);
+                                 border:1px solid rgba(33,150,243,.4);font-weight:600;">
+                        {{ s | replace('_', ' ') | title }}
+                    </span>
+                    {% endfor %}
+                    {% for s in coach.secondary_stats %}
+                    <span style="font-size:.55rem;padding:1px 5px;border-radius:3px;
+                                 background:rgba(255,255,255,.04);color:var(--text-muted);
+                                 border:1px solid rgba(255,255,255,.1);">
+                        {{ s | replace('_', ' ') | title }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endif %}
+
+                {# Legacy "Stats trained" pills — kept for any old market entries
+                   that still expose .focus from systems.game_start. #}
+                {% if coach.focus and not coach.primary_stats %}
                 <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--spacing-md);">
                     {% for stat in coach.focus %}
                     <span style="font-size:.6rem;padding:2px 6px;border-radius:3px;
