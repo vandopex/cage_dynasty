@@ -117,6 +117,12 @@
                 {% elif fighter.ranking %} ·
                     <span style="color:var(--info);">#{{ fighter.ranking }} Ranked</span>
                 {% endif %}
+                {% if is_hof %} ·
+                    <a href="{{ url_for('hall_of_fame') }}"
+                       style="color:var(--gold);text-decoration:none;">
+                        🏛️ Hall of Fame
+                    </a>
+                {% endif %}
             </div>
 
             {# Style-class banner — RPG class header #}

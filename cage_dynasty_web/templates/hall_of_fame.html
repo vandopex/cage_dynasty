@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Hall of Fame{% endblock %}
+
+{% block content %}
+
+{# ── Hero header ──────────────────────────────────────────── #}
+<div style="text-align:center;padding:var(--spacing-xl) 0;">
+    <div style="font-size:.65rem;letter-spacing:.3em;
+                text-transform:uppercase;color:var(--gold);
+                margin-bottom:var(--spacing-sm);">
+        Cage Dynasty
+    </div>
+    <h1 style="font-family:var(--font-display);
+               font-size:3rem;color:var(--gold);
+               letter-spacing:.05em;margin:0;line-height:1;">
+        🏛️ Hall of Fame
+    </h1>
+    <div style="color:var(--text-muted);margin-top:8px;
+                font-size:.85rem;">
+        The greatest fighters in Cage Dynasty history
+    </div>
+    <div style="font-size:.72rem;color:var(--text-muted);
+                margin-top:4px;">
+        {{ inductees|length }} inductee{% if inductees|length != 1 %}s{% endif %}
+    </div>
+</div>
+
+{% if not inductees %}
+{# Empty state — early career, no inductees yet #}
+<div class="card" style="text-align:center;
+                         padding:var(--spacing-xl);
+                         max-width:600px;margin:0 auto;">
+    <div style="font-size:3rem;margin-bottom:var(--spacing-md);">🏛️</div>
+    <div style="font-family:var(--font-display);
+                color:var(--text-muted);font-size:1.1rem;">
+        No inductees yet
+    </div>
+    <div style="color:var(--text-muted);font-size:.78rem;
+                margin-top:8px;">
+        The Hall of Fame opens after the first year of
+        competition. Check back after year-end awards.
+    </div>
+</div>
+{% else %}
+
+{# ── Prestige tier buckets ─────────────────────────────────── #}
+{% set legends = inductees | selectattr('prestige_score', 'ge', 200) | list %}
+{% set greats  = inductees | selectattr('prestige_score', 'ge', 100) | rejectattr('prestige_score', 'ge', 200) | list %}
+{% set standard = inductees | rejectattr('prestige_score', 'ge', 100) | list %}
+
+{# Tier rendering macro — keeps card layout DRY across all 3 tiers #}
+{% macro inductee_card(inductee, tier_color, tier_color_alpha, tier_icon, tier_label) %}
+<div class="card mb-md" style="border-color:{{ tier_color }};
+     background:linear-gradient(135deg,{{ tier_color_alpha }},transparent);">
+    <div style="height:3px;background:{{ tier_color }};"></div>
+    <div style="padding:var(--spacing-lg);">
+
+        {# Top row: tier badge + weight class + year #}
+        <div style="display:flex;justify-content:space-between;
+                    align-items:flex-start;margin-bottom:var(--spacing-md);">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span style="font-size:1.4rem;">{{ tier_icon }}</span>
+                <span style="font-family:var(--font-display);
+                             font-size:.65rem;letter-spacing:.15em;
+                             text-transform:uppercase;
+                             color:{{ tier_color }};">{{ tier_label }}</span>
+            </div>
+            <div style="text-align:right;font-size:.68rem;
+                        color:var(--text-muted);line-height:1.4;">
+                {{ inductee.weight_class }}<br>
+                Inducted Year {{ inductee.year_inducted }}
+            </div>
+        </div>
+
+        {# Name + nickname #}
+        <div>
+            <a href="{{ url_for('fighter_profile', fighter_id=inductee.fighter_id) }}"
+               style="font-family:var(--font-display);
+                      font-size:1.8rem;color:var(--text-bright);
+                      text-decoration:none;line-height:1.1;
+                      display:block;">
+                {{ inductee.name }}
+            </a>
+            {% if inductee.nickname %}
+            <div style="font-style:italic;color:var(--gold);
+                        font-size:.9rem;margin-top:2px;">
+                "{{ inductee.nickname }}"
+            </div>
+            {% endif %}
+        </div>
+
+        {# Record + stats row #}
+        <div style="display:flex;gap:var(--spacing-lg);
+                    flex-wrap:wrap;margin-top:var(--spacing-md);
+                    padding-top:var(--spacing-md);
+                    border-top:1px solid rgba(255,255,255,.06);
+                    align-items:center;">
+
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.4rem;color:var(--text-bright);">
+                    {{ inductee.record }}
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--text-muted);">
+                    Record
+                </div>
+            </div>
+
+            {% if inductee.title_reigns and inductee.title_reigns > 0 %}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.4rem;color:var(--gold);">
+                    {{ inductee.title_reigns }}x
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--text-muted);">
+                    Champion
+                </div>
+            </div>
+            {% endif %}
+
+            {% if inductee.title_defenses and inductee.title_defenses > 0 %}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.4rem;color:var(--neon-green);">
+                    {{ inductee.title_defenses }}
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--text-muted);">
+                    Defenses
+                </div>
+            </div>
+            {% endif %}
+
+            {% if inductee.best_rank and inductee.best_rank < 99 %}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.4rem;color:var(--info);">
+                    #{{ inductee.best_rank }}
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--text-muted);">
+                    Peak Rank
+                </div>
+            </div>
+            {% endif %}
+
+            {% set finishes = (inductee.ko_wins or 0) + (inductee.sub_wins or 0) %}
+            {% if finishes > 0 %}
+            <div style="text-align:center;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.4rem;color:var(--blood-red);">
+                    {{ finishes }}
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--text-muted);">
+                    Finishes
+                </div>
+            </div>
+            {% endif %}
+
+            {# Prestige score — right-aligned, muted #}
+            <div style="margin-left:auto;text-align:right;">
+                <div style="font-family:var(--font-display);
+                            font-size:1.2rem;color:var(--text-muted);">
+                    {{ inductee.prestige_score | int }}
+                </div>
+                <div style="font-size:.6rem;text-transform:uppercase;
+                            letter-spacing:.1em;color:var(--text-muted);">
+                    Prestige
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}
+
+{# ── Tier sections ─────────────────────────────────────────── #}
+{% macro tier_header(label, color, count) %}
+<div style="margin:var(--spacing-xl) 0 var(--spacing-md);
+            padding-bottom:8px;border-bottom:1px solid {{ color }};">
+    <div style="font-family:var(--font-display);font-size:.78rem;
+                letter-spacing:.2em;text-transform:uppercase;
+                color:{{ color }};">
+        {{ label }} <span style="color:var(--text-muted);font-size:.7rem;
+                                 letter-spacing:.1em;margin-left:6px;">
+            {{ count }} inductee{% if count != 1 %}s{% endif %}
+        </span>
+    </div>
+</div>
+{% endmacro %}
+
+{% if legends %}
+{{ tier_header('Legends', 'var(--gold)', legends|length) }}
+{% for inductee in legends %}
+{{ inductee_card(inductee, 'var(--gold)', 'rgba(255,215,0,.08)',
+                 '👑', 'Legend') }}
+{% endfor %}
+{% endif %}
+
+{% if greats %}
+{{ tier_header('All-Time Greats', 'var(--neon-green)', greats|length) }}
+{% for inductee in greats %}
+{{ inductee_card(inductee, 'var(--neon-green)', 'rgba(0,230,118,.06)',
+                 '⭐', 'All-Time Great') }}
+{% endfor %}
+{% endif %}
+
+{% if standard %}
+{{ tier_header('Hall of Famers', 'var(--info)', standard|length) }}
+{% for inductee in standard %}
+{{ inductee_card(inductee, 'var(--info)', 'rgba(33,150,243,.06)',
+                 '🏛️', 'Hall of Famer') }}
+{% endfor %}
+{% endif %}
+
+{% endif %}
+
+{% endblock %}

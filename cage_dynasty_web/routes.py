@@ -857,6 +857,17 @@ def register_routes(app):
         except Exception:
             next_fight = None
 
+        # Ship HOF2: HOF badge on fighter profile
+        is_hof = False
+        try:
+            if bridge.game_started and hasattr(bridge, 'get_record_book'):
+                rb = bridge.get_record_book() or {}
+                hof_ids = {h.get('fighter_id') for h in
+                           (rb.get('hof_inductees') or [])}
+                is_hof = fighter.fighter_id in hof_ids
+        except Exception:
+            is_hof = False
+
         return render_template('fighter_profile.html',
             fighter=fighter,
             attributes=attributes,
@@ -877,6 +888,7 @@ def register_routes(app):
             next_fight=next_fight,
             is_free_agent=is_free_agent,
             can_sign=can_sign,
+            is_hof=is_hof,
             week=bridge.week_number,
         )
     
@@ -2468,7 +2480,7 @@ def register_routes(app):
 
     @app.route('/record-book')
     def record_book():
-        """DFC record book — all-time stats and records."""
+        """Cage Dynasty record book — all-time stats and records."""
         bridge = get_bridge()
         if not bridge.game_started:
             return redirect(url_for('new_game'))
@@ -2479,6 +2491,23 @@ def register_routes(app):
         return render_template('record_book.html',
             week=bridge.week_number,
             records=records,
+        )
+
+    @app.route('/hall-of-fame')
+    def hall_of_fame():
+        """Standalone Hall of Fame — museum-feel surface for HOF1 data."""
+        bridge = get_bridge()
+        inductees = []
+        if bridge.game_started:
+            try:
+                rb = bridge.get_record_book() if hasattr(
+                    bridge, 'get_record_book') else {}
+                inductees = rb.get('hof_inductees', []) or []
+            except Exception:
+                inductees = []
+        return render_template('hall_of_fame.html',
+            inductees=inductees,
+            week=bridge.week_number if bridge.game_started else 0,
         )
 
     @app.route('/compare')

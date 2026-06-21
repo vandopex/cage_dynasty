@@ -169,6 +169,9 @@
                 <a href="{{ url_for('record_book') }}" class="nav-link {% if request.endpoint == 'record_book' %}active{% endif %}">
                     <span class="icon">📊</span><span>Record Book</span>
                 </a>
+                <a href="{{ url_for('hall_of_fame') }}" class="nav-link {% if request.endpoint == 'hall_of_fame' %}active{% endif %}">
+                    <span class="icon">🏛️</span><span>Hall of Fame</span>
+                </a>
                 <a href="{{ url_for('compare_fighters') }}" class="nav-link {% if request.endpoint == 'compare_fighters' %}active{% endif %}">
                     <span class="icon">⚖️</span><span>Compare</span>
                 </a>
