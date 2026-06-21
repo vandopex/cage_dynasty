@@ -44,66 +44,11 @@
 </div>
 
 
-{# ── FOTN Banner ── #}
-{% if event and event.fotn and event.fotn.fight_id == fight.fight_id %}
-<div style="margin-bottom:var(--spacing-lg);padding:var(--spacing-md) var(--spacing-xl);
-            background:linear-gradient(135deg,rgba(255,107,0,.12),rgba(255,215,0,.12));
-            border:1px solid rgba(255,215,0,.5);border-radius:8px;
-            display:flex;align-items:center;justify-content:center;gap:var(--spacing-lg);">
-    <span style="font-size:2rem;">🔥</span>
-    <div style="text-align:center;">
-        <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--gold);letter-spacing:.08em;">
-            FIGHT OF THE NIGHT
-        </div>
-        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
-            $50,000 bonus awarded to each fighter
-        </div>
-    </div>
-    <span style="font-size:2rem;">🔥</span>
-</div>
-{% endif %}
-
-{# ── Scorecard (if decision) ── #}
-{% if scorecard and fight.method not in ('KO','TKO','SUB') %}
-<div class="card mb-lg">
-    <div class="card-header"><h3>🗳️ Judges' Scorecard</h3></div>
-    <div style="padding:var(--spacing-md);">
-        <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
-            <thead>
-                <tr>
-                    <th style="text-align:left;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">Judge</th>
-                    <th style="text-align:center;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">{{ fight.fighter1_name }}</th>
-                    <th style="text-align:center;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">{{ fight.fighter2_name }}</th>
-                    <th style="text-align:center;padding:6px;color:var(--text-bright);border-bottom:1px solid var(--border-color);">Winner</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for judge in scorecard.judges %}
-                {% set f1 = judge.f1_score if judge.f1_score is defined else judge.get('f1_score', 0) if judge.get is defined else 0 %}
-                {% set f2 = judge.f2_score if judge.f2_score is defined else judge.get('f2_score', 0) if judge.get is defined else 0 %}
-                <tr>
-                    <td style="padding:6px;color:var(--text-muted);">Judge {{ loop.index }}</td>
-                    <td style="text-align:center;padding:6px;
-                               color:{% if f1 > f2 %}var(--neon-green){% elif f2 > f1 %}var(--blood-red){% else %}var(--text-muted){% endif %};">
-                        {{ f1 }}
-                    </td>
-                    <td style="text-align:center;padding:6px;
-                               color:{% if f2 > f1 %}var(--neon-green){% elif f1 > f2 %}var(--blood-red){% else %}var(--text-muted){% endif %};">
-                        {{ f2 }}
-                    </td>
-                    <td style="text-align:center;padding:6px;font-size:.75rem;color:var(--text-muted);">
-                        {% if f1 > f2 %}{{ fight.fighter1_name }}{% elif f2 > f1 %}{{ fight.fighter2_name }}{% else %}Draw{% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <div style="margin-top:var(--spacing-sm);font-size:.72rem;color:var(--text-muted);text-align:center;">
-            {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %} (left) · {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %} (right)
-        </div>
-    </div>
-</div>
-{% endif %}
+{# Anti-spoiler — FOTN banner and Scorecard moved to AFTER the
+   commentary rounds. Showing them up here would reveal that the
+   fight was great (FOTN) or that it went to decision (scorecard
+   only renders for DEC fights). Both now render below alongside
+   the Official Result block. #}
 
 {# ── Commentary ── #}
 <div id="live-controls" style="
@@ -386,6 +331,67 @@
         {% endif %}
     </div>
 </div>
+
+{# ── FOTN Banner (moved from top) — anti-spoiler ── #}
+{% if event and event.fotn and event.fotn.fight_id == fight.fight_id %}
+<div style="margin-bottom:var(--spacing-lg);padding:var(--spacing-md) var(--spacing-xl);
+            background:linear-gradient(135deg,rgba(255,107,0,.12),rgba(255,215,0,.12));
+            border:1px solid rgba(255,215,0,.5);border-radius:8px;
+            display:flex;align-items:center;justify-content:center;gap:var(--spacing-lg);">
+    <span style="font-size:2rem;">🔥</span>
+    <div style="text-align:center;">
+        <div style="font-family:var(--font-display);font-size:1.1rem;color:var(--gold);letter-spacing:.08em;">
+            FIGHT OF THE NIGHT
+        </div>
+        <div style="font-size:.75rem;color:var(--text-muted);margin-top:2px;">
+            $50,000 bonus awarded to each fighter
+        </div>
+    </div>
+    <span style="font-size:2rem;">🔥</span>
+</div>
+{% endif %}
+
+{# ── Scorecard (moved from top) — anti-spoiler. Decision fights only ── #}
+{% if scorecard and fight.method not in ('KO','TKO','SUB') %}
+<div class="card mb-lg">
+    <div class="card-header"><h3>🗳️ Judges' Scorecard</h3></div>
+    <div style="padding:var(--spacing-md);">
+        <table style="width:100%;border-collapse:collapse;font-size:.82rem;">
+            <thead>
+                <tr>
+                    <th style="text-align:left;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">Judge</th>
+                    <th style="text-align:center;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">{{ fight.fighter1_name }}</th>
+                    <th style="text-align:center;padding:6px;color:var(--text-muted);border-bottom:1px solid var(--border-color);">{{ fight.fighter2_name }}</th>
+                    <th style="text-align:center;padding:6px;color:var(--text-bright);border-bottom:1px solid var(--border-color);">Winner</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for judge in scorecard.judges %}
+                {% set f1 = judge.f1_score if judge.f1_score is defined else judge.get('f1_score', 0) if judge.get is defined else 0 %}
+                {% set f2 = judge.f2_score if judge.f2_score is defined else judge.get('f2_score', 0) if judge.get is defined else 0 %}
+                <tr>
+                    <td style="padding:6px;color:var(--text-muted);">Judge {{ loop.index }}</td>
+                    <td style="text-align:center;padding:6px;
+                               color:{% if f1 > f2 %}var(--neon-green){% elif f2 > f1 %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+                        {{ f1 }}
+                    </td>
+                    <td style="text-align:center;padding:6px;
+                               color:{% if f2 > f1 %}var(--neon-green){% elif f1 > f2 %}var(--blood-red){% else %}var(--text-muted){% endif %};">
+                        {{ f2 }}
+                    </td>
+                    <td style="text-align:center;padding:6px;font-size:.75rem;color:var(--text-muted);">
+                        {% if f1 > f2 %}{{ fight.fighter1_name }}{% elif f2 > f1 %}{{ fight.fighter2_name }}{% else %}Draw{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div style="margin-top:var(--spacing-sm);font-size:.72rem;color:var(--text-muted);text-align:center;">
+            {% if fight.fighter1_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter1_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter1_name }}</a>{% else %}{{ fight.fighter1_name }}{% endif %} (left) · {% if fight.fighter2_id %}<a href="{{ url_for('fighter_profile', fighter_id=fight.fighter2_id) }}" style="color:inherit;text-decoration:none;">{{ fight.fighter2_name }}</a>{% else %}{{ fight.fighter2_name }}{% endif %} (right)
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% else %}
 {# No commentary stored — show basic result #}
