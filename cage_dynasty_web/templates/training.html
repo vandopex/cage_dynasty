@@ -377,6 +377,7 @@
                     'STRIKING:boxing':   '🥊 Boxing ×1.0 · 🦵 Kicks ×0.5 · 👊 Clinch ×0.25 · 🛡 Defense ×0.25',
                     'STRIKING:kicks':    '🦵 Kicks ×1.0 · 🥊 Boxing ×0.5 · 👊 Clinch ×0.5 · 🛡 Defense ×0.25',
                     'STRIKING:clinch':   '👊 Clinch ×1.0 · 🥊 Boxing ×0.5 · 🦵 Kicks ×0.25 · 🛡 Defense ×0.25',
+                    'STRIKING:clinch_control': '💪 Clinch Ctrl ×1.0 · 👊 Clinch Strike ×0.3 · 🤼 Takedowns ×0.2',
                     'STRIKING:defense':  '🛡 Defense ×1.0 · 🥊 Boxing ×0.25 · 🦵 Kicks ×0.25 · 👊 Clinch ×0.25',
                     'GRAPPLING:takedowns':        '🤼 Takedowns ×1.0 · ⬇️ Top Control ×0.5 · 🦅 TD Def ×0.25 · 🛡 Guard ×0.25',
                     'GRAPPLING:takedown_defense': '🦅 TD Defense ×1.0 · 🤼 Takedowns ×0.5 · 🛡 Guard ×0.25',
@@ -2109,8 +2110,25 @@ function showTemplatePicker(fighterId, style, styleTmpls, scTmpl) {
 }
 
 function applyPickedTemplate(fighterId, style, idx) {
-    const cache = window._fighterTemplates && window._fighterTemplates[fighterId];
-    if (!cache) return;
+    // Self-sufficient: if cache is missing (user clicked "Use This"
+    // before "Load Template"), rebuild it from the coach-rec div's
+    // data-stats attribute. Defaults intensity to INTENSE — user can
+    // adjust via the queue intensity dropdown.
+    let cache = window._fighterTemplates && window._fighterTemplates[fighterId];
+    if (!cache) {
+        const el = document.getElementById('coach-rec-' + fighterId);
+        if (!el) return;
+        const stats = (el.dataset.stats || '').split(',').map(Number);
+        if (stats.length !== 18 || stats.some(isNaN)) return;
+        try {
+            const templates = buildStyleTemplates(...stats);
+            cache = { templates: templates, intensity: 'INTENSE' };
+            window._fighterTemplates = window._fighterTemplates || {};
+            window._fighterTemplates[fighterId] = cache;
+        } catch (e) {
+            return;
+        }
+    }
     const { templates, intensity } = cache;
 
     let tmpl;
