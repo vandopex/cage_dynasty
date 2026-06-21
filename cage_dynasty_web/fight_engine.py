@@ -1337,7 +1337,17 @@ def select_action(
     if position in _DOMINANT_CLUSTER_POSITIONS:
         position_secured = fight_state.dominant_control_duration >= 3
     else:
-        position_secured = fight_state.position_duration >= 5
+        # Ship Sub-Fix: elite BJJ sets up faster from bottom/guard
+        # positions — skilled grapplers need fewer ticks to find the
+        # opening. Dominant-cluster keeps the 3-tick threshold above.
+        _subs = getattr(fighter_attrs, 'submissions', 0) or 0
+        if _subs >= 85 and position in (GUARD_POSITIONS | INFERIOR_POSITIONS):
+            _secure_threshold = 2
+        elif _subs >= 75:
+            _secure_threshold = 4
+        else:
+            _secure_threshold = 5
+        position_secured = fight_state.position_duration >= _secure_threshold
     
     # Filter submissions by BJJ skill
     if submissions:
