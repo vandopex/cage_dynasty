@@ -187,7 +187,12 @@ class CampRecord:
     total_wins: int = 0
     total_losses: int = 0
     titles_held: int = 0
-    
+
+    # Ship AI-Coach: dominant coach type derived from fighter styles
+    # at world-gen. Read by AI training loop for style-fit bonus.
+    # Empty for legacy saves / camps without coach-type assignment.
+    dominant_coach_type: str = ""
+
     @property
     def location_str(self) -> str:
         """Get formatted location string"""
@@ -213,6 +218,7 @@ class CampRecord:
             "total_wins": self.total_wins,
             "total_losses": self.total_losses,
             "titles_held": self.titles_held,
+            "dominant_coach_type": self.dominant_coach_type,
         }
 
     @classmethod
@@ -221,7 +227,8 @@ class CampRecord:
         valid_fields = {
             "camp_id", "name", "is_player", "tier", "fighter_count",
             "balance", "reputation", "location", "city", "country", "region",
-            "total_wins", "total_losses", "titles_held"
+            "total_wins", "total_losses", "titles_held",
+            "dominant_coach_type",
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered_data)

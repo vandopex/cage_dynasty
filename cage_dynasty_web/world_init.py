@@ -2668,6 +2668,18 @@ class WorldInitializer:
                 fighter_count=len(camp.fighter_ids),
                 location=camp.location,
             )
+        # Ship AI-Coach: ferry dominant_coach_type onto the registry
+        # record so the AI training loop can apply style-fit bonus.
+        # Setattr-after-construction is defensive — works for both
+        # add_camp and direct-CampRecord paths regardless of whether
+        # the underlying class declares the field.
+        try:
+            _dom = getattr(camp, 'dominant_coach_type', '')
+            if _dom and camp.camp_id in self.game_state.camps:
+                setattr(self.game_state.camps[camp.camp_id],
+                        'dominant_coach_type', _dom)
+        except Exception:
+            pass
 
         # Generate equipment for AI camp based on tier
         try:

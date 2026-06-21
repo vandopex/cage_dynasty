@@ -10078,10 +10078,38 @@ class GameBridge:
                 elif current >= effective_cap - 5:
                     _cap_mod = 0.4
 
+                # ── Ship AI-Coach: style-fit bonus ──
+                # AI fighter in a camp whose dominant_coach_type matches
+                # the fighter's style develops faster in the coach's
+                # primary domain. Mirrors the player system's
+                # COACH_STYLE_FIT_BONUS (+15%) for parity.
+                # Coverage gate: stats outside the coach's primary or
+                # secondary domain suffer the same 0.85x penalty.
+                _ai_style_bonus = 1.0
+                _dom_type = getattr(camp, 'dominant_coach_type', '') or ''
+                if _dom_type:
+                    _ct_def = COACH_TYPES.get(_dom_type, {})
+                    _ct_primary = _ct_def.get('primary', [])
+                    _ct_secondary = _ct_def.get('secondary', [])
+                    _style_match = _ct_def.get('style_match', [])
+                    # Style bonus on primary stats only
+                    if focus_attr in _ct_primary:
+                        if style in _style_match:
+                            _ai_style_bonus = 1 + COACH_STYLE_FIT_BONUS
+                        elif not _style_match:
+                            # S&C — universal, half bonus
+                            _ai_style_bonus = 1 + (
+                                COACH_STYLE_FIT_BONUS * 0.5)
+                    # Coverage penalty when stat isn't in coach domain
+                    if (focus_attr not in _ct_primary
+                            and focus_attr not in _ct_secondary):
+                        _ai_style_bonus *= 0.85
+
                 effective = (base_gain
                     * age_gain_mult
                     * _coach_gain_mult
-                    * _cap_mod)
+                    * _cap_mod
+                    * _ai_style_bonus)
 
                 if effective > 0.02 and hasattr(
                         fighter, focus_attr):
