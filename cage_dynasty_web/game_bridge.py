@@ -5685,6 +5685,9 @@ class GameBridge:
         fdict = self._make_scheduled_fight(
             f1, f2, wc, event_name, target_week, "main_event", is_title=True,
         )
+        if not fdict:
+            # _make_scheduled_fight refused (self-fight guard or null fighter)
+            return None
 
         # Routing: direct-write to in-window card with open main_event slot,
         # else queue for Phase 2 hand-off (lead-time path) or fail (override).
@@ -11653,8 +11656,16 @@ class GameBridge:
 
         return {"success": False, "error": "Invalid action"}
 
-    def _book_fight_from_neg(self, neg: Dict) -> Dict:
-        """Convert a completed negotiation into a scheduled fight."""
+    def _book_fight_from_neg(self, neg: Dict) -> Optional[Dict]:
+        """Convert a completed negotiation into a scheduled fight.
+        Self-fight guard returns None defensively — the negotiation
+        UI shouldn't surface own-fighter targets, but the fallback
+        keeps a future UI regression from silently booking a fighter
+        against themselves."""
+        if neg.get("player_fighter_id") == neg.get("ai_fighter_id"):
+            print(f"  ⚠️ [BOOK_NEG] Self-fight refused — "
+                  f"{neg.get('player_fighter_name', '?')} vs themselves")
+            return None
         fight = {
             "fight_id":      f"fight_{neg['player_fighter_id']}_{neg['ai_fighter_id']}",
             "fighter1_id":   neg["player_fighter_id"],
@@ -15205,6 +15216,8 @@ class GameBridge:
                     co_main_used += 1
                 fight_dict = self._make_scheduled_fight(
                     f1, f2, wc, event_name, target_week, slot, is_title=is_title)
+                if not fight_dict:
+                    continue  # self-fight guard tripped; skip
                 card["fights"].append(fight_dict)
                 if len(card["fights"]) >= target_count:
                     card["locked"] = True
@@ -15213,6 +15226,8 @@ class GameBridge:
                 _q_event_name = self._dfc_label(computed_target_week)
                 fight_dict = self._make_scheduled_fight(
                     f1, f2, wc, _q_event_name, computed_target_week, slot, is_title=is_title)
+                if not fight_dict:
+                    continue  # self-fight guard tripped; skip
                 self._ai_deferred_bookings.append(fight_dict)
                 print(f"  📅 [LEAD-TIME QUEUE] {f1.name} vs {f2.name} → "
                       f"{_q_event_name} ({computed_target_week - target_week:+d}w)")
@@ -15257,8 +15272,23 @@ class GameBridge:
 
     def _make_scheduled_fight(self, f1, f2, wc: str, event_name: str,
                                target_week: int, slot: str,
-                               is_title: bool = False) -> Dict[str, Any]:
-        """Build a scheduled fight dict for the card pipeline."""
+                               is_title: bool = False) -> Optional[Dict[str, Any]]:
+        """Build a scheduled fight dict for the card pipeline.
+
+        Defense-in-depth: refuses self-fights (f1.fighter_id ==
+        f2.fighter_id). Every upstream caller already excludes the
+        champion/booked fighter, but this funnel is the last gate
+        before a fight enters the pipeline. Returning None forces
+        callers to skip the append, surfacing any future regression
+        as a missing fight rather than a nonsensical one."""
+        if f1 is None or f2 is None:
+            print(f"  ⚠️ [MAKE_FIGHT] Null fighter — refused ({wc}, {event_name})")
+            return None
+        if f1.fighter_id == f2.fighter_id:
+            print(f"  ⚠️ [MAKE_FIGHT] Self-fight refused — "
+                  f"{getattr(f1, 'name', f1.fighter_id)} vs themselves "
+                  f"({wc}, {event_name})")
+            return None
         weeks_out = target_week - (self._game_state.week_number if self._game_state else 0)
         return {
             "fight_id":       f"fight_{target_week}_{f1.fighter_id}_{f2.fighter_id}",
@@ -15500,6 +15530,8 @@ class GameBridge:
                 co_main_used += 1
             fight_dict = self._make_scheduled_fight(
                 f1, f2, wc, event_name, target_week, slot, is_title=is_title)
+            if not fight_dict:
+                continue  # self-fight guard tripped; skip
             card["fights"].append(fight_dict)
             locally_booked.add(f1.fighter_id)
             locally_booked.add(f2.fighter_id)
