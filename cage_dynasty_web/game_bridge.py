@@ -7196,15 +7196,23 @@ class GameBridge:
                         if _goal_target > 0 and _cur_stat_val >= _goal_target:
                             plan['queue_index'] = _q_idx + 1
                             _q_idx += 1
+                            # Auto-maintain on hit — lock the floor at the
+                            # achieved target so the stat is now protected
+                            # at that level. Clamped 50-95 to match the
+                            # unified-grid floor range. Existing manual
+                            # floor wins if it's already higher.
+                            _floors_map = plan.setdefault('floors', {})
+                            _lock = max(50, min(95, int(_goal_target)))
+                            if _lock > int(_floors_map.get(_primary_stat, 0) or 0):
+                                _floors_map[_primary_stat] = _lock
                             _fname2 = getattr(
                                 self._game_state.get_fighter(fid),
                                 'name', '') if self._game_state else ''
                             self._news_items.insert(0, {
                                 "headline": (
-                                    f"🎯 {_fname2} hit their training goal — "
+                                    f"🎯 {_fname2} hit their "
                                     f"{_primary_stat.replace('_',' ').title()} "
-                                    f"reached {_goal_target}. "
-                                    f"Moving to next goal."),
+                                    f"goal ({_goal_target})! Now maintaining."),
                                 "category": "training",
                                 "week": self._game_state.week_number
                                     if self._game_state else 0,

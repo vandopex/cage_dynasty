@@ -1042,9 +1042,20 @@ def register_routes(app):
 
         # Training plans per fighter
         training_plans = {}
+        # Unified-grid: precompute per-stat targets from the saved queue
+        # so the template doesn't need Jinja namespace gymnastics. Targets
+        # map: {stat_key: target_value}. Zero/missing == no active goal.
+        stat_targets = {}
         for f in fighters:
             plan = bridge.get_training_plan(f.fighter_id)
             training_plans[f.fighter_id] = plan
+            _t = {}
+            for _g in (plan.get('queue', []) or []):
+                _focus = (_g.get('focus') or '').strip()
+                _tgt   = int(_g.get('target', 0) or 0)
+                if _focus and _focus != 'maintain' and _tgt > 0:
+                    _t[_focus] = _tgt
+            stat_targets[f.fighter_id] = _t
 
         # Decay risk per fighter — surfaces on training page
         decay_risks = {}
@@ -1126,6 +1137,7 @@ def register_routes(app):
             coach=coach,
             staff_developing=staff_developing,
             training_plans=training_plans,
+            stat_targets=stat_targets,
             training_groups=training_groups,
             intensity_options=intensity_options,
             decay_risks=decay_risks,
@@ -1208,6 +1220,69 @@ def register_routes(app):
             return redirect(url_for('training'))
         bridge.clear_training_queue(fighter_id)
         flash("Training queue cleared — back to manual mode.", "success")
+        return redirect(url_for('training'))
+
+    @app.route('/training/set_unified/<fighter_id>', methods=['POST'])
+    def set_unified_training(fighter_id):
+        """Unified stat-grid submit — single POST carries all 18 floor_
+        and target_ fields plus intensity. Builds the training queue
+        from non-zero targets (preserving the grid order) and saves
+        floors alongside. The existing queue advancement + auto-maintain
+        hook in _apply_weekly_training does the rest."""
+        bridge = get_bridge()
+        if not bridge.game_started:
+            return jsonify({"error": "No game loaded"}), 400
+
+        all_stats = [
+            'boxing','kicks','clinch_striking','clinch_control','striking_defense',
+            'takedowns','takedown_defense','top_control','submissions','guard',
+            'strength','speed','cardio','chin','recovery',
+            'heart','fight_iq','composure',
+        ]
+
+        # Floors — clamp 50-95, step 5 enforced server-side too.
+        floors = {}
+        for stat in all_stats:
+            raw = request.form.get(f'floor_{stat}', '50').strip()
+            try:
+                val = int(raw) if raw else 50
+            except ValueError:
+                val = 50
+            val = max(50, min(95, (val // 5) * 5))
+            floors[stat] = val
+        bridge.set_stat_floors(fighter_id, floors)
+
+        # Targets — build queue in stat-grid order. Skip targets that
+        # are at or below current stat value (already maintained).
+        fighter = bridge.get_fighter(fighter_id)
+        queue = []
+        for stat in all_stats:
+            raw = request.form.get(f'target_{stat}', '0').strip()
+            try:
+                tgt = int(raw) if raw else 0
+            except ValueError:
+                tgt = 0
+            if tgt <= 0:
+                continue
+            tgt = max(0, min(99, (tgt // 5) * 5))
+            cur = int(getattr(fighter, stat, 0)) if fighter else 0
+            if tgt > cur:
+                queue.append({"focus": stat, "target": tgt})
+
+        intensity = request.form.get('intensity', 'MODERATE').upper()
+        if intensity not in ('REST','LIGHT','MODERATE','INTENSE','EXTREME'):
+            intensity = 'MODERATE'
+
+        if queue:
+            bridge.set_training_queue(fighter_id, queue, intensity)
+            flash(f"Training plan saved — {len(queue)} stat"
+                  f"{'s' if len(queue) != 1 else ''} targeted. "
+                  f"Floors locked in.", "success")
+        else:
+            # No active targets — clear queue, keep floors (maintain only).
+            bridge.clear_training_queue(fighter_id)
+            flash("Maintenance mode — floors locked in, no active goals.", "success")
+
         return redirect(url_for('training'))
 
     @app.route('/training/set', methods=['POST'])

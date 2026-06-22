@@ -175,53 +175,6 @@
             </div>
         </div>
     </div>
-    {# ── Stat overview — visible while setting floors/queue ── #}
-    <div style="padding:var(--spacing-sm) var(--spacing-md);
-                border-bottom:1px solid rgba(255,255,255,.06);">
-        <div style="font-size:.58rem;text-transform:uppercase;
-                    letter-spacing:.1em;color:var(--text-muted);
-                    margin-bottom:6px;">Current Stats</div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);
-                    gap:3px 8px;">
-        {% for label, stat_key, color in [
-            ('Boxing',    'boxing',            'var(--info)'),
-            ('Kicks',     'kicks',             'var(--info)'),
-            ('Clinch',    'clinch_striking',   'var(--info)'),
-            ('Clinch Ctrl', 'clinch_control',  'var(--info)'),
-            ('Str Def',   'striking_defense',  'var(--info)'),
-            ('Takedowns', 'takedowns',         'var(--neon-green)'),
-            ('TD Def',    'takedown_defense',  'var(--neon-green)'),
-            ('Top Ctrl',  'top_control',       'var(--neon-green)'),
-            ('Subs',      'submissions',       'var(--neon-green)'),
-            ('Guard',     'guard',             'var(--neon-green)'),
-            ('Strength',  'strength',          'var(--warning)'),
-            ('Speed',     'speed',             'var(--warning)'),
-            ('Cardio',    'cardio',            'var(--warning)'),
-            ('Chin',      'chin',              'var(--warning)'),
-            ('Recovery',  'recovery',          'var(--warning)'),
-            ('Fight IQ',  'fight_iq',          'var(--gold)'),
-            ('Composure', 'composure',         'var(--gold)'),
-            ('Heart',     'heart',             'var(--gold)'),
-        ] %}
-        {% set _sv = fighter|attr(stat_key) %}
-        {% set _floor_v = fighter.stat_floors.get(stat_key, 0) %}
-        <div style="display:flex;justify-content:space-between;
-                    align-items:center;padding:2px 0;">
-            <span style="font-size:.6rem;color:var(--text-muted);">
-                {{ label }}</span>
-            <span style="font-size:.68rem;font-weight:700;
-                         color:{{ color }};">
-                {{ _sv }}
-                {% if _floor_v %}
-                <span style="font-size:.55rem;color:rgba(99,179,237,.6);"
-                      title="Floor set at {{ _floor_v }}">▸{{ _floor_v }}</span>
-                {% endif %}
-            </span>
-        </div>
-        {% endfor %}
-        </div>
-    </div>
-
     {% if fighter.fight_camp_active %}
     <div style="margin:0 var(--spacing-md) var(--spacing-sm);
                 background:rgba(255,165,0,.08);
@@ -352,564 +305,311 @@
     {% endif %}
     {% endif %}
 
-    <form action="{{ url_for('set_training') }}" method="POST"
+    {# ── UNIFIED STAT GRID ────────────────────────────────────────
+       Single form per fighter. All 18 floors + 18 targets + intensity
+       submit at once. Hidden inputs paired with visible steppers; JS
+       keeps them in sync. Categories use native <details> for collapse.
+       Floor range 50-95 (universal minimum). Target range cur-99. #}
+    {% set _saved_targets = stat_targets.get(fighter.fighter_id, {}) %}
+    {% set _saved_floors  = plan.get('floors', {}) %}
+    {% set _saved_intensity = (plan.get('queue_intensity') or
+                              plan.get('intensity') or 'MODERATE')|upper %}
+    {% set _STAT_CATS = [
+        ('striking', '👊 Striking', True, [
+            ('boxing','Boxing'), ('kicks','Kicks'),
+            ('clinch_striking','Clinch Striking'),
+            ('clinch_control','Clinch Control'),
+            ('striking_defense','Striking Defense'),
+        ]),
+        ('grappling', '🥋 Grappling', False, [
+            ('takedowns','Takedowns'),
+            ('takedown_defense','Takedown Defense'),
+            ('top_control','Top Control'),
+            ('submissions','Submissions'),
+            ('guard','Guard'),
+        ]),
+        ('physical', '💪 Physical', True, [
+            ('strength','Strength'), ('speed','Speed'),
+            ('cardio','Cardio'), ('chin','Chin'),
+            ('recovery','Recovery'),
+        ]),
+        ('mental', '🧠 Mental', False, [
+            ('heart','Heart'), ('fight_iq','Fight IQ'),
+            ('composure','Composure'),
+        ]),
+    ] %}
+
+    {# Template + coach rec row — outside the form so it can mutate
+       the form's target/floor inputs without a nested-form risk. #}
+    <div style="padding:var(--spacing-md);
+                border-bottom:1px solid rgba(255,255,255,.06);">
+        <div style="display:flex;align-items:flex-start;
+                    gap:var(--spacing-md);flex-wrap:wrap;">
+            <div style="flex:1;min-width:200px;">
+                <div style="font-size:.62rem;color:var(--text-muted);
+                            text-transform:uppercase;letter-spacing:.08em;
+                            margin-bottom:4px;">Style Template</div>
+                <button type="button"
+                        onclick="loadStyleTemplate(
+                            '{{ fighter.fighter_id }}',
+                            '{{ fighter.fighting_style }}',
+                            {{ fighter.boxing }},{{ fighter.kicks }},
+                            {{ fighter.clinch_striking }},
+                            {{ fighter.clinch_control }},
+                            {{ fighter.striking_defense }},
+                            {{ fighter.takedowns }},
+                            {{ fighter.takedown_defense }},
+                            {{ fighter.top_control }},
+                            {{ fighter.submissions }},{{ fighter.guard }},
+                            {{ fighter.strength }},{{ fighter.speed }},
+                            {{ fighter.cardio }},{{ fighter.chin }},
+                            {{ fighter.recovery }},{{ fighter.fight_iq }},
+                            {{ fighter.composure }},{{ fighter.heart }},
+                            '{{ fighter.career_phase }}')"
+                        style="font-size:.72rem;padding:6px 14px;
+                               background:rgba(255,165,0,.08);
+                               border:1px solid rgba(255,165,0,.25);
+                               color:var(--gold);border-radius:4px;
+                               cursor:pointer;">
+                    ✨ Load {{ fighter.fighting_style }} Template
+                </button>
+            </div>
+            <div style="flex:2;min-width:240px;">
+                <div id="coach-rec-{{ fighter.fighter_id }}"
+                     data-fid="{{ fighter.fighter_id }}"
+                     data-style="{{ fighter.fighting_style }}"
+                     data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.clinch_control }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
+                     data-fight-weeks="{% if _nf %}{{ _nf.weeks_until }}{% else %}-1{% endif %}"
+                     data-fight-opp="{% if _nf and _nf.opponent %}{{ _nf.opponent }}{% endif %}"
+                     style="font-size:.72rem;color:var(--text-muted);">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form method="POST"
+          action="{{ url_for('set_unified_training',
+                             fighter_id=fighter.fighter_id) }}"
+          id="unified-form-{{ fighter.fighter_id }}"
           data-injured="{{ '1' if fighter.is_injured else '0' }}"
           data-fighter-id="{{ fighter.fighter_id }}">
-        <input type="hidden" name="fighter_id" value="{{ fighter.fighter_id }}">
-        <div style="padding:var(--spacing-md);display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);">
 
-            {# Focus — two-stage picker: GROUP then EMPHASIS.
-               Hidden input submits "STRIKING:boxing" etc.
-               Bridge resolves legacy flat saves via _FOCUS_LEGACY_MAP. #}
-            <div class="focus-picker">
-                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Training Focus<i class="tip-icon" data-tip="Focus determines which stats improve this week alongside your coach's passive gains. Stacking focus and coach specialty in the same domain accelerates development in that area.">ⓘ</i></div>
-                {% set saved = plan.get('focus', '') %}
-                {% if saved and ':' in saved %}
-                    {% set saved_grp = saved.split(':')[0] %}
-                    {% set saved_emp = saved.split(':')[1] %}
-                {% else %}
-                    {% set saved_grp = '' %}
-                    {% set saved_emp = '' %}
-                {% endif %}
-                {# Tier breakdown per emphasis — mirrors _TRAINING_GROUPS weights
-                   in game_bridge.py. Keep aligned if weights change. #}
-                {% set emp_tiers = {
-                    'STRIKING:boxing':   '🥊 Boxing ×1.0 · 🦵 Kicks ×0.5 · 👊 Clinch ×0.25 · 🛡 Defense ×0.25',
-                    'STRIKING:kicks':    '🦵 Kicks ×1.0 · 🥊 Boxing ×0.5 · 👊 Clinch ×0.5 · 🛡 Defense ×0.25',
-                    'STRIKING:clinch':   '👊 Clinch ×1.0 · 🥊 Boxing ×0.5 · 🦵 Kicks ×0.25 · 🛡 Defense ×0.25',
-                    'STRIKING:clinch_control': '💪 Clinch Ctrl ×1.0 · 👊 Clinch Strike ×0.3 · 🤼 Takedowns ×0.2',
-                    'STRIKING:defense':  '🛡 Defense ×1.0 · 🥊 Boxing ×0.25 · 🦵 Kicks ×0.25 · 👊 Clinch ×0.25',
-                    'GRAPPLING:takedowns':        '🤼 Takedowns ×1.0 · ⬇️ Top Control ×0.5 · 🦅 TD Def ×0.25 · 🛡 Guard ×0.25',
-                    'GRAPPLING:takedown_defense': '🦅 TD Defense ×1.0 · 🤼 Takedowns ×0.5 · 🛡 Guard ×0.25',
-                    'GRAPPLING:top_control':      '⬇️ Top Control ×1.0 · 🤼 Takedowns ×0.5 · 🔒 Subs ×0.25 · 🛡 Guard ×0.25',
-                    'GRAPPLING:submissions':      '🔒 Submissions ×1.0 · 🛡 Guard ×0.5 · ⬇️ Top Control ×0.25',
-                    'GRAPPLING:guard':            '🛡 Guard ×1.0 · 🔒 Submissions ×0.5 · 🦅 TD Def ×0.25',
-                    'CONDITIONING:cardio':    '❤️ Cardio ×1.0 · Recovery ×0.5 · 💪 Heart ×0.25',
-                    'CONDITIONING:strength':  '⚡ Strength ×1.0 · ❤️ Cardio ×0.5 · 🦴 Chin ×0.25',
-                    'CONDITIONING:toughness': '🦴 Chin ×1.0 · 💪 Heart ×0.5 · Recovery ×0.5',
-                    'MENTAL:fight_iq':  '🧠 Fight IQ ×1.0 · 🧘 Composure ×0.5 · 🛡 Strike Def ×0.25',
-                    'MENTAL:composure': '🧘 Composure ×1.0 · 🧠 Fight IQ ×0.5 · 💪 Heart ×0.25',
-                    'SPARRING:sparring': '🥊 Boxing ×0.5 · 🦅 TD Def ×0.5 · 🧠 Fight IQ ×0.5 · ⚡ Speed ×0.5',
-                } %}
-                <input type="hidden" name="focus" value="{{ saved }}" data-role="focus-input">
-
-                {# Stage 1: group tiles #}
-                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:8px;">
-                {% for grp, icon, desc, _emphases in training_groups %}
-                <div data-role="group-tile" data-group="{{ grp }}"
-                     onclick="pickGroup(this)"
-                     title="{{ desc }}"
-                     style="cursor:pointer;border-radius:5px;
-                            border:2px solid {% if saved_grp==grp %}var(--info){% else %}var(--border-color){% endif %};
-                            padding:6px 3px;text-align:center;background:var(--bg-dark);
-                            transition:border-color .15s;">
-                    <div style="font-size:1.1rem;">{{ icon }}</div>
-                    <div style="font-size:.52rem;color:var(--text-muted);margin-top:2px;
-                                letter-spacing:.05em;">{{ grp }}</div>
-                </div>
+        {# Intensity — global per fighter #}
+        <div style="padding:var(--spacing-md) var(--spacing-md) 0;">
+            <div style="font-size:.7rem;text-transform:uppercase;
+                        letter-spacing:.1em;color:var(--text-muted);
+                        margin-bottom:var(--spacing-sm);">
+                Training Intensity
+                <i class="tip-icon" data-tip="Applies to all active training goals. Rest = recovery only, no gains. Intense/Extreme push gains but risk injuries.">ⓘ</i>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);
+                        gap:4px;">
+                {% set iicons = {'REST':'😴','LIGHT':'🚶','MODERATE':'🏃','INTENSE':'🔥','EXTREME':'⚡'} %}
+                {% set icolors = {'REST':'var(--neon-green)','LIGHT':'var(--info)','MODERATE':'var(--warning)','INTENSE':'#ff6b35','EXTREME':'var(--blood-red)'} %}
+                {% for ikey in ['REST','LIGHT','MODERATE','INTENSE','EXTREME'] %}
+                <label style="cursor:pointer;border-radius:5px;
+                              border:2px solid {% if _saved_intensity == ikey %}{{ icolors.get(ikey,'var(--border-color)') }}{% else %}var(--border-color){% endif %};
+                              padding:6px 4px;text-align:center;
+                              background:var(--bg-dark);
+                              transition:border-color .15s;"
+                       onclick="this.querySelector('input').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.borderColor='var(--border-color)');this.style.borderColor='{{ icolors.get(ikey,'var(--info)') }}'">
+                    <input type="radio" name="intensity" value="{{ ikey }}"
+                           {% if _saved_intensity == ikey %}checked{% endif %}
+                           style="display:none;">
+                    <div style="font-size:1rem;">{{ iicons.get(ikey,'🏃') }}</div>
+                    <div style="font-size:.58rem;color:var(--text-muted);
+                                margin-top:2px;">{{ ikey|title }}</div>
+                </label>
                 {% endfor %}
-                </div>
+            </div>
+        </div>
 
-                {# Stage 2: emphasis panels — one per group, hidden unless active #}
-                {% for grp, icon, desc, emphases in training_groups %}
-                <div data-role="emp-panel" data-group="{{ grp }}"
-                     style="display:{% if saved_grp==grp %}block{% else %}none{% endif %};
-                            margin-bottom:6px;">
-                    <div style="font-size:.55rem;color:var(--text-muted);text-transform:uppercase;
-                                letter-spacing:.1em;margin-bottom:3px;">{{ grp }} — pick emphasis</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:3px;">
-                    {% for emp_key, emp_label in emphases %}
-                    <div data-role="emp-tile" data-emphasis="{{ emp_key }}"
-                         onclick="pickEmphasis(this)"
-                         style="cursor:pointer;border-radius:4px;flex:1;min-width:120px;
-                                border:2px solid {% if saved_grp==grp and saved_emp==emp_key %}var(--info){% else %}var(--border-color){% endif %};
-                                padding:5px 6px;text-align:center;background:var(--bg-dark);
-                                transition:border-color .15s;">
-                        <div style="font-size:.66rem;color:var(--text-bright);">{{ emp_label }}</div>
-                        <div style="font-size:.48rem;color:var(--text-muted);
-                                    margin-top:2px;line-height:1.3;">
-                            {{ emp_tiers.get(grp + ':' + emp_key, '') }}
+        {# 4 collapsible category panels #}
+        <div style="padding:var(--spacing-md);">
+        {% for cat_key, cat_label, cat_open, cat_stats in _STAT_CATS %}
+            {% set _train_count = namespace(active=0, maint=0) %}
+            {% for sk, sl in cat_stats %}
+                {% if _saved_targets.get(sk, 0) > 0
+                      and _saved_targets.get(sk, 0) > (fighter|attr(sk)|int) %}
+                    {% set _train_count.active = _train_count.active + 1 %}
+                {% else %}
+                    {% set _train_count.maint = _train_count.maint + 1 %}
+                {% endif %}
+            {% endfor %}
+            <details {% if cat_open %}open{% endif %}
+                     data-cat-panel="{{ cat_key }}"
+                     data-fid="{{ fighter.fighter_id }}"
+                     style="margin-bottom:8px;
+                            border:1px solid rgba(255,255,255,.06);
+                            border-radius:5px;background:var(--bg-dark);">
+                <summary style="cursor:pointer;padding:8px 12px;
+                                font-size:.78rem;color:var(--text-bright);
+                                font-weight:600;list-style:none;
+                                display:flex;justify-content:space-between;
+                                align-items:center;">
+                    <span>{{ cat_label }}</span>
+                    <span id="cat-sum-{{ fighter.fighter_id }}-{{ cat_key }}"
+                          style="font-size:.66rem;font-weight:400;
+                                 color:var(--text-muted);">
+                        {{ _train_count.active }} training,
+                        {{ _train_count.maint }} maintained
+                    </span>
+                </summary>
+                <div style="padding:6px 10px 10px;
+                            border-top:1px solid rgba(255,255,255,.04);">
+                {% for stat_key, stat_label in cat_stats %}
+                    {% set _cur = fighter|attr(stat_key)|int %}
+                    {% set _floor = _saved_floors.get(stat_key, 50)|int %}
+                    {% if _floor < 50 %}{% set _floor = 50 %}{% endif %}
+                    {% if _floor > 95 %}{% set _floor = 95 %}{% endif %}
+                    {% set _target = _saved_targets.get(stat_key, 0)|int %}
+                    {% if _cur >= 80 %}{% set _ccol = 'var(--gold)' %}
+                    {% elif _cur >= 70 %}{% set _ccol = 'var(--neon-green)' %}
+                    {% elif _cur >= 55 %}{% set _ccol = 'var(--info)' %}
+                    {% else %}{% set _ccol = 'var(--text-muted)' %}
+                    {% endif %}
+                    {% set _is_training = _target > _cur %}
+                    {% set _pct = (_cur * 100 // _target) if (_is_training and _target > 0) else 0 %}
+                    {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
+                    <div class="stat-row"
+                         data-stat="{{ stat_key }}"
+                         data-fid="{{ fighter.fighter_id }}"
+                         data-cat="{{ cat_key }}"
+                         data-cur="{{ _cur }}"
+                         style="display:grid;
+                                grid-template-columns:130px 32px 1fr 1fr 70px;
+                                gap:8px;align-items:center;
+                                padding:5px 4px;font-size:.72rem;
+                                border-bottom:1px solid rgba(255,255,255,.03);">
+                        <div style="color:{{ _ccol }};font-weight:600;">
+                            {{ stat_label }}
+                        </div>
+                        <div style="text-align:right;
+                                    font-family:var(--font-display);
+                                    font-weight:700;color:{{ _ccol }};">
+                            {{ _cur }}
+                        </div>
+                        {# Floor stepper #}
+                        <div style="display:flex;align-items:center;
+                                    justify-content:center;gap:4px;">
+                            <span style="font-size:.55rem;
+                                         color:var(--text-muted);
+                                         margin-right:2px;">⏚</span>
+                            <button type="button"
+                                    onclick="adjFloor('{{ fighter.fighter_id }}','{{ stat_key }}',-5)"
+                                    style="width:24px;height:24px;
+                                           font-size:.85rem;line-height:1;
+                                           background:rgba(255,255,255,.04);
+                                           border:1px solid rgba(255,255,255,.12);
+                                           border-radius:3px;cursor:pointer;
+                                           color:var(--text-muted);padding:0;">−</button>
+                            <span id="floor-{{ fighter.fighter_id }}-{{ stat_key }}"
+                                  style="min-width:28px;text-align:center;
+                                         font-family:var(--font-display);
+                                         font-size:.78rem;color:var(--info);">
+                                {{ _floor }}
+                            </span>
+                            <input type="hidden"
+                                   name="floor_{{ stat_key }}"
+                                   id="floor-in-{{ fighter.fighter_id }}-{{ stat_key }}"
+                                   value="{{ _floor }}">
+                            <button type="button"
+                                    onclick="adjFloor('{{ fighter.fighter_id }}','{{ stat_key }}',5)"
+                                    style="width:24px;height:24px;
+                                           font-size:.85rem;line-height:1;
+                                           background:rgba(255,255,255,.04);
+                                           border:1px solid rgba(255,255,255,.12);
+                                           border-radius:3px;cursor:pointer;
+                                           color:var(--text-muted);padding:0;">+</button>
+                        </div>
+                        {# Target stepper #}
+                        <div style="display:flex;align-items:center;
+                                    justify-content:center;gap:4px;">
+                            <span style="font-size:.55rem;
+                                         color:var(--text-muted);
+                                         margin-right:2px;">🎯</span>
+                            <button type="button"
+                                    onclick="adjTarget('{{ fighter.fighter_id }}','{{ stat_key }}',-5)"
+                                    style="width:24px;height:24px;
+                                           font-size:.85rem;line-height:1;
+                                           background:rgba(255,255,255,.04);
+                                           border:1px solid rgba(255,255,255,.12);
+                                           border-radius:3px;cursor:pointer;
+                                           color:var(--text-muted);padding:0;">−</button>
+                            <span id="target-{{ fighter.fighter_id }}-{{ stat_key }}"
+                                  style="min-width:32px;text-align:center;
+                                         font-family:var(--font-display);
+                                         font-size:.78rem;
+                                         color:{% if _is_training %}var(--neon-green){% elif _target > 0 %}var(--text-muted){% else %}rgba(255,255,255,.25){% endif %};">
+                                {% if _target > 0 %}{{ _target }}{% else %}—{% endif %}
+                            </span>
+                            <input type="hidden"
+                                   name="target_{{ stat_key }}"
+                                   id="target-in-{{ fighter.fighter_id }}-{{ stat_key }}"
+                                   value="{{ _target }}">
+                            <button type="button"
+                                    onclick="adjTarget('{{ fighter.fighter_id }}','{{ stat_key }}',5)"
+                                    style="width:24px;height:24px;
+                                           font-size:.85rem;line-height:1;
+                                           background:rgba(255,255,255,.04);
+                                           border:1px solid rgba(255,255,255,.12);
+                                           border-radius:3px;cursor:pointer;
+                                           color:var(--text-muted);padding:0;">+</button>
+                        </div>
+                        {# Progress bar / maintained indicator #}
+                        <div id="bar-cell-{{ fighter.fighter_id }}-{{ stat_key }}"
+                             style="text-align:right;">
+                            {% if _is_training %}
+                            <div style="height:5px;width:100%;
+                                        background:rgba(255,255,255,.06);
+                                        border-radius:3px;overflow:hidden;">
+                                <div id="bar-{{ fighter.fighter_id }}-{{ stat_key }}"
+                                     style="width:{{ _pct }}%;height:100%;
+                                            background:var(--neon-green);
+                                            transition:width .25s;"></div>
+                            </div>
+                            <div style="font-size:.55rem;color:var(--text-muted);
+                                        margin-top:1px;">{{ _pct }}%</div>
+                            {% elif _target > 0 and _target <= _cur %}
+                            <span style="font-size:.62rem;
+                                         color:var(--neon-green);">✓ Hit</span>
+                            {% else %}
+                            <span style="font-size:.62rem;
+                                         color:rgba(255,255,255,.18);">—</span>
+                            {% endif %}
                         </div>
                     </div>
-                    {% endfor %}
-                    </div>
-                </div>
                 {% endfor %}
-            </div>
-
-            {# Intensity #}
-            <div>
-                <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--text-muted);margin-bottom:var(--spacing-sm);">Intensity<i class="tip-icon" data-tip="Intensity controls injury risk and training volume. LIGHT is safe but slow. MODERATE is the standard. INTENSE/EXTREME push gains but risk injuries that can cost months of development.">ⓘ</i></div>
-                <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;">
-                    {% set iicons = {'rest':'😴','light':'🚶','moderate':'🏃','intense':'🔥','extreme':'⚡'} %}
-                    {% set icolors = {'rest':'var(--neon-green)','light':'var(--info)','moderate':'var(--warning)','intense':'#ff6b35','extreme':'var(--blood-red)'} %}
-                    {% for value, name, desc in intensity_options %}
-                    <label style="cursor:pointer;border-radius:5px;border:2px solid {% if plan.get('intensity','moderate')|lower==value %}{{ icolors.get(value,'var(--border-color)') }}{% else %}var(--border-color){% endif %};
-                                  padding:6px 4px;text-align:center;background:var(--bg-dark);transition:border-color .15s;"
-                           onclick="this.querySelector('input').checked=true;this.parentElement.querySelectorAll('label').forEach(l=>l.style.borderColor='var(--border-color)');this.style.borderColor='{{ icolors.get(value,'var(--info)') }}'">
-                        <input type="radio" name="intensity" value="{{ value }}" {% if plan.get('intensity','moderate')|lower==value %}checked{% endif %} style="display:none;">
-                        <div style="font-size:1rem;">{{ iicons.get(value,'🏃') }}</div>
-                        <div style="font-size:.58rem;color:var(--text-muted);margin-top:2px;">{{ name }}</div>
-                    </label>
-                    {% endfor %}
                 </div>
-            </div>
-        </div>
-        <div style="padding:0 var(--spacing-md) var(--spacing-md);text-align:right;">
-            <button type="submit" class="btn btn-primary">Set Training</button>
-        </div>
-    </form>
-
-    {# Decay floors UI hidden — templates set floors, maintain protects.
-       Form remains rendered (display:none) so applyTemplate can populate
-       inputs and the queue-form submit hook can fetch-POST them silently. #}
-    <details style="margin:0 var(--spacing-md) var(--spacing-md);display:none;">
-    <summary style="cursor:pointer;font-size:.72rem;color:var(--text-muted);
-                    letter-spacing:.08em;text-transform:uppercase;
-                    padding:4px 0;list-style:none;">
-        ⚙️ Decay Floors <span style="font-size:.65rem;color:var(--text-muted);
-        font-weight:400;text-transform:none;letter-spacing:0;">
-        — set a minimum value; decay stops here</span>
-    </summary>
-    <form method="POST"
-          action="{{ url_for('set_stat_floors', fighter_id=fighter.fighter_id) }}"
-          id="floors-form-{{ fighter.fighter_id }}"
-          style="margin-top:var(--spacing-sm);">
-        {% set _floor_stats = [
-            ('boxing','Boxing'),('kicks','Kicks'),
-            ('clinch_striking','Clinch'),('clinch_control','Clinch Ctrl'),
-            ('striking_defense','Str. Def'),
-            ('takedowns','Takedowns'),('takedown_defense','TD Def'),
-            ('top_control','Top Ctrl'),('submissions','Subs'),('guard','Guard'),
-            ('strength','Strength'),('speed','Speed'),('cardio','Cardio'),
-            ('chin','Chin'),('recovery','Recovery'),
-            ('fight_iq','Fight IQ'),('composure','Composure'),('heart','Heart'),
-        ] %}
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);
-                    gap:4px 8px;margin-bottom:var(--spacing-sm);">
-        {% for stat_key, stat_label in _floor_stats %}
-            {% set _cur_val = fighter|attr(stat_key) %}
-            {% set _floor_val = fighter.stat_floors.get(stat_key, 0)
-                                if fighter.stat_floors is defined else 0 %}
-            <div style="display:flex;align-items:center;gap:3px;">
-                <label style="font-size:.6rem;color:var(--text-muted);
-                              width:52px;flex-shrink:0;">{{ stat_label }}</label>
-                {# Current stat value — primary visual emphasis #}
-                <span style="font-size:.78rem;color:var(--text-bright);
-                             font-weight:700;
-                             width:24px;text-align:right;flex-shrink:0;
-                             font-family:var(--font-display);">
-                    {{ _cur_val }}</span>
-                <button type="button"
-                        onclick="adjFloor(this,-5)"
-                        style="width:14px;height:14px;font-size:.55rem;
-                               background:rgba(255,255,255,.03);
-                               border:1px solid rgba(255,255,255,.08);
-                               border-radius:2px;cursor:pointer;
-                               color:rgba(255,255,255,.5);line-height:1;
-                               padding:0;flex-shrink:0;">-</button>
-                <input type="number" name="floor_{{ stat_key }}"
-                       id="floor-{{ fighter.fighter_id }}-{{ stat_key }}"
-                       value="{{ _floor_val }}"
-                       min="0" max="99" placeholder="0"
-                       style="width:28px;padding:1px 2px;font-size:.55rem;
-                              background:var(--surface-2);
-                              border:1px solid {% if _floor_val > 0 %}rgba(99,179,237,.4){% else %}rgba(255,255,255,.06){% endif %};
-                              border-radius:2px;color:rgba(255,255,255,.75);
-                              text-align:center;flex-shrink:0;"
-                       title="Floor for {{ stat_label }}">
-                <button type="button"
-                        onclick="adjFloor(this,5)"
-                        style="width:14px;height:14px;font-size:.55rem;
-                               background:rgba(255,255,255,.03);
-                               border:1px solid rgba(255,255,255,.08);
-                               border-radius:2px;cursor:pointer;
-                               color:rgba(255,255,255,.5);line-height:1;
-                               padding:0;flex-shrink:0;">+</button>
-            </div>
+            </details>
         {% endfor %}
         </div>
 
-        {# Preset chips — prominent quick-set #}
-        <div style="margin:var(--spacing-sm) 0;
-                    padding:6px 8px;
-                    background:rgba(99,179,237,.04);
-                    border-radius:4px;
-                    border:1px solid rgba(99,179,237,.12);
-                    display:flex;align-items:center;
-                    flex-wrap:wrap;gap:5px;">
-            <span style="font-size:.65rem;color:var(--info);
-                         font-weight:600;letter-spacing:.04em;
-                         margin-right:4px;">Set all floors:</span>
-            {% for preset in [0, 60, 65, 70, 75, 80] %}
-            <button type="button"
-                    onclick="setAllFloors(this.closest('form'), {{ preset }})"
-                    onmouseover="this.style.borderColor='var(--info)';this.style.color='var(--info)';"
-                    onmouseout="this.style.borderColor='{% if preset == 0 %}rgba(255,255,255,.12){% else %}rgba(99,179,237,.25){% endif %}';this.style.color='{% if preset == 0 %}var(--text-muted){% else %}var(--text-bright){% endif %}';"
-                    style="font-size:.68rem;padding:3px 10px;
-                           background:{% if preset == 0 %}rgba(255,255,255,.04){% else %}rgba(99,179,237,.08){% endif %};
-                           border:1px solid {% if preset == 0 %}rgba(255,255,255,.12){% else %}rgba(99,179,237,.25){% endif %};
-                           color:{% if preset == 0 %}var(--text-muted){% else %}var(--text-bright){% endif %};
-                           border-radius:3px;cursor:pointer;
-                           font-weight:600;transition:all .15s;">
-                {% if preset == 0 %}Clear{% else %}{{ preset }}{% endif %}
+        <div style="padding:0 var(--spacing-md) var(--spacing-md);
+                    display:flex;justify-content:space-between;
+                    align-items:center;gap:8px;">
+            <div style="font-size:.62rem;color:var(--text-muted);">
+                Floors lock decay at the chosen value (50 minimum).
+                Targets train the stat to the chosen value, then auto-lock the floor there.
+            </div>
+            <button type="submit"
+                    style="font-size:.78rem;padding:6px 16px;
+                           background:rgba(99,179,237,.12);
+                           border:1px solid rgba(99,179,237,.4);
+                           color:var(--info);border-radius:4px;
+                           cursor:pointer;font-weight:600;
+                           white-space:nowrap;">
+                ▶ Start Training
             </button>
-            {% endfor %}
         </div>
-
-        <button type="submit"
-                style="font-size:.68rem;padding:4px 10px;
-                       background:rgba(99,179,237,.08);
-                       border:1px solid rgba(99,179,237,.25);
-                       color:var(--info);border-radius:4px;cursor:pointer;">
-            Save Floors
-        </button>
     </form>
-    </details>
 
-    <details style="margin:0 var(--spacing-md) var(--spacing-md);"
-             {% if fighter.training_queue_active %}open{% endif %}>
-    <summary style="cursor:pointer;font-size:.72rem;
-                    color:var(--text-muted);
-                    letter-spacing:.08em;text-transform:uppercase;
-                    padding:4px 0;list-style:none;">
-        🎯 Training Queue
-        {% if fighter.training_queue_active %}
-        <span style="margin-left:6px;font-size:.65rem;
-                     color:var(--neon-green);font-weight:700;
-                     text-transform:none;letter-spacing:0;">
-            ● Active
-            {% set _qi = fighter.training_queue_index %}
-            {% set _qq = fighter.training_queue %}
-            {% if _qi < _qq|length %}
-            — {{ _qq[_qi].focus | replace('_',' ') | title }}
-            {% if _qq[_qi].target %}→ {{ _qq[_qi].target }}{% endif %}
-            {% endif %}
-        </span>
-        {% else %}
-        <span style="font-size:.65rem;color:var(--text-muted);
-                     font-weight:400;text-transform:none;letter-spacing:0;">
-            — set goals, train automatically</span>
-        {% endif %}
-    </summary>
-
-    {% if fighter.training_queue_active %}
-    {# Current goal — prominent banner with progress bar #}
-    {% set _qi_p = fighter.training_queue_index %}
-    {% set _qq_p = fighter.training_queue %}
-    {% if _qi_p < _qq_p|length %}
-        {% set _cur_goal = _qq_p[_qi_p] %}
-        {% set _gfocus = _cur_goal.focus %}
-        {% if _gfocus != 'maintain' %}
-            {% set _gtarget = _cur_goal.target %}
-            {% set _gcurval = fighter|attr(_gfocus) if _gfocus in [
-                'boxing','kicks','clinch_striking','clinch_control','striking_defense',
-                'takedowns','takedown_defense','top_control','submissions',
-                'guard','strength','speed','cardio','chin','recovery',
-                'fight_iq','composure','heart'
-            ] else 0 %}
-            {% set _gpct = (_gcurval * 100 // _gtarget) if _gtarget > 0 else 0 %}
-            {% set _gpct = _gpct if _gpct <= 100 else 100 %}
-            <div style="margin:var(--spacing-sm) 0;padding:8px 10px;
-                        background:rgba(0,230,118,.06);
-                        border-left:3px solid var(--neon-green);
-                        border-radius:0 5px 5px 0;">
-                <div style="display:flex;justify-content:space-between;
-                            align-items:baseline;font-size:.78rem;
-                            margin-bottom:5px;">
-                    <span style="color:var(--text-bright);font-weight:700;">
-                        ▶ Currently training:
-                        <span style="color:var(--neon-green);">{{ _gfocus | replace('_',' ') | title }}</span>
-                        → <span style="color:var(--neon-green);">{{ _gtarget }}</span>
-                    </span>
-                    <span style="font-size:.7rem;color:var(--text-muted);
-                                 font-family:var(--font-display);">
-                        {{ _gcurval }} / {{ _gtarget }}
-                    </span>
-                </div>
-                <div style="height:4px;background:rgba(255,255,255,.06);
-                            border-radius:2px;overflow:hidden;">
-                    <div style="width:{{ _gpct }}%;height:100%;
-                                background:var(--neon-green);
-                                border-radius:2px;
-                                transition:width .3s;"></div>
-                </div>
-            </div>
-        {% else %}
-            <div style="margin:var(--spacing-sm) 0;padding:8px 10px;
-                        background:rgba(0,230,118,.06);
-                        border-left:3px solid var(--neon-green);
-                        border-radius:0 5px 5px 0;
-                        font-size:.78rem;color:var(--text-bright);
-                        font-weight:600;">
-                🔄 Maintain mode — floor protection active
-            </div>
-        {% endif %}
-    {% endif %}
-    <div style="padding:var(--spacing-sm) 0;margin-bottom:var(--spacing-sm);">
-        {% for _goal in fighter.training_queue %}
-        {% set _gi = loop.index0 %}
-        {% set _done = _gi < fighter.training_queue_index %}
-        {% set _current = _gi == fighter.training_queue_index %}
-        <div style="display:flex;align-items:center;gap:8px;
-                    padding:3px 0;font-size:.72rem;
-                    opacity:{% if _done %}0.4{% else %}1{% endif %};">
-            <span style="width:16px;text-align:center;">
-                {% if _done %}✅{% elif _current %}▶{% else %}○{% endif %}
-            </span>
-            <span style="color:{% if _current %}var(--text-bright){% elif _done %}var(--text-muted){% else %}var(--text-muted){% endif %};">
-                {% if _goal.focus == 'maintain' %}
-                    🔄 Maintain (floor protection active)
-                {% else %}
-                    {{ _goal.focus | replace('_',' ') | title }}
-                    → {{ _goal.target }}
-                {% endif %}
-            </span>
-        </div>
-        {% endfor %}
-    </div>
-    <form method="POST"
-          action="{{ url_for('clear_training_queue',
-                             fighter_id=fighter.fighter_id) }}">
-        <button type="submit"
-                style="font-size:.65rem;padding:3px 8px;
-                       background:rgba(255,100,100,.08);
-                       border:1px solid rgba(255,100,100,.2);
-                       color:var(--blood-red);border-radius:4px;
-                       cursor:pointer;">
-            ✕ Clear Queue
-        </button>
-    </form>
-    {% else %}
-    <form method="POST"
-          action="{{ url_for('set_training_queue',
-                             fighter_id=fighter.fighter_id) }}"
-          id="queue-form-{{ fighter.fighter_id }}"
-          style="margin-top:var(--spacing-sm);">
-
-        {# Style template loader + coach recommendation #}
-        <div style="margin-bottom:var(--spacing-md);">
-            <div style="font-size:.65rem;color:var(--text-muted);
-                        margin-bottom:6px;">
-                Load a template for
-                <span style="color:var(--info);">
-                    {{ fighter.fighting_style }}</span>:
-            </div>
-            <div id="coach-rec-{{ fighter.fighter_id }}"
-                 data-fid="{{ fighter.fighter_id }}"
-                 data-style="{{ fighter.fighting_style }}"
-                 data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.clinch_control }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
-                 data-fight-weeks="{% if _nf %}{{ _nf.weeks_until }}{% else %}-1{% endif %}"
-                 data-fight-opp="{% if _nf and _nf.opponent %}{{ _nf.opponent }}{% endif %}"
-                 style="font-size:.72rem;color:var(--text-muted);margin-bottom:6px;">
-            </div>
-            <button type="button"
-                    onclick="loadStyleTemplate(
-                        '{{ fighter.fighter_id }}',
-                        '{{ fighter.fighting_style }}',
-                        {{ fighter.boxing }},
-                        {{ fighter.kicks }},
-                        {{ fighter.clinch_striking }},
-                        {{ fighter.clinch_control }},
-                        {{ fighter.striking_defense }},
-                        {{ fighter.takedowns }},
-                        {{ fighter.takedown_defense }},
-                        {{ fighter.top_control }},
-                        {{ fighter.submissions }},
-                        {{ fighter.guard }},
-                        {{ fighter.strength }},
-                        {{ fighter.speed }},
-                        {{ fighter.cardio }},
-                        {{ fighter.chin }},
-                        {{ fighter.recovery }},
-                        {{ fighter.fight_iq }},
-                        {{ fighter.composure }},
-                        {{ fighter.heart }},
-                        '{{ fighter.career_phase }}'
-                    )"
-                    style="font-size:.68rem;padding:4px 12px;
-                           background:rgba(255,165,0,.08);
-                           border:1px solid rgba(255,165,0,.25);
-                           color:var(--gold);border-radius:4px;
-                           cursor:pointer;">
-                ✨ Load {{ fighter.fighting_style }} Template
-            </button>
-        </div>
-
-        <div style="margin-bottom:var(--spacing-sm);">
-            <label style="font-size:.65rem;color:var(--text-muted);
-                          display:block;margin-bottom:4px;">
-                Training Intensity (all goals)
-            </label>
-            <select name="queue_intensity"
-                    style="font-size:.72rem;padding:4px 8px;
-                           background:var(--surface-2);
-                           border:1px solid rgba(255,255,255,.12);
-                           border-radius:4px;color:var(--text-bright);">
-                {% for ikey in ['LIGHT','MODERATE','INTENSE','EXTREME'] %}
-                <option value="{{ ikey }}"
-                    {% if ikey == 'INTENSE' %}selected{% endif %}>
-                    {{ ikey | title }}
-                </option>
-                {% endfor %}
-            </select>
-        </div>
-
-        <div id="queue-goals-{{ fighter.fighter_id }}"
-             style="margin-bottom:var(--spacing-sm);">
-            <div class="queue-row" style="display:flex;align-items:center;
-                         gap:6px;margin-bottom:4px;">
-                <span style="font-size:.6rem;color:var(--text-muted);
-                             width:16px;text-align:center;">1</span>
-                <select name="queue_focus_0"
-                        style="font-size:.68rem;padding:3px 6px;
-                               background:var(--surface-2);
-                               border:1px solid rgba(255,255,255,.12);
-                               border-radius:4px;color:var(--text-bright);
-                               flex:1;">
-                    <option value="">— pick focus —</option>
-                    {% for sk, sl in [
-                        ('boxing','Boxing'),('kicks','Kicks'),
-                        ('clinch_striking','Clinch Striking'),
-                        ('clinch_control','Clinch Control'),
-                        ('striking_defense','Striking Defense'),
-                        ('takedowns','Takedowns'),
-                        ('takedown_defense','Takedown Defense'),
-                        ('top_control','Top Control'),
-                        ('submissions','Submissions'),('guard','Guard'),
-                        ('strength','Strength'),('speed','Speed'),
-                        ('cardio','Cardio'),('chin','Chin'),
-                        ('recovery','Recovery'),('fight_iq','Fight IQ'),
-                        ('composure','Composure'),('heart','Heart'),
-                    ] %}
-                    <option value="{{ sk }}">{{ sl }}</option>
-                    {% endfor %}
-                </select>
-                <span style="font-size:.65rem;color:var(--text-muted);">→</span>
-                <input type="number" name="queue_target_0"
-                       min="1" max="99" placeholder="target"
-                       style="width:48px;padding:3px 4px;font-size:.68rem;
-                              background:var(--surface-2);
-                              border:1px solid rgba(255,255,255,.12);
-                              border-radius:4px;color:var(--text-bright);
-                              text-align:center;">
-            </div>
-        </div>
-
-        <div style="display:flex;gap:8px;align-items:center;
-                    margin-bottom:var(--spacing-sm);">
-            <button type="button"
-                    onclick="addQueueRow('{{ fighter.fighter_id }}')"
-                    style="font-size:.65rem;padding:3px 8px;
-                           background:rgba(255,255,255,.04);
-                           border:1px solid rgba(255,255,255,.12);
-                           color:var(--text-muted);border-radius:4px;
-                           cursor:pointer;">
-                + Add Goal
-            </button>
-            <button type="button"
-                    onclick="addMaintainRow('{{ fighter.fighter_id }}')"
-                    style="font-size:.65rem;padding:3px 8px;
-                           background:rgba(0,230,118,.04);
-                           border:1px solid rgba(0,230,118,.15);
-                           color:var(--neon-green);border-radius:4px;
-                           cursor:pointer;">
-                + Maintain
-            </button>
-        </div>
-
-        <button type="submit"
-                style="font-size:.68rem;padding:4px 12px;
-                       background:rgba(99,179,237,.08);
-                       border:1px solid rgba(99,179,237,.25);
-                       color:var(--info);border-radius:4px;
-                       cursor:pointer;">
-            ▶ Start Queue
-        </button>
-    </form>
-    {% endif %}
-    </details>
 
     {# Decay-warning pills removed — templates + maintain are the system. #}
 </div>
 {% endfor %}
 
 <script>
-function pickGroup(el) {
-    const picker = el.closest('.focus-picker');
-    if (!picker) return;
-    picker.querySelectorAll('[data-role="group-tile"]').forEach(t => {
-        t.style.borderColor = 'var(--border-color)';
-    });
-    el.style.borderColor = 'var(--info)';
-    const grp = el.dataset.group;
-    picker.querySelectorAll('[data-role="emp-panel"]').forEach(p => {
-        p.style.display = (p.dataset.group === grp) ? 'block' : 'none';
-    });
-    // Clear any prior emphasis selection — user must pick within group
-    const hidden = picker.querySelector('[data-role="focus-input"]');
-    if (hidden && hidden.value.split(':')[0] !== grp) {
-        hidden.value = '';
-    }
-}
-function pickEmphasis(el) {
-    const picker = el.closest('.focus-picker');
-    const panel  = el.closest('[data-role="emp-panel"]');
-    if (!picker || !panel) return;
-    panel.querySelectorAll('[data-role="emp-tile"]').forEach(t => {
-        t.style.borderColor = 'var(--border-color)';
-    });
-    el.style.borderColor = 'var(--info)';
-    const grp = panel.dataset.group;
-    const emp = el.dataset.emphasis;
-    picker.querySelector('[data-role="focus-input"]').value = grp + ':' + emp;
-}
-</script>
-
-<script>
-function addQueueRow(fighterId) {
-    const container = document.getElementById('queue-goals-' + fighterId);
-    const rows = container.querySelectorAll('.queue-row');
-    const idx = rows.length;
-    const statOptions = [
-        ['boxing','Boxing'],['kicks','Kicks'],
-        ['clinch_striking','Clinch Striking'],
-        ['clinch_control','Clinch Control'],
-        ['striking_defense','Striking Defense'],
-        ['takedowns','Takedowns'],['takedown_defense','Takedown Defense'],
-        ['top_control','Top Control'],['submissions','Submissions'],
-        ['guard','Guard'],['strength','Strength'],['speed','Speed'],
-        ['cardio','Cardio'],['chin','Chin'],['recovery','Recovery'],
-        ['fight_iq','Fight IQ'],['composure','Composure'],['heart','Heart'],
-    ];
-    let opts = '<option value="">— pick focus —</option>' +
-        statOptions.map(([v,l]) =>
-            `<option value="${v}">${l}</option>`).join('');
-    const row = document.createElement('div');
-    row.className = 'queue-row';
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
-    row.innerHTML = `
-        <span style="font-size:.6rem;color:var(--text-muted);
-                     width:16px;text-align:center;">${idx+1}</span>
-        <select name="queue_focus_${idx}"
-                style="font-size:.68rem;padding:3px 6px;
-                       background:var(--surface-2);
-                       border:1px solid rgba(255,255,255,.12);
-                       border-radius:4px;color:var(--text-bright);flex:1;">
-            ${opts}
-        </select>
-        <span style="font-size:.65rem;color:var(--text-muted);">→</span>
-        <input type="number" name="queue_target_${idx}"
-               min="1" max="99" placeholder="target"
-               style="width:48px;padding:3px 4px;font-size:.68rem;
-                      background:var(--surface-2);
-                      border:1px solid rgba(255,255,255,.12);
-                      border-radius:4px;color:var(--text-bright);
-                      text-align:center;">
-    `;
-    container.appendChild(row);
-}
-
 function buildStyleTemplates(
     boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
@@ -1922,92 +1622,78 @@ function loadStyleTemplate(fighterId, style,
 }
 
 function applyTemplate(fighterId, tmpl, intensity) {
-    // Populate intensity dropdown
-    const intSelect = document.querySelector(
-        `#queue-form-${fighterId} [name="queue_intensity"]`);
-    if (intSelect) intSelect.value = intensity;
+    // Unified-grid template apply: writes target_<stat> and floor_<stat>
+    // values directly into the per-stat hidden inputs and visible spans,
+    // then refreshes progress bars + category counters.
+    const form = document.getElementById('unified-form-' + fighterId);
+    if (!form) return;
 
-    // Populate queue rows
-    const container = document.getElementById('queue-goals-' + fighterId);
-    if (!container) return;
-    container.innerHTML = '';
-
-    const statOptions = [
-        ['boxing','Boxing'],['kicks','Kicks'],
-        ['clinch_striking','Clinch Striking'],
-        ['clinch_control','Clinch Control'],
-        ['striking_defense','Striking Defense'],
-        ['takedowns','Takedowns'],['takedown_defense','Takedown Defense'],
-        ['top_control','Top Control'],['submissions','Submissions'],
-        ['guard','Guard'],['strength','Strength'],['speed','Speed'],
-        ['cardio','Cardio'],['chin','Chin'],['recovery','Recovery'],
-        ['fight_iq','Fight IQ'],['composure','Composure'],['heart','Heart'],
-    ];
-
-    tmpl.queue.forEach((g, idx) => {
-        const row = document.createElement('div');
-        row.className = 'queue-row';
-        row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
-
-        if (g.focus === 'maintain') {
-            row.innerHTML = `
-                <span style="font-size:.6rem;color:var(--text-muted);
-                             width:16px;text-align:center;">${idx+1}</span>
-                <span style="font-size:.72rem;color:var(--neon-green);
-                             flex:1;padding:3px 6px;">
-                    🔄 Maintain (floor protection active)
-                </span>
-                <input type="hidden" name="queue_focus_${idx}" value="maintain">
-                <input type="hidden" name="queue_target_${idx}" value="0">
-            `;
-        } else {
-            let opts = '<option value="">— pick focus —</option>'
-                + statOptions.map(([v, l]) =>
-                    `<option value="${v}"${v === g.focus ? ' selected' : ''}>${l}</option>`
-                ).join('');
-            row.innerHTML = `
-                <span style="font-size:.6rem;color:var(--text-muted);
-                             width:16px;text-align:center;">${idx+1}</span>
-                <select name="queue_focus_${idx}"
-                        style="font-size:.68rem;padding:3px 6px;
-                               background:var(--surface-2);
-                               border:1px solid rgba(255,255,255,.12);
-                               border-radius:4px;color:var(--text-bright);
-                               flex:1;">${opts}</select>
-                <span style="font-size:.65rem;color:var(--text-muted);">→</span>
-                <input type="number" name="queue_target_${idx}"
-                       value="${g.target}" min="1" max="99"
-                       style="width:48px;padding:3px 4px;font-size:.68rem;
-                              background:var(--surface-2);
-                              border:1px solid rgba(255,255,255,.12);
-                              border-radius:4px;color:var(--text-bright);
-                              text-align:center;">
-            `;
-        }
-        container.appendChild(row);
-    });
-
-    // Populate floor inputs — use stable form id (Ship: floor selector
-    // hardening). Falls back to action-substring match for safety.
-    // Universal minimum 50: every stat seeded to 50 first, then template-
-    // specific higher values override. Nothing decays below baseline.
-    const floorForm = document.getElementById('floors-form-' + fighterId)
-        || document.querySelector(`form[action*="set_floors/${fighterId}"]`);
-    if (floorForm) {
-        floorForm.querySelectorAll('input[name^="floor_"]').forEach(inp => {
-            inp.value = 50;
-            inp.style.borderColor = 'rgba(255,255,255,.08)';
-        });
-        Object.entries(tmpl.floors).forEach(([stat, val]) => {
-            const inp = floorForm.querySelector(`input[name="floor_${stat}"]`);
-            if (inp) {
-                // Template floor wins only if higher than the 50 baseline.
-                const useVal = Math.max(50, parseInt(val, 10) || 0);
-                inp.value = useVal;
-                inp.style.borderColor = 'rgba(99,179,237,.4)';
+    // Set intensity
+    const intRadio = form.querySelector(
+        `input[name="intensity"][value="${intensity}"]`);
+    if (intRadio) {
+        intRadio.checked = true;
+        form.querySelectorAll('input[name="intensity"]').forEach(r => {
+            const lbl = r.closest('label');
+            if (lbl) {
+                lbl.style.borderColor = r.checked
+                    ? (r.value === 'REST' ? 'var(--neon-green)'
+                       : r.value === 'LIGHT' ? 'var(--info)'
+                       : r.value === 'MODERATE' ? 'var(--warning)'
+                       : r.value === 'INTENSE' ? '#ff6b35'
+                       : 'var(--blood-red)')
+                    : 'var(--border-color)';
             }
         });
     }
+
+    // Clear all targets first — template defines the active goals.
+    form.querySelectorAll('input[name^="target_"]').forEach(inp => {
+        inp.value = 0;
+        const stat = inp.name.substring('target_'.length);
+        const span = document.getElementById('target-' + fighterId + '-' + stat);
+        if (span) {
+            span.textContent = '—';
+            span.style.color = 'rgba(255,255,255,.25)';
+        }
+    });
+
+    // Apply targets from queue (skip "maintain" entry — that's the
+    // end-of-queue marker in legacy templates, not a per-stat goal).
+    (tmpl.queue || []).forEach(g => {
+        if (!g.focus || g.focus === 'maintain') return;
+        const inp  = document.getElementById('target-in-' + fighterId + '-' + g.focus);
+        const span = document.getElementById('target-' + fighterId + '-' + g.focus);
+        if (!inp || !span) return;
+        const t = Math.max(50, Math.min(99, Math.round((g.target || 0) / 5) * 5));
+        inp.value = t;
+        span.textContent = t;
+        const row = inp.closest('.stat-row');
+        const cur = row ? parseInt(row.dataset.cur, 10) : 0;
+        span.style.color = (t > cur) ? 'var(--neon-green)' : 'var(--text-muted)';
+        updateBar(fighterId, g.focus);
+    });
+
+    // Seed floors at 50 baseline, then override from template floors map.
+    form.querySelectorAll('input[name^="floor_"]').forEach(inp => {
+        inp.value = 50;
+        const stat = inp.name.substring('floor_'.length);
+        const span = document.getElementById('floor-' + fighterId + '-' + stat);
+        if (span) span.textContent = 50;
+    });
+    Object.entries(tmpl.floors || {}).forEach(([stat, val]) => {
+        const inp  = document.getElementById('floor-in-' + fighterId + '-' + stat);
+        const span = document.getElementById('floor-' + fighterId + '-' + stat);
+        if (!inp || !span) return;
+        const v = Math.max(50, Math.min(95, Math.round((val || 50) / 5) * 5));
+        inp.value = v;
+        span.textContent = v;
+    });
+
+    // Refresh all category summaries — counts changed across the board.
+    document.querySelectorAll(
+        `details[data-cat-panel][data-fid="${fighterId}"]`
+    ).forEach(d => updateCatSummary(fighterId, d.dataset.catPanel));
 }
 
 function flashLoadedButton(btn) {
@@ -2151,59 +1837,116 @@ function applyPickedTemplate(fighterId, style, idx) {
 
 
 function adjFloor(btn, delta) {
-    const input = btn.parentElement.querySelector('input[type="number"]');
-    if (!input) return;
-    const cur = parseInt(input.value) || 0;
-    const next = Math.max(0, Math.min(99, cur + delta));
-    input.value = next;
-    input.style.borderColor = next > 0
-        ? 'rgba(99,179,237,.4)' : 'rgba(255,255,255,.08)';
+    // Legacy signature retained for safety — unified-grid steppers
+    // call adjFloor(fid, stat, delta). If called with (btn, delta)
+    // shape, no-op (old hidden form is gone).
+    if (typeof btn === 'string') {
+        const fid = btn, stat = arguments[1], d = arguments[2];
+        const inp  = document.getElementById('floor-in-' + fid + '-' + stat);
+        const span = document.getElementById('floor-' + fid + '-' + stat);
+        if (!inp || !span) return;
+        const cur = parseInt(inp.value, 10) || 50;
+        const next = Math.max(50, Math.min(95, cur + d));
+        inp.value = next;
+        span.textContent = next;
+    }
 }
 
-function setAllFloors(form, val) {
-    form.querySelectorAll('input[name^="floor_"]').forEach(inp => {
-        inp.value = val;
-        inp.style.borderColor = val > 0
-            ? 'rgba(99,179,237,.4)' : 'rgba(255,255,255,.08)';
+// Target stepper — adjusts target by ±delta, clamped to [50, 99].
+// Below 50 (= the universal floor minimum) the value resets to 0
+// meaning "no goal". Updates progress bar + category summary live.
+function adjTarget(fid, stat, delta) {
+    const inp  = document.getElementById('target-in-' + fid + '-' + stat);
+    const span = document.getElementById('target-' + fid + '-' + stat);
+    if (!inp || !span) return;
+    const cur = parseInt(inp.value, 10) || 0;
+    let next = cur + delta;
+    if (next < 50) {
+        next = (delta < 0 && cur > 0) ? 0 : 50;
+    }
+    if (next > 99) next = 95;
+    inp.value = next;
+    span.textContent = (next > 0) ? next : '—';
+    const row = inp.closest('.stat-row');
+    const curStat = row ? parseInt(row.dataset.cur, 10) : 0;
+    if (next === 0) {
+        span.style.color = 'rgba(255,255,255,.25)';
+    } else if (next > curStat) {
+        span.style.color = 'var(--neon-green)';
+    } else {
+        span.style.color = 'var(--text-muted)';
+    }
+    updateBar(fid, stat);
+    if (row && row.dataset.cat) updateCatSummary(fid, row.dataset.cat);
+}
+
+// Refresh the progress bar / maintained indicator for one stat row.
+function updateBar(fid, stat) {
+    const cell = document.getElementById('bar-cell-' + fid + '-' + stat);
+    if (!cell) return;
+    const inp = document.getElementById('target-in-' + fid + '-' + stat);
+    if (!inp) return;
+    const row = inp.closest('.stat-row');
+    const cur = row ? parseInt(row.dataset.cur, 10) : 0;
+    const tgt = parseInt(inp.value, 10) || 0;
+    if (tgt > cur) {
+        const pct = Math.min(100, Math.floor(cur * 100 / tgt));
+        cell.innerHTML =
+            '<div style="height:5px;width:100%;'
+            + 'background:rgba(255,255,255,.06);'
+            + 'border-radius:3px;overflow:hidden;">'
+            + '<div id="bar-' + fid + '-' + stat + '" '
+            + 'style="width:' + pct + '%;height:100%;'
+            + 'background:var(--neon-green);transition:width .25s;">'
+            + '</div></div>'
+            + '<div style="font-size:.55rem;color:var(--text-muted);'
+            + 'margin-top:1px;">' + pct + '%</div>';
+    } else if (tgt > 0 && tgt <= cur) {
+        cell.innerHTML =
+            '<span style="font-size:.62rem;color:var(--neon-green);">'
+            + '✓ Hit</span>';
+    } else {
+        cell.innerHTML =
+            '<span style="font-size:.62rem;'
+            + 'color:rgba(255,255,255,.18);">—</span>';
+    }
+}
+
+// Recalculate "X training, Y maintained" summary for one category.
+function updateCatSummary(fid, catKey) {
+    const panel = document.querySelector(
+        `details[data-cat-panel="${catKey}"][data-fid="${fid}"]`);
+    if (!panel) return;
+    let active = 0, maint = 0;
+    panel.querySelectorAll('.stat-row').forEach(row => {
+        const stat = row.dataset.stat;
+        const inp  = document.getElementById('target-in-' + fid + '-' + stat);
+        const cur  = parseInt(row.dataset.cur, 10);
+        const tgt  = inp ? (parseInt(inp.value, 10) || 0) : 0;
+        if (tgt > cur) active++;
+        else maint++;
     });
+    const sum = document.getElementById('cat-sum-' + fid + '-' + catKey);
+    if (sum) sum.textContent = active + ' training, ' + maint + ' maintained';
 }
 
-function addMaintainRow(fighterId) {
-    const container = document.getElementById('queue-goals-' + fighterId);
-    const rows = container.querySelectorAll('.queue-row');
-    const idx = rows.length;
-    const row = document.createElement('div');
-    row.className = 'queue-row';
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:4px;';
-    row.innerHTML = `
-        <span style="font-size:.6rem;color:var(--text-muted);
-                     width:16px;text-align:center;">${idx+1}</span>
-        <span style="font-size:.72rem;color:var(--neon-green);flex:1;
-                     padding:3px 6px;">
-            🔄 Maintain (floor protection active)
-        </span>
-        <input type="hidden" name="queue_focus_${idx}" value="maintain">
-        <input type="hidden" name="queue_target_${idx}" value="0">
-    `;
-    container.appendChild(row);
-}
-
-// Ship E1: injury-aware intensity. For each fighter's training form
-// flagged data-injured="1": auto-select Rest, deselect others, and
-// disable + visually mute Intense/Extreme labels.
+// Injury-aware intensity. For each fighter's training form flagged
+// data-injured="1": auto-select REST, deselect others, and disable +
+// visually mute INTENSE/EXTREME labels. Intensity values are upper
+// case in the unified grid.
 document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('form[data-injured="1"]').forEach(function(form) {
         const radios = form.querySelectorAll('input[name="intensity"]');
         radios.forEach(function(r) {
             const label = r.closest('label');
-            if (r.value === 'rest') {
+            if (r.value === 'REST') {
                 r.checked = true;
                 if (label) label.style.borderColor = 'var(--neon-green)';
             } else {
                 r.checked = false;
                 if (label) label.style.borderColor = 'var(--border-color)';
             }
-            if (r.value === 'intense' || r.value === 'extreme') {
+            if (r.value === 'INTENSE' || r.value === 'EXTREME') {
                 r.disabled = true;
                 if (label) {
                     label.style.opacity = '0.35';
@@ -2214,26 +1957,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     });
-});
-
-// Ship: auto-save floors when Start Queue is clicked. The decay floors
-// UI is hidden — templates set floor values into the hidden form, and
-// this hook flushes them to the server before the queue form submits.
-// Uses silent=1 so the floors endpoint returns 204 without flashing.
-document.addEventListener('submit', function(e) {
-    const form = e.target;
-    if (!form.id || !form.id.startsWith('queue-form-')) return;
-    if (form._floorsSent) return;  // re-entry guard after fetch resolves
-    const fid = form.id.replace('queue-form-', '');
-    const floorsForm = document.getElementById('floors-form-' + fid);
-    if (!floorsForm) return;
-    e.preventDefault();
-    form._floorsSent = true;
-    const fd = new FormData(floorsForm);
-    fd.append('silent', '1');
-    fetch(floorsForm.action, { method: 'POST', body: fd })
-        .catch(() => {})  // network failure shouldn't block queue start
-        .finally(() => { form.submit(); });
 });
 
 // Ship: coach recommendation per fighter card. Picks the template
