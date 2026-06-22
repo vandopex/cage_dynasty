@@ -9930,24 +9930,70 @@ class GameBridge:
         if not self._game_state:
             return
 
+        # Multi-stat focus per style — every fighter trains primary
+        # (1.0x), secondary (0.5x), and tertiary (0.25x) every week
+        # plus universal physicals (cardio/recovery/heart at 0.15x).
+        # Mirrors the player's coach emphasis system; replaces the
+        # prior week-rotation single-stat scheme.
         _STYLE_FOCUS = {
-            "Orthodox Boxer":   ["boxing","striking_defense","cardio"],
-            "Muay Thai":        ["kicks","clinch_striking","clinch_control"],
-            "Kickboxer":        ["kicks","boxing","striking_defense"],
-            "Wrestler":         ["takedowns","top_control","strength"],
-            "BJJ Specialist":   ["submissions","guard","takedowns"],
-            "Ground & Pound":   ["top_control","takedowns","boxing"],
-            "Clinch Fighter":   ["clinch_striking","clinch_control","takedowns"],
-            "Counter Striker":  ["striking_defense","fight_iq","boxing"],
-            "Pressure Fighter": ["boxing","cardio","clinch_striking"],
-            "Sambo":            ["takedowns","submissions","strength"],
-            "Brawler":          ["strength","chin","boxing"],
-            "Judo":             ["takedowns","top_control","strength"],
-            "Point Fighter":    ["fight_iq","speed","striking_defense"],
-            "Hybrid":           ["fight_iq","boxing","takedowns"],
-            "Karate":           ["striking_defense","kicks","speed"],
-            "Sprawl & Brawl":   ["takedown_defense","boxing","cardio"],
+            "Orthodox Boxer":   {"primary": "boxing",
+                                 "secondary": "striking_defense",
+                                 "tertiary": "chin"},
+            "Muay Thai":        {"primary": "kicks",
+                                 "secondary": "clinch_striking",
+                                 "tertiary": "clinch_control"},
+            "Kickboxer":        {"primary": "kicks",
+                                 "secondary": "boxing",
+                                 "tertiary": "striking_defense"},
+            "Wrestler":         {"primary": "takedowns",
+                                 "secondary": "top_control",
+                                 "tertiary": "cardio"},
+            "BJJ Specialist":   {"primary": "submissions",
+                                 "secondary": "guard",
+                                 "tertiary": "takedown_defense"},
+            "Ground & Pound":   {"primary": "top_control",
+                                 "secondary": "boxing",
+                                 "tertiary": "takedowns"},
+            "Clinch Fighter":   {"primary": "clinch_striking",
+                                 "secondary": "clinch_control",
+                                 "tertiary": "takedowns"},
+            "Counter Striker":  {"primary": "striking_defense",
+                                 "secondary": "boxing",
+                                 "tertiary": "fight_iq"},
+            "Pressure Fighter": {"primary": "boxing",
+                                 "secondary": "cardio",
+                                 "tertiary": "clinch_control"},
+            "Sambo":            {"primary": "takedowns",
+                                 "secondary": "submissions",
+                                 "tertiary": "top_control"},
+            "Brawler":          {"primary": "strength",
+                                 "secondary": "boxing",
+                                 "tertiary": "chin"},
+            "Judo":             {"primary": "takedowns",
+                                 "secondary": "clinch_control",
+                                 "tertiary": "top_control"},
+            "Point Fighter":    {"primary": "fight_iq",
+                                 "secondary": "striking_defense",
+                                 "tertiary": "speed"},
+            "Hybrid":           {"primary": "fight_iq",
+                                 "secondary": "boxing",
+                                 "tertiary": "takedowns"},
+            "Karate":           {"primary": "striking_defense",
+                                 "secondary": "kicks",
+                                 "tertiary": "fight_iq"},
+            "Sprawl & Brawl":   {"primary": "takedown_defense",
+                                 "secondary": "boxing",
+                                 "tertiary": "cardio"},
         }
+        _STAT_RATES = (("primary", 1.0),
+                       ("secondary", 0.5),
+                       ("tertiary", 0.25))
+        # Universal physicals — every fighter develops these at 0.15x
+        # so they don't stagnate, mirroring the S&C-coach universal
+        # bonus on the player side. cardio only fires here if it's not
+        # already in the style's focus.
+        _UNIVERSAL_RATE = 0.15
+        _ALWAYS_UNIVERSAL = ("recovery", "heart")
 
         _INTENSITY_FATIGUE = {
             "REST": -15, "LIGHT": 2,
@@ -9985,8 +10031,11 @@ class GameBridge:
                 age = getattr(fighter, 'age', 28)
                 style = getattr(
                     fighter, 'fighting_style', 'Orthodox Boxer')
-                focus_attrs = _STYLE_FOCUS.get(
-                    style, ['fight_iq', 'boxing', 'cardio'])
+                focus_dict = _STYLE_FOCUS.get(style, {
+                    "primary":   "fight_iq",
+                    "secondary": "boxing",
+                    "tertiary":  "cardio",
+                })
 
                 # Get or initialize fighter fatigue
                 _fdata = self._game_state._fighter_data.get(fid, {})
@@ -10082,13 +10131,14 @@ class GameBridge:
                 # ── Apply training gains ──────────────────
                 base_gain = _INTENSITY_GAIN[intensity]
                 if base_gain <= 0:
-                    # Age decline still fires on REST weeks
+                    # Age decline still fires on REST weeks.
+                    # OVR recalc removed — AI OVR is player-facing only
+                    # and refreshes via post-fight / explicit recompute
+                    # paths, not every training tick.
                     if age >= 31:
                         try:
                             self._apply_age_decline(
                                 fid, age, tier, "MODERATE")
-                            fighter.overall_rating = (
-                                self._compute_ovr(fighter))
                         except Exception:
                             pass
                     continue
@@ -10100,112 +10150,92 @@ class GameBridge:
                     0.8 if age < 33 else
                     0.4)
 
-                # Train primary style stats in rotation
-                # Week-based rotation so all 3 get attention
-                _focus_idx = week % len(focus_attrs)
-                focus_attr = focus_attrs[_focus_idx]
-
-                current = float(getattr(fighter,
-                    focus_attr, 60))
-
                 # Per-fighter potential ceiling bounds growth
                 stored_potential = self._game_state._fighter_data.get(
                     fid, {}).get("potential",
                     getattr(fighter, 'overall_rating', 60) + 8)
                 effective_cap = min(tier_cap, int(stored_potential))
 
-                # Diminishing returns above effective cap
-                _cap_mod = 1.0
-                if current >= effective_cap:
-                    _cap_mod = max(0.05,
-                        1 - (current - effective_cap) * 0.15)
-                elif current >= effective_cap - 5:
-                    _cap_mod = 0.4
+                # ── Build the per-week training plan ──────
+                # Primary 1.0x, secondary 0.5x, tertiary 0.25x — every
+                # week, no rotation. Plus universal physicals
+                # (recovery / heart always, cardio when not already in
+                # focus) at 0.15x so AI fighters' conditioning doesn't
+                # stagnate.
+                _focus_set = {focus_dict.get("primary"),
+                              focus_dict.get("secondary"),
+                              focus_dict.get("tertiary")}
+                _stat_plan = [
+                    (focus_dict["primary"],   1.0),
+                    (focus_dict["secondary"], 0.5),
+                    (focus_dict["tertiary"],  0.25),
+                ]
+                if "cardio" not in _focus_set:
+                    _stat_plan.append(("cardio", _UNIVERSAL_RATE))
+                for _u in _ALWAYS_UNIVERSAL:
+                    if _u not in _focus_set:
+                        _stat_plan.append((_u, _UNIVERSAL_RATE))
 
-                # ── Ship AI-Coach: style-fit bonus ──
+                # ── Coach style-fit setup (reused per stat) ──
                 # AI fighter in a camp whose dominant_coach_type matches
                 # the fighter's style develops faster in the coach's
-                # primary domain. Mirrors the player system's
-                # COACH_STYLE_FIT_BONUS (+15%) for parity.
-                # Coverage gate: stats outside the coach's primary or
-                # secondary domain suffer the same 0.85x penalty.
-                _ai_style_bonus = 1.0
+                # primary domain. Coverage gate: stats outside the
+                # coach's primary or secondary domain take a 0.85x
+                # penalty. Mirrors COACH_STYLE_FIT_BONUS on the player
+                # side. Now applied PER STAT in the multi-stat loop
+                # instead of just the single rotated focus stat.
                 _dom_type = getattr(camp, 'dominant_coach_type', '') or ''
-                if _dom_type:
-                    _ct_def = COACH_TYPES.get(_dom_type, {})
-                    _ct_primary = _ct_def.get('primary', [])
-                    _ct_secondary = _ct_def.get('secondary', [])
-                    _style_match = _ct_def.get('style_match', [])
-                    # Style bonus on primary stats only
-                    if focus_attr in _ct_primary:
-                        if style in _style_match:
-                            _ai_style_bonus = 1 + COACH_STYLE_FIT_BONUS
-                        elif not _style_match:
-                            # S&C — universal, half bonus
-                            _ai_style_bonus = 1 + (
-                                COACH_STYLE_FIT_BONUS * 0.5)
-                    # Coverage penalty when stat isn't in coach domain
-                    if (focus_attr not in _ct_primary
-                            and focus_attr not in _ct_secondary):
-                        _ai_style_bonus *= 0.85
+                _ct_def = COACH_TYPES.get(_dom_type, {}) if _dom_type else {}
+                _ct_primary = _ct_def.get('primary', [])
+                _ct_secondary = _ct_def.get('secondary', [])
+                _style_match = _ct_def.get('style_match', [])
 
-                effective = (base_gain
-                    * age_gain_mult
-                    * _coach_gain_mult
-                    * _cap_mod
-                    * _ai_style_bonus)
+                for stat, rate in _stat_plan:
+                    if not hasattr(fighter, stat):
+                        continue
+                    current = float(getattr(fighter, stat, 60))
 
-                if effective > 0.02 and hasattr(
-                        fighter, focus_attr):
-                    setattr(fighter, focus_attr,
-                        min(100.0, current + effective))
-                    # Mirror to _fighter_data (Ship #32)
-                    if fid in self._game_state._fighter_data:
-                        self._game_state._fighter_data[fid][
-                            focus_attr] = round(
-                            min(100.0, current + effective), 2)
+                    # Diminishing returns above effective cap
+                    _cap_mod = 1.0
+                    if current >= effective_cap:
+                        _cap_mod = max(0.05,
+                            1 - (current - effective_cap) * 0.15)
+                    elif current >= effective_cap - 5:
+                        _cap_mod = 0.4
 
-                # Clinch_control secondary training — clinch-relevant
-                # styles develop grip work alongside primary focus at
-                # 0.8x rate; all others get 0.3x maintenance so the
-                # stat doesn't decay to floor. Skipped when this week's
-                # rotation already trained clinch_control (avoids
-                # double-train for Muay Thai / Clinch Fighter).
-                if focus_attr != 'clinch_control':
-                    _clinch_styles = {
-                        'Clinch Fighter', 'Muay Thai', 'Wrestler',
-                        'Judo', 'Sambo', 'Pressure Fighter',
-                    }
-                    _cc_rate = 0.8 if style in _clinch_styles else 0.3
-                    _cc_cur = float(getattr(
-                        fighter, 'clinch_control', 60))
-                    _cc_cap_mod = 1.0
-                    if _cc_cur >= effective_cap:
-                        _cc_cap_mod = max(0.05,
-                            1 - (_cc_cur - effective_cap) * 0.15)
-                    elif _cc_cur >= effective_cap - 5:
-                        _cc_cap_mod = 0.4
-                    _cc_gain = (base_gain * age_gain_mult
-                                * _coach_gain_mult
-                                * _cc_cap_mod * _cc_rate)
-                    if _cc_gain > 0.02 and hasattr(
-                            fighter, 'clinch_control'):
-                        _cc_new = min(100.0, _cc_cur + _cc_gain)
-                        setattr(fighter, 'clinch_control', _cc_new)
+                    # Coach style-fit bonus / coverage penalty per stat
+                    _ai_style_bonus = 1.0
+                    if _dom_type:
+                        if stat in _ct_primary:
+                            if style in _style_match:
+                                _ai_style_bonus = 1 + COACH_STYLE_FIT_BONUS
+                            elif not _style_match:
+                                _ai_style_bonus = 1 + (
+                                    COACH_STYLE_FIT_BONUS * 0.5)
+                        if (stat not in _ct_primary
+                                and stat not in _ct_secondary):
+                            _ai_style_bonus *= 0.85
+
+                    effective = (base_gain
+                        * age_gain_mult
+                        * _coach_gain_mult
+                        * _cap_mod
+                        * _ai_style_bonus
+                        * rate)
+
+                    if effective > 0.02:
+                        new_val = min(100.0, current + effective)
+                        setattr(fighter, stat, new_val)
                         if fid in self._game_state._fighter_data:
-                            self._game_state._fighter_data[fid][
-                                'clinch_control'] = round(_cc_new, 2)
+                            self._game_state._fighter_data[fid][stat] = round(
+                                new_val, 2)
 
-                # Style-weighted OVR
-                fighter.overall_rating = self._compute_ovr(fighter)
-
-                # Age decline at 31+ — applies weekly
+                # Age decline at 31+ — applies weekly. OVR recalc
+                # removed per the OVR-player-facing-only principle.
                 if age >= 31:
                     try:
                         self._apply_age_decline(
                             fid, age, tier, "MODERATE")
-                        fighter.overall_rating = (
-                            self._compute_ovr(fighter))
                     except Exception:
                         pass
 
