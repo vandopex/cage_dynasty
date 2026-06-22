@@ -468,6 +468,40 @@
                     {% elif _cur >= 55 %}{% set _ccol = 'var(--info)' %}
                     {% else %}{% set _ccol = 'var(--text-muted)' %}
                     {% endif %}
+                    {# Development tier pill — value-based gain curve.
+                       Same thresholds as _stat_tier_mult in game_bridge.py.
+                       Tooltip explains the gain multiplier. #}
+                    {% if _cur >= 90 %}
+                        {% set _tier_label = '👑' %}
+                        {% set _tier_color = 'var(--gold)' %}
+                        {% set _tier_name = 'Legend' %}
+                        {% set _tier_rate = '0.25×' %}
+                    {% elif _cur >= 85 %}
+                        {% set _tier_label = '🏆' %}
+                        {% set _tier_color = '#ff6b35' %}
+                        {% set _tier_name = 'Elite' %}
+                        {% set _tier_rate = '0.40×' %}
+                    {% elif _cur >= 80 %}
+                        {% set _tier_label = '💪' %}
+                        {% set _tier_color = 'var(--warning)' %}
+                        {% set _tier_name = 'Hard Work' %}
+                        {% set _tier_rate = '0.55×' %}
+                    {% elif _cur >= 70 %}
+                        {% set _tier_label = '🔄' %}
+                        {% set _tier_color = 'var(--neon-green)' %}
+                        {% set _tier_name = 'Slowing' %}
+                        {% set _tier_rate = '0.75×' %}
+                    {% elif _cur >= 55 %}
+                        {% set _tier_label = '📈' %}
+                        {% set _tier_color = 'var(--info)' %}
+                        {% set _tier_name = 'Normal' %}
+                        {% set _tier_rate = '1.00×' %}
+                    {% else %}
+                        {% set _tier_label = '⚡' %}
+                        {% set _tier_color = 'var(--text-muted)' %}
+                        {% set _tier_name = 'Fast' %}
+                        {% set _tier_rate = '1.30×' %}
+                    {% endif %}
                     {% set _is_training = _target > _cur %}
                     {% set _pct = (_cur * 100 // _target) if (_is_training and _target > 0) else 0 %}
                     {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
@@ -477,7 +511,7 @@
                          data-cat="{{ cat_key }}"
                          data-cur="{{ _cur }}"
                          style="display:grid;
-                                grid-template-columns:130px 32px 1fr 1fr 70px;
+                                grid-template-columns:130px 32px 82px 1fr 1fr 70px;
                                 gap:8px;align-items:center;
                                 padding:5px 4px;font-size:.72rem;
                                 border-bottom:1px solid rgba(255,255,255,.03);">
@@ -488,6 +522,19 @@
                                     font-family:var(--font-display);
                                     font-weight:700;color:{{ _ccol }};">
                             {{ _cur }}
+                        </div>
+                        {# Development tier pill #}
+                        <div style="display:flex;justify-content:center;">
+                            <span title="{{ _tier_name }} — training gains at {{ _tier_rate }} the base rate. Lower stats develop faster; elite stats are hard work."
+                                  style="font-size:.55rem;padding:1px 5px;
+                                         border-radius:3px;
+                                         background:{{ _tier_color }}22;
+                                         color:{{ _tier_color }};
+                                         border:1px solid {{ _tier_color }}44;
+                                         white-space:nowrap;cursor:help;
+                                         letter-spacing:.02em;">
+                                {{ _tier_label }} {{ _tier_name }}
+                            </span>
                         </div>
                         {# Floor stepper #}
                         <div style="display:flex;align-items:center;

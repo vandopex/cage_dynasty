@@ -519,6 +519,36 @@ COACH_STYLE_FIT_BONUS    = 0.15  # +15% gains on primary stats when style matche
 COACH_DECAY_PROTECTION   = 0.15  # 15% slower decay on coach-primary stats
 COACH_IQ_BONUS_THRESHOLD = 75    # fight_iq ≥ this → corner +2 / camp +2
 COACH_IQ_ELITE_THRESHOLD = 88    # fight_iq ≥ this → corner +3 / camp +3
+
+
+def _stat_tier_mult(current: float) -> float:
+    """Value-based gain multiplier — Pokémon-curve diminishing returns
+    by absolute stat value, independent of facility cap. Developing a
+    weakness is fast; pushing elite stats is hard work. Applied on top
+    of facility-cap diminishing returns, age modifier, and coach bonuses
+    so all four interact. Player and AI training paths share this
+    function for parity.
+
+    Tiers (current value → multiplier):
+        <55  → 1.30  ⚡ Fast — big leaps possible
+        <70  → 1.00  📈 Normal
+        <80  → 0.75  🔄 Slowing
+        <85  → 0.55  💪 Hard Work
+        <90  → 0.40  🏆 Elite Territory
+        ≥90  → 0.25  👑 Legend
+    """
+    if current < 55:
+        return 1.30
+    elif current < 70:
+        return 1.00
+    elif current < 80:
+        return 0.75
+    elif current < 85:
+        return 0.55
+    elif current < 90:
+        return 0.40
+    else:
+        return 0.25
 def _is_nickname_earned(fighter) -> bool:
     """Ship Nickname-Tier: tiered earned-nickname gate. Returns True
     if a fighter qualifies via ANY tier. Used by both the earn-on-win
@@ -6875,6 +6905,10 @@ class GameBridge:
                         # No coach covers this stat — gains suffer
                         effective *= 0.85
                     effective *= _style_bonus
+                    # Value-based tier curve — pushing elite stats is
+                    # hard work regardless of facility cap. Stacks
+                    # with _diminishing_gain (cap) above.
+                    effective *= _stat_tier_mult(current)
 
                     if effective > 0.01:
                         if fighter_id in self._game_state._fighter_data:
@@ -10370,6 +10404,7 @@ class GameBridge:
                         * _coach_gain_mult
                         * _cap_mod
                         * _ai_style_bonus
+                        * _stat_tier_mult(current)
                         * rate)
 
                     if effective > 0.02:

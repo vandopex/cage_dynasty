@@ -695,6 +695,24 @@
                                  color:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}var(--text-muted){% endif %};">
                         {{ value }}
                     </span>
+                    {# Development tier indicator — value-based gain
+                       curve. Below 70, no indicator (keeps layout
+                       quiet for unremarkable stats). #}
+                    {% if value >= 90 %}
+                    <span title="Legend — gains at 0.25× base rate"
+                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">👑</span>
+                    {% elif value >= 85 %}
+                    <span title="Elite — gains at 0.40× base rate"
+                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">🏆</span>
+                    {% elif value >= 80 %}
+                    <span title="Hard Work — gains at 0.55× base rate"
+                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">💪</span>
+                    {% elif value >= 70 %}
+                    <span title="Slowing — gains at 0.75× base rate"
+                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">⭐</span>
+                    {% else %}
+                    <span style="width:14px;flex-shrink:0;">&nbsp;</span>
+                    {% endif %}
                     {% if name == 'Chin' and fighter.ko_losses_received >= 3 and fighter.chin_perm_erosion > 0 %}
                     <span title="Permanent chin damage from repeated KO losses — training cannot fully restore this"
                           style="font-size:.6rem;color:var(--blood-red);margin-left:3px;">⚠</span>

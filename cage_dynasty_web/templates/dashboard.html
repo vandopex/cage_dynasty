@@ -489,6 +489,13 @@
                         </span>
                     </div>
                     {% for g in _goals %}
+                    {# Tier indicator matches _stat_tier_mult thresholds #}
+                    {% if g.current >= 90 %}{% set _g_tier = '👑' %}
+                    {% elif g.current >= 85 %}{% set _g_tier = '🏆' %}
+                    {% elif g.current >= 80 %}{% set _g_tier = '💪' %}
+                    {% elif g.current >= 70 %}{% set _g_tier = '⭐' %}
+                    {% else %}{% set _g_tier = '' %}
+                    {% endif %}
                     <div style="display:flex;align-items:center;
                                 gap:8px;margin-bottom:4px;font-size:.7rem;">
                         <span style="color:var(--text-muted);
@@ -497,8 +504,8 @@
                         </span>
                         <span style="color:var(--text-bright);
                                      font-family:var(--font-display);
-                                     min-width:64px;font-size:.7rem;">
-                            {{ g.current }}<span style="color:var(--text-muted);">→</span>{{ g.target }}
+                                     min-width:78px;font-size:.7rem;">
+                            {{ g.current }}{% if _g_tier %} <span title="Stat tier — gain rate slows at higher values">{{ _g_tier }}</span>{% endif %}<span style="color:var(--text-muted);"> → </span>{{ g.target }}
                         </span>
                         <div style="flex:1;height:5px;
                                     background:rgba(255,255,255,.06);
