@@ -253,7 +253,7 @@
 
         {# Action button #}
         <div style="flex-shrink:0;display:flex;
-                    align-items:center;
+                    align-items:center;gap:6px;
                     padding:0 var(--spacing-md);">
             <a href="{{ url_for('training') }}"
                onclick="event.stopPropagation();"
@@ -264,6 +264,27 @@
                onmouseout="this.style.borderColor='var(--border-color)';this.style.color='var(--text-muted)';">
                 Train →
             </a>
+            {# Release — hidden when fighter has a scheduled fight.
+               stopPropagation matches the Train-link pattern so the
+               click doesn't bubble to the wrapping anchor. #}
+            {% if not sched %}
+            <form action="{{ url_for('release_fighter',
+                                      fighter_id=f.fighter_id) }}"
+                  method="POST" style="margin:0;"
+                  onclick="event.stopPropagation();"
+                  onsubmit="return confirm('Release ' + '{{ f.name }}' + '?');">
+                <button type="submit"
+                        style="font-size:.6rem;padding:2px 8px;
+                               background:rgba(211,47,47,.06);
+                               border:1px solid rgba(211,47,47,.2);
+                               color:var(--blood-red);
+                               border-radius:3px;cursor:pointer;
+                               opacity:.7;"
+                        title="Release {{ f.name }}">
+                    🚪
+                </button>
+            </form>
+            {% endif %}
         </div>
 
     </div>

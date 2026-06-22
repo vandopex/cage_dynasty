@@ -2600,6 +2600,21 @@ def register_routes(app):
 
         return redirect(url_for('dashboard'))
 
+    @app.route('/fighter/<fighter_id>/release', methods=['POST'])
+    def release_fighter(fighter_id):
+        """Player-initiated release of a roster fighter. Backend
+        enforces no-scheduled-fight + no-fight-camp guards and
+        returns an error dict that's surfaced as a flash."""
+        from flask import flash
+        bridge = get_bridge()
+        result = bridge.release_fighter(fighter_id)
+        if result.get('success'):
+            flash(result['message'], 'info')
+        else:
+            flash(result.get('error',
+                  'Could not release fighter.'), 'error')
+        return redirect(url_for('roster'))
+
     # =========================================================================
     # RECORD BOOK, COMPARE, FACILITY, SAVES
     # =========================================================================

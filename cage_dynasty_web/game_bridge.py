@@ -17431,6 +17431,94 @@ class GameBridge:
                     "week": current_week,
                 })
 
+    def release_fighter(self, fighter_id: str) -> Dict[str, Any]:
+        """Player proactively releases a fighter from the roster.
+
+        Guards: must be the player's fighter, no scheduled fight,
+        not currently in fight camp. Effects: fighter joins the
+        free-agent pool, contract is cleared, training plan dropped,
+        remaining roster takes a small (-5) morale hit, news headline
+        filed. AI camps may immediately bid via the same path as
+        contract-expiry releases."""
+        if not self._game_state:
+            return {"success": False, "error": "No game loaded"}
+
+        fighter = self._game_state.get_fighter(fighter_id)
+        if not fighter:
+            return {"success": False, "error": "Fighter not found"}
+
+        player_camp_id = self._game_state.player_camp_id
+        if getattr(fighter, 'camp_id', None) != player_camp_id:
+            return {"success": False, "error": "Not your fighter"}
+
+        # Guard: no scheduled fight
+        for sf in self._scheduled_fights:
+            if fighter_id in (sf.get('fighter1_id'),
+                              sf.get('fighter2_id')):
+                return {"success": False,
+                        "error": (f"{fighter.name} has a "
+                                  f"scheduled fight — "
+                                  f"can't release them now")}
+
+        # Guard: not in fight camp
+        _plan = self._fighter_training_plans.get(fighter_id, {})
+        if _plan.get('fight_camp_active', False):
+            return {"success": False,
+                    "error": (f"{fighter.name} is in fight camp — "
+                              f"wait until after the fight")}
+
+        name = fighter.name
+        record = f"{fighter.wins}-{fighter.losses}"
+        camp = self._game_state.camps.get(player_camp_id)
+        camp_name = getattr(camp, 'name', 'the camp') if camp else 'the camp'
+
+        # Release: strip camp + contract, add to free agents
+        fighter.camp_id = None
+        if hasattr(fighter, 'contract_id'):
+            fighter.contract_id = None
+        if camp and hasattr(camp, 'fighter_ids'):
+            if fighter_id in camp.fighter_ids:
+                camp.fighter_ids.remove(fighter_id)
+                if hasattr(camp, 'fighter_count'):
+                    camp.fighter_count = len(camp.fighter_ids)
+        self._game_state.free_agents.add(fighter_id)
+
+        # Clear contract + training plan
+        self._contracts.pop(fighter_id, None)
+        self._fighter_training_plans.pop(fighter_id, None)
+
+        # Small morale hit to remaining roster (player-initiated
+        # releases sting less than founder walkouts — -5 not 15).
+        for _fid, _contract in self._contracts.items():
+            _other = self._game_state.get_fighter(_fid)
+            if (_other and _other.is_active
+                    and getattr(_other, 'camp_id', None)
+                        == player_camp_id):
+                _cur = int(_contract.get('morale', 70))
+                _contract['morale'] = max(30, _cur - 5)
+
+        week = self._game_state.week_number
+        self._news_items.insert(0, {
+            'headline': (f"🚪 {name} ({record}) released "
+                         f"by {camp_name} — now a free agent."),
+            'category':     'signing',
+            'week':         week,
+            'fighter_id':   fighter_id,
+            'fighter_name': name,
+        })
+        print(f"  🚪 [RELEASE] {name} released by player — free agent")
+
+        # AI camps may immediately bid (same path as contract-expiry).
+        try:
+            self._ai_bid_for_free_agent(fighter_id, fighter)
+        except Exception as _be:
+            print(f"⚠️  AI bid after release failed: {_be}")
+        self._clear_cache()
+
+        return {"success": True,
+                "message": (f"{name} has been released. "
+                            f"They're now a free agent.")}
+
     def _release_fighter_to_free_agency(self, fighter_id: str,
                                          name: str, reason: str) -> None:
         """Strip fighter from player camp, add to free agents, AI may pick up."""

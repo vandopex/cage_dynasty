@@ -562,6 +562,32 @@
                     ✅ Re-sign {{ fighter.name }}
                 </button>
             </form>
+
+            {# Release — destructive, tucked low. Hidden when fighter
+               has a scheduled fight (backend also enforces this). #}
+            {% if player_ids and fighter.fighter_id in player_ids and not next_fight %}
+            <div style="margin-top:var(--spacing-md);
+                        padding-top:var(--spacing-sm);
+                        border-top:1px solid rgba(255,255,255,.04);
+                        display:flex;justify-content:flex-end;">
+                <form action="{{ url_for('release_fighter',
+                                          fighter_id=fighter.fighter_id) }}"
+                      method="POST"
+                      onsubmit="return confirm(
+                          'Release {{ fighter.name }}? They will '
+                          + 'become a free agent immediately.');"
+                      style="margin:0;">
+                    <button type="submit"
+                            style="font-size:.65rem;padding:3px 10px;
+                                   background:rgba(211,47,47,.08);
+                                   border:1px solid rgba(211,47,47,.3);
+                                   color:var(--blood-red);
+                                   border-radius:4px;cursor:pointer;">
+                        🚪 Release Fighter
+                    </button>
+                </form>
+            </div>
+            {% endif %}
         </div>
         {% endif %}
     </div>
