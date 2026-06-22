@@ -3875,6 +3875,147 @@ class GameBridge:
         # Clear camp cache so dashboard shows updated record
         self._camp_cache.clear()
 
+    # ──────────────────────────────────────────────────────────────
+    # Gameplan payoff loop — closes the loop the training-page
+    # gameplan banner opens. After a player fight, grades whether
+    # the loaded counter-gameplan was relevant given the opponent's
+    # actual fight behavior. Three outcomes per gameplan type:
+    #   - PAID OFF: opponent leaned into their style, player defense held
+    #   - WRONG READ: opponent fought their off-style, gameplan unused
+    #   - TESTED: opponent committed but player still took damage
+    # Headline category 'training' so it appears in the post-fight news.
+    # ──────────────────────────────────────────────────────────────
+    _GAMEPLAN_TYPE = {
+        'takedown_defense': 'wrestling',
+        'clinch_control':   'wrestling',
+        'guard':             'grappling',
+        'submissions':       'grappling',
+        'striking_defense':  'striking',
+        'fight_iq':          'technical',
+        'cardio':            'pressure',
+    }
+
+    def _apply_gameplan_payoff(self, player_fid: str, opp_name: str,
+                                opp_stats: List[Dict[str, Any]],
+                                fight: Dict[str, Any], week: int) -> None:
+        """Generate a one-line headline grading the player's counter-
+        gameplan against the opponent's actual fight stats. No-op when
+        no gameplan was loaded or no opp stats are available."""
+        if not opp_stats:
+            return
+        plan = self._fighter_training_plans.get(player_fid, {})
+        queue = plan.get('queue') or []
+        if not queue:
+            return
+        q_idx = int(plan.get('queue_index', 0) or 0)
+        # Use whichever queue entry was the active/primary focus.
+        # Fall back to entry 0 if queue_index is past the end.
+        if q_idx >= len(queue):
+            q_idx = 0
+        focus = (queue[q_idx].get('focus') or '').strip()
+        gp_type = self._GAMEPLAN_TYPE.get(focus)
+        if not gp_type:
+            return  # not a recognised counter-gameplan focus
+
+        # Sum opponent's per-round stats. Engine round-stat dicts are
+        # produced by fight_integration.NarratedFightSimulator.
+        def _sum(key):
+            return sum(int(r.get(key, 0) or 0) for r in opp_stats)
+        td_att   = _sum('takedowns_attempted')
+        td_land  = _sum('takedowns_landed')
+        str_att  = _sum('significant_strikes_attempted')
+        str_land = _sum('significant_strikes_landed')
+        sub_att  = _sum('submission_attempts')
+
+        headline = None
+        if gp_type == 'wrestling':
+            if td_att == 0:
+                headline = (f"📋 Wrong read — {opp_name} never shot "
+                            f"for a takedown. The Counter-Wrestling "
+                            f"camp wasn't tested.")
+            elif td_att <= 2 and td_land == 0:
+                headline = (f"🎯 Gameplan worked — {opp_name} barely "
+                            f"threatened the takedown "
+                            f"({td_att} attempted, {td_land} landed). "
+                            f"Counter-Wrestling paid off.")
+            elif td_land * 2 < td_att:
+                headline = (f"💪 Gameplan tested — {opp_name} tried "
+                            f"{td_att} takedowns, landed {td_land}. "
+                            f"The Counter-Wrestling camp held up.")
+            else:
+                headline = (f"⚠️ Beaten on the mat — {opp_name} landed "
+                            f"{td_land}/{td_att} takedowns despite the "
+                            f"Counter-Wrestling camp.")
+        elif gp_type == 'striking':
+            # Low attempts → opponent didn't commit to striking.
+            # Low landing % → defense absorbed well.
+            if str_att < 25:
+                headline = (f"📋 Wrong read — {opp_name} barely engaged "
+                            f"in striking ({str_att} attempts). The "
+                            f"Striking-Defense camp wasn't tested.")
+            else:
+                land_pct = int(str_land * 100 / str_att) if str_att else 0
+                if land_pct < 30:
+                    headline = (f"🎯 Defense camp paid off — absorbed "
+                                f"{opp_name}'s striking "
+                                f"({str_land}/{str_att}, {land_pct}%). "
+                                f"Sharpened defense held.")
+                elif land_pct < 45:
+                    headline = (f"💪 Striking defense tested — "
+                                f"{opp_name} landed {str_land}/"
+                                f"{str_att} ({land_pct}%). The camp "
+                                f"held up.")
+                else:
+                    headline = (f"⚠️ {opp_name} found the mark — "
+                                f"{str_land}/{str_att} landed "
+                                f"({land_pct}%). The defense camp "
+                                f"didn't hold.")
+        elif gp_type == 'grappling':
+            if sub_att == 0:
+                headline = (f"📋 Wrong read — {opp_name} never went "
+                            f"for a submission. The Grappling-Defense "
+                            f"camp wasn't tested.")
+            elif sub_att == 1:
+                headline = (f"💪 Survived a sub attempt from "
+                            f"{opp_name}. The grappling camp held.")
+            else:
+                headline = (f"🎯 Guard work paid off — survived "
+                            f"{sub_att} submission attempts from "
+                            f"{opp_name}.")
+        elif gp_type == 'pressure':
+            # Cardio camp pays off when opponent fatigues late or
+            # output drops across rounds. Heuristic: compare round-1
+            # strikes to last-round strikes (when ≥3 rounds available).
+            if len(opp_stats) >= 3:
+                r1 = int(opp_stats[0].get(
+                    'significant_strikes_attempted', 0) or 0)
+                rN = int(opp_stats[-1].get(
+                    'significant_strikes_attempted', 0) or 0)
+                if r1 > 0 and rN * 2 < r1:
+                    headline = (f"🎯 Cardio camp paid off — "
+                                f"{opp_name} faded down the stretch "
+                                f"(R1 {r1} → R{len(opp_stats)} {rN}).")
+                elif rN > 0:
+                    headline = (f"💪 {opp_name} kept the pace "
+                                f"(R1 {r1} → R{len(opp_stats)} {rN}). "
+                                f"Cardio camp held up.")
+        elif gp_type == 'technical':
+            # Fight-IQ camp: hard to grade from stats alone. Fire a
+            # subtle "the prep showed" line when the fight goes to
+            # decision (suggests technical chess).
+            if len(opp_stats) >= 3 and str_att > 0:
+                headline = (f"💪 Fight-IQ camp showed — {opp_name} "
+                            f"didn't get clean entries.")
+
+        if headline:
+            self._news_items.insert(0, {
+                'headline':   headline,
+                'category':   'training',
+                'week':       week,
+                'fight_id':   fight.get('fight_id', ''),
+                'fighter_id': player_fid,
+            })
+
     def _apply_post_fight_experience(
         self,
         fighter_id: str,
@@ -16346,6 +16487,32 @@ class GameBridge:
                 winner.sub_wins += 1
                 loser.sub_losses = getattr(loser, 'sub_losses', 0) + 1
             self._apply_post_fight_camp_record(winner, loser, fight, method)
+
+            # Gameplan payoff — grade the player's counter-gameplan
+            # against the opponent's actual fight stats. Fires once
+            # per player fighter in this bout (almost always 0 or 1,
+            # since intra-camp player matches are rare).
+            try:
+                _player_fids = {
+                    pf.fighter_id for pf in self.get_player_fighters()}
+                for _fid, _opp_id in [(f1_id, f2_id), (f2_id, f1_id)]:
+                    if _fid not in _player_fids:
+                        continue
+                    _opp_stats = (eng_result.fighter2_stats
+                                  if _fid == f1_id
+                                  else eng_result.fighter1_stats)
+                    _opp_ftr = self._game_state.get_fighter(_opp_id)
+                    _opp_name = _opp_ftr.name if _opp_ftr else 'Opponent'
+                    self._apply_gameplan_payoff(
+                        player_fid=_fid,
+                        opp_name=_opp_name,
+                        opp_stats=_opp_stats or [],
+                        fight=fight,
+                        week=(self._game_state.week_number
+                              if self._game_state else 0),
+                    )
+            except Exception as _gpe:
+                print(f"  ⚠️  [GAMEPLAN PAYOFF] {_gpe}")
 
         # Post-fight experience feedback — read per-round stats from
         # eng_result and nudge attributes based on what the fight
