@@ -2742,6 +2742,8 @@ class WorldInitializer:
                 wins=fighter.wins,
                 losses=fighter.losses,
                 draws=fighter.draws,
+                ko_wins=fighter.ko_wins,
+                sub_wins=fighter.sub_wins,
                 is_champion=fighter.is_champion,
                 overall_rating=fighter.skill_rating,
                 is_active=fighter.is_active,

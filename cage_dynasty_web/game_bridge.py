@@ -1417,6 +1417,10 @@ class GameBridge:
         # at the prompt's creation week.
         self._pending_retirement_prompts: Dict[str, Dict[str, Any]] = {}
 
+        # KO/sub backfill — one-shot guard so the load-time repair
+        # doesn't re-run every load once a save has been corrected.
+        self._kosub_backfill_done: bool = False
+
         # Cumulative camp stat gains — {fighter_id: {stat: float}}
         # Accumulates fractional weekly gains so UI shows real progress
         self._camp_stat_totals: Dict[str, Dict[str, float]] = {}
@@ -2041,6 +2045,8 @@ class GameBridge:
             "pending_injury_decisions": self._pending_injury_decisions,
             "pending_retirement_prompts":
                 self._pending_retirement_prompts,
+            "kosub_backfill_done":
+                bool(getattr(self, '_kosub_backfill_done', False)),
             "pending_challenges":       self._pending_challenges,
             "amateur_graduates":        self._amateur_graduates,
             "champion_holds":           self._champion_holds,
@@ -2270,6 +2276,8 @@ class GameBridge:
         self._pending_injury_decisions  = data.get("pending_injury_decisions", [])
         self._pending_retirement_prompts = data.get(
             "pending_retirement_prompts", {})
+        self._kosub_backfill_done = bool(
+            data.get("kosub_backfill_done", False))
         self._champion_holds            = data.get("champion_holds", {})
         if INJURY_AVAILABLE and InjurySystem and "injury_system" in data:
             try:
@@ -2420,6 +2428,43 @@ class GameBridge:
                 print(f"✅ Ship #48 backfill: {_bf_count} fighters scanned")
         except Exception as _bfe:
             print(f"⚠️  Ship #48 backfill failed: {_bfe}")
+
+        # Ship KOSub-Backfill: ko_wins/sub_wins were zeroed for pre-gen
+        # fighters because world_init didn't transfer them to
+        # FighterRecord. Walk fight_history to reconstruct correct
+        # counts. Idempotent via _kosub_backfill_done flag on the
+        # bridge (persisted in web_save).
+        try:
+            if (self._game_state
+                    and not getattr(self, '_kosub_backfill_done', False)):
+                _kos_fixed = 0
+                for _f in self._game_state.fighters.values():
+                    if not getattr(_f, 'fight_history', None):
+                        continue
+                    _hist_ko = sum(
+                        1 for _h in _f.fight_history
+                        if isinstance(_h, dict)
+                        and _h.get('result') == 'W'
+                        and _h.get('method') in ('KO', 'TKO'))
+                    _hist_sub = sum(
+                        1 for _h in _f.fight_history
+                        if isinstance(_h, dict)
+                        and _h.get('result') == 'W'
+                        and _h.get('method') in ('SUB', 'Submission'))
+                    if (getattr(_f, 'ko_wins', 0) != _hist_ko
+                            or getattr(_f, 'sub_wins', 0) != _hist_sub):
+                        _f.ko_wins = _hist_ko
+                        _f.sub_wins = _hist_sub
+                        _kos_fixed += 1
+                        _fdata_map = self._game_state._fighter_data
+                        if _f.fighter_id in _fdata_map:
+                            _fdata_map[_f.fighter_id]['ko_wins'] = _hist_ko
+                            _fdata_map[_f.fighter_id]['sub_wins'] = _hist_sub
+                if _kos_fixed:
+                    print(f"✅ KO/Sub backfill: fixed {_kos_fixed} fighters")
+                self._kosub_backfill_done = True
+        except Exception as _kbe:
+            print(f"⚠️  KO/Sub backfill failed: {_kbe}")
 
         # ── One-time cleanup: prune retired fighters from camp rosters.
         # Pre-fix saves accumulated inactive fighters in camp.fighter_ids
