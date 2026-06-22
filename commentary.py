@@ -1185,12 +1185,18 @@ PUNCH_TEMPLATES = {
         "{actor}'s punch just grazes the air as {target} evades.",
         "{target} ducks under the looping punch nicely.",
         "{actor} overcommits and comes up empty.",
-        "Good head movement from {target} avoids the strike."
+        "Good head movement from {target} avoids the strike.",
+        "{target} slips the shot and resets to the center.",
+        "Good head movement from {target} keeps them safe.",
+        "{target} rolls with the punch, taking the sting off.",
     ],
     "fail": [
         "{target} blocks the punch effectively.",
         "{actor}'s punch is deflected by {target}'s guard.",
-        "{target} covers up well to absorb the impact."
+        "{target} covers up well to absorb the impact.",
+        "{target} frames up and creates space.",
+        "{target} covers up, weathering the pressure.",
+        "{target} catches the punch on the glove and resets.",
     ]
 }
 
@@ -1519,17 +1525,31 @@ GNP_BACK_MOUNT_TEMPLATES = {
         "{actor} digs in punches while controlling the back.",
         "Short shots connect from {actor} with the back taken.",
         "{actor} punishes {target} from behind.",
+        "{actor} rains down hammer fists from the back.",
+        "Back mount established — {actor} is looking for the finish.",
+        "{actor} digs in short elbows from the back position.",
+        "{actor} controls the position, working for the finish.",
+        "Dominant back control from {actor} — {target} is in serious trouble.",
+        "{actor} maintains the hooks, grinding down {target}.",
+        "Body triangle locked in from {actor} — {target} can't shake them loose.",
     ],
     "success_heavy": [
         "{actor} UNLOADS punches from back control!",
         "VICIOUS shots from {actor} with the hooks in!",
         "{actor} is TEEING OFF from back mount!",
         "{target} is getting HAMMERED from behind!",
+        "PUNISHMENT! {actor} drops bombs from the back!",
+        "{actor} is HUNTING the finish from back control!",
     ],
     "fail": [
         "{target} defends the punches while fighting the hooks.",
         "Solid defensive work from {target}.",
         "{target} protects the head well despite the bad position.",
+        "{target} fights the hooks, trying to free a leg.",
+        "{target} tucks the chin, protecting the neck.",
+        "{target} tries to work back to the fence.",
+        "{target} rolls to create space, looking for an escape.",
+        "Intelligent defense from {target} — surviving the storm.",
     ]
 }
 
@@ -2345,19 +2365,37 @@ class FightCommentarySystem:
         self.round_summaries: List[RoundSummary] = []
         self.commentary_log: List[str] = []
         
-        # Repetition avoidance
+        # === Repetition avoidance — per-pool dedupe ===
+        # Each template pool gets its own recent-fired deque (maxlen=5).
+        # Prior implementation used a single global set across all pools,
+        # which meant a 5-slot global rotation: pool-specific repetition
+        # (e.g. GNP_BACK_MOUNT firing 36× in one fight) wasn't actually
+        # prevented because other pools' lines kept evicting the back-mount
+        # entries. Keyed by id(templates) — stable for module-level pools.
+        from collections import deque as _deque
+        self._deque_cls = _deque
+        self._recent_templates: Dict[int, "_deque"] = {}
+        self.template_cooldown = 5
+
+        # Legacy attributes — kept for callers that read them directly.
+        # The dedupe logic ignores these; per-pool deques above are
+        # authoritative.
         self.recent_templates: Set[str] = set()
-        self.template_cooldown = 5  # Don't repeat within 5 uses
         self.recent_queue: List[str] = []
-        
+
         # Current round tracking
         self.current_round = 1
         self.current_exchange = 0
         self.round_stats: Dict[str, Dict] = {}
 
         # === Position announcement throttling ===
-        # Truck is high-drama — announce at most ONCE per round
+        # Truck (special-cased inline) was the original pattern. Generalized
+        # to all dominant positions via `_pos_announced` keyed by
+        # "{actor}|{position_family}|{round}" — fires at most once per
+        # fighter per position-family per round. Kills "X takes the back!
+        # RNC is RIGHT THERE!" spam when back is re-asserted each tick.
         self._truck_announced_round: int = -1
+        self._pos_announced: Set[str] = set()
 
         # === Peril line throttling ===
         # "IS DONE / legs are GONE / SERIOUS TROUBLE" lines should only fire
@@ -2403,31 +2441,38 @@ class FightCommentarySystem:
         return f"{minutes}:{seconds:02d}"
     
     def _select_template(
-        self, 
-        templates: List[str], 
+        self,
+        templates: List[str],
         avoid_repeats: bool = True
     ) -> str:
-        """Select a template with repetition avoidance"""
+        """Select a template with per-pool repetition avoidance.
+
+        Each distinct template list maintains its own recent-fired
+        deque (last 5). When all are recent, the deque is cleared and
+        the full pool becomes available again. Pool identity uses
+        id(templates) — stable for module-level constants (the common
+        case); inline lists fire infrequently so per-call identity loss
+        is acceptable."""
         if not templates:
             return ""
-        
-        if avoid_repeats and len(templates) > 1:
-            available = [t for t in templates if t not in self.recent_templates]
-            if not available:
-                # All used recently, clear oldest
-                self.recent_templates.clear()
-                available = templates
-            selected = random.choice(available)
-        else:
-            selected = random.choice(templates)
-        
-        # Track for cooldown
-        self.recent_queue.append(selected)
-        self.recent_templates.add(selected)
-        if len(self.recent_queue) > self.template_cooldown:
-            old = self.recent_queue.pop(0)
-            self.recent_templates.discard(old)
-        
+
+        if not avoid_repeats or len(templates) <= 1:
+            return random.choice(templates)
+
+        pool_key = id(templates)
+        recent = self._recent_templates.get(pool_key)
+        if recent is None:
+            recent = self._deque_cls(maxlen=self.template_cooldown)
+            self._recent_templates[pool_key] = recent
+
+        available = [t for t in templates if t not in recent]
+        if not available:
+            # Whole pool has fired recently — reset to full pool.
+            recent.clear()
+            available = list(templates)
+
+        selected = random.choice(available)
+        recent.append(selected)
         return selected
     
     def _get_damage_level(self, damage: float) -> DamageLevel:
@@ -3182,27 +3227,39 @@ class FightCommentarySystem:
         strike_lower = strike_type.lower() if strike_type else "punch"
         position_lower = position.lower() if position else ""
         
-        # Route to position-specific templates based on position
+        # Route to position-specific templates based on position.
+        # _bottom positions excluded — top-control templates only fire
+        # when actor is on top (see generate_gnp_commentary punch path
+        # for the same fix).
+        _is_top_pos = not position_lower.endswith("_bottom")
         if "elbow" in strike_lower:
             # Check for position-specific elbow templates
-            if "back_mount" in position_lower or "back mount" in position_lower:
+            if _is_top_pos and (
+                    position_lower == "back_mount"
+                    or position_lower == "back mount"
+                    or position_lower.startswith("back_mount_")):
                 # Back mount uses punch templates for elbows (limited elbow options)
                 templates = GNP_BACK_MOUNT_TEMPLATES
-            elif "mount" in position_lower and "back" not in position_lower:
+            elif _is_top_pos and (
+                    position_lower == "mount"
+                    or position_lower.startswith("mount_")) and "back" not in position_lower:
                 pos_templates = GNP_ELBOW_POSITION_TEMPLATES.get("mount", {})
                 template_list = pos_templates.get(key, pos_templates.get("success_light", []))
                 if template_list:
                     template = self._select_template(template_list)
                     return template.format(actor=actor, target=target)
                 templates = GNP_ELBOW_TEMPLATES
-            elif "side_control" in position_lower or "side control" in position_lower:
+            elif _is_top_pos and (
+                    position_lower == "side_control"
+                    or position_lower == "side_control_top"
+                    or position_lower == "side control"):
                 pos_templates = GNP_ELBOW_POSITION_TEMPLATES.get("side_control", {})
                 template_list = pos_templates.get(key, pos_templates.get("success_light", []))
                 if template_list:
                     template = self._select_template(template_list)
                     return template.format(actor=actor, target=target)
                 templates = GNP_ELBOW_TEMPLATES
-            elif "guard" in position_lower and "half" not in position_lower:
+            elif _is_top_pos and "guard" in position_lower and "half" not in position_lower:
                 pos_templates = GNP_ELBOW_POSITION_TEMPLATES.get("guard", {})
                 template_list = pos_templates.get(key, pos_templates.get("success_light", []))
                 if template_list:
@@ -3212,20 +3269,37 @@ class FightCommentarySystem:
             else:
                 templates = GNP_ELBOW_TEMPLATES
         else:
-            # Punches/hammer fists - use position-specific templates
-            if "back_mount" in position_lower or "back mount" in position_lower:
+            # Punches/hammer fists - use position-specific templates.
+            # _bottom positions excluded: templates assume actor is the
+            # TOP controller. A bottom fighter throwing an upward elbow
+            # from back_mount_bottom should NOT fire "controlling the
+            # back" with their own name as actor.
+            _is_top_pos = not position_lower.endswith("_bottom")
+            if _is_top_pos and (
+                    position_lower == "back_mount"
+                    or position_lower == "back mount"
+                    or position_lower.startswith("back_mount_")):
                 templates = GNP_BACK_MOUNT_TEMPLATES
-            elif "mount" in position_lower and "back" not in position_lower:
+            elif _is_top_pos and (
+                    position_lower == "mount"
+                    or position_lower.startswith("mount_")) and "back" not in position_lower:
                 templates = GNP_MOUNT_TEMPLATES
-            elif "side_control" in position_lower or "side control" in position_lower:
+            elif _is_top_pos and (
+                    position_lower == "side_control"
+                    or position_lower == "side_control_top"
+                    or position_lower == "side control"):
                 templates = GNP_SIDE_CONTROL_TEMPLATES
-            elif "half_guard" in position_lower or "half guard" in position_lower:
+            elif _is_top_pos and (
+                    position_lower == "half_guard"
+                    or position_lower == "half_guard_top"
+                    or position_lower == "half guard"):
                 templates = GNP_HALF_GUARD_TEMPLATES
-            elif "guard" in position_lower:
-                # full_guard, closed_guard, butterfly_guard, etc.
+            elif _is_top_pos and "guard" in position_lower:
+                # full_guard_top, closed_guard_top, butterfly_guard_top, etc.
                 templates = GNP_GUARD_TEMPLATES
             else:
-                # Fallback to generic templates (but remove guard-specific text)
+                # Fallback to generic — covers bottom positions and
+                # anything not specifically routed.
                 templates = GNP_PUNCH_TEMPLATES
         
         template_list = templates.get(key, templates.get("success_light", []))
@@ -3477,52 +3551,87 @@ class FightCommentarySystem:
         target: str,
         position: str
     ) -> str:
-        """Generate announcement for new ground position"""
-        # Position-specific announcements
+        """Generate announcement for new ground position.
+
+        Cooldown: each fighter+position-family fires at most ONCE per
+        round (was: every successful action while in the position).
+        Routing excludes _bottom positions to prevent the "X controls
+        the back" line firing for the fighter who's actually getting
+        their back taken."""
         position_lower = position.lower() if position else ""
-        
-        if "mount" in position_lower and "back" not in position_lower:
+
+        # Skip _bottom positions entirely — those describe the controlled
+        # fighter's perspective, and any top-control template fired with
+        # the bottom fighter as {actor} would name the wrong fighter.
+        if position_lower.endswith("_bottom"):
+            return ""
+
+        # Determine position family for cooldown key + template lookup.
+        # Use exact-match-with-suffix-trim so "back_mount" doesn't shadow
+        # "mount" and vice versa.
+        if (position_lower == "mount"
+                or position_lower.startswith("mount_")):
+            family = "mount"
             templates = [
                 f"{actor} is in full mount!",
                 f"{actor} has mounted {target}!",
                 f"Mount position! {target} is in BIG trouble!",
             ]
-        elif "back_mount" in position_lower or "back mount" in position_lower:
+        elif (position_lower == "back_mount"
+                or position_lower == "back mount"
+                or position_lower.startswith("back_mount_")):
+            family = "back_mount"
             templates = [
                 f"{actor} has the back! Hooks are in!",
                 f"Back control for {actor}! This is DANGEROUS!",
                 f"{actor} takes the back! Rear naked choke is RIGHT THERE!",
             ]
-        elif "side_control" in position_lower or "side control" in position_lower:
+        elif (position_lower == "side_control_top"
+                or position_lower == "side_control"
+                or position_lower == "side control"):
+            family = "side_control"
             templates = [
                 f"{actor} settles into side control.",
                 f"Side control for {actor}. Heavy top pressure.",
                 f"{actor} has side control. Looking to advance or strike.",
             ]
-        elif "half_guard" in position_lower or "half guard" in position_lower:
+        elif (position_lower == "half_guard_top"
+                or position_lower == "half_guard"
+                or position_lower == "half guard"):
+            family = "half_guard"
             templates = [
                 f"Half guard position.",
                 f"{actor} is in half guard, working to pass.",
             ]
-        elif "full_guard" in position_lower or "full guard" in position_lower:
+        elif (position_lower == "full_guard_top"
+                or position_lower == "closed_guard_top"
+                or position_lower == "butterfly_guard_top"
+                or position_lower == "rubber_guard_top"
+                or position_lower == "full_guard"
+                or position_lower == "full guard"):
+            family = "guard_top"
             templates = [
                 f"Full guard position. {target} controlling from bottom.",
                 f"{actor} is in {target}'s full guard.",
             ]
-        elif "turtle" in position_lower:
+        elif position_lower == "turtle_top" or position_lower == "turtle":
+            family = "turtle"
             templates = [
                 f"{target} turtles up. {actor} looking for openings.",
                 f"Turtle position. {actor} working for the back.",
             ]
-        elif "crucifix" in position_lower:
+        elif position_lower == "crucifix_top" or position_lower == "crucifix":
+            family = "crucifix"
             templates = [
                 f"{actor} has the CRUCIFIX! This is a nightmare!",
                 f"Crucifix position! Unanswered strikes incoming!",
             ]
         elif "truck" in position_lower:
-            # High-drama — announce at most once per round to avoid spam
+            # Truck retains its own single-line cooldown (legacy) plus
+            # joins the new per-fighter cooldown system below.
+            family = "truck"
             if self._truck_announced_round == self.current_round:
-                return ""   # Already fired this round — stay quiet
+                return ""
             self._truck_announced_round = self.current_round
             templates = [
                 f"{actor} enters the TRUCK position! Calf slicer or twister incoming!",
@@ -3530,28 +3639,39 @@ class FightCommentarySystem:
                 f"{actor} rolls into the truck! {target} is in serious danger!",
                 f"The truck position! {actor} looking for the calf slicer or twister!",
             ]
-        elif "north_south" in position_lower or "north south" in position_lower:
+        elif (position_lower == "north_south_top"
+                or position_lower == "north_south"
+                or position_lower == "north south"):
+            family = "north_south"
             templates = [
                 f"{actor} transitions to north-south.",
                 f"North-south position. Kimura is there.",
             ]
         elif "knockdown" in position_lower:
+            family = "knockdown"
             templates = [
                 f"{actor} standing over the downed {target}!",
                 f"{target} is on the canvas! {actor} looking to finish!",
             ]
         elif "clinch" in position_lower:
+            family = "clinch"
             templates = [
                 f"They're clinched up!",
                 f"Into the clinch!",
             ]
         elif "standing" in position_lower:
-            # Don't announce standing - it's obvious
-            return ""
+            return ""  # standing is obvious
         else:
-            # Generic position change
             return ""
-        
+
+        # Per-fighter, per-family, per-round cooldown — prevents the
+        # back-mount / mount announcement from spamming every time the
+        # position is re-asserted within the same round.
+        cooldown_key = f"{actor}|{family}|{self.current_round}"
+        if cooldown_key in self._pos_announced:
+            return ""
+        self._pos_announced.add(cooldown_key)
+
         return random.choice(templates) if templates else ""
     
     def _generate_hurt_buildup(
