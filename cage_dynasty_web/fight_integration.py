@@ -1314,13 +1314,19 @@ class NarratedFightSimulator:
             except Exception:
                 pass
 
-            # Log event for stats / event_log
+            # Log event for stats / event_log. log_event routes ESCAPE
+            # through generate_position_commentary, whose ESCAPE_TEMPLATES
+            # use {actor} for the escaper — so pass defender.name (the
+            # one who got out) as actor here. action="escape" (not
+            # "escape_<sub>") so the routing matches the escape template
+            # pool instead of falling to the generic "advances to a
+            # better position" pool.
             try:
                 self.commentary.log_event(
                     action_type=ActionType.ESCAPE,
-                    actor=attacker.name,
-                    target=defender.name,
-                    action=f"escape_{_sub_name}",
+                    actor=defender.name,
+                    target=attacker.name,
+                    action="escape",
                     success=True,
                     damage=0.0,
                     exchange_num=exchange_num,
