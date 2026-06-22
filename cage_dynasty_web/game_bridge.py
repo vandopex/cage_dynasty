@@ -2410,6 +2410,37 @@ class GameBridge:
         except Exception as _bfe:
             print(f"⚠️  Ship #48 backfill failed: {_bfe}")
 
+        # ── One-time cleanup: prune retired fighters from camp rosters.
+        # Pre-fix saves accumulated inactive fighters in camp.fighter_ids
+        # forever (retirement set is_active=False but never removed the
+        # roster entry). Idempotent — runs cheap every load.
+        try:
+            if self._game_state and self._game_state.camps:
+                _total_pruned = 0
+                for _camp_cl in self._game_state.camps.values():
+                    if not hasattr(_camp_cl, 'fighter_ids'):
+                        continue
+                    _active_ids = []
+                    for _fid_cl in _camp_cl.fighter_ids:
+                        _f_cl = self._game_state.get_fighter(_fid_cl)
+                        if _f_cl and getattr(_f_cl, 'is_active', True):
+                            _active_ids.append(_fid_cl)
+                    if len(_active_ids) != len(_camp_cl.fighter_ids):
+                        _removed = (len(_camp_cl.fighter_ids)
+                                    - len(_active_ids))
+                        _camp_cl.fighter_ids = _active_ids
+                        if hasattr(_camp_cl, 'fighter_count'):
+                            _camp_cl.fighter_count = len(_active_ids)
+                        _total_pruned += _removed
+                        print(f"  🧹 [CLEANUP] "
+                              f"{getattr(_camp_cl, 'name', _camp_cl.camp_id)}: "
+                              f"removed {_removed} retired fighters")
+                if _total_pruned > 0:
+                    print(f"✅ Roster cleanup: {_total_pruned} retired "
+                          f"fighters removed from camp rosters")
+        except Exception as _cle:
+            print(f"⚠️  Roster cleanup failed: {_cle}")
+
         return {"success": True, "meta": meta}
 
     def get_web_saves(self) -> List[Dict[str, Any]]:
@@ -9624,6 +9655,25 @@ class GameBridge:
         # Process retirements
         for fighter, ret_age in retiring:
             fighter.is_active = False
+
+            # ── Remove from camp roster ──────────────────
+            # Without this, retired fighters accumulate in
+            # camp.fighter_ids forever — camp roster counts
+            # drift and idle slots are never freed for new
+            # signings.
+            _fid_ret = fighter.fighter_id
+            _camp_ret = self._game_state.camps.get(
+                getattr(fighter, 'camp_id', None))
+            if _camp_ret and hasattr(_camp_ret, 'fighter_ids'):
+                if _fid_ret in _camp_ret.fighter_ids:
+                    _camp_ret.fighter_ids.remove(_fid_ret)
+                    if hasattr(_camp_ret, 'fighter_count'):
+                        _camp_ret.fighter_count = len(
+                            _camp_ret.fighter_ids)
+            if _fid_ret in self._game_state._fighter_data:
+                self._game_state._fighter_data[_fid_ret][
+                    'is_active'] = False
+
             record = f"{fighter.wins}-{fighter.losses}"
             _titles = getattr(fighter, 'titles_held', 0) or 0
             _ko_wins = getattr(fighter, 'ko_wins', 0) or 0
