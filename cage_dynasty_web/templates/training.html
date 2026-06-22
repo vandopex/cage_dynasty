@@ -1821,7 +1821,13 @@ function applyPickedTemplate(fighterId, style, idx) {
     if (style === '__sc__') {
         tmpl = templates['Strength & Conditioning'];
     } else {
-        const styleTmpls = templates[style];
+        // Mirror coachRecommend's fallback: unmapped styles use the
+        // Hybrid array. _idx from coachRecommend indexes into whatever
+        // array it picked, so the lookup must use the same array.
+        let styleTmpls = templates[style];
+        if (!Array.isArray(styleTmpls) && !styleTmpls) {
+            styleTmpls = templates['Hybrid'];
+        }
         tmpl = Array.isArray(styleTmpls) ? styleTmpls[idx] : styleTmpls;
     }
     if (!tmpl) return;
