@@ -1114,7 +1114,8 @@ def register_routes(app):
 
         # Ship: next-fight per fighter (for fight camp banner).
         # Scan _scheduled_fights for earliest match, expose weeks_until +
-        # opponent name. Keyed by fighter_id for template lookup.
+        # opponent name + opponent style (for gameplan suggestion).
+        # Keyed by fighter_id for template lookup.
         next_fights = {}
         try:
             sched = list(bridge._scheduled_fights or [])
@@ -1131,12 +1132,22 @@ def register_routes(app):
                 nf = cands[0]
                 weeks = max(0, nf.get('week', 0) - bridge.week_number)
                 is_f1 = nf.get('fighter1_id') == fid
+                _opp_id = (nf.get('fighter2_id') if is_f1
+                           else nf.get('fighter1_id'))
+                _opp_style = ''
+                if _opp_id:
+                    _opp = bridge.get_fighter(_opp_id)
+                    if _opp:
+                        _opp_style = getattr(
+                            _opp, 'fighting_style', '') or ''
                 next_fights[fid] = {
-                    'weeks_until':  weeks,
-                    'opponent':     (nf.get('fighter2_name')
-                                     if is_f1 else nf.get('fighter1_name')),
-                    'event_name':   nf.get('event_name', ''),
-                    'is_title':     nf.get('is_title_fight', False),
+                    'weeks_until':    weeks,
+                    'opponent':       (nf.get('fighter2_name')
+                                       if is_f1 else nf.get('fighter1_name')),
+                    'opponent_id':    _opp_id,
+                    'opponent_style': _opp_style,
+                    'event_name':     nf.get('event_name', ''),
+                    'is_title':       nf.get('is_title_fight', False),
                 }
         except Exception:
             next_fights = {}
