@@ -1410,6 +1410,13 @@ class GameBridge:
         self._pending_injury_decisions: List[Dict[str, Any]] = []
         self._champion_holds:           Dict[str, Dict[str, Any]] = {}
 
+        # Player retirement prompt pipeline — player fighters never
+        # auto-retire; instead they queue a dashboard decision card
+        # the player resolves via /fighter/<id>/retirement-decision.
+        # Keyed by fighter_id; payload includes the snapshot of stats
+        # at the prompt's creation week.
+        self._pending_retirement_prompts: Dict[str, Dict[str, Any]] = {}
+
         # Cumulative camp stat gains — {fighter_id: {stat: float}}
         # Accumulates fractional weekly gains so UI shows real progress
         self._camp_stat_totals: Dict[str, Dict[str, float]] = {}
@@ -2032,6 +2039,8 @@ class GameBridge:
             "dfc_event_offset":         self._dfc_event_offset,
             "champ_weeks_since_defense": self._champ_weeks_since_defense,
             "pending_injury_decisions": self._pending_injury_decisions,
+            "pending_retirement_prompts":
+                self._pending_retirement_prompts,
             "pending_challenges":       self._pending_challenges,
             "amateur_graduates":        self._amateur_graduates,
             "champion_holds":           self._champion_holds,
@@ -2259,6 +2268,8 @@ class GameBridge:
         self._camp_archetypes         = data.get("camp_archetypes", {})
         self._champ_weeks_since_defense = data.get("champ_weeks_since_defense", {})
         self._pending_injury_decisions  = data.get("pending_injury_decisions", [])
+        self._pending_retirement_prompts = data.get(
+            "pending_retirement_prompts", {})
         self._champion_holds            = data.get("champion_holds", {})
         if INJURY_AVAILABLE and InjurySystem and "injury_system" in data:
             try:
@@ -9189,6 +9200,26 @@ class GameBridge:
         ("blame_camp",        "Blame Camp — Put it on the corner"),
     ]
 
+    def get_pending_retirement_prompts(self) -> List[Dict[str, Any]]:
+        """Surface queued player-fighter retirement decisions for the
+        dashboard. Filters out stale prompts whose fighter is no longer
+        active or has gone missing. Enriches the saved snapshot with
+        live overall_rating / weight_class / fighting_style for display."""
+        if not self._game_state:
+            return []
+        result = []
+        for fid, prompt in self._pending_retirement_prompts.items():
+            fighter = self._game_state.get_fighter(fid)
+            if not fighter or not getattr(fighter, 'is_active', True):
+                continue
+            result.append({
+                **prompt,
+                'overall_rating': getattr(fighter, 'overall_rating', 0),
+                'weight_class':   getattr(fighter, 'weight_class', ''),
+                'fighting_style': getattr(fighter, 'fighting_style', ''),
+            })
+        return result
+
     def get_pending_interviews(self) -> List[Dict[str, Any]]:
         pending    = []
         seen_fids  = set()  # Deduplicate — same fight can appear in merged events
@@ -9650,7 +9681,30 @@ class GameBridge:
                     morale=morale,
                 )
                 if should_retire:
-                    retiring.append((fighter, age + 1))
+                    # Player fighters never auto-retire — surface a
+                    # dashboard decision card and let the player choose
+                    # "let retire" or "convince to continue".
+                    _player_camp_id = (
+                        self._game_state.player_camp_id
+                        if self._game_state else None)
+                    if (_player_camp_id
+                            and getattr(fighter, 'camp_id', None)
+                                == _player_camp_id):
+                        if fid not in self._pending_retirement_prompts:
+                            self._pending_retirement_prompts[fid] = {
+                                'fighter_id':   fid,
+                                'fighter_name': fighter.name,
+                                'age':          age + 1,
+                                'record': (f"{fighter.wins}-"
+                                           f"{fighter.losses}"),
+                                'week':         week,
+                                'wins':         fighter.wins,
+                                'losses':       fighter.losses,
+                                'titles': getattr(
+                                    fighter, 'titles_held', 0),
+                            }
+                    else:
+                        retiring.append((fighter, age + 1))
 
         # Process retirements
         for fighter, ret_age in retiring:

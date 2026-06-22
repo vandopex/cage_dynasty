@@ -628,6 +628,10 @@ def register_routes(app):
         # Ship K5b: accepted challenges awaiting player to finalize negotiation
         pending_negotiations = bridge.get_pending_negotiations()
 
+        # Player-fighter retirement decision prompts — surfaced as
+        # high-priority cards above the weekly news feed.
+        retirement_prompts = bridge.get_pending_retirement_prompts()
+
         return render_template('dashboard.html',
             camp=camp,
             fighters=fighters,
@@ -637,6 +641,7 @@ def register_routes(app):
             scheduled_fights=scheduled_fights,
             finances=finances,
             pending_interviews=pending_interviews,
+            retirement_prompts=retirement_prompts,
             training_plans=training_plans,
             player_card=player_card,
             balance=balance,
@@ -2552,6 +2557,69 @@ def register_routes(app):
         else:
             flash(result.get('error', 'Could not re-sign.'), 'error')
         return redirect(url_for('fighter_profile', fighter_id=fighter_id))
+
+    @app.route('/fighter/<fighter_id>/retirement-decision',
+               methods=['POST'])
+    def retirement_decision(fighter_id):
+        """Resolve a queued player-fighter retirement prompt. The
+        player picks 'retire' (process retirement now, free the roster
+        slot, file the news headline) or 'continue' (clear the prompt,
+        +15 morale bump for the convince-to-fight moment). The prompt
+        is popped either way."""
+        bridge = get_bridge()
+        decision = request.form.get('decision', 'retire')
+        prompt = bridge._pending_retirement_prompts.pop(fighter_id, None)
+        if not prompt:
+            return redirect(url_for('dashboard'))
+
+        from flask import flash
+        fighter = bridge.get_fighter(fighter_id)
+        name = prompt.get('fighter_name', 'Fighter')
+
+        if decision == 'retire':
+            if fighter:
+                fighter.is_active = False
+                camp = bridge._game_state.camps.get(
+                    getattr(fighter, 'camp_id', None))
+                if camp and hasattr(camp, 'fighter_ids'):
+                    if fighter_id in camp.fighter_ids:
+                        camp.fighter_ids.remove(fighter_id)
+                        if hasattr(camp, 'fighter_count'):
+                            camp.fighter_count = len(
+                                camp.fighter_ids)
+                if fighter_id in bridge._game_state._fighter_data:
+                    bridge._game_state._fighter_data[
+                        fighter_id]['is_active'] = False
+                bridge._news_items.insert(0, {
+                    'headline': (
+                        f"🥊 {name} ({prompt['record']}) "
+                        f"retires at age {prompt['age']}"),
+                    'category':     'retirement',
+                    'week':         bridge.week_number,
+                    'fighter_id':   fighter_id,
+                    'fighter_name': name,
+                })
+            flash(f"{name} has retired. A legend.", "info")
+        else:
+            # Continue — convince-to-stay morale bump.
+            if fighter:
+                contract = bridge._contracts.get(fighter_id) or {}
+                cur_morale = int(contract.get('morale', 70))
+                contract['morale'] = min(100, cur_morale + 15)
+                bridge._contracts[fighter_id] = contract
+            bridge._news_items.insert(0, {
+                'headline': (
+                    f"💪 {name} decides to continue fighting "
+                    f"— one more run!"),
+                'category':     'roster',
+                'week':         bridge.week_number,
+                'fighter_id':   fighter_id,
+                'fighter_name': name,
+            })
+            flash(f"{name} is staying. Let's get them one more fight.",
+                  "success")
+
+        return redirect(url_for('dashboard'))
 
     # =========================================================================
     # RECORD BOOK, COMPARE, FACILITY, SAVES

@@ -96,6 +96,74 @@
     </div>
 </div>
 
+{# ── Player retirement decision prompts ── #}
+{% if retirement_prompts %}
+{% for prompt in retirement_prompts %}
+<div class="card mb-lg" style="border-color:var(--gold);
+     background:linear-gradient(135deg,rgba(255,215,0,.06),transparent);">
+    <div style="height:3px;background:var(--gold);"></div>
+    <div style="padding:var(--spacing-lg);">
+        <div style="font-size:.65rem;letter-spacing:.2em;
+                    text-transform:uppercase;color:var(--gold);
+                    margin-bottom:var(--spacing-sm);">
+            ⚖️ Career Decision
+        </div>
+        <div style="font-family:var(--font-display);
+                    font-size:1.4rem;color:var(--text-bright);
+                    margin-bottom:4px;">
+            {{ prompt.fighter_name }} is considering retirement
+        </div>
+        <div style="font-size:.82rem;color:var(--text-muted);
+                    margin-bottom:var(--spacing-md);">
+            Age {{ prompt.age }} · {{ prompt.record }} ·
+            {{ prompt.weight_class }}
+            {% if prompt.titles %}
+             · {{ prompt.titles }}x Champion
+            {% endif %}
+        </div>
+        <div style="font-size:.78rem;color:var(--text-secondary);
+                    margin-bottom:var(--spacing-lg);
+                    line-height:1.6;">
+            After {{ prompt.wins + prompt.losses }} fights,
+            {{ prompt.fighter_name }} is thinking about
+            hanging up the gloves.
+            What do you want them to do?
+        </div>
+        <div style="display:flex;gap:var(--spacing-md);">
+            <form action="{{ url_for('retirement_decision',
+                                     fighter_id=prompt.fighter_id) }}"
+                  method="POST" style="margin:0;">
+                <input type="hidden" name="decision" value="retire">
+                <button type="submit"
+                        style="padding:8px 20px;
+                               background:rgba(211,47,47,.12);
+                               border:1px solid var(--blood-red);
+                               color:var(--blood-red);
+                               border-radius:6px;cursor:pointer;
+                               font-size:.78rem;">
+                    🥊 Let them retire
+                </button>
+            </form>
+            <form action="{{ url_for('retirement_decision',
+                                     fighter_id=prompt.fighter_id) }}"
+                  method="POST" style="margin:0;">
+                <input type="hidden" name="decision" value="continue">
+                <button type="submit"
+                        style="padding:8px 20px;
+                               background:rgba(0,230,118,.12);
+                               border:1px solid var(--neon-green);
+                               color:var(--neon-green);
+                               border-radius:6px;cursor:pointer;
+                               font-size:.78rem;">
+                    💪 Convince them to continue
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
 {# ── Alerts row ── #}
 {% if offer_count > 0 or (sponsor_offer_count and sponsor_offer_count > 0) or pending_interviews or scout_tips %}
 <div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
