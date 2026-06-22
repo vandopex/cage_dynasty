@@ -1290,27 +1290,6 @@ def register_routes(app):
 
         return redirect(url_for('training'))
 
-    @app.route('/training/set', methods=['POST'])
-    def set_training():
-        """Store a fighter's weekly training plan — applied automatically each advance_week."""
-        bridge     = get_bridge()
-        fighter_id = request.form.get('fighter_id')
-        focus      = request.form.get('focus', 'sparring')
-        intensity  = request.form.get('intensity', 'MODERATE')
-
-        fighter = bridge.get_fighter(fighter_id)
-        if fighter:
-            result = bridge.set_training_plan(fighter_id, focus, intensity)
-            if result.get("success"):
-                focus_label = focus.replace('_', ' ').title()
-                flash(f"{fighter.name}: {focus_label} · {intensity.title()} — plan saved. Takes effect next week.", "success")
-            else:
-                flash(result.get("message", "Training plan updated."), "success")
-        else:
-            flash("Fighter not found.", "error")
-
-        return redirect(url_for('training'))
-    
     # =========================================================================
     # RANKINGS
     # =========================================================================
