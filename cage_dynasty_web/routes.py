@@ -533,14 +533,37 @@ def register_routes(app):
                     fight['fighter'] = f
                     break
 
-        # Training plans per fighter
+        # Training plans per fighter — plus formatted active goals
+        # (current → target with progress %) sourced from the unified
+        # grid's queue. Stale entries already hit are filtered out.
         training_plans = {}
+        training_goals = {}
         for f in fighters:
             plan = bridge.get_training_plan(f.fighter_id)
             training_plans[f.fighter_id] = {
-                'intensity': plan.get('intensity', 'MODERATE'),
+                'intensity': (plan.get('queue_intensity')
+                              or plan.get('intensity')
+                              or 'MODERATE'),
                 'focus':     plan.get('focus', 'balanced'),
             }
+            _goals = []
+            for _g in (plan.get('queue', []) or []):
+                _stat = (_g.get('focus') or '').strip()
+                _tgt  = int(_g.get('target', 0) or 0)
+                if not _stat or _stat == 'maintain' or _tgt <= 0:
+                    continue
+                _cur = int(getattr(f, _stat, 0) or 0)
+                if _tgt <= _cur:
+                    continue  # already hit
+                _pct = min(100, int(_cur * 100 / _tgt)) if _tgt else 0
+                _goals.append({
+                    'label':   _stat.replace('_', ' ').title(),
+                    'stat':    _stat,
+                    'current': _cur,
+                    'target':  _tgt,
+                    'pct':     _pct,
+                })
+            training_goals[f.fighter_id] = _goals[:4]
 
         # Upcoming card that has a player fight
         upcoming_events = bridge.get_upcoming_events(limit=8)
@@ -642,6 +665,7 @@ def register_routes(app):
             finances=finances,
             pending_interviews=pending_interviews,
             retirement_prompts=retirement_prompts,
+            training_goals=training_goals,
             training_plans=training_plans,
             player_card=player_card,
             balance=balance,

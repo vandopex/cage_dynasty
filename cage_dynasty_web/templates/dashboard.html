@@ -450,6 +450,77 @@
             {% endif %}
         </div>
 
+        {# ── Active Training Goals — live current→target progress ── #}
+        {% set _any_goals = namespace(found=false) %}
+        {% if training_goals %}
+            {% for _fid, _gl in training_goals.items() %}
+                {% if _gl %}{% set _any_goals.found = true %}{% endif %}
+            {% endfor %}
+        {% endif %}
+        {% if _any_goals.found %}
+        <div class="card mb-lg">
+            <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+                <h3>🎯 Active Training Goals</h3>
+                <a href="{{ url_for('training') }}" class="btn btn-outline btn-sm">Adjust →</a>
+            </div>
+            <div style="padding:0;">
+                {% for fighter in fighters %}
+                {% set _goals = training_goals.get(fighter.fighter_id, []) %}
+                {% if _goals %}
+                {% set _plan = training_plans.get(fighter.fighter_id, {}) %}
+                {% set _int = _plan.get('intensity','MODERATE')|upper %}
+                {% set _icol = intensity_color.get(_int, '#9e9e9e') %}
+                {% set _iicn = intensity_icon.get(_int, '🏃') %}
+                <div style="padding:var(--spacing-md);
+                            border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
+                    <div style="display:flex;align-items:center;justify-content:space-between;
+                                margin-bottom:var(--spacing-sm);">
+                        <span style="font-family:var(--font-display);font-size:.9rem;
+                                     color:var(--text-bright);">
+                            {{ fighter.name }}
+                            <span style="font-size:.65rem;margin-left:6px;
+                                         color:{{ _icol }};
+                                         letter-spacing:.04em;">
+                                {{ _iicn }} {{ _int|title }}
+                            </span>
+                        </span>
+                        <span style="font-size:.62rem;color:var(--text-muted);">
+                            {{ _goals|length }} active goal{{ 's' if _goals|length != 1 else '' }}
+                        </span>
+                    </div>
+                    {% for g in _goals %}
+                    <div style="display:flex;align-items:center;
+                                gap:8px;margin-bottom:4px;font-size:.7rem;">
+                        <span style="color:var(--text-muted);
+                                     min-width:120px;font-size:.7rem;">
+                            {{ g.label }}
+                        </span>
+                        <span style="color:var(--text-bright);
+                                     font-family:var(--font-display);
+                                     min-width:64px;font-size:.7rem;">
+                            {{ g.current }}<span style="color:var(--text-muted);">→</span>{{ g.target }}
+                        </span>
+                        <div style="flex:1;height:5px;
+                                    background:rgba(255,255,255,.06);
+                                    border-radius:3px;overflow:hidden;">
+                            <div style="width:{{ g.pct }}%;height:100%;
+                                        background:var(--neon-green);
+                                        border-radius:3px;
+                                        transition:width .3s;"></div>
+                        </div>
+                        <span style="font-size:.62rem;color:var(--text-muted);
+                                     min-width:30px;text-align:right;">
+                            {{ g.pct }}%
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {# ── Training History (last 4 weeks per fighter) ── Ship A #}
         {% if training_history %}
         <div class="card mb-lg">
@@ -482,12 +553,16 @@
                                 Wk {{ entry.week }} · {{ entry.intensity }}
                                 {% if entry.is_fight_camp %}<span style="color:var(--gold);">⚡</span>{% endif %}
                             </div>
-                            {# Focus + OVR delta #}
+                            {# Focus + OVR delta — strip legacy "GROUP:" prefix
+                               ("CONDITIONING:cardio" → "Cardio") so the log
+                               reads cleanly post unified-grid refactor. #}
+                            {% set _f = entry.focus or '' %}
+                            {% if ':' in _f %}{% set _f = _f.split(':')[-1] %}{% endif %}
                             <div style="display:flex;justify-content:space-between;
                                         align-items:center;margin-bottom:4px;">
                                 <span style="font-size:.65rem;color:var(--text-bright);
                                              text-transform:capitalize;">
-                                    {{ entry.focus | replace('_', ' ') }}
+                                    {{ _f | replace('_', ' ') }}
                                 </span>
                                 {% set d = entry.ovr_after - entry.ovr_before %}
                                 {% if d > 0 %}
