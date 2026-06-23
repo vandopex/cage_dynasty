@@ -5313,11 +5313,80 @@ class GameBridge:
             accept_chance=offer.get("accept_chance", 75),
         )
     
+    # Categories that ALWAYS pass the relevance filter — league-wide
+    # events the player cares about regardless of who's involved.
+    _NEWS_ALWAYS_SHOW = frozenset({
+        'title', 'fotn', 'rivalry', 'retirement', 'award', 'record',
+        'upset', 'player_result', 'fight', 'interview', 'roster',
+    })
+    # Keyword markers that signal a high-value flavor headline
+    # (earned nickname, signature technique, KO artist, etc.).
+    _NEWS_KEEP_KEYWORDS = (
+        'nickname', 'KO artist', 'sub artist', 'Iron',
+        'earned', 'signature', 'streak', '👑', '🎯',
+        '⚡', '🔥', '🥋', '📢',
+    )
+    # Categories restricted to player-fighter context.
+    _NEWS_PLAYER_ONLY = frozenset({
+        'contract', 'training', 'decay', 'scouting', 'facility',
+    })
+
+    def _is_relevant_news(self, item: Dict[str, Any],
+                          player_fids: Set[str],
+                          top_fids: Set[str]) -> bool:
+        """Filter low-value AI noise from the news feed while keeping
+        every player-fighter event + league-wide arc. AI signings only
+        survive when the signed fighter is top-10 ranked or OVR>=65."""
+        cat = item.get('category', '') or ''
+        headline = item.get('headline', '') or ''
+        fighter_id = item.get('fighter_id', '') or ''
+
+        # Player fighter content always passes
+        if fighter_id and fighter_id in player_fids:
+            return True
+
+        # League-wide arcs always pass
+        if cat in self._NEWS_ALWAYS_SHOW:
+            return True
+
+        # Flavor headlines (nicknames, signatures, KO-artist callouts)
+        # always pass — these are what make AI fighters feel real
+        if any(kw in headline for kw in self._NEWS_KEEP_KEYWORDS):
+            return True
+
+        # Signing: only show if fighter is top-10 OR OVR >= 65
+        if cat == 'signing':
+            if fighter_id and fighter_id in top_fids:
+                return True
+            # OVR check — prefer pre-stored value, fall back to live
+            # lookup (no source touch needed at the 15 signing-news
+            # creation sites)
+            ovr = item.get('overall_rating')
+            if ovr is None and fighter_id and self._game_state:
+                _ftr = self._game_state.get_fighter(fighter_id)
+                if _ftr:
+                    ovr = getattr(_ftr, 'overall_rating', 0) or 0
+            if ovr is not None and ovr >= 65:
+                return True
+            return False
+
+        # Player-only categories — drop unless fighter_id is player's
+        if cat in self._NEWS_PLAYER_ONLY:
+            return False
+
+        # Injury: player fighters or top-10 only
+        if cat == 'injury':
+            return bool(fighter_id and fighter_id in top_fids)
+
+        # Default: show. Conservative — avoids hiding categories
+        # I haven't catalogued.
+        return True
+
     def get_news_feed(self, limit: int = 30) -> List[WebNewsItem]:
         """Get recent news items"""
         if self._mock_mode:
             if hasattr(self, '_mock_generator'):
-                return [self._convert_mock_news(n) 
+                return [self._convert_mock_news(n)
                         for n in self._mock_generator.news_feed[:limit]]
             return []
         
@@ -5337,9 +5406,41 @@ class GameBridge:
             "scouting":   "👀",
         }
         
+        # Relevance filter sets — built once per call. Filters out
+        # AI-camp signing noise (low-OVR journeymen) while preserving
+        # every player-fighter event, league-wide arc, and
+        # nickname/signature flavor headline.
+        _player_fids = set()
+        _top_fids = set()
+        if self._game_state:
+            try:
+                _player_fids = {f.fighter_id
+                                for f in self.get_player_fighters()}
+            except Exception:
+                pass
+            try:
+                for _wc, _div in (self._game_state.divisions
+                                  or {}).items():
+                    _rankings = getattr(_div, 'rankings', None) or []
+                    for _entry in _rankings[:10]:
+                        _rid = (_entry if isinstance(_entry, str)
+                                else _entry[0])
+                        if _rid:
+                            _top_fids.add(_rid)
+                    _champ = getattr(_div, 'champion_id', None)
+                    if _champ:
+                        _top_fids.add(_champ)
+            except Exception:
+                pass
+
+        _filtered = [
+            _n for _n in self._news_items
+            if self._is_relevant_news(_n, _player_fids, _top_fids)
+        ]
+
         # Sort newest first by week, then by insertion order within same week
         sorted_items = sorted(
-            self._news_items,
+            _filtered,
             key=lambda x: x.get("week", 0),
             reverse=True,
         )
