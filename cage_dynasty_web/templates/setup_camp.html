@@ -74,21 +74,34 @@
                                    letter-spacing:.1em;color:var(--text-muted);margin-bottom:8px;">
                         Location
                     </label>
-                    <input type="hidden" name="camp_location" id="camp-location-val" value="{{ locations[0] }}">
-                    <div style="display:flex;flex-wrap:wrap;gap:6px;" id="location-pills">
-                        {% for location in locations %}
-                        <button type="button"
-                                onclick="selectLocation(this, '{{ location }}')"
-                                class="loc-pill"
-                                style="padding:5px 12px;border-radius:20px;font-size:.78rem;cursor:pointer;
-                                       transition:all .15s;
-                                       background:{% if loop.first %}var(--gold){% else %}var(--bg-dark){% endif %};
-                                       color:{% if loop.first %}var(--bg-darkest){% else %}var(--text-muted){% endif %};
-                                       border:1px solid {% if loop.first %}var(--gold){% else %}var(--border-color){% endif %};">
-                            {{ location }}
-                        </button>
+                    {# Grouped dropdown — scales to many cities while
+                       staying compact. Native <select> with optgroups
+                       handles the value submit (name="camp_location"). #}
+                    <select name="camp_location"
+                            id="camp-location-select"
+                            style="width:100%;padding:10px 14px;
+                                   background:var(--bg-dark);
+                                   border:1px solid var(--border-color);
+                                   border-radius:6px;
+                                   color:var(--text-bright);
+                                   font-size:.85rem;
+                                   cursor:pointer;
+                                   appearance:none;
+                                   -webkit-appearance:none;
+                                   background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E&quot;);
+                                   background-repeat:no-repeat;
+                                   background-position:right 12px center;">
+                    {% for group_label, group_locs in location_groups.items() %}
+                    <optgroup label="{{ group_label }}">
+                        {% for loc in group_locs %}
+                        <option value="{{ loc }}"
+                                {% if loop.first and loop.parent.loop.first %}selected{% endif %}>
+                            {{ loc }}
+                        </option>
                         {% endfor %}
-                    </div>
+                    </optgroup>
+                    {% endfor %}
+                    </select>
                 </div>
 
                 {# ── Garage Tier Card ── #}
@@ -192,18 +205,6 @@ function randomName() {
     const input = document.getElementById('camp-name-input');
     input.value = CAMP_NAMES[nameIdx % CAMP_NAMES.length];
     nameIdx++;
-}
-
-function selectLocation(btn, loc) {
-    document.querySelectorAll('.loc-pill').forEach(p => {
-        p.style.background = 'var(--bg-dark)';
-        p.style.color = 'var(--text-muted)';
-        p.style.borderColor = 'var(--border-color)';
-    });
-    btn.style.background = 'var(--gold)';
-    btn.style.color = 'var(--bg-darkest)';
-    btn.style.borderColor = 'var(--gold)';
-    document.getElementById('camp-location-val').value = loc;
 }
 
 // Pre-fill with a random name on load so the field isn't blank

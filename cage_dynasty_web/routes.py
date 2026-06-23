@@ -325,18 +325,47 @@ def register_routes(app):
             session['camp_tier'] = request.form.get('camp_tier', 'GARAGE')
             return redirect(url_for('setup_fighter'))
         
-        locations = [
+        # Camp setup locations — US + international. Grouped for
+        # the optgroup dropdown in setup_camp.html; full flat list
+        # preserved for backwards compatibility with any other callers.
+        us_locations = [
             "Las Vegas, NV", "Los Angeles, CA", "Miami, FL", "New York, NY",
             "Dallas, TX", "Chicago, IL", "Denver, CO", "Phoenix, AZ",
-            "San Diego, CA", "Albuquerque, NM", "Sacramento, CA", "Portland, OR"
+            "San Diego, CA", "Albuquerque, NM", "Sacramento, CA", "Portland, OR",
+            "Houston, TX", "Atlanta, GA", "Seattle, WA", "Boston, MA",
+            "Philadelphia, PA", "Detroit, MI", "Nashville, TN",
+            "Salt Lake City, UT", "Tampa, FL", "San Antonio, TX",
         ]
-        
+        intl_locations = [
+            "London, UK", "Manchester, UK", "Dublin, Ireland",
+            "Amsterdam, Netherlands", "Paris, France", "Berlin, Germany",
+            "Stockholm, Sweden", "Moscow, Russia", "St. Petersburg, Russia",
+            "Dagestan, Russia", "Warsaw, Poland",
+            "Sao Paulo, Brazil", "Rio de Janeiro, Brazil",
+            "Monterrey, Mexico", "Mexico City, Mexico",
+            "Toronto, Canada", "Vancouver, Canada", "Montreal, Canada",
+            "Sydney, Australia", "Melbourne, Australia",
+            "Tokyo, Japan", "Osaka, Japan", "Seoul, South Korea",
+            "Bangkok, Thailand", "Singapore", "Dubai, UAE",
+            "Almaty, Kazakhstan", "Tashkent, Uzbekistan", "Baku, Azerbaijan",
+            "Manila, Philippines", "Jakarta, Indonesia",
+            "Lagos, Nigeria", "Nairobi, Kenya", "Cape Town, South Africa",
+        ]
+        locations = us_locations + intl_locations
+        location_groups = {
+            "🇺🇸 United States": us_locations,
+            "🌍 International":   intl_locations,
+        }
+
         # Only GARAGE tier available at start - you earn your way up!
         tiers = [
             ("GARAGE", "Garage Gym", "$50,000", "3 fighters max, basic equipment - where legends begin"),
         ]
-        
-        return render_template('setup_camp.html', locations=locations, tiers=tiers)
+
+        return render_template('setup_camp.html',
+            locations=locations,
+            location_groups=location_groups,
+            tiers=tiers)
     
     @app.route('/setup/coach', methods=['GET', 'POST'])
     def setup_coach():

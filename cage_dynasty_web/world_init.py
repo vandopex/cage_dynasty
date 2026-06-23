@@ -170,14 +170,31 @@ CAMP_PREFIXES = [
     "Thunder", "Lightning", "Storm", "Phoenix", "Warrior", "Champion", "Victory", "Power", "Force", "Strike",
     "Combat", "Battle", "Fight", "War", "Gladiator", "Spartan", "Viking", "Samurai", "Ronin", "Shogun",
     "Cobra", "Viper", "Hawk", "Eagle", "Raven", "Bear", "Bull", "Ram", "Jaguar", "Panther",
-    "Black", "Red", "Gold", "Silver", "Platinum", "Diamond", "Royal", "Imperial", "Supreme", "Ultimate"
+    "Black", "Red", "Gold", "Silver", "Platinum", "Diamond", "Royal", "Imperial", "Supreme", "Ultimate",
+    # Expansion — danger / scale / atmosphere / minerals / geography / temperament
+    "Fury", "Savage", "Titan", "Colossus", "Golem",
+    "Shadow", "Ghost", "Phantom", "Spectre", "Nomad",
+    "Lone", "Wild", "Feral", "Primal", "Raw",
+    "Stone", "Granite", "Bronze", "Obsidian",
+    "Crimson", "Midnight", "Onyx", "Azure", "Scarlet",
+    "Northern", "Southern", "Eastern", "Western", "Pacific",
+    "Atlantic", "Arctic", "Desert", "Mountain", "Summit",
+    "Peak", "Ridge", "Canyon", "Deadlock", "Hardline",
+    "Relentless", "Ruthless", "Merciless", "Unstoppable",
 ]
 
 CAMP_SUFFIXES = [
     "MMA", "Fight Team", "Combat", "Athletics", "Academy", "Gym", "Training Center", "Martial Arts",
     "Fighting", "Kombat", "Warriors", "Fighters", "Champions", "Elite", "Pro", "Sports",
     "Alliance", "Coalition", "Brotherhood", "Legion", "Squad", "Crew", "Unit", "Force",
-    "Foundation", "Institute", "Performance", "Conditioning", "Systems", "Methods"
+    "Foundation", "Institute", "Performance", "Conditioning", "Systems", "Methods",
+    # Expansion — facility types / collectives / power structures
+    "Pit", "Den", "Lair", "Compound", "Bunker",
+    "Barracks", "Outpost", "Base", "Fortress", "Stronghold",
+    "Underground", "Project", "Initiative", "Collective",
+    "Network", "Association", "Club", "Society", "Order",
+    "Dynasty", "Empire", "Kingdom", "Regime", "Republic",
+    "Syndicate", "Cartel", "Faction", "Division", "Corps",
 ]
 
 # Weight class definitions
