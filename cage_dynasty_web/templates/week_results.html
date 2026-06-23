@@ -760,16 +760,71 @@
                                 {% if is_major %}font-family:var(--font-display);{% endif %}">
                         {{ item.headline }}
                     </div>
-                    <div style="font-size:.65rem;color:var(--text-muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap;">
+                    <div style="font-size:.65rem;color:var(--text-muted);
+                                margin-top:2px;display:flex;gap:6px;
+                                flex-wrap:wrap;align-items:center;">
                         <span>Week {{ item.week }}</span>
+
+                        {# Primary fighter — dedupe vs winner_id so we
+                           don't render the same link twice on fight
+                           result items where fighter_id == winner_id. #}
+                        {% if item.fighter_id
+                              and item.fighter_id != item.winner_id
+                              and item.fighter_id != item.loser_id %}
+                        <span>·</span>
+                        <a href="{{ url_for('fighter_profile',
+                                             fighter_id=item.fighter_id) }}"
+                           style="color:var(--info);text-decoration:none;">
+                            {{ item.fighter_name or 'Fighter' }} →
+                        </a>
+                        {% endif %}
+
+                        {# Winner / Loser — fight results #}
                         {% if item.winner_id %}
                         <span>·</span>
-                        <a href="{{ url_for('fighter_profile', fighter_id=item.winner_id) }}"
-                           style="color:var(--neon-green);text-decoration:none;">Winner →</a>
+                        <a href="{{ url_for('fighter_profile',
+                                             fighter_id=item.winner_id) }}"
+                           style="color:var(--neon-green);text-decoration:none;">
+                            Winner →
+                        </a>
                         {% endif %}
                         {% if item.loser_id %}
-                        <a href="{{ url_for('fighter_profile', fighter_id=item.loser_id) }}"
-                           style="color:var(--text-muted);text-decoration:none;">Loser →</a>
+                        <a href="{{ url_for('fighter_profile',
+                                             fighter_id=item.loser_id) }}"
+                           style="color:var(--text-muted);text-decoration:none;">
+                            Loser →
+                        </a>
+                        {% endif %}
+
+                        {# Camp link #}
+                        {% if item.camp_id %}
+                        <span>·</span>
+                        <a href="{{ url_for('camp_detail',
+                                             camp_id=item.camp_id) }}"
+                           style="color:var(--text-muted);text-decoration:none;">
+                            {{ item.camp_name or 'Camp' }} →
+                        </a>
+                        {% endif %}
+
+                        {# Division / rankings link — WebNewsItem uses
+                           weight_class as the canonical field name. #}
+                        {% if item.weight_class %}
+                        <span>·</span>
+                        <a href="{{ url_for('rankings',
+                                             division=item.weight_class) }}"
+                           style="color:var(--text-muted);text-decoration:none;">
+                            {{ item.weight_class }} →
+                        </a>
+                        {% endif %}
+
+                        {# Watch fight — only when fight_id present #}
+                        {% if item.fight_id %}
+                        <span>·</span>
+                        <a href="{{ url_for('watch_fight',
+                                             fight_id=item.fight_id) }}"
+                           style="color:var(--info);text-decoration:none;">
+                            Watch →
+                        </a>
                         {% endif %}
                     </div>
                 </div>
