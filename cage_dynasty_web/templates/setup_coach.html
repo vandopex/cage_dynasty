@@ -45,11 +45,21 @@
                 margin-bottom:var(--spacing-lg);">
         {% for coach in coaches %}
 
+        {# Specialist color — supports both canonical coach_type
+           keys (Ship Coach-3 + this ship) and the legacy archetype
+           names so older save flows render correctly. #}
         {% set arch_color = {
-            'Striking':  'var(--blood-red)',
-            'Grappling': 'var(--info)',
-            'S&C':       'var(--neon-green)',
-            'MMA':       'var(--gold)',
+            'boxing_coach':     'var(--blood-red)',
+            'muay_thai_coach':  'var(--warning)',
+            'kickboxing_coach': 'var(--neon-green)',
+            'wrestling_coach':  'var(--gold)',
+            'bjj_coach':        'var(--info)',
+            'clinch_coach':     'var(--violet, #9c27b0)',
+            'sc_coach':         'var(--neon-green)',
+            'Striking':         'var(--blood-red)',
+            'Grappling':        'var(--info)',
+            'S&C':              'var(--neon-green)',
+            'MMA':              'var(--gold)',
         }.get(coach.specialty, 'var(--text-muted)') %}
 
         <label style="cursor:pointer;">
@@ -101,9 +111,31 @@
 
                 {# Description #}
                 <div style="font-size:.75rem;color:var(--text-secondary);
-                            margin-bottom:var(--spacing-md);line-height:1.5;">
+                            margin-bottom:var(--spacing-sm);line-height:1.5;">
                     {{ coach.description }}
                 </div>
+
+                {# Best-fit hint — surfaces the style-fit bonus
+                   system from day 1 so players understand why a
+                   specific coach matters for their fighter's style.
+                   Falls back to "Universal" for S&C coaches. #}
+                {% if coach.style_fit is defined %}
+                <div style="font-size:.68rem;color:var(--text-muted);
+                            margin-bottom:var(--spacing-md);
+                            padding:5px 8px;
+                            background:rgba(255,215,0,.04);
+                            border-left:2px solid rgba(255,215,0,.3);
+                            border-radius:0 3px 3px 0;">
+                    🎯 Best fit:
+                    <span style="color:var(--gold);">
+                        {% if coach.style_fit %}
+                            {{ coach.style_fit | join(', ') }}
+                        {% else %}
+                            Universal — all styles benefit
+                        {% endif %}
+                    </span>
+                </div>
+                {% endif %}
 
                 {# Ship Coach-3: specialist type detail #}
                 {% if coach.type_name %}
