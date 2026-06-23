@@ -14471,6 +14471,48 @@ class GameBridge:
         """True if fighter's signing window has opened this week."""
         return self._fighter_signing_available.get(fighter_id, 0) <= week
 
+    def _both_fought_since(self, f1, f2) -> bool:
+        """Returns True if BOTH fighters have had at least one fight
+        against a DIFFERENT opponent since their last meeting with
+        each other. Used as a stronger-than-time-only rematch gate:
+        even after the 16w minimum, the bout shouldn't book unless
+        both fighters have moved on at least once."""
+        def _has_intervening_fight(fighter, other_id):
+            history = getattr(fighter, 'fight_history', []) or []
+            # Walk newest-first. If we hit a fight vs another opponent
+            # before we hit the last meeting vs other_id, that's the
+            # intervening fight we're looking for.
+            for h in reversed(history):
+                if not isinstance(h, dict):
+                    continue
+                opp = h.get('opponent_id') or h.get('opponent', '')
+                if str(opp) == str(other_id):
+                    return False  # meeting hit before any intervening
+                if opp:
+                    return True   # intervening fight found
+            return True  # never fought each other — always ok
+        return (_has_intervening_fight(f1, f2.fighter_id)
+                and _has_intervening_fight(f2, f1.fighter_id))
+
+    def _contender_earned_title_shot(self, champ, contender) -> bool:
+        """Returns True if contender has beaten at least 2 different
+        opponents since their last title shot vs champ. Prevents the
+        same contender cycling title shots without re-establishing
+        themselves at the top of the division."""
+        history = getattr(contender, 'fight_history', []) or []
+        wins_since = 0
+        seen_opps: Set[str] = set()
+        for h in reversed(history):
+            if not isinstance(h, dict):
+                continue
+            opp = h.get('opponent_id') or h.get('opponent', '')
+            if str(opp) == str(champ.fighter_id):
+                break  # hit the last meeting — stop counting
+            if h.get('result') == 'W' and opp and opp not in seen_opps:
+                seen_opps.add(opp)
+                wins_since += 1
+        return wins_since >= 2
+
     def _weeks_since_fought(self, f1, f2) -> Optional[int]:
         """
         Return how many weeks ago f1 and f2 last fought each other.
@@ -15150,14 +15192,27 @@ class GameBridge:
             champ = next((f for f in available if f.fighter_id == champ_id), None)
             if champ:
                 # Try #1 through #10 in order — expanded from top-5 so
-                # champion doesn't sit out when top contenders are busy
+                # champion doesn't sit out when top contenders are busy.
+                # Rematch guards: hard 20-week minimum between title
+                # rematches, plus contender must have re-established
+                # themselves with 2 wins vs different opponents since
+                # the last meeting. First-ever pairings (last is None)
+                # skip the earned-shot check.
                 top = None
                 for contender_id in division.rankings[:10]:
                     candidate = next((f for f in available
                                       if f.fighter_id == contender_id), None)
-                    if candidate and candidate.fighter_id != champ_id:
-                        top = candidate
-                        break
+                    if not candidate or candidate.fighter_id == champ_id:
+                        continue
+                    last = self._weeks_since_fought(champ, candidate)
+                    if last is not None:
+                        if last < 20:
+                            continue
+                        if not self._contender_earned_title_shot(
+                                champ, candidate):
+                            continue
+                    top = candidate
+                    break
                 if top:
                     score = self._matchup_score(champ, top, is_title=True)
                     # Sub-ship A: rank-aware lead time. Champion is rank 0.
@@ -15188,12 +15243,20 @@ class GameBridge:
                         r_a = division.rankings.index(f_a.fighter_id) + 1 if f_a.fighter_id in division.rankings else 99
                         r_b = division.rankings.index(f_b.fighter_id) + 1 if f_b.fighter_id in division.rankings else 99
                         s = self._matchup_score(f_a, f_b)
-                        # Rematch cooldown
+                        # Rematch cooldown — 16w hard minimum, plus
+                        # both-fought-since check when division has
+                        # ≥8 ranked available. Thin divisions (<8
+                        # available) fall back to a score penalty so
+                        # the matchmaker still produces a card.
                         last_fought = self._weeks_since_fought(f_a, f_b)
-                        if last_fought is not None and last_fought < 6:
-                            continue
-                        if last_fought is not None and last_fought < 12:
-                            s -= 50
+                        if last_fought is not None:
+                            if last_fought < 16:
+                                continue
+                            if len(ranked_avail) >= 8:
+                                if not self._both_fought_since(f_a, f_b):
+                                    continue
+                            else:
+                                s -= 30
                         # Fight declining — check if either camp would refuse
                         if self._would_decline_fight(f_a, f_b, r_a, r_b):
                             continue

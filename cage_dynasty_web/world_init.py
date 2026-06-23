@@ -1625,6 +1625,44 @@ class HistorySimulator:
             return False
 
         return True
+
+    def _recent_opponent_ids(self, fighter: 'GeneratedFighter',
+                              n: int = 3) -> Set[str]:
+        """Return the most-recent N opponent IDs from fighter's
+        history (newest first). Used by _find_opponent to prevent
+        immediate rematches during pre-gen — the Davies-vs-Rozenstruik
+        9-times pattern came from this loop having no rematch guard."""
+        history = getattr(fighter, 'fight_history', []) or []
+        recent: List[str] = []
+        for h in reversed(history):
+            if not isinstance(h, dict):
+                continue
+            opp = h.get('opponent_id')
+            if opp and opp not in recent:
+                recent.append(opp)
+                if len(recent) >= n:
+                    break
+        return set(recent)
+
+    def _wins_since_last_meeting(self, contender: 'GeneratedFighter',
+                                  champ_id: str) -> int:
+        """Count wins vs DIFFERENT opponents since contender's last
+        meeting with champ_id. Used to require world-gen title rematches
+        to have at least 1 intervening win — softer than the live-game
+        2-win rule because pre-gen has less history to work with."""
+        history = getattr(contender, 'fight_history', []) or []
+        wins = 0
+        seen: Set[str] = set()
+        for h in reversed(history):
+            if not isinstance(h, dict):
+                continue
+            opp = h.get('opponent_id', '')
+            if opp == champ_id:
+                break
+            if h.get('result') == 'W' and opp and opp not in seen:
+                seen.add(opp)
+                wins += 1
+        return wins
     
     def update_rankings(self):
         """Recalculate rankings based on current records."""
@@ -1691,22 +1729,45 @@ class HistorySimulator:
         
         # Champion logic
         if fighter.is_champion:
-            # Champions fight top 5 contenders
+            # Champions fight top 5 contenders. Rematch guards: skip
+            # any contender from fighter's last 3 opponents AND require
+            # ≥1 intervening win when this would be a title rematch.
+            # If guards reject all candidates, fall back to unfiltered
+            # so a champion never sits idle when a thin top 5 forces
+            # the issue.
+            _fighter_recent = self._recent_opponent_ids(fighter, n=3)
             candidates = []
             for fid, rank in ranked_list[:5]:
                 opp = self.fighters.get(fid)
                 if opp and self._is_fighter_available(fid, current_week, booked_this_week):
+                    if fid in _fighter_recent:
+                        # Possible rematch — require at least 1
+                        # intervening win for the contender.
+                        if self._wins_since_last_meeting(
+                                opp, fighter.fighter_id) < 1:
+                            continue
                     candidates.append(opp)
+            if not candidates:
+                # Fallback: ignore rematch guards rather than no fight
+                for fid, rank in ranked_list[:5]:
+                    opp = self.fighters.get(fid)
+                    if opp and self._is_fighter_available(
+                            fid, current_week, booked_this_week):
+                        candidates.append(opp)
             if candidates:
                 # Prefer higher ranked opponents
                 return random.choice(candidates[:3]) if len(candidates) >= 3 else random.choice(candidates)
         
         min_rank, max_rank, unranked_chance = self._get_opponent_rank_range(fighter_rank)
-        
+
+        # Rematch guard prep — fighter's last 3 opponents are blocked
+        # unless they also have an intervening fight (both-fought-since).
+        _fighter_recent = self._recent_opponent_ids(fighter, n=3)
+
         # Build candidate pools
         ranked_candidates = []
         unranked_candidates = []
-        
+
         for opp in available_fighters:
             if opp.fighter_id == fighter.fighter_id:
                 continue
@@ -1716,7 +1777,16 @@ class HistorySimulator:
                 continue
             if opp.camp_id and fighter.camp_id and opp.camp_id == fighter.camp_id:
                 continue  # Same camp
-            
+            # Rematch guard: skip if both fighters are in each other's
+            # recent-3 lists. Single-sided overlap is allowed (covers
+            # cases where one fighter has more total fights than the
+            # other and the older-pair overlap doesn't reflect actual
+            # rematch tension).
+            if opp.fighter_id in _fighter_recent:
+                _opp_recent = self._recent_opponent_ids(opp, n=3)
+                if fighter.fighter_id in _opp_recent:
+                    continue
+
             opp_rank = self._get_fighter_rank(opp.fighter_id, opp.weight_class) or 0
             
             if opp_rank > 0:
