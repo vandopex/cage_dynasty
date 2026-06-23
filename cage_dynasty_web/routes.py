@@ -931,17 +931,28 @@ def register_routes(app):
         bridge = get_bridge()
         fighters = bridge.get_player_fighters()
         offers = bridge.get_fight_offers()
-        
+
+        # Filter offers for fighters who are already booked. Backstop
+        # to the weekly prune in _expire_stale_offers — catches the
+        # race between booking and the next advance_week.
+        _booked_fids = set()
+        for _sf in (bridge._scheduled_fights or []):
+            _booked_fids.add(_sf.get('fighter1_id'))
+            _booked_fids.add(_sf.get('fighter2_id'))
+
         # Group offers by fighter
         offers_by_fighter = {}
         for fighter in fighters:
-            fighter_offers = [o for o in offers if o.fighter_id == fighter.fighter_id]
+            if fighter.fighter_id in _booked_fids:
+                continue  # already has a scheduled fight
+            fighter_offers = [o for o in offers
+                              if o.fighter_id == fighter.fighter_id]
             if fighter_offers:
                 offers_by_fighter[fighter.fighter_id] = {
                     'fighter': fighter,
                     'offers': fighter_offers
                 }
-        
+
         return render_template('offers.html',
             offers_by_fighter=offers_by_fighter,
             week=bridge.week_number,

@@ -3522,7 +3522,15 @@ class GameBridge:
         if not self._game_state:
             return
         current = self._game_state.week_number
-        kept, dropped, withdrawn = [], [], []
+
+        # Build the global "already scheduled" set ONCE per call so the
+        # offerer/target booking checks are O(offers) not O(offers × sched).
+        _booked_fids = set()
+        for sf in self._scheduled_fights:
+            _booked_fids.add(sf.get("fighter1_id"))
+            _booked_fids.add(sf.get("fighter2_id"))
+
+        kept, dropped, withdrawn, target_booked = [], [], [], []
         for o in self._fight_offers:
             created = o.get("created_week")
             if created is None:
@@ -3530,8 +3538,16 @@ class GameBridge:
                 kept.append(o)
                 continue
 
+            # Target-side booking check FIRST — if the player fighter
+            # already has a fight scheduled (via challenge / negotiation
+            # / auto-book), every other pending offer for them is stale.
+            target_id = o.get("fighter_id")
+            if target_id and target_id in _booked_fids:
+                target_booked.append(o)
+                continue
+
             # Tier-aware max age = target's signing delay (4/3/2 per tier)
-            target = self._game_state.get_fighter(o.get("fighter_id", ""))
+            target = self._game_state.get_fighter(target_id or "")
             max_age = (self._signing_delay_weeks(target,
                            getattr(target, 'is_champion', False))
                        if target else 3)
@@ -3542,9 +3558,7 @@ class GameBridge:
             if offerer_id:
                 offerer = self._game_state.get_fighter(offerer_id)
                 if offerer:
-                    if any(sf.get("fighter1_id") == offerer_id or
-                           sf.get("fighter2_id") == offerer_id
-                           for sf in self._scheduled_fights):
+                    if offerer_id in _booked_fids:
                         offerer_unavailable = True
                     if (INJURY_AVAILABLE and self._injury_system
                             and not self._injury_system.is_cleared_to_fight(offerer_id)):
@@ -3560,6 +3574,9 @@ class GameBridge:
                 kept.append(o)
 
         self._fight_offers = kept
+        if target_booked:
+            print(f"  🧹 Pruned {len(target_booked)} stale fight offers"
+                  f" — target fighters already booked")
 
         for o in dropped:
             self._news_items.insert(0, {
