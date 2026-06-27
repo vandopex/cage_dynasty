@@ -52,6 +52,13 @@
                     <div style="flex:1;">
                         <div style="font-family:var(--font-display);color:var(--gold);">
                             {{ champion.name }}
+                            <span style="font-size:.6rem;padding:1px 5px;
+                                         background:rgba(255,215,0,.12);
+                                         border:1px solid rgba(255,215,0,.3);
+                                         color:var(--gold);border-radius:3px;
+                                         margin-left:6px;vertical-align:middle;">
+                                {{ champion.defenses or 0 }}D
+                            </span>
                             {% if champion.is_injured %}
                             <span style="font-size:.7rem;color:var(--blood-red);font-weight:600;margin-left:8px;">🤕 INJURED — {{ champion.injury_weeks_out }}w out</span>
                             {% endif %}

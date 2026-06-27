@@ -927,6 +927,8 @@ class WebFighter:
     # number.
     wrestling: int = 0
     bjj: int = 0
+    # Successful title defenses on current reign (champions only).
+    defenses: int = 0
 
 
 @dataclass
@@ -3461,7 +3463,8 @@ class GameBridge:
                                     "awards": awards, "structured": structured})
 
         # Ship HOF1: induct eligible retired fighters at each year boundary.
-        HOF_THRESHOLD = 60
+        # Sharing _compute_hof_score with the on-retire path so the formula
+        # stays in one place.
         _all_ftrs = list(self._game_state.fighters.values())
         _inducted_ids = {h["fighter_id"] for h in self._hof_inductees}
         for _ftr in _all_ftrs:
@@ -3469,55 +3472,105 @@ class GameBridge:
                 continue
             if _ftr.fighter_id in _inducted_ids:
                 continue
-            _reigns = [
-                r for _wc_list in self._title_history.values()
-                for r in _wc_list
-                if r.get("champion_id") == _ftr.fighter_id
-            ]
-            _title_count = len(_reigns)
-            _def_count = sum(r.get("successful_defenses", 0) for r in _reigns)
-            _best = getattr(_ftr, 'best_rank', 99)
-            _rank_pts = max(0, (15 - _best) * 2)
-            _score = (
-                _ftr.wins * 3
-                + _ftr.ko_wins * 2
-                + _ftr.sub_wins * 2
-                + _title_count * 25
-                + _def_count * 10
-                + _rank_pts
-                + getattr(_ftr, 'popularity', 10) * 0.3
-            )
-            if _score < HOF_THRESHOLD:
-                continue
-            _wc = getattr(_ftr, 'weight_class', '')
-            self._hof_inductees.append({
-                "fighter_id":     _ftr.fighter_id,
-                "name":           _ftr.name,
-                "nickname":       getattr(_ftr, 'nickname', None),
-                "weight_class":   _wc,
-                "record":         f"{_ftr.wins}-{_ftr.losses}-{_ftr.draws}",
-                "wins":           _ftr.wins,
-                "losses":         _ftr.losses,
-                "ko_wins":        _ftr.ko_wins,
-                "sub_wins":       _ftr.sub_wins,
-                "title_reigns":   _title_count,
-                "title_defenses": _def_count,
-                "best_rank":      _best,
-                "popularity":     getattr(_ftr, 'popularity', 10),
-                "prestige_score": round(_score),
-                "year_inducted":  year,
-                "week_inducted":  week,
-            })
-            _inducted_ids.add(_ftr.fighter_id)
-            self._news_items.insert(0, {
-                "headline":    (f"🏛️ HALL OF FAME: {_ftr.name} inducted "
-                                f"into the Cage Dynasty Hall of Fame!"),
-                "category":    "award",
-                "week":        week,
-                "icon":        "🏛️",
-                "fighter1_id": _ftr.fighter_id,
-            })
-            print(f"  🏛️  [HOF] {_ftr.name} inducted (score: {round(_score)})")
+            self._induct_into_hof(
+                _ftr, week=week, year=year,
+                year_end=True, _inducted_ids=_inducted_ids)
+
+    HOF_THRESHOLD = 60
+
+    def _compute_hof_score(self, fighter) -> tuple:
+        """Compute HOF prestige score for a fighter.
+        Returns (score, title_reigns, title_defenses, best_rank).
+        Pure read — no side effects. Shared by year-end and on-retire."""
+        _reigns = [
+            r for _wc_list in self._title_history.values()
+            for r in _wc_list
+            if r.get("champion_id") == fighter.fighter_id
+        ]
+        title_count = len(_reigns)
+        def_count = sum(r.get("successful_defenses", 0) for r in _reigns)
+        best = getattr(fighter, 'best_rank', 99)
+        rank_pts = max(0, (15 - best) * 2)
+        score = (
+            fighter.wins * 3
+            + fighter.ko_wins * 2
+            + fighter.sub_wins * 2
+            + title_count * 25
+            + def_count * 10
+            + rank_pts
+            + getattr(fighter, 'popularity', 10) * 0.3
+        )
+        return score, title_count, def_count, best
+
+    def _induct_into_hof(self, fighter, week: int,
+                         year: int = 0, year_end: bool = False,
+                         _inducted_ids: set = None) -> bool:
+        """Single induction path — appends to _hof_inductees, emits news,
+        prints log. Returns True if inducted. Skips if already inducted
+        or score below threshold."""
+        if _inducted_ids is None:
+            _inducted_ids = {h["fighter_id"] for h in self._hof_inductees}
+        if fighter.fighter_id in _inducted_ids:
+            return False
+
+        score, title_count, def_count, best = \
+            self._compute_hof_score(fighter)
+        if score < self.HOF_THRESHOLD:
+            return False
+
+        wc = getattr(fighter, 'weight_class', '')
+        self._hof_inductees.append({
+            "fighter_id":     fighter.fighter_id,
+            "name":           fighter.name,
+            "nickname":       getattr(fighter, 'nickname', None),
+            "weight_class":   wc,
+            "record": f"{fighter.wins}-{fighter.losses}-{fighter.draws}",
+            "wins":           fighter.wins,
+            "losses":         fighter.losses,
+            "ko_wins":        fighter.ko_wins,
+            "sub_wins":       fighter.sub_wins,
+            "title_reigns":   title_count,
+            "title_defenses": def_count,
+            "best_rank":      best,
+            "popularity":     getattr(fighter, 'popularity', 10),
+            "prestige_score": round(score),
+            "year_inducted":  year,
+            "week_inducted":  week,
+        })
+        _inducted_ids.add(fighter.fighter_id)
+
+        if year_end:
+            headline = (f"🏛️ HALL OF FAME: {fighter.name} inducted "
+                        f"into the Cage Dynasty Hall of Fame!")
+        else:
+            tier = ('Legend' if score >= 200
+                    else 'All-Time Great' if score >= 100
+                    else 'Hall of Famer')
+            headline = (f"🏛️ {fighter.name} retires straight into "
+                        f"the Hall of Fame as a {tier}!")
+        self._news_items.insert(0, {
+            "headline":    headline,
+            "category":    "award" if year_end else "retirement",
+            "week":        week,
+            "icon":        "🏛️",
+            "fighter1_id": fighter.fighter_id,
+            "fighter_id":  fighter.fighter_id,
+        })
+        print(f"  🏛️  [HOF] {fighter.name} inducted "
+              f"(score: {round(score)}"
+              f"{'' if year_end else ', on retire'})")
+        return True
+
+    def _check_hof_on_retire(self, fighter) -> None:
+        """Evaluate HOF eligibility immediately on retirement rather
+        than waiting for year-end. Safe to call even for fighters who
+        don't meet the threshold — just returns silently."""
+        try:
+            week = (self._game_state.week_number
+                    if self._game_state else 0)
+            self._induct_into_hof(fighter, week=week, year_end=False)
+        except Exception as _e:
+            print(f"  ⚠️  HOF on retire failed: {_e}")
 
     def get_yearly_awards(self) -> List[Dict[str, Any]]:
         """Ship YS1: return all yearly award records for the year-summary
@@ -6088,6 +6141,19 @@ class GameBridge:
         _wf.bjj = int(
             _wf.submissions * 0.5 +
             _wf.guard * 0.5)
+        # Defenses on current reign — populated only for champions
+        # to avoid per-fighter belt-history lookup on every list view.
+        if _wf.is_champion and self._belt_history is not None:
+            try:
+                _reigns_d = self._belt_history.get_fighter_reigns(
+                    _wf.fighter_id)
+                for _r_d in _reigns_d:
+                    if getattr(_r_d, 'is_active', False):
+                        _wf.defenses = int(
+                            getattr(_r_d, 'successful_defenses', 0) or 0)
+                        break
+            except Exception:
+                pass
         return _wf
     
     def _convert_mock_camp(self, c) -> WebCamp:
@@ -6269,6 +6335,19 @@ class GameBridge:
         _wf.bjj = int(
             _wf.submissions * 0.5 +
             _wf.guard * 0.5)
+        # Defenses on current reign — populated only for champions
+        # to avoid per-fighter belt-history lookup on every list view.
+        if _wf.is_champion and self._belt_history is not None:
+            try:
+                _reigns_d = self._belt_history.get_fighter_reigns(
+                    _wf.fighter_id)
+                for _r_d in _reigns_d:
+                    if getattr(_r_d, 'is_active', False):
+                        _wf.defenses = int(
+                            getattr(_r_d, 'successful_defenses', 0) or 0)
+                        break
+            except Exception:
+                pass
         return _wf
 
     def _convert_real_fighter(self, fighter) -> WebFighter:
@@ -6551,6 +6630,19 @@ class GameBridge:
         _wf.bjj = int(
             _wf.submissions * 0.5 +
             _wf.guard * 0.5)
+        # Defenses on current reign — populated only for champions
+        # to avoid per-fighter belt-history lookup on every list view.
+        if _wf.is_champion and self._belt_history is not None:
+            try:
+                _reigns_d = self._belt_history.get_fighter_reigns(
+                    _wf.fighter_id)
+                for _r_d in _reigns_d:
+                    if getattr(_r_d, 'is_active', False):
+                        _wf.defenses = int(
+                            getattr(_r_d, 'successful_defenses', 0) or 0)
+                        break
+            except Exception:
+                pass
         return _wf
 
 
@@ -10145,6 +10237,8 @@ class GameBridge:
             # Update rankings to remove retired fighter
             self._update_rankings_after_fight(
                 getattr(fighter, 'weight_class', ''))
+            # Immediate HOF eval — skip the year-end wait
+            self._check_hof_on_retire(fighter)
 
     # =========================================================================
     # MAINTENANCE TRAINING

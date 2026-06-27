@@ -97,6 +97,14 @@
                       color:{% if tier == 'champ' %}var(--gold){% elif is_player %}var(--info){% else %}var(--text-bright){% endif %};">
                 {{ fighter.name }}
             </a>
+            {% if fighter.is_champion %}
+            <span style="font-size:.6rem;padding:1px 5px;
+                         background:rgba(255,215,0,.12);
+                         border:1px solid rgba(255,215,0,.3);
+                         color:var(--gold);border-radius:3px;">
+                {{ fighter.defenses or 0 }}D
+            </span>
+            {% endif %}
             {% if is_player %}
             <span style="font-size:.58rem;color:var(--info);font-family:var(--font-display);
                          border:1px solid var(--info);padding:0 4px;border-radius:3px;">YOU</span>

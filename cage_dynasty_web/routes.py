@@ -2735,6 +2735,8 @@ def register_routes(app):
                     'fighter_id':   fighter_id,
                     'fighter_name': name,
                 })
+                # Immediate HOF eval — skip the year-end wait
+                bridge._check_hof_on_retire(fighter)
             flash(f"{name} has retired. A legend.", "info")
         else:
             # Continue — convince-to-stay morale bump.
