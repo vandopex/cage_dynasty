@@ -2527,6 +2527,16 @@ class GameBridge:
         except Exception as _cle:
             print(f"⚠️  Roster cleanup failed: {_cle}")
 
+        # Backfill tier_since_week on legacy saves (Ship: AI facility upgrades).
+        try:
+            if self._game_state and self._game_state.camps:
+                for _camp_bf in self._game_state.camps.values():
+                    if not hasattr(_camp_bf, 'tier_since_week') \
+                            or _camp_bf.tier_since_week is None:
+                        _camp_bf.tier_since_week = 0
+        except Exception as _bfe:
+            print(f"⚠️  tier_since_week backfill failed: {_bfe}")
+
         return {"success": True, "meta": meta}
 
     def get_web_saves(self) -> List[Dict[str, Any]]:
@@ -2864,6 +2874,10 @@ class GameBridge:
             # Ship L1: AI camp roster management — cuts, demands, FA sweep
             self._process_ai_camp_roster(current_week)
             self._process_ai_free_agent_bidding(current_week)
+
+            # AI facility upgrades — quarterly check
+            if current_week % 12 == 0:
+                self._maybe_ai_upgrade_facilities(current_week)
 
             # Ship S1: weekly sponsor processing — retainers, drops, offers
             self._process_weekly_sponsors(current_week)
@@ -18718,6 +18732,12 @@ class GameBridge:
             if current_week - last_cut < 26:
                 continue
 
+            # Min-5-fights gate — give new fighters time to develop
+            total_fights = (getattr(fighter, 'wins', 0)
+                            + getattr(fighter, 'losses', 0))
+            if total_fights < 5:
+                continue
+
             lose_streak = self._get_fighter_lose_streak(fighter)
             rank = self._get_fighter_rank(fighter)
             personality = (
@@ -18733,10 +18753,20 @@ class GameBridge:
 
             released = False
 
-            # Action 1: camp cuts underperformer
-            if (lose_streak >= 3
-                    and (rank is None or rank > 10)):
-                if _rnd.random() < 0.10:
+            # Action 1: camp cuts underperformer.
+            # Tiered chance — 5+L gets 70% regardless of rank,
+            # top-10 gets 15% (more rope), else 40%.
+            if lose_streak >= 3:
+                if lose_streak >= 5:
+                    cut_prob = 0.70
+                elif rank is not None and rank <= 10:
+                    cut_prob = 0.15
+                elif rank is None or rank > 10:
+                    cut_prob = 0.40
+                else:
+                    cut_prob = 0.0
+
+                if cut_prob > 0 and _rnd.random() < cut_prob:
                     _release_to_fa(fid, fighter)
                     self._ai_cut_cooldown[fid] = current_week
                     # News only for ranked/familiar fighters (suppress churn spam)
@@ -18787,6 +18817,96 @@ class GameBridge:
                             "week": current_week,
                             "fighter_id": fid,
                         })
+
+    def _maybe_ai_upgrade_facilities(self, week: int) -> None:
+        """AI camps upgrade tier when performance and finances justify
+        it. Runs every 12 weeks. Uses player's exact upgrade costs and
+        roster caps for parity — AI gets no discount."""
+        if not self._game_state:
+            return
+        import random as _rnd
+
+        TIER_ORDER = ['GARAGE', 'LOCAL', 'REGIONAL', 'NATIONAL', 'ELITE']
+
+        # Mirror player's UPGRADE_COSTS_MAP at game_bridge.py:4841
+        UPGRADE_COSTS = {
+            'GARAGE':   25_000,
+            'LOCAL':    100_000,
+            'REGIONAL': 500_000,
+            'NATIONAL': 2_000_000,
+        }
+        # Mirror player's _ROSTER_CAPS at game_bridge.py:4813
+        ROSTER_CAPS = {
+            'GARAGE': 3, 'LOCAL': 6, 'REGIONAL': 10,
+            'NATIONAL': 15, 'ELITE': 25,
+        }
+
+        player_camp_id = self._game_state.player_camp_id
+        current_week = self._game_state.week_number
+
+        for camp in self._game_state.camps.values():
+            if camp.camp_id == player_camp_id:
+                continue
+
+            tier = str(getattr(camp, 'tier', 'LOCAL')).upper()
+            if tier not in TIER_ORDER:
+                continue
+            tier_idx = TIER_ORDER.index(tier)
+            if tier_idx >= len(TIER_ORDER) - 1:
+                continue
+
+            tier_since = getattr(camp, 'tier_since_week', 0) or 0
+            if current_week - tier_since < 26:
+                continue
+
+            upgrade_cost = UPGRADE_COSTS.get(tier)
+            if not upgrade_cost:
+                continue
+            balance = getattr(camp, 'balance', 0) or 0
+            if balance < upgrade_cost * 1.2:
+                continue
+
+            # Win rate of active roster — use _camp_data['fighters']
+            # (same source as release logic)
+            camp_data = self._game_state._camp_data.get(camp.camp_id, {})
+            fighter_ids = camp_data.get('fighters', []) or []
+            wins = losses = 0
+            for fid in fighter_ids:
+                f = self._game_state.get_fighter(fid)
+                if f and getattr(f, 'is_active', True):
+                    wins += getattr(f, 'wins', 0)
+                    losses += getattr(f, 'losses', 0)
+            total = wins + losses
+            if total < 10:
+                continue
+            if wins / total < 0.55:
+                continue
+
+            if _rnd.random() > 0.60:
+                continue
+
+            new_tier = TIER_ORDER[tier_idx + 1]
+            camp.tier = new_tier
+            camp.tier_since_week = current_week
+            camp.balance = balance - upgrade_cost
+            new_cap = ROSTER_CAPS[new_tier]
+            if hasattr(camp, 'max_fighters'):
+                camp.max_fighters = new_cap
+            if 'max_fighters' in camp_data:
+                camp_data['max_fighters'] = new_cap
+
+            camp_name = getattr(camp, 'name', 'Camp')
+            self._news_items.insert(0, {
+                'headline': (f"🏗️ {camp_name} upgrades to "
+                             f"{new_tier.title()} facility."),
+                'category': 'roster',
+                'week':     current_week,
+                'camp_id':  camp.camp_id,
+                'camp_name': camp_name,
+            })
+            print(f"  🏗️ [AI UPGRADE] {camp_name}: "
+                  f"{tier} → {new_tier} "
+                  f"(${balance:,.0f} → ${camp.balance:,.0f})")
 
     def _process_weekly_sponsors(self, current_week: int) -> None:
         """Weekly sponsor processing:

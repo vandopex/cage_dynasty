@@ -193,6 +193,8 @@ class CampRecord:
     # Empty for legacy saves / camps without coach-type assignment.
     dominant_coach_type: str = ""
 
+    tier_since_week: int = 0
+
     @property
     def location_str(self) -> str:
         """Get formatted location string"""
@@ -219,6 +221,7 @@ class CampRecord:
             "total_losses": self.total_losses,
             "titles_held": self.titles_held,
             "dominant_coach_type": self.dominant_coach_type,
+            "tier_since_week": self.tier_since_week,
         }
 
     @classmethod
@@ -228,7 +231,7 @@ class CampRecord:
             "camp_id", "name", "is_player", "tier", "fighter_count",
             "balance", "reputation", "location", "city", "country", "region",
             "total_wins", "total_losses", "titles_held",
-            "dominant_coach_type",
+            "dominant_coach_type", "tier_since_week",
         }
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
         return cls(**filtered_data)
