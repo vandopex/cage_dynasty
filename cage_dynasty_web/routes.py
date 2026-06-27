@@ -765,6 +765,7 @@ def register_routes(app):
         # Player-fighter retirement decision prompts — surfaced as
         # high-priority cards above the weekly news feed.
         retirement_prompts = bridge.get_pending_retirement_prompts()
+        title_promises = bridge.get_pending_title_promises()
 
         return render_template('dashboard.html',
             camp=camp,
@@ -776,6 +777,7 @@ def register_routes(app):
             finances=finances,
             pending_interviews=pending_interviews,
             retirement_prompts=retirement_prompts,
+            title_promises=title_promises,
             training_goals=training_goals,
             training_plans=training_plans,
             player_card=player_card,
@@ -2756,6 +2758,72 @@ def register_routes(app):
             })
             flash(f"{name} is staying. Let's get them one more fight.",
                   "success")
+
+        return redirect(url_for('dashboard'))
+
+    @app.route('/fighter/<fighter_id>/title-shot-decision',
+               methods=['POST'])
+    def title_shot_decision(fighter_id):
+        """Resolve a queued title-shot demand. Accept → pledge fighter
+        for next title fight in their division (matchmaking consumes
+        the pledge when champion + contender are both available).
+        Decline → −15 morale; below 40 morale fires an "demands
+        release" headline (cosmetic for now — the existing morale
+        system handles the actual walkout)."""
+        from flask import flash
+        bridge = get_bridge()
+        decision = request.form.get('decision', 'decline')
+        promise = bridge._pending_title_promises.pop(fighter_id, None)
+        if not promise:
+            return redirect(url_for('dashboard'))
+
+        fighter = bridge.get_fighter(fighter_id)
+        name = promise.get('fighter_name', 'Fighter')
+        week = bridge.week_number
+
+        if decision == 'accept':
+            bridge._title_shot_pledges[fighter_id] = {
+                'fighter_id':   fighter_id,
+                'fighter_name': name,
+                'weight_class': promise.get('weight_class', ''),
+                'week_pledged': week,
+            }
+            bridge._news_items.insert(0, {
+                'headline': (f"🏆 {name} promised a title shot "
+                             f"— management delivers."),
+                'category':     'contract',
+                'week':         week,
+                'fighter_id':   fighter_id,
+                'fighter_name': name,
+            })
+            flash(f"Title shot promised to {name}. "
+                  f"Book it before they lose patience.", "success")
+        else:
+            if fighter:
+                contract = bridge._contracts.get(fighter_id) or {}
+                cur = int(contract.get('morale', 70))
+                new_morale = max(20, cur - 15)
+                contract['morale'] = new_morale
+                bridge._contracts[fighter_id] = contract
+                if new_morale < 40:
+                    bridge._news_items.insert(0, {
+                        'headline': (f"😤 {name} furious after title "
+                                     f"shot denied — demands release."),
+                        'category':     'contract',
+                        'week':         week,
+                        'fighter_id':   fighter_id,
+                        'fighter_name': name,
+                    })
+                else:
+                    bridge._news_items.insert(0, {
+                        'headline': (f"😤 {name} unhappy after title "
+                                     f"shot denied."),
+                        'category':     'contract',
+                        'week':         week,
+                        'fighter_id':   fighter_id,
+                        'fighter_name': name,
+                    })
+            flash(f"{name} is unhappy. Watch their morale.", "warning")
 
         return redirect(url_for('dashboard'))
 

@@ -1449,6 +1449,14 @@ class GameBridge:
         # at the prompt's creation week.
         self._pending_retirement_prompts: Dict[str, Dict[str, Any]] = {}
 
+        # Title shot demand pipeline — CONTENDER personalities at rank ≤ 5
+        # demand a title shot clause on re-sign. Player resolves via
+        # /fighter/<id>/title-shot-decision (accept → pledge, decline →
+        # morale hit). Two dicts: pending demands awaiting decision, and
+        # accepted pledges read by matchmaking when booking title fights.
+        self._pending_title_promises: Dict[str, Dict[str, Any]] = {}
+        self._title_shot_pledges: Dict[str, Dict[str, Any]] = {}
+
         # KO/sub backfill — one-shot guard so the load-time repair
         # doesn't re-run every load once a save has been corrected.
         self._kosub_backfill_done: bool = False
@@ -2077,6 +2085,8 @@ class GameBridge:
             "pending_injury_decisions": self._pending_injury_decisions,
             "pending_retirement_prompts":
                 self._pending_retirement_prompts,
+            "pending_title_promises":   self._pending_title_promises,
+            "title_shot_pledges":       self._title_shot_pledges,
             "kosub_backfill_done":
                 bool(getattr(self, '_kosub_backfill_done', False)),
             "pending_challenges":       self._pending_challenges,
@@ -2308,6 +2318,10 @@ class GameBridge:
         self._pending_injury_decisions  = data.get("pending_injury_decisions", [])
         self._pending_retirement_prompts = data.get(
             "pending_retirement_prompts", {})
+        self._pending_title_promises = data.get(
+            "pending_title_promises", {})
+        self._title_shot_pledges = data.get(
+            "title_shot_pledges", {})
         self._kosub_backfill_done = bool(
             data.get("kosub_backfill_done", False))
         self._champion_holds            = data.get("champion_holds", {})
@@ -15307,10 +15321,17 @@ class GameBridge:
                 # the last meeting. First-ever pairings (last is None)
                 # skip the earned-shot check.
                 top = None
-                for contender_id in division.rankings[:10]:
+                # Pledged contender — player promised them the next
+                # title shot. Try them first; same rematch + earned-shot
+                # gates still apply.
+                _pledged_fids = [
+                    fid for fid, p in self._title_shot_pledges.items()
+                    if p.get('weight_class') == wc and fid != champ_id
+                ]
+                for _pfid in _pledged_fids:
                     candidate = next((f for f in available
-                                      if f.fighter_id == contender_id), None)
-                    if not candidate or candidate.fighter_id == champ_id:
+                                      if f.fighter_id == _pfid), None)
+                    if not candidate:
                         continue
                     last = self._weeks_since_fought(champ, candidate)
                     if last is not None:
@@ -15320,7 +15341,26 @@ class GameBridge:
                                 champ, candidate):
                             continue
                     top = candidate
+                    self._title_shot_pledges.pop(_pfid, None)
+                    print(f"  🏆 [PLEDGE BOOKED] {candidate.name} "
+                          f"({wc}) — title shot promised, delivered")
                     break
+
+                if not top:
+                    for contender_id in division.rankings[:10]:
+                        candidate = next((f for f in available
+                                          if f.fighter_id == contender_id), None)
+                        if not candidate or candidate.fighter_id == champ_id:
+                            continue
+                        last = self._weeks_since_fought(champ, candidate)
+                        if last is not None:
+                            if last < 20:
+                                continue
+                            if not self._contender_earned_title_shot(
+                                    champ, candidate):
+                                continue
+                        top = candidate
+                        break
                 if top:
                     score = self._matchup_score(champ, top, is_title=True)
                     # Sub-ship A: rank-aware lead time. Champion is rank 0.
@@ -19892,8 +19932,68 @@ class GameBridge:
             "fighter_id": fighter_id,
             "camp_id":    self._game_state.player_camp_id,
         })
+
+        # Title-shot demand — CONTENDER at rank ≤ 5 queues a player decision card.
+        if self._should_demand_title_shot(fighter_id):
+            rank = self._get_fighter_rank(ftr)
+            wc = getattr(ftr, 'weight_class', '')
+            self._pending_title_promises[fighter_id] = {
+                'fighter_id':    fighter_id,
+                'fighter_name':  ftr.name,
+                'weight_class':  wc,
+                'rank':          rank,
+                'week_promised': self._game_state.week_number,
+                'record':        f"{ftr.wins}-{ftr.losses}",
+            }
+            self._news_items.insert(0, {
+                'headline': (f"📋 {ftr.name} re-signs — "
+                             f"but demands a title shot or they walk."),
+                'category':     'contract',
+                'week':         self._game_state.week_number,
+                'fighter_id':   fighter_id,
+                'fighter_name': ftr.name,
+            })
+
         self._clear_cache()
         return {"success": True, "message": f"Re-signed {ftr.name} — {contract_fights}-fight deal"}
+
+    def _should_demand_title_shot(self, fighter_id: str) -> bool:
+        """True when re-signing fighter is a CONTENDER personality
+        ranked top-5 with no active pledge or pending demand."""
+        if not self._game_state:
+            return False
+        fighter = self._game_state.get_fighter(fighter_id)
+        if not fighter:
+            return False
+        # Re-sign just wrote contract.personality, but recompute fresh
+        # so this helper is callable from other contexts later.
+        personality = self._get_ai_neg_personality(fighter)
+        if personality != 'CONTENDER':
+            return False
+        rank = self._get_fighter_rank(fighter)
+        if rank is None or rank > 5:
+            return False
+        if fighter_id in self._pending_title_promises:
+            return False
+        if fighter_id in self._title_shot_pledges:
+            return False
+        return True
+
+    def get_pending_title_promises(self) -> List[Dict[str, Any]]:
+        """Active title-shot demands awaiting player decision."""
+        if not self._game_state:
+            return []
+        result = []
+        for fid, promise in self._pending_title_promises.items():
+            fighter = self._game_state.get_fighter(fid)
+            if not fighter or not getattr(fighter, 'is_active', True):
+                continue
+            result.append({
+                **promise,
+                'overall_rating': getattr(fighter, 'overall_rating', 0),
+                'fighting_style': getattr(fighter, 'fighting_style', ''),
+            })
+        return result
 
     def get_contract_options_for_tier(self, fighter_id: Optional[str] = None) -> List[Dict]:
         """Available contract lengths for the player's current facility tier.

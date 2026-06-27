@@ -164,6 +164,71 @@
 {% endfor %}
 {% endif %}
 
+{# ── Title-shot demand decision cards ── #}
+{% if title_promises %}
+{% for promise in title_promises %}
+<div class="card mb-lg" style="border-color:var(--gold);
+     background:linear-gradient(135deg,rgba(255,215,0,.06),transparent);">
+    <div style="height:3px;background:var(--gold);"></div>
+    <div style="padding:var(--spacing-lg);">
+        <div style="font-size:.65rem;letter-spacing:.2em;
+                    text-transform:uppercase;color:var(--gold);
+                    margin-bottom:var(--spacing-sm);">
+            📋 Title Shot Demand
+        </div>
+        <div style="font-family:var(--font-display);
+                    font-size:1.3rem;color:var(--text-bright);
+                    margin-bottom:4px;">
+            {{ promise.fighter_name }} wants a title shot
+        </div>
+        <div style="font-size:.82rem;color:var(--text-muted);
+                    margin-bottom:var(--spacing-md);">
+            Rank #{{ promise.rank }} ·
+            {{ promise.weight_class }} ·
+            {{ promise.record }}
+        </div>
+        <div style="font-size:.78rem;color:var(--text-secondary);
+                    margin-bottom:var(--spacing-lg);
+                    line-height:1.6;">
+            They re-signed — but made it clear: book the title
+            fight or they walk. You have until next contract
+            expiry to deliver.
+        </div>
+        <div style="display:flex;gap:var(--spacing-md);">
+            <form action="{{ url_for('title_shot_decision',
+                                     fighter_id=promise.fighter_id) }}"
+                  method="POST" style="margin:0;">
+                <input type="hidden" name="decision" value="accept">
+                <button type="submit"
+                        style="padding:8px 20px;
+                               background:rgba(0,230,118,.12);
+                               border:1px solid var(--neon-green);
+                               color:var(--neon-green);
+                               border-radius:6px;cursor:pointer;
+                               font-size:.78rem;">
+                    🏆 Promise the title shot
+                </button>
+            </form>
+            <form action="{{ url_for('title_shot_decision',
+                                     fighter_id=promise.fighter_id) }}"
+                  method="POST" style="margin:0;">
+                <input type="hidden" name="decision" value="decline">
+                <button type="submit"
+                        style="padding:8px 20px;
+                               background:rgba(211,47,47,.12);
+                               border:1px solid var(--blood-red);
+                               color:var(--blood-red);
+                               border-radius:6px;cursor:pointer;
+                               font-size:.78rem;">
+                    ❌ Decline — deal with fallout
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endfor %}
+{% endif %}
+
 {# ── Alerts row ── #}
 {% if offer_count > 0 or (sponsor_offer_count and sponsor_offer_count > 0) or pending_interviews or scout_tips %}
 <div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;margin-bottom:var(--spacing-lg);">
