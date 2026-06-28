@@ -1743,17 +1743,19 @@ class GameBridge:
             self.game_started = True
 
             # Pre-generate amateur circuit history so fighters
-            # have records at week 1 — not everyone 0-0
+            # have records at week 1 — not everyone 0-0. 26 weeks
+            # = ~6 months of tournaments before player joins.
             try:
                 _am_sys = self._get_amateur_system()
                 if _am_sys:
-                    _PRE_GEN_WEEKS = 10
+                    _PRE_GEN_WEEKS = 26
                     for _aw in range(1, _PRE_GEN_WEEKS + 1):
                         try:
                             _am_sys.process_week(_aw)
                         except Exception:
                             pass
-                    print(f"✅ Amateur pre-gen: {_PRE_GEN_WEEKS} weeks simulated")
+                    print(f"✅ Amateur pre-gen: {_PRE_GEN_WEEKS} weeks simulated "
+                          f"({len(_am_sys.completed_tournaments)} tournaments)")
             except Exception as _ape:
                 print(f"⚠️  Amateur pre-gen failed: {_ape}")
 
@@ -2115,6 +2117,19 @@ class GameBridge:
                                         if self._aging_system else {},
         }
 
+        # Amateur circuit — persist pool / rankings / completed tournaments.
+        # Scheduled (not-yet-run) tournaments are NOT in to_dict; they're
+        # rebuilt on restore via schedule_year_tournaments.
+        try:
+            _am_sys = getattr(self, '_amateur_system', None)
+            if _am_sys is not None:
+                bridge_data['amateur_state'] = _am_sys.to_dict()
+                print(f"  📦 Amateur state saved: "
+                      f"{len(_am_sys.amateurs)} fighters, "
+                      f"{len(_am_sys.completed_tournaments)} tournaments")
+        except Exception as _ase:
+            print(f"  ⚠️ Amateur save failed: {_ase}")
+
         try:
             path = self._bridge_save_path(slot)
             with open(path, 'w') as f:
@@ -2417,6 +2432,40 @@ class GameBridge:
         self._pending_challenges = data.get("pending_challenges", {})
         # Ship A1: amateur graduates persist for the graduates tab
         self._amateur_graduates = data.get("amateur_graduates", [])
+
+        # Restore amateur circuit state — pool, rankings, completed
+        # tournaments. Schedules for future weeks are NOT serialized;
+        # re-seed them after restore via schedule_year_tournaments.
+        self._amateur_system = None
+        try:
+            _am_state = data.get('amateur_state')
+            if _am_state:
+                import importlib as _ila_am
+                for _mod in ['amateur', 'systems.amateur']:
+                    try:
+                        _am_mod = _ila_am.import_module(_mod)
+                        self._amateur_system = (
+                            _am_mod.AmateurSystem.from_dict(_am_state))
+                        _current_wk = (self._game_state.week_number
+                                       if self._game_state else 1)
+                        self._amateur_system.schedule_year_tournaments(
+                            year=self._amateur_system.current_year,
+                            start_week=_current_wk,
+                        )
+                        # Mark as loaded so _get_amateur_system's lazy
+                        # fast-forward doesn't re-simulate history.
+                        self._amateur_loaded_from_save = True
+                        print(f"✅ Amateur state restored: "
+                              f"{len(self._amateur_system.amateurs)} fighters, "
+                              f"{len(self._amateur_system.completed_tournaments)} "
+                              f"tournaments")
+                        break
+                    except Exception as _amle:
+                        print(f"  ⚠️ Amateur load ({_mod}): {_amle}")
+                        self._amateur_system = None
+        except Exception as _amoe:
+            print(f"  ⚠️ Amateur restore failed: {_amoe}")
+            self._amateur_system = None
 
         self.game_started = True
         self._clear_cache()
@@ -20345,17 +20394,25 @@ class GameBridge:
                         self._amateur_system.schedule_year_tournaments(
                             year=1, start_week=1
                         )
-                        # Fast-forward to current week so loaded games
-                        # have a populated amateur circuit immediately
-                        current = self.week_number if self.game_started else 0
-                        if current > 1:
-                            for w in range(1, current):
-                                try:
-                                    self._amateur_system.process_week(w)
-                                except Exception:
-                                    pass
-                        print(f"✅ Amateur system initialized from {_mod}"
-                              f" (fast-forwarded to week {current})")
+                        # Fast-forward only when this is a true fresh
+                        # init (no save restored prior). web_load sets
+                        # _amateur_loaded_from_save so a restored save
+                        # keeps its real history without re-simulation.
+                        if not getattr(self,
+                                '_amateur_loaded_from_save', False):
+                            current = (self.week_number
+                                       if self.game_started else 0)
+                            if current > 1:
+                                for w in range(1, current):
+                                    try:
+                                        self._amateur_system.process_week(w)
+                                    except Exception:
+                                        pass
+                            print(f"✅ Amateur system initialized from {_mod}"
+                                  f" (fast-forwarded to week {current})")
+                        else:
+                            print(f"✅ Amateur system initialized from {_mod}"
+                                  f" (skipped fast-forward — restored from save)")
                         break
                     except (ImportError, AttributeError, Exception) as e:
                         self._amateur_system = None

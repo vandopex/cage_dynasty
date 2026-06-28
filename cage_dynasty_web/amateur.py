@@ -2473,7 +2473,32 @@ class AmateurSystem:
         system.current_week = data.get("current_week", 0)
         system.current_year = data.get("current_year", 1)
         system._used_names = set(data.get("used_names", []))
-        
+
+        # Restore completed tournaments — only the display-relevant
+        # fields (champion/finalist/semis/quarters/circuit branding).
+        # Bracket state and fight blow-by-blow are not restored since
+        # they're not surfaced post-completion.
+        for t_data in data.get("completed_tournaments", []) or []:
+            try:
+                t = Tournament(
+                    tournament_id=t_data.get('tournament_id', ''),
+                    name=t_data.get('name', ''),
+                    region=t_data.get('region', ''),
+                    weight_class=t_data.get('weight_class', ''),
+                    week=t_data.get('week', 0),
+                    year=t_data.get('year', 1),
+                    circuit_name=t_data.get('circuit_name', ''),
+                    city=t_data.get('city', ''),
+                    is_complete=True,
+                    champion_id=t_data.get('champion_id'),
+                    finalist_id=t_data.get('finalist_id'),
+                    semifinalists=list(t_data.get('semifinalists', []) or []),
+                    quarterfinalists=list(t_data.get('quarterfinalists', []) or []),
+                )
+                system.completed_tournaments.append(t)
+            except Exception:
+                pass
+
         return system
 
 
