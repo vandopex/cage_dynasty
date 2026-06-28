@@ -10179,6 +10179,49 @@ class GameBridge:
             except Exception:
                 pass
 
+        # ── Amateur news headlines — surface noteworthy tournament events
+        # in the main news feed (category='amateur'). Champion announcement,
+        # undefeated milestones (5-0/8-0/10-0), elite-prospect promotions.
+        try:
+            for result in tournaments_run:
+                champ_id = getattr(result, 'champion_id', None)
+                t_name = getattr(result, 'name', 'Tournament')
+                if champ_id:
+                    champ = sys.amateurs.get(champ_id)
+                    if champ:
+                        self._news_items.insert(0, {
+                            "headline": (f"🏆 {champ.name} ({champ.record}) "
+                                         f"wins the {t_name}."),
+                            "category":   "amateur",
+                            "week":       week,
+                            "fighter_id": champ_id,
+                        })
+                        if champ.losses == 0 and champ.wins in (5, 8, 10):
+                            self._news_items.insert(0, {
+                                "headline": (f"⭐ {champ.name} runs amateur "
+                                             f"record to {champ.wins}-0 — "
+                                             f"undefeated."),
+                                "category":   "amateur",
+                                "week":       week,
+                                "fighter_id": champ_id,
+                            })
+            for fid in newly_eligible:
+                a = sys.amateurs.get(fid)
+                if not a:
+                    continue
+                if getattr(a, 'potential_grade', '') in ('Elite', 'High'):
+                    self._news_items.insert(0, {
+                        "headline": (f"🌟 {a.name} cleared for pro — "
+                                     f"{a.record} amateur career, "
+                                     f"{getattr(a, 'potential_grade', '')} "
+                                     f"potential."),
+                        "category":   "amateur",
+                        "week":       week,
+                        "fighter_id": fid,
+                    })
+        except Exception as _ne:
+            print(f"  ⚠️ amateur news headlines failed: {_ne}")
+
         return events
 
     # =========================================================================
@@ -20335,6 +20378,40 @@ class GameBridge:
 
         week = self.week_number
 
+        # Inline helpers for buzz, win streak, finish counts, last-N
+        # results — all derived from fight_history so no AmateurFighter
+        # schema bump needed.
+        try:
+            from amateur import _calculate_buzz as _buzz_fn
+        except Exception:
+            _buzz_fn = None
+
+        def _streak(f) -> int:
+            n = 0
+            for h in reversed(getattr(f, 'fight_history', []) or []):
+                if isinstance(h, dict) and h.get('result') == 'W':
+                    n += 1
+                else:
+                    break
+            return n
+
+        def _finishes(f):
+            ko = sub = 0
+            for h in (getattr(f, 'fight_history', []) or []):
+                if not isinstance(h, dict) or h.get('result') != 'W':
+                    continue
+                m = (h.get('method') or '').lower()
+                if 'ko' in m or 'tko' in m:
+                    ko += 1
+                elif 'sub' in m:
+                    sub += 1
+            return ko, sub
+
+        def _last_n(f, n=3):
+            return [h.get('result', '')
+                    for h in (getattr(f, 'fight_history', []) or [])[-n:]
+                    if isinstance(h, dict)]
+
         # Pro-eligible fighters per weight class
         eligible: Dict[str, List[Dict]] = {}
         from amateur import WEIGHT_CLASSES as _AMATEUR_WCS
@@ -20351,8 +20428,12 @@ class GameBridge:
                     key=lambda f: getattr(f, 'potential_ceiling', 0),
                     reverse=True
                 )
-                eligible[wc] = [
-                    {
+                eligible[wc] = []
+                for f in prospects[:12]:
+                    _ko, _sub = _finishes(f)
+                    _stk = _streak(f)
+                    _buzz = _buzz_fn(f) if _buzz_fn else 0
+                    eligible[wc].append({
                         "id":             f.fighter_id,
                         "name":           f.name,
                         "age":            getattr(f, 'age', 20),
@@ -20371,16 +20452,18 @@ class GameBridge:
                         "tournament_wins":getattr(f, 'tournament_wins', 0),
                         "tournament_finals":getattr(f, 'tournament_finals', 0),
                         "tournament_semis":getattr(f, 'tournament_semis', 0),
-                        # Ship A1: extra fields for the redesigned prospect cards
                         "weight_class":   getattr(f, 'weight_class', wc),
                         "eligibility_reason": getattr(f, 'eligibility_reason', ''),
                         "regional_rank":  getattr(f, 'regional_rank', None),
                         "traits":         list(getattr(f, 'traits', []) or []),
                         "weeks_in_amateur": getattr(f, 'weeks_in_amateur', 0),
                         "signing_cost":   self._compute_amateur_signing_cost(f),
-                    }
-                    for f in prospects[:12]
-                ]
+                        "buzz_score":     _buzz,
+                        "win_streak":     _stk,
+                        "ko_wins":        _ko,
+                        "sub_wins":       _sub,
+                        "last_3_results": _last_n(f, 3),
+                    })
             except Exception:
                 eligible[wc] = []
 
@@ -20446,23 +20529,96 @@ class GameBridge:
             except Exception:
                 regional_rankings[region] = []
 
-        # Recent completed tournaments
+        # Recent completed tournaments — enriched with finalist + fight count
+        _REGION_FLAG = {
+            "Americas": "🌎", "Europe": "🇪🇺",
+            "Asia": "🌏", "Pacific": "🏝️",
+        }
         recent_tourneys = []
         for t in getattr(sys, 'completed_tournaments', [])[-6:]:
             try:
                 champ_id   = getattr(t, 'champion_id', None)
                 champ_obj  = sys.amateurs.get(champ_id) if champ_id else None
                 champ_name = champ_obj.name if champ_obj else "Unknown"
+                fin_id     = getattr(t, 'finalist_id', None)
+                fin_obj    = sys.amateurs.get(fin_id) if fin_id else None
+                fin_name   = fin_obj.name if fin_obj else None
+                _region    = getattr(t, 'region', '')
                 recent_tourneys.append({
-                    "name":    getattr(t, 'name', 'Tournament'),
-                    "region":  getattr(t, 'region', ''),
-                    "wc":      getattr(t, 'weight_class', ''),
-                    "week":    getattr(t, 'week', 0),
-                    "champion":champ_name,
-                    "champion_id": champ_id or '',
+                    "name":         getattr(t, 'name', 'Tournament'),
+                    "region":       _region,
+                    "region_flag":  _REGION_FLAG.get(_region, '🥋'),
+                    "wc":           getattr(t, 'weight_class', ''),
+                    "week":         getattr(t, 'week', 0),
+                    "champion":     champ_name,
+                    "champion_id":  champ_id or '',
+                    "champion_record": (f"{champ_obj.wins}-{champ_obj.losses}"
+                                        if champ_obj else ''),
+                    "finalist":     fin_name or '',
+                    "finalist_id":  fin_id or '',
+                    "finalist_record": (f"{fin_obj.wins}-{fin_obj.losses}"
+                                        if fin_obj else ''),
+                    "fight_count":  len(getattr(t, 'all_fights', []) or []),
                 })
             except Exception:
                 pass
+
+        # Rising stars — not yet eligible but already worth watching.
+        # Gates: buzz ≥ 30 OR win streak ≥ 3 OR has a tournament win.
+        # Sorted by buzz desc, cap at 15 per division.
+        rising_stars: Dict[str, List[Dict]] = {}
+        try:
+            from amateur import MIN_FIGHTS_FOR_ELIGIBILITY as _MIN_FIGHTS
+            for f in sys.amateurs.values():
+                if not (f.is_active and not f.turned_pro):
+                    continue
+                if getattr(f, 'is_pro_eligible', False):
+                    continue
+                _stk = _streak(f)
+                _t_wins = int(getattr(f, 'tournament_wins', 0) or 0)
+                _buzz = _buzz_fn(f) if _buzz_fn else 0
+                if not (_buzz >= 30 or _stk >= 3 or _t_wins >= 1):
+                    continue
+                _ko, _sub = _finishes(f)
+                _wc = getattr(f, 'weight_class', 'Unknown')
+                _fights_needed = max(
+                    0, _MIN_FIGHTS - (f.wins + f.losses))
+                _reason = (getattr(f, 'eligibility_reason', '') or
+                           (f"Needs {_fights_needed} more fight"
+                            f"{'s' if _fights_needed != 1 else ''}"
+                            if _fights_needed > 0
+                            else "Win a tournament to turn pro"))
+                rising_stars.setdefault(_wc, []).append({
+                    "id":             f.fighter_id,
+                    "name":           f.name,
+                    "age":            getattr(f, 'age', 20),
+                    "region":         getattr(f, 'region', 'Unknown'),
+                    "record":         f"{f.wins}-{f.losses}",
+                    "wins":           f.wins,
+                    "losses":         f.losses,
+                    "overall":        getattr(f, 'overall_rating', 60),
+                    "potential_grade":getattr(f, 'potential_grade', 'Average'),
+                    "display_grade":  ceiling_to_display_grade(
+                        getattr(f, 'potential_ceiling', 75)),
+                    "grade_color":    grade_color(ceiling_to_display_grade(
+                        getattr(f, 'potential_ceiling', 75))),
+                    "style":          getattr(f, 'fighting_style', 'Balanced'),
+                    "weight_class":   _wc,
+                    "tournament_wins":_t_wins,
+                    "win_streak":     _stk,
+                    "ko_wins":        _ko,
+                    "sub_wins":       _sub,
+                    "buzz_score":     _buzz,
+                    "fights_needed":  _fights_needed,
+                    "eligibility_reason": _reason,
+                    "last_3_results": _last_n(f, 3),
+                })
+            for _wc, _lst in rising_stars.items():
+                _lst.sort(key=lambda x: -x.get('buzz_score', 0))
+                rising_stars[_wc] = _lst[:15]
+        except Exception as _re:
+            print(f"  ⚠️ rising_stars build failed: {_re}")
+            rising_stars = {}
 
         # Ship A1: top-level counters surfaced for the redesigned page
         _pro_eligible_count = sum(len(v) for v in eligible.values())
@@ -20470,6 +20626,7 @@ class GameBridge:
         return {
             "available":         True,
             "eligible":          eligible,
+            "rising_stars":      rising_stars,
             "all_prospects":     all_prospects,
             "regional_rankings": regional_rankings,
             "recent_tourneys":   recent_tourneys,

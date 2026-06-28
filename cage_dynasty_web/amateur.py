@@ -178,7 +178,7 @@ POINTS_FOTN_BONUS = 1
 MIN_FIGHTS_FOR_ELIGIBILITY = 8
 MIN_AGE_FOR_PRO = 18
 MIN_FIGHTS_FOR_RECORD_PATH = 16
-MIN_WIN_RATE_FOR_RECORD_PATH = 0.65
+MIN_WIN_RATE_FOR_RECORD_PATH = 0.70
 TOP_REGIONAL_RANK_FOR_ELIGIBILITY = 3
 MIN_WEEKS_FOR_ELIGIBILITY = 26  # Must be in circuit at least 6 months
 PRODIGY_RATING_THRESHOLD = 82   # Harder to be an instant prodigy
@@ -199,6 +199,53 @@ RETIREMENT_AGE_MAX = 33
 
 # New amateur generation per year
 NEW_AMATEURS_PER_DIVISION_PER_REGION = 3
+
+
+def _calculate_buzz(fighter: "AmateurFighter") -> int:
+    """Momentum score 0-100 derived from current state. Pure read —
+    no side effects. Pulls streak / finishes / tournament wins live
+    from the fighter dataclass + fight_history so no schema bump.
+
+    Composition:
+      - current win streak (max 40)
+      - tournament wins (max 40)
+      - finish-rate bonus (max 20)
+      - loss penalty (-5 per loss)
+    """
+    history = getattr(fighter, 'fight_history', []) or []
+
+    streak = 0
+    for f in reversed(history):
+        if (f.get('result') if isinstance(f, dict) else '') == 'W':
+            streak += 1
+        else:
+            break
+
+    wins = int(getattr(fighter, 'wins', 0) or 0)
+    losses = int(getattr(fighter, 'losses', 0) or 0)
+    t_wins = int(getattr(fighter, 'tournament_wins', 0) or 0)
+
+    ko_wins = 0
+    sub_wins = 0
+    for f in history:
+        if not isinstance(f, dict):
+            continue
+        if f.get('result') != 'W':
+            continue
+        m = (f.get('method') or '').lower()
+        if 'ko' in m or 'tko' in m:
+            ko_wins += 1
+        elif 'sub' in m:
+            sub_wins += 1
+
+    score = 0
+    score += min(streak * 8, 40)
+    score += min(t_wins * 20, 40)
+    if wins > 0:
+        finish_rate = (ko_wins + sub_wins) / wins
+        score += int(finish_rate * 20)
+    score -= losses * 5
+    return max(0, min(100, score))
 
 
 # ============================================================================
