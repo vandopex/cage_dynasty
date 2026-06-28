@@ -184,13 +184,12 @@
             {# Record — W(KO)-L(KO)-D, broadcast format.
                ko_l/sub_l now read persistent fields populated on every fight,
                not the truncated last-10 fight_history slice. #}
-            {% set ko_l = fighter.ko_losses if fighter.ko_losses is defined else 0 %}
-            {% set sub_l = fighter.sub_losses if fighter.sub_losses is defined else 0 %}
             {% set draws = fighter.draws if fighter.draws is defined else 0 %}
+            {% set finish_w = (ko_w or 0) + (sub_w or 0) %}
             <div style="font-family:var(--font-display);font-size:2.2rem;
                         color:var(--text-bright);margin-bottom:2px;letter-spacing:-.02em;
                         line-height:1;">
-                <span style="color:var(--neon-green);">{{ wins }}</span><span style="font-size:1.3rem;color:var(--neon-green);">({{ ko_w }})</span><span style="color:var(--text-muted);font-size:1.6rem;margin:0 6px;">–</span><span style="color:var(--blood-red);">{{ losses }}</span><span style="font-size:1.3rem;color:var(--blood-red-light);">({{ ko_l }})</span><span style="color:var(--text-muted);font-size:1.6rem;margin:0 6px;">–</span><span style="color:var(--text-muted);">{{ draws }}</span>
+                <span style="color:var(--neon-green);">{{ wins }}</span>{% if finish_w > 0 %}<span style="font-size:1.3rem;color:var(--neon-green);">({{ finish_w }})</span>{% endif %}<span style="color:var(--text-muted);font-size:1.6rem;margin:0 6px;">–</span><span style="color:var(--blood-red);">{{ losses }}</span><span style="color:var(--text-muted);font-size:1.6rem;margin:0 6px;">–</span><span style="color:var(--warning);">{{ draws }}</span>
             </div>
             {% if wins > 0 %}
             <div style="font-size:.7rem;color:var(--text-muted);
@@ -706,12 +705,18 @@
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"
                      {% if name == 'Chin' %}title="Chin durability — affected by KO losses.{% if fighter.ko_losses_received > 0 %} {{ fighter.ko_losses_received }} KO loss{{ 'es' if fighter.ko_losses_received != 1 else '' }} on record.{% endif %}"{% endif %}>
                     <span style="font-size:.72rem;color:var(--text-muted);width:90px;flex-shrink:0;">{{ name }}</span>
+                    {% set _val_color = 'var(--gold)' if value >= 90
+                                     else '#ff6b35'       if value >= 85
+                                     else 'var(--warning)' if value >= 80
+                                     else 'var(--neon-green)' if value >= 70
+                                     else 'var(--info)'    if value >= 55
+                                     else 'var(--text-muted)' %}
                     <div class="stat-bar-track" style="flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden;">
                         <div style="width:{{ value }}%;height:100%;border-radius:5px;
-                                    background:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}rgba(255,255,255,.2){% endif %};"></div>
+                                    background:{% if value >= 55 %}{{ _val_color }}{% else %}rgba(255,255,255,.2){% endif %};"></div>
                     </div>
                     <span style="font-family:var(--font-display);font-size:.92rem;width:30px;text-align:right;flex-shrink:0;
-                                 color:{% if value >= 85 %}var(--gold){% elif value >= 70 %}var(--neon-green){% elif value >= 55 %}var(--info){% else %}var(--text-muted){% endif %};">
+                                 color:{{ _val_color }};">
                         {{ value }}
                     </span>
                     {# Development tier indicator — value-based gain
@@ -1080,8 +1085,8 @@
             {# Method + Watch link #}
             <div style="flex-shrink:0;text-align:right;">
                 <div style="font-size:.72rem;font-family:var(--font-display);
-                             color:{% if method in ('KO','TKO') %}var(--blood-red){% elif method == 'SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
-                    {{ method }}
+                             color:{% if is_draw %}var(--warning){% elif method in ('KO','TKO') %}var(--blood-red){% elif method == 'SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
+                    {% if is_draw %}DRAW{% else %}{{ method }}{% endif %}
                 </div>
                 {% if fight.round_finished %}
                 <div style="font-size:.62rem;color:var(--text-muted);">R{{ fight.round_finished }}</div>

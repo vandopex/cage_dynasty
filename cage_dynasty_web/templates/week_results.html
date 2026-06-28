@@ -515,8 +515,10 @@
                         {{ obs.fatigue_label }}
                     </span>
                     <span style="font-size:.68rem;">{{ obs.intensity_emoji }}</span>
+                    {% set _of = obs.focus or '' %}
+                    {% if ':' in _of %}{% set _of = _of.split(':')[-1] %}{% endif %}
                     <span style="font-size:.62rem;color:var(--text-muted);">
-                        {{ obs.focus }} · {{ obs.intensity }}{% if obs.is_fight_camp %} · <span style="color:var(--gold);">Fight Camp</span>{% endif %}
+                        {{ _of | replace('_', ' ') | title }} · {{ obs.intensity }}{% if obs.is_fight_camp %} · <span style="color:var(--gold);">Fight Camp</span>{% endif %}
                     </span>
                 </div>
                 <div style="font-size:.78rem;color:var(--text-secondary);font-style:italic;
@@ -623,8 +625,10 @@
                     <div>
                         <span style="font-family:var(--font-display);font-size:.95rem;
                                      color:var(--text-bright);">{{ tr.name }}</span>
+                        {% set _tf = tr.focus or '' %}
+                        {% if ':' in _tf %}{% set _tf = _tf.split(':')[-1] %}{% endif %}
                         <span style="font-size:.68rem;color:var(--text-muted);margin-left:8px;">
-                            {{ tr.focus }} · {{ tr.intensity }}
+                            {{ _tf | replace('_', ' ') | title }} · {{ tr.intensity }}
                             {% if tr.is_fight_camp %}<span style="color:var(--gold);"> · Fight Camp</span>{% endif %}
                         </span>
                     </div>
