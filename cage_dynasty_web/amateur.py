@@ -68,6 +68,55 @@ from enum import Enum
 # World Regions for amateur circuit
 REGIONS = ["Americas", "Europe", "Asia", "Pacific"]
 
+# Named regional circuits — used for tournament naming so the amateur
+# portal reads as a real promotion stack (city + suffix) rather than
+# "Y1 Americas Regional #3". city_idx and suffix_idx cycle in
+# create_tournament so every city pairs with every suffix before any
+# combination repeats.
+REGION_CIRCUITS = {
+    "Americas": {
+        "circuit": "Pan-American Combat League",
+        "abbr": "PACL",
+        "cities": [
+            "Las Vegas", "São Paulo", "Toronto",
+            "Mexico City", "Miami", "New York",
+            "Los Angeles", "Chicago", "Montreal", "Houston",
+        ],
+    },
+    "Europe": {
+        "circuit": "European Fighting Championship",
+        "abbr": "EFC",
+        "cities": [
+            "Moscow", "London", "Warsaw",
+            "Amsterdam", "Dublin", "Stockholm",
+            "Berlin", "Paris", "Kyiv", "Madrid",
+        ],
+    },
+    "Asia": {
+        "circuit": "Asian Combat Series",
+        "abbr": "ACS",
+        "cities": [
+            "Tokyo", "Seoul", "Bangkok",
+            "Almaty", "Osaka", "Tashkent",
+            "Shanghai", "Singapore", "Baku", "Manila",
+        ],
+    },
+    "Pacific": {
+        "circuit": "Pacific Rim Championship",
+        "abbr": "PRC",
+        "cities": [
+            "Sydney", "Lagos", "Auckland",
+            "Cape Town", "Melbourne", "Nairobi",
+            "Perth", "Johannesburg", "Brisbane", "Wellington",
+        ],
+    },
+}
+
+TOURNAMENT_SUFFIXES = [
+    "Open", "Invitational", "Classic",
+    "Grand Prix", "Series", "Championship",
+]
+
 WEIGHT_CLASSES = [
     "Strawweight", "Flyweight", "Bantamweight", "Featherweight",
     "Lightweight", "Welterweight", "Middleweight", "Light Heavyweight",
@@ -384,9 +433,12 @@ class Tournament:
     weight_class: str
     week: int
     year: int
-    
+
     # Bracket
     bracket_size: int = BRACKET_SIZE
+    # Named-circuit branding — empty for legacy saves
+    circuit_name: str = ""
+    city: str = ""
     fighters: List[str] = field(default_factory=list)  # Fighter IDs
     seeding: List[str] = field(default_factory=list)  # Ordered by seed
     
@@ -420,6 +472,8 @@ class Tournament:
             "semifinalists": self.semifinalists,
             "quarterfinalists": self.quarterfinalists,
             "all_fights": [f.__dict__ for f in self.all_fights] if self.all_fights else [],
+            "circuit_name": self.circuit_name,
+            "city": self.city,
         }
 
 
@@ -961,11 +1015,17 @@ class AmateurSystem:
         seeded = sorted(selected, key=lambda f: -f.overall_rating)
         seeding = [f.fighter_id for f in seeded]
         
-        # Tournament name
-        tournament_num = len([t for t in self.completed_tournaments 
+        # Tournament name — city + suffix from named regional circuit
+        tournament_num = len([t for t in self.completed_tournaments
                             if t.region == region and t.weight_class == weight_class and t.year == year]) + 1
-        name = f"Y{year} {region} Regional #{tournament_num} - {weight_class}"
-        
+        circuit_info = REGION_CIRCUITS.get(region, {})
+        cities = circuit_info.get("cities", [region])
+        suffixes = TOURNAMENT_SUFFIXES
+        city = cities[tournament_num % len(cities)]
+        suffix = suffixes[(tournament_num // len(cities)) % len(suffixes)]
+        name = f"{city} {suffix} — {weight_class}"
+        circuit_name = circuit_info.get("circuit", region)
+
         tournament = Tournament(
             tournament_id=str(uuid.uuid4())[:8],
             name=name,
@@ -975,6 +1035,8 @@ class AmateurSystem:
             year=year,
             fighters=[f.fighter_id for f in selected],
             seeding=seeding,
+            circuit_name=circuit_name,
+            city=city,
         )
         
         # Create bracket

@@ -308,16 +308,19 @@
     <div class="card" style="margin-bottom:var(--spacing-md);
                               padding:var(--spacing-md);">
         <div style="display:flex;align-items:center;gap:8px;
-                    margin-bottom:6px;">
+                    margin-bottom:4px;">
             <span style="font-size:1.1rem;">🏆</span>
             <span style="font-family:var(--font-display);font-size:.95rem;
                          color:var(--gold);">
                 {{ t.region_flag }} {{ t.name }}
             </span>
-            <span style="font-size:.7rem;color:var(--text-muted);">
-                · {{ t.wc }}
-            </span>
         </div>
+        {% if t.circuit_name %}
+        <div style="font-size:.68rem;color:var(--text-muted);
+                    margin-bottom:6px;font-style:italic;">
+            {{ t.circuit_name }}{% if t.abbr %} ({{ t.abbr }}){% endif %}
+        </div>
+        {% endif %}
         <div style="font-size:.7rem;color:var(--text-muted);
                     margin-bottom:8px;">
             Week {{ t.week }} · {{ t.fight_count }} fights

@@ -20534,6 +20534,10 @@ class GameBridge:
             "Americas": "🌎", "Europe": "🇪🇺",
             "Asia": "🌏", "Pacific": "🏝️",
         }
+        try:
+            from amateur import REGION_CIRCUITS as _CIRCUITS
+        except Exception:
+            _CIRCUITS = {}
         recent_tourneys = []
         for t in getattr(sys, 'completed_tournaments', [])[-6:]:
             try:
@@ -20544,6 +20548,7 @@ class GameBridge:
                 fin_obj    = sys.amateurs.get(fin_id) if fin_id else None
                 fin_name   = fin_obj.name if fin_obj else None
                 _region    = getattr(t, 'region', '')
+                _circ_info = _CIRCUITS.get(_region, {}) or {}
                 recent_tourneys.append({
                     "name":         getattr(t, 'name', 'Tournament'),
                     "region":       _region,
@@ -20559,6 +20564,11 @@ class GameBridge:
                     "finalist_record": (f"{fin_obj.wins}-{fin_obj.losses}"
                                         if fin_obj else ''),
                     "fight_count":  len(getattr(t, 'all_fights', []) or []),
+                    # Named-circuit branding — falls back to region for legacy tourneys
+                    "circuit_name": (getattr(t, 'circuit_name', '') or
+                                     _circ_info.get('circuit', _region)),
+                    "city":         getattr(t, 'city', ''),
+                    "abbr":         _circ_info.get('abbr', (_region or '')[:3]),
                 })
             except Exception:
                 pass
