@@ -2118,7 +2118,7 @@ class HistorySimulator:
             # Progress indicator
             if week % 20 == 0:
                 title_fights = sum(1 for e in self.events if e.main_event and e.main_event.was_title_fight)
-                print(f"    Week {week}/{weeks} - DFC {event.event_number} ({event.total_fights} fights, {title_fights} title fights so far)")
+                print(f"    Week {week}/{weeks} - Cage Dynasty {event.event_number} ({event.total_fights} fights, {title_fights} title fights so far)")
 
         # Final ranking update
         self.update_rankings()
@@ -2129,7 +2129,7 @@ class HistorySimulator:
             len([r for r in reigns if r.won_from is not None])
             for reigns in self.belt_history.reigns.values()
         )
-        print(f"  Created {len(self.events)} events (DFC 1 - DFC {self.next_event_number - 1})")
+        print(f"  Created {len(self.events)} events (Cage Dynasty 1 - {self.next_event_number - 1})")
         print(f"  Total fights: {len(self.fight_history)} | Title fights: {title_fights} | Title changes: {title_changes}")
         print(f"  Aging: {self.retirement_count} retirements ({self.champion_retirement_count} champions) | {self.replacement_count} replacement prospects")
         print(f"  Rivalries seeded: {self.rivalry_seeded_count}" +
@@ -3020,8 +3020,8 @@ class WorldInitializer:
         print(f"  Camps: {len(self.camps)}")
         print(f"  Coaches: {coach_count}")
         print(f"  Champions: {len(self._title_holders)}")
-        print(f"  Events Created: {len(self._events)} (DFC 1 - DFC {self.get_next_event_number() - 1})")
-        print(f"  Next Event: DFC {self.get_next_event_number()}")
+        print(f"  Events Created: {len(self._events)} (Cage Dynasty 1 - {self.get_next_event_number() - 1})")
+        print(f"  Next Event: Cage Dynasty {self.get_next_event_number()}")
         if hasattr(self, '_amateur_system') and self._amateur_system:
             amateur_count = len(self._amateur_system.amateurs)
             print(f"  Amateur Fighters: {amateur_count}")

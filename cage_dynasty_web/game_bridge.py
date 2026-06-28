@@ -3979,7 +3979,7 @@ class GameBridge:
                     elif method in ("KO", "TKO"):
                         _hl = f"💥 {ftr.name} puts the division on notice — {method} finish at {fight.get('event_name', PROMOTION_NAME)}"
                     elif method == "SUB":
-                        _hl = f"🔒 {ftr.name} locks up the submission — makes a statement at {fight.get('event_name','DFC')}"
+                        _hl = f"🔒 {ftr.name} locks up the submission — makes a statement at {fight.get('event_name', PROMOTION_NAME)}"
                     else:
                         _hl = f"📋 {ftr.name} grinds out the decision — showing championship mentality"
                     self._news_items.insert(0, {
@@ -4007,7 +4007,7 @@ class GameBridge:
                 # fighter is back in the pool, addressable via /fighter/<id>
                 # (existing Challenge button on profile page).
                 _opp_name = loser.name if is_win else winner.name
-                _ev = fight.get("event_name", "DFC")
+                _ev = fight.get("event_name", PROMOTION_NAME)
                 if is_win:
                     _hl = (f"📋 Free agent {ftr.name} won for you over {_opp_name} "
                            f"at {_ev} — back in the pool, available to challenge again.")
@@ -15807,7 +15807,7 @@ class GameBridge:
                 # This card matches lead time — place here
                 if len(card["fights"]) >= target_count:
                     print(f"  ⏭️  [LEAD-TIME DISPLACED] {f1.name} vs {f2.name} "
-                          f"dropped (DFC {target_week} full)")
+                          f"dropped ({PROMOTION_NAME} week {target_week} full)")
                     card["locked"] = True
                     continue  # card full, drop (next top-up regenerates)
                 if slot in ("co_main", "main_event"):
@@ -17331,7 +17331,7 @@ class GameBridge:
                         loser        = loser_obj,
                         method       = method,
                         rnd          = round_finished,
-                        event_name   = fight.get("event_name", "DFC"),
+                        event_name   = fight.get("event_name", PROMOTION_NAME),
                         week         = self._game_state.week_number,
                     )
             except Exception as _te:
