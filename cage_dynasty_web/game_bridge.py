@@ -6810,7 +6810,7 @@ class GameBridge:
 
     _EQUIPMENT_TIERS = {
         "BASIC": {
-            "cost":        15_000,
+            "cost":        20_000,
             "gain_bonus":  0.05,
             "decay_bonus": 0.0,
             "passive":     None,
