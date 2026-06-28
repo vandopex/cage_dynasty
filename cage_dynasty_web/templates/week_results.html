@@ -216,6 +216,7 @@
                                 color:{% if player_won %}var(--neon-green){% else %}var(--blood-red){% endif %};">
                         {% if player_won %}VICTORY{% else %}DEFEAT{% endif %}
                         {% if fight.is_fotn %}<span style="color:var(--gold);margin-left:6px;font-size:.7rem;">🔥 FOTN</span>{% endif %}
+                        {% if fight.is_rivalry %}<span style="color:var(--blood-red);margin-left:6px;font-size:.7rem;">🔥 Rivalry</span>{% endif %}
                     </div>
                     <div style="font-size:.8rem;color:var(--text-bright);margin-top:4px;">
                         {% if fight.method == 'DRAW' or fight.method == 'Draw' or fight.is_draw %}

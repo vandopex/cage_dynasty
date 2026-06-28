@@ -138,6 +138,11 @@
                 {% if is_fotn %}
                 <div style="font-size:.65rem;color:var(--gold);margin-top:2px;">🔥 FOTN</div>
                 {% endif %}
+                {% if fight.is_rivalry %}
+                <div style="font-size:.6rem;color:var(--blood-red);margin-top:2px;">
+                    🔥 Rivalry{% if fight.rivalry_heat %} ({{ fight.rivalry_heat }}){% endif %}
+                </div>
+                {% endif %}
                 {# Watch link if commentary exists #}
                 {% if fight.fight_id %}
                 <a href="{{ url_for('watch_fight', fight_id=fight.fight_id) }}"

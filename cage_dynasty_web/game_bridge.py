@@ -4643,6 +4643,11 @@ class GameBridge:
                         "fights":     rivalry.fights,
                         "intensity":  rivalry.intensity.name.title(),
                     }
+                    # Mirror to top-level flag so UI surfaces (event_detail,
+                    # week_results) can render badges without descending into
+                    # the rivalry sub-dict.
+                    result["is_rivalry"] = heat_score >= 50
+                    result["rivalry_heat"] = heat_score
                     # News item if above TENSION and involves player
                     player_ids = []
                     if self._game_state:
@@ -14984,7 +14989,7 @@ class GameBridge:
         if CARD_BUILDER_AVAILABLE and f1 and f2:
             r1 = self._get_fighter_rank(f1)
             r2 = self._get_fighter_rank(f2)
-            return self._card_builder.calculate_matchup_score(
+            score = self._card_builder.calculate_matchup_score(
                 fighter1_rating=0,   # unused in new formula
                 fighter2_rating=0,
                 fighter1_rank=r1,
@@ -14995,13 +15000,41 @@ class GameBridge:
                 fighter2_wins=getattr(f2, 'wins', 0),
                 fighter2_losses=getattr(f2, 'losses', 0),
             )
+            score += self._rivalry_heat_bonus(f1, f2)
+            return score
         # Fallback — rank-based only
         r1 = self._get_fighter_rank(f1) if f1 else None
         r2 = self._get_fighter_rank(f2) if f2 else None
         if r1 is not None and r2 is not None:
             gap = abs(r1 - r2)
-            return max(0, 70 - gap * 4)
-        return 20.0
+            return max(0, 70 - gap * 4) + self._rivalry_heat_bonus(f1, f2)
+        return 20.0 + self._rivalry_heat_bonus(f1, f2)
+
+    def _rivalry_heat_bonus(self, f1, f2) -> float:
+        """Tiered score bump for rematches with built-up heat. Fires
+        only after rematch-cooldown gates have already passed — does
+        not override the rematch-prevention system, just ranks within
+        allowed rematches. Calibrated against card_builder's 0-130
+        range (rank proximity ~30, title ~35)."""
+        if not (RIVALRY_AVAILABLE and f1 and f2):
+            return 0.0
+        try:
+            r = get_rivalry_system().get_rivalry(
+                f1.fighter_id, f2.fighter_id)
+            if not r:
+                return 0.0
+            heat = int(getattr(r, 'score', 0) or 0)
+            if heat >= 90:
+                return 35.0
+            if heat >= 70:
+                return 25.0
+            if heat >= 50:
+                return 15.0
+            if heat >= 30:
+                return 5.0
+        except Exception:
+            pass
+        return 0.0
 
     def _is_exceptional_amateur(self, fighter) -> bool:
         """Ship Smart-Card debut-cap exception: amateurs with 8+
@@ -15763,6 +15796,17 @@ class GameBridge:
                   f"({wc}, {event_name})")
             return None
         weeks_out = target_week - (self._game_state.week_number if self._game_state else 0)
+        # Rivalry flag for downstream UI (event_detail, week_results badges).
+        # Only surfaces meaningful heat (≥ 50) so the badge stays special.
+        _heat = 0
+        if RIVALRY_AVAILABLE:
+            try:
+                _r_sf = get_rivalry_system().get_rivalry(
+                    f1.fighter_id, f2.fighter_id)
+                if _r_sf:
+                    _heat = int(getattr(_r_sf, 'score', 0) or 0)
+            except Exception:
+                pass
         return {
             "fight_id":       f"fight_{target_week}_{f1.fighter_id}_{f2.fighter_id}",
             "fighter1_id":    f1.fighter_id,
@@ -15778,6 +15822,8 @@ class GameBridge:
             "is_player_fight": False,
             "is_ai_fight":    True,
             "purse":          0,
+            "is_rivalry":     _heat >= 50,
+            "rivalry_heat":   _heat,
         }
 
     def initialize_card_pipeline(self) -> None:

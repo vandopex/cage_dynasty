@@ -109,6 +109,23 @@
     </div>
 </div>
 
+{% if rivalry_context %}
+<div style="margin-bottom:var(--spacing-md);
+            padding:10px 14px;
+            background:rgba(211,47,47,.06);
+            border:1px solid rgba(211,47,47,.2);
+            border-left:3px solid var(--blood-red);
+            border-radius:0 6px 6px 0;
+            font-size:.78rem;">
+    🔥 <span style="color:var(--blood-red);font-weight:600;">Rivalry fight</span>
+    · {{ rivalry_context.fights }} fights between these two
+    · Heat {{ rivalry_context.heat }}/100
+    {% if rivalry_context.stage %}
+    · <span style="color:var(--blood-red);">{{ rivalry_context.stage }}</span>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if rounds %}
 <div id="commentary-container">
 <style>

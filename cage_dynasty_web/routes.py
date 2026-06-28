@@ -3905,6 +3905,19 @@ def register_routes(app):
                                     'tier': 'Basic Corner',
                                     'icon': '📋'}
 
+        # Rivalry context — surface heat ≥ 40 from the stored fight
+        # result. Already serialized at engine-completion time so no
+        # live rivalry-system lookup is needed.
+        rivalry_context = None
+        _riv = fight_result.get('rivalry') or {}
+        if _riv and int(_riv.get('score', 0) or 0) >= 40:
+            rivalry_context = {
+                'heat':   int(_riv.get('score', 0) or 0),
+                'fights': int(_riv.get('fights', 0) or 0),
+                'stage':  (_riv.get('stage', '') or '').replace('_', ' ').title(),
+                'type':   _riv.get('intensity', ''),
+            }
+
         return render_template('watch_fight.html',
             fight=fight_result,
             event=fight_event,
@@ -3912,6 +3925,7 @@ def register_routes(app):
             commentary=commentary,
             scorecard=scorecard,
             coach_corner=coach_corner,
+            rivalry_context=rivalry_context,
             week=bridge.week_number,
         )
 
