@@ -229,6 +229,61 @@
 {% endfor %}
 {% endif %}
 
+{# ── Active feuds — player-relevant rivalries ── #}
+{% if active_feuds %}
+<div class="card mb-lg">
+    <div class="card-header">
+        <h3>🔥 Active Feuds</h3>
+    </div>
+    <div style="padding:0;">
+        {% for feud in active_feuds %}
+        {% set heat_color = 'var(--blood-red)' if feud.heat_score >= 70
+                          else 'var(--warning)' if feud.heat_score >= 50
+                          else 'var(--gold)' %}
+        <div style="padding:var(--spacing-md);
+                    border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};
+                    display:flex;align-items:center;gap:var(--spacing-md);">
+            <div style="flex:1;">
+                <div style="font-size:.85rem;color:var(--text-bright);
+                            font-weight:600;margin-bottom:2px;">
+                    <a href="{{ url_for('fighter_profile',
+                                fighter_id=feud.fighter1_id) }}"
+                       style="color:{% if feud.is_player %}var(--info){% else %}var(--text-bright){% endif %};
+                              text-decoration:none;">
+                        {{ feud.fighter1_name }}
+                    </a>
+                    <span style="color:var(--text-muted);margin:0 6px;">vs</span>
+                    <a href="{{ url_for('fighter_profile',
+                                fighter_id=feud.fighter2_id) }}"
+                       style="color:var(--text-bright);text-decoration:none;">
+                        {{ feud.fighter2_name }}
+                    </a>
+                </div>
+                <div style="font-size:.72rem;color:var(--text-muted);">
+                    {{ feud.fights_count }} fight{{ 's' if feud.fights_count != 1 else '' }}
+                    · {{ feud.rivalry_type }}
+                    · {{ feud.weight_class }}
+                    {% if feud.stage %}
+                    · <span style="color:{{ heat_color }};">{{ feud.stage }}</span>
+                    {% endif %}
+                </div>
+            </div>
+            <div style="text-align:right;flex-shrink:0;">
+                <div style="font-size:1.1rem;font-family:var(--font-display);
+                            color:{{ heat_color }};font-weight:700;">
+                    {{ feud.heat_score }}
+                </div>
+                <div style="font-size:.6rem;color:var(--text-muted);
+                            text-transform:uppercase;letter-spacing:.1em;">
+                    Heat
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
 {# ── Alerts row ── #}
 {% if offer_count > 0 or (sponsor_offer_count and sponsor_offer_count > 0) or pending_interviews or scout_tips %}
 <div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;margin-bottom:var(--spacing-lg);">

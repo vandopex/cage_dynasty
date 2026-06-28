@@ -4622,10 +4622,20 @@ class GameBridge:
                     was_controversial=bool(scorecard_data and scorecard_data.get("is_controversial")),
                 )
                 rsys    = get_rivalry_system()
+                # Capture pre-fight heat to detect threshold crossings
+                # after process_fight bumps the score.
+                _pre = rsys.get_rivalry(fighter1.fighter_id,
+                                         fighter2.fighter_id)
+                _old_heat = int(getattr(_pre, 'score', 0) or 0)
                 rivalry = rsys.process_fight(ctx)
                 if rivalry:
                     heat_score = rivalry.score
                     stage      = get_heat_stage(heat_score)
+                    self._check_rivalry_stage_transition(
+                        fighter1.fighter_id, fighter2.fighter_id,
+                        _old_heat, heat_score,
+                        self._game_state.week_number
+                            if self._game_state else 1)
                     result["rivalry"] = {
                         "score":      heat_score,
                         "stage":      stage.value,
@@ -8510,6 +8520,115 @@ class GameBridge:
         except Exception as exc:
             print(f"⚠️ get_fighter_rivalries failed: {exc}")
             return []
+
+    def get_active_feuds(self) -> List[Dict[str, Any]]:
+        """Rivalries worth surfacing on the dashboard.
+        - Player fighters: heat ≥ 40 AND ≥ 2 fights.
+        - Top-10 AI in player's divisions: heat ≥ 60 AND ≥ 3 fights (higher bar).
+        Dedupes pairs, sorts by heat desc, caps at 3."""
+        if not self._game_state or not RIVALRY_AVAILABLE:
+            return []
+        try:
+            player_fighters = self.get_player_fighters()
+            player_fids = {f.fighter_id for f in player_fighters}
+            player_wcs = {
+                getattr(self._game_state.get_fighter(fid),
+                        'weight_class', '')
+                for fid in player_fids
+            }
+            top_fids = set()
+            for wc in player_wcs:
+                div = (self._game_state.divisions or {}).get(wc)
+                if div:
+                    for fid in (getattr(div, 'rankings', []) or [])[:10]:
+                        if isinstance(fid, str) and fid:
+                            top_fids.add(fid)
+
+            feuds: List[Dict[str, Any]] = []
+            seen_pairs = set()
+
+            def _add(fid: str, hot_floor: int, fight_floor: int):
+                fighter = self._game_state.get_fighter(fid)
+                if not fighter:
+                    return
+                for r in self.get_fighter_rivalries(fid):
+                    heat = int(r.get('score', 0) or 0)
+                    fights = int(r.get('fights', 0) or 0)
+                    if heat < hot_floor or fights < fight_floor:
+                        continue
+                    opp_id = r.get('opponent_id', '')
+                    pair = tuple(sorted([fid, opp_id]))
+                    if pair in seen_pairs:
+                        continue
+                    seen_pairs.add(pair)
+                    feuds.append({
+                        'fighter1_id':   fid,
+                        'fighter1_name': fighter.name,
+                        'fighter2_id':   opp_id,
+                        'fighter2_name': r.get('opponent_name',
+                                               'Unknown'),
+                        'heat_score':    heat,
+                        'fights_count':  fights,
+                        'stage':         r.get('stage_display', ''),
+                        'rivalry_type':  r.get('type', 'Competitive'),
+                        'is_player':     fid in player_fids,
+                        'weight_class':  getattr(fighter,
+                                                 'weight_class', ''),
+                    })
+
+            for pfid in player_fids:
+                _add(pfid, hot_floor=40, fight_floor=2)
+            for fid in top_fids - player_fids:
+                _add(fid, hot_floor=60, fight_floor=3)
+
+            feuds.sort(key=lambda x: x['heat_score'], reverse=True)
+            return feuds[:3]
+        except Exception as exc:
+            print(f"  ⚠️ get_active_feuds: {exc}")
+            return []
+
+    _RIVALRY_STAGE_HEADLINES = {
+        30: ("⚔️ A rivalry is forming — {f1} and {f2} "
+             "have unfinished business."),
+        50: ("🔥 This is getting personal — {f1} vs {f2} "
+             "is heating up."),
+        70: ("💀 All-out war — {f1} and {f2} have exchanged "
+             "wins and bad blood across {fights} fights."),
+        90: ("👑 Historic feud — {f1} vs {f2} is one of the "
+             "great rivalries in Cage Dynasty history."),
+    }
+
+    def _check_rivalry_stage_transition(
+            self, f1_id: str, f2_id: str,
+            old_heat: int, new_heat: int, week: int) -> None:
+        """Emit a headline when rivalry heat first crosses a key
+        threshold. Fires at most once per threshold per pair."""
+        if not self._game_state or new_heat <= old_heat:
+            return
+        for t in (30, 50, 70, 90):
+            if not (old_heat < t <= new_heat):
+                continue
+            tmpl = self._RIVALRY_STAGE_HEADLINES.get(t)
+            if not tmpl:
+                continue
+            f1 = self._game_state.get_fighter(f1_id)
+            f2 = self._game_state.get_fighter(f2_id)
+            f1n = getattr(f1, 'name', 'Fighter')
+            f2n = getattr(f2, 'name', 'Fighter')
+            fights = 2
+            try:
+                if RIVALRY_AVAILABLE:
+                    _r = get_rivalry_system().get_rivalry(f1_id, f2_id)
+                    fights = int(getattr(_r, 'fights', 2) or 2)
+            except Exception:
+                pass
+            self._news_items.insert(0, {
+                'headline':     tmpl.format(f1=f1n, f2=f2n, fights=fights),
+                'category':     'rivalry',
+                'week':         week,
+                'fighter1_id':  f1_id,
+                'fighter2_id':  f2_id,
+            })
 
     def get_fighter_reigns(self, fighter_id: str) -> List[Dict[str, Any]]:
         """
