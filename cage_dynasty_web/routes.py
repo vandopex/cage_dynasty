@@ -3873,12 +3873,43 @@ def register_routes(app):
         # Get scorecard if available
         scorecard = fight_result.get('scorecard')
 
+        # Coach corner label — only meaningful for player fights
+        # (engine only injects corner advice for the player). Mirrors
+        # COACH_IQ_*_THRESHOLD bands in game_bridge.py.
+        coach_corner = None
+        if fight_result.get('is_player_fight'):
+            _staff = getattr(bridge, '_coaching_staff', None) or []
+            _best_iq = 0
+            _best_name = ''
+            for _sc in _staff:
+                _iq = _sc.get('fight_iq', 0) or 0
+                if _iq > _best_iq:
+                    _best_iq = _iq
+                    _best_name = _sc.get('name', '')
+            if not _best_name and getattr(bridge, '_coach', None):
+                _best_iq = int(bridge._coach.get('fight_iq', 0) or 0)
+                _best_name = bridge._coach.get('name', '')
+            if _best_name:
+                if _best_iq >= 88:
+                    coach_corner = {'name': _best_name,
+                                    'tier': 'Elite Corner',
+                                    'icon': '🧠'}
+                elif _best_iq >= 75:
+                    coach_corner = {'name': _best_name,
+                                    'tier': 'Good Corner',
+                                    'icon': '💬'}
+                else:
+                    coach_corner = {'name': _best_name,
+                                    'tier': 'Basic Corner',
+                                    'icon': '📋'}
+
         return render_template('watch_fight.html',
             fight=fight_result,
             event=fight_event,
             rounds=rounds,
             commentary=commentary,
             scorecard=scorecard,
+            coach_corner=coach_corner,
             week=bridge.week_number,
         )
 

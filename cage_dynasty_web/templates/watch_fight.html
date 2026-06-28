@@ -281,12 +281,20 @@
                 background:linear-gradient(135deg,rgba(255,107,0,.08),rgba(255,215,0,.06));
                 border-top:1px solid rgba(255,107,0,.25);">
         <div style="display:flex;align-items:center;gap:var(--spacing-sm);
-                    margin-bottom:var(--spacing-sm);">
+                    margin-bottom:var(--spacing-sm);flex-wrap:wrap;">
             <span style="font-size:.7rem;font-family:var(--font-display);
                          color:var(--gold);text-transform:uppercase;
                          letter-spacing:.12em;">
                 💼 In the Corner
             </span>
+            {% if coach_corner %}
+            <span style="font-size:.68rem;color:var(--text-muted);">
+                {{ coach_corner.icon }} {{ coach_corner.name }}
+                <span style="color:{% if 'Elite' in coach_corner.tier %}var(--gold){% elif 'Good' in coach_corner.tier %}var(--info){% else %}var(--text-muted){% endif %};">
+                    ({{ coach_corner.tier }})
+                </span>
+            </span>
+            {% endif %}
         </div>
         {% for advice_line in round.corner %}
         <div class="commentary-line tier-corner" style="font-family:'Courier New',monospace;font-size:.82rem;

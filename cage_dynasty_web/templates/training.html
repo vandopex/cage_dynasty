@@ -11,7 +11,7 @@
 
 {# Camp + Coach overview #}
 <div class="card mb-lg">
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-md);padding:var(--spacing-lg);">
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:var(--spacing-md);padding:var(--spacing-lg);">
         <div class="stat-box">
             <div class="stat-value">{{ camp.tier }}</div>
             <div class="stat-label">Facility</div>
@@ -23,6 +23,20 @@
         <div class="stat-box">
             <div class="stat-value text-sm" style="font-size:.9rem;">{{ coach.get('specialty', '—') | title if coach else '—' }}</div>
             <div class="stat-label">Specialty</div>
+        </div>
+        {# Coach quality tier — surfaces the engine's fight-night IQ bonus #}
+        {% set _ciq = coach.get('fight_iq', 0) if coach else 0 %}
+        <div class="stat-box">
+            {% if _ciq >= 88 %}
+            <div class="stat-value text-sm" style="font-size:.95rem;color:var(--gold);">🧠 Elite</div>
+            <div class="stat-label">+3 Fight IQ on fight night</div>
+            {% elif _ciq >= 75 %}
+            <div class="stat-value text-sm" style="font-size:.95rem;color:var(--info);">💡 Good</div>
+            <div class="stat-label">+2 Fight IQ on fight night</div>
+            {% else %}
+            <div class="stat-value text-sm" style="font-size:.95rem;color:var(--text-muted);">📋 Basic</div>
+            <div class="stat-label">No fight-night IQ bonus</div>
+            {% endif %}
         </div>
         <div class="stat-box">
             <div class="stat-value">{{ fighters|length }}</div>

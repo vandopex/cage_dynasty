@@ -226,6 +226,40 @@
                 {% if cs.bias_note %}
                 <div style="margin-top:var(--spacing-sm);font-size:.75rem;color:var(--warning);">{{ cs.bias_note }}</div>
                 {% endif %}
+
+                {# Game plan bonus — surfaces engine's pre-fight fight_iq buff #}
+                <div style="margin-top:var(--spacing-md);padding:8px 10px;
+                            background:rgba(0,0,0,.22);border-radius:6px;
+                            border-left:3px solid
+                                {% if cs.coach_iq_tier == 'elite' %}var(--gold)
+                                {% elif cs.coach_iq_tier == 'good' %}var(--info)
+                                {% else %}var(--text-muted){% endif %};">
+                    {% if cs.coach_iq_tier == 'elite' %}
+                    <div style="font-size:.78rem;color:var(--gold);
+                                font-family:var(--font-display);">
+                        🧠 Elite game plan — +{{ cs.coach_iq_bonus }} Fight IQ on fight night
+                    </div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">
+                        {{ cs.coach_best_name }} has identified opponent tendencies.
+                    </div>
+                    {% elif cs.coach_iq_tier == 'good' %}
+                    <div style="font-size:.78rem;color:var(--info);
+                                font-family:var(--font-display);">
+                        🧠 Solid game plan — +{{ cs.coach_iq_bonus }} Fight IQ on fight night
+                    </div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">
+                        {{ cs.coach_best_name }} has the corner under control.
+                    </div>
+                    {% else %}
+                    <div style="font-size:.78rem;color:var(--text-muted);
+                                font-family:var(--font-display);">
+                        📋 Basic corner work — no significant game plan edge
+                    </div>
+                    <div style="font-size:.7rem;color:var(--text-muted);margin-top:2px;">
+                        Upgrade your corner staff to unlock fight-night bonuses.
+                    </div>
+                    {% endif %}
+                </div>
             </div>
             <div style="flex-shrink:0;text-align:center;min-width:120px;">
                 <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;

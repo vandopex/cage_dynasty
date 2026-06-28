@@ -12220,6 +12220,27 @@ class GameBridge:
 
         coach_quote = self._build_coach_quote(player, opponent, rec_focus,
                                                vuln_reason, rec_intensity, intensity_reason)
+
+        # Coach IQ tier — surfaces the +2/+3 fight_iq game-plan bonus
+        # the engine applies via _apply_coach_iq_prefight_buff. Reads
+        # the same best-fight_iq metric so UI and engine stay aligned.
+        _best_iq = 0
+        _best_name = ""
+        for _sc in (self._coaching_staff or []):
+            _iq = _sc.get('fight_iq', 0) or 0
+            if _iq > _best_iq:
+                _best_iq = _iq
+                _best_name = _sc.get('name', '')
+        if not _best_name and self._coach:
+            _best_iq = int(self._coach.get('fight_iq', 0) or 0)
+            _best_name = self._coach.get('name', '')
+        if _best_iq >= COACH_IQ_ELITE_THRESHOLD:
+            iq_tier, iq_bonus = 'elite', 3
+        elif _best_iq >= COACH_IQ_BONUS_THRESHOLD:
+            iq_tier, iq_bonus = 'good', 2
+        else:
+            iq_tier, iq_bonus = 'basic', 0
+
         return {
             "gameplan":      rec_gameplan,
             "focus":         rec_focus,
@@ -12230,6 +12251,10 @@ class GameBridge:
             "coach_quote":   coach_quote,
             "vuln_focus":    vuln_focus,
             "vuln_reason":   vuln_reason,
+            "coach_iq_tier":  iq_tier,
+            "coach_iq_bonus": iq_bonus,
+            "coach_best_iq":  _best_iq,
+            "coach_best_name": _best_name,
         }
 
     def _gameplan_from_style_matchup(self, player_style: str, opp_style: str) -> str:
