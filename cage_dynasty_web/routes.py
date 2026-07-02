@@ -766,7 +766,6 @@ def register_routes(app):
         # high-priority cards above the weekly news feed.
         retirement_prompts = bridge.get_pending_retirement_prompts()
         title_promises = bridge.get_pending_title_promises()
-        active_feuds = bridge.get_active_feuds()
 
         return render_template('dashboard.html',
             camp=camp,
@@ -779,7 +778,6 @@ def register_routes(app):
             pending_interviews=pending_interviews,
             retirement_prompts=retirement_prompts,
             title_promises=title_promises,
-            active_feuds=active_feuds,
             training_goals=training_goals,
             training_plans=training_plans,
             player_card=player_card,
