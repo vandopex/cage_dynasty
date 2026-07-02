@@ -3253,6 +3253,16 @@ def register_routes(app):
         flash(f"Load failed: {result.get('error','unknown error')}", 'error')
         return redirect(url_for('saves_menu'))
 
+    @app.route('/saves/<slot>/delete', methods=['POST'])
+    def delete_save(slot):
+        bridge = get_bridge()
+        result = bridge.delete_web_save(slot)
+        if result.get('success'):
+            flash(result.get('message', 'Save deleted.'), 'info')
+        else:
+            flash(result.get('error', 'Could not delete save.'), 'error')
+        return redirect(url_for('saves_menu'))
+
     # =========================================================================
     # GAME ACTIONS
     # =========================================================================

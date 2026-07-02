@@ -2607,7 +2607,7 @@ class GameBridge:
     def get_web_saves(self) -> List[Dict[str, Any]]:
         """List all available web save slots with metadata."""
         import json, os
-        slots = ["slot1", "slot2", "slot3", "autosave"]
+        slots = ["slot1", "slot2", "slot3", "slot4", "slot5", "autosave"]
         saves = []
         for slot in slots:
             path = self._bridge_save_path(slot)
@@ -2635,6 +2635,25 @@ class GameBridge:
                     "exists": False,
                 })
         return saves
+
+    def delete_web_save(self, slot: str) -> Dict[str, Any]:
+        """Delete a save slot's bridge file (and any legacy CLI file)."""
+        import os
+        if slot == 'autosave':
+            return {"success": False, "error": "Can't delete autosave"}
+        try:
+            bridge_path = self._bridge_save_path(slot)
+            if os.path.exists(bridge_path):
+                os.remove(bridge_path)
+            # Defensive: remove any legacy CLI-side save file if present.
+            # core/persistence.save_game is a stub today, but older builds
+            # may have left web_{slot}.json in the saves dir.
+            legacy = os.path.join(self._saves_dir(), f"web_{slot}.json")
+            if os.path.exists(legacy):
+                os.remove(legacy)
+            return {"success": True, "message": "Save slot deleted."}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     def autosave_if_due(self, week: int) -> None:
         """Autosave every 5 weeks automatically."""

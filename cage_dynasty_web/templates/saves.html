@@ -16,8 +16,8 @@
     </a>
 </div>
 
-{# Manual slots (slot1-3) #}
-<div style="display:grid;grid-template-columns:repeat(3,1fr);
+{# Manual slots (slot1-5) #}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
             gap:var(--spacing-lg);margin-bottom:var(--spacing-xl);">
 {% for save in saves if save.slot != 'autosave' %}
 {% set has_data = save.exists %}
@@ -62,6 +62,19 @@
         {% if has_data %}
         <form action="{{ url_for('load_game_slot', slot=save.slot) }}" method="POST">
             <button type="submit" class="btn btn-outline btn-block">Load</button>
+        </form>
+        <form action="{{ url_for('delete_save', slot=save.slot) }}"
+              method="POST"
+              style="margin:0;"
+              onsubmit="return confirm('Delete this save permanently? This cannot be undone.');">
+            <button type="submit"
+                    style="width:100%;font-size:.7rem;padding:4px 12px;
+                           background:rgba(211,47,47,.1);
+                           border:1px solid var(--blood-red);
+                           color:var(--blood-red);
+                           border-radius:4px;cursor:pointer;">
+                🗑️ Delete
+            </button>
         </form>
         {% endif %}
     </div>
