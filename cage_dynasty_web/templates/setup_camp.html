@@ -91,11 +91,12 @@
                                    background-image:url(&quot;data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23999' d='M6 8L1 3h10z'/%3E%3C/svg%3E&quot;);
                                    background-repeat:no-repeat;
                                    background-position:right 12px center;">
+                    {% set _first_selected = namespace(done=false) %}
                     {% for group_label, group_locs in location_groups.items() %}
                     <optgroup label="{{ group_label }}">
                         {% for loc in group_locs %}
                         <option value="{{ loc }}"
-                                {% if loop.first and loop.parent.loop.first %}selected{% endif %}>
+                                {% if not _first_selected.done %}selected{% set _first_selected.done = true %}{% endif %}>
                             {{ loc }}
                         </option>
                         {% endfor %}
