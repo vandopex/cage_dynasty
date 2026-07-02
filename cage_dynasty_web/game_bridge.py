@@ -8113,6 +8113,11 @@ class GameBridge:
                         _trait_delta += 0.10
                 if 'PATIENT' in cs_traits and _lose_streak >= 2:
                     _trait_delta += 0.15
+                # Players Coach — the tradeoff: +morale (applied in the
+                # post-fight morale path), but training is slightly less
+                # rigorous, so per-coach gain shaves 5%.
+                if 'PLAYERS_COACH' in cs_traits:
+                    _trait_delta -= 0.05
                 _trait_mult = max(0.5, 1.0 + _trait_delta)
 
                 # Per-coach specialist mult — closure binds cs_traits via default arg
@@ -8172,6 +8177,17 @@ class GameBridge:
                                     min(100.0, current + effective), 2)
                             if result.get("actual_gains") is not None:
                                 result["actual_gains"][f"{attr} (coach: {cs_name})"] = round(effective, 2)
+
+            # Taskmaster morale hit — trait identity is "intense training
+            # hurts morale," so gate on INTENSE/EXTREME weeks only. Single
+            # −3 hit per training week, regardless of how many Taskmaster
+            # coaches are on staff.
+            if active_plan['intensity'] in ('INTENSE', 'EXTREME') and any(
+                    'TASKMASTER' in (c.get('traits', []) or [])
+                    for c in _active_coaches):
+                _tc = self._contracts.get(fid)
+                if _tc is not None:
+                    _tc['morale'] = max(0, _tc.get('morale', 75) - 3)
 
             # Recompute OVR once after all coaches have contributed
             if real_fighter:
@@ -10523,6 +10539,7 @@ class GameBridge:
             "name":      coach_name,
             "specialty": coach_spec,
             "rating":    coach_rtg,
+            "traits":    coach.get("traits", []) or [],
         }]}
 
         for f in player_fighters:
@@ -18235,8 +18252,9 @@ class GameBridge:
                                      if getattr(self, '_coach', None) else [])
                     if _coach_traits:
                         _m = contract.get('morale', 75)
-                        if 'TASKMASTER' in _coach_traits:
-                            _m -= 3
+                        # TASKMASTER penalty moved to weekly training loop
+                        # (gated on INTENSE/EXTREME intensity — see
+                        # _apply_weekly_training).
                         if 'MOTIVATOR' in _coach_traits and _m < 60:
                             _m += 5
                         if 'PLAYERS_COACH' in _coach_traits:

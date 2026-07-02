@@ -764,13 +764,13 @@ class MaintenanceTrainingSystem:
                     else:
                         trait_names = []
                     
-                    if "Motivator" in trait_names:
+                    if "MOTIVATOR" in trait_names:
                         boost_chance *= 1.2
-                    if "Diamond Polisher" in trait_names and fighter_age < 25:
+                    if "DIAMOND_POLISHER" in trait_names and fighter_age < 25:
                         boost_chance *= 1.3
-                    if "Veteran's Touch" in trait_names and fighter_age > 32:
+                    if "VETERANS_TOUCH" in trait_names and fighter_age > 32:
                         boost_chance *= 1.25
-                    if "Burned Out" in trait_names:
+                    if "BURNED_OUT" in trait_names:
                         boost_chance *= 0.5
                 
                 if random.random() < boost_chance:
