@@ -5749,6 +5749,13 @@ class GameBridge:
             "is_title_fight": offer.get("is_title_fight", False),
             "is_player_fight": True,
         }
+        # Route through assign_player_fight_to_card so the fight lands on
+        # the right DFC card with a real card_slot — mirrors the
+        # negotiation-accept path in _book_fight_from_neg. Also normalizes
+        # event_name / week / weeks_until against the canonical card, and
+        # bypasses the "locked card skips rebuild" gap in _top_up_pipeline
+        # Phase 3 that would otherwise leave this fight unslotted.
+        self.assign_player_fight_to_card(fight)
 
         self._scheduled_fights.append(fight)
         
