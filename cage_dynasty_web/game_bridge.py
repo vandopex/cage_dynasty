@@ -13693,7 +13693,11 @@ class GameBridge:
                     "time":              _finish_time,
                     "weight_class":      wc,
                     "event_name":        event_name,
-                    "is_title_fight":    False,
+                    # TITLE-TRANSFER-FIX1: propagate real title status
+                    # (was hardcoded False; belt-transfer never fired
+                    # for AI-vs-AI title fights routed through this
+                    # fallback path).
+                    "is_title_fight":    is_title,
                     "is_ai_fight":       True,
                     "scorecard":         None,
                     "rivalry":           None,
@@ -13759,7 +13763,12 @@ class GameBridge:
                 "time":             _finish_time,
                 "weight_class":     wc,
                 "event_name":       event_name,
-                "is_title_fight":   False,
+                # TITLE-TRANSFER-FIX1: propagate real title status
+                # (was hardcoded False; belt-transfer never fired
+                # for AI-vs-AI title fights routed through this
+                # fallback path). Downstream news, awards, and rank
+                # readers all consume this flag.
+                "is_title_fight":   is_title,
                 "is_ai_fight":      True,
                 "scorecard":        None,
                 "rivalry":          None,
@@ -13770,6 +13779,23 @@ class GameBridge:
                 "loser_rank_delta":  self._rank_delta(pre_l_rank, new_l_rank),
             }
             event["fights"].append(fight_result)
+
+            # TITLE-TRANSFER-FIX1: record title fight results into
+            # belt history + division.champion_id — matches the
+            # primary path (_simulate_card_fights line ~13372). Prior
+            # to this fix, the fallback path never called this so
+            # champions kept their belt after losing to a contender.
+            if is_title:
+                self._record_title_result(
+                    weight_class = wc,
+                    winner       = winner,
+                    loser        = loser,
+                    method       = method,
+                    rnd          = rnd,
+                    event_name   = event_name,
+                    week         = week,
+                )
+
             # event["main_event"] is set exclusively post-loop by
             # _score_and_slot_fights (line ~7594). No provisional write
             # here — the fight loop runs before slot assignment, so
