@@ -491,7 +491,15 @@
                                border:1px solid rgba(255,165,0,.25);
                                color:var(--gold);border-radius:4px;
                                cursor:pointer;">
+                    {# TRAINING-SUBTEMPLATE-UX1: label matches behavior.
+                       Legacy single-template styles apply in one click;
+                       the 16 canonical styles open a picker with 4 named
+                       variants — "Choose" telegraphs that. #}
+                    {% if fighter.fighting_style in ('Strength & Conditioning', 'Striker', 'Balanced') %}
                     ✨ Load {{ fighter.fighting_style }} Template
+                    {% else %}
+                    ✨ Choose {{ fighter.fighting_style }} Camp Style
+                    {% endif %}
                 </button>
             </div>
             <div style="flex:2;min-width:240px;">
@@ -2092,6 +2100,17 @@ function showTemplatePicker(fighterId, style, styleTmpls, scTmpl) {
     picker.className = 'tmpl-picker';
     picker.innerHTML = html;
     container.appendChild(picker);
+    // TRAINING-SUBTEMPLATE-UX1: guarantee the picker is visible even
+    // when the fighter card is below the fold on a multi-fighter
+    // roster. Without this scroll, users clicking Load Template on a
+    // lower card get no visual confirmation that anything happened.
+    try {
+        picker.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    } catch (e) {
+        // Older browsers without smooth-scroll options — fall back
+        // to boolean-arg form. Defensive; not expected to fire.
+        try { picker.scrollIntoView(false); } catch (e2) {}
+    }
 }
 
 function applyPickedTemplate(fighterId, style, idx) {
