@@ -1367,7 +1367,7 @@ def register_routes(app):
             'heart','fight_iq','composure',
         ]
 
-        # Floors — clamp 50-95, step 5 enforced server-side too.
+        # Floors — clamp 50-100, step 5 enforced server-side too.
         floors = {}
         for stat in all_stats:
             raw = request.form.get(f'floor_{stat}', '50').strip()
@@ -1375,7 +1375,7 @@ def register_routes(app):
                 val = int(raw) if raw else 50
             except ValueError:
                 val = 50
-            val = max(50, min(95, (val // 5) * 5))
+            val = max(50, min(100, (val // 5) * 5))
             floors[stat] = val
         bridge.set_stat_floors(fighter_id, floors)
 
@@ -1391,7 +1391,7 @@ def register_routes(app):
                 tgt = 0
             if tgt <= 0:
                 continue
-            tgt = max(0, min(99, (tgt // 5) * 5))
+            tgt = max(0, min(100, (tgt // 5) * 5))
             cur = int(getattr(fighter, stat, 0)) if fighter else 0
             if tgt > cur:
                 queue.append({"focus": stat, "target": tgt})

@@ -7928,11 +7928,11 @@ class GameBridge:
                             _q_idx += 1
                             # Auto-maintain on hit — lock the floor at the
                             # achieved target so the stat is now protected
-                            # at that level. Clamped 50-95 to match the
+                            # at that level. Clamped 50-100 to match the
                             # unified-grid floor range. Existing manual
                             # floor wins if it's already higher.
                             _floors_map = plan.setdefault('floors', {})
-                            _lock = max(50, min(95, int(_goal_target)))
+                            _lock = max(50, min(100, int(_goal_target)))
                             if _lock > int(_floors_map.get(_primary_stat, 0) or 0):
                                 _floors_map[_primary_stat] = _lock
                             _fname2 = getattr(

@@ -429,7 +429,7 @@
        Single form per fighter. All 18 floors + 18 targets + intensity
        submit at once. Hidden inputs paired with visible steppers; JS
        keeps them in sync. Categories use native <details> for collapse.
-       Floor range 50-95 (universal minimum). Target range cur-99. #}
+       Floor range 50-100 (universal minimum). Target range cur-100. #}
     {% set _saved_targets = stat_targets.get(fighter.fighter_id, {}) %}
     {% set _saved_floors  = plan.get('floors', {}) %}
     {% set _saved_intensity = (plan.get('queue_intensity') or
@@ -589,7 +589,7 @@
                     {% set _cur = fighter|attr(stat_key)|int %}
                     {% set _floor = _saved_floors.get(stat_key, 50)|int %}
                     {% if _floor < 50 %}{% set _floor = 50 %}{% endif %}
-                    {% if _floor > 95 %}{% set _floor = 95 %}{% endif %}
+                    {% if _floor > 100 %}{% set _floor = 100 %}{% endif %}
                     {% set _target = _saved_targets.get(stat_key, 0)|int %}
                     {% if _cur >= 80 %}{% set _ccol = 'var(--gold)' %}
                     {% elif _cur >= 70 %}{% set _ccol = 'var(--neon-green)' %}
@@ -798,7 +798,7 @@ function buildStyleTemplates(
 
     function goal(cur, styleMin) {
         const t = Math.max(cur + 15, styleMin);
-        return Math.min(95, t);
+        return Math.min(100, t);
     }
 
     return {
@@ -1846,7 +1846,7 @@ function applyTemplate(fighterId, tmpl, intensity) {
         const inp  = document.getElementById('target-in-' + fighterId + '-' + g.focus);
         const span = document.getElementById('target-' + fighterId + '-' + g.focus);
         if (!inp || !span) return;
-        const t = Math.max(50, Math.min(99, Math.round((g.target || 0) / 5) * 5));
+        const t = Math.max(50, Math.min(100, Math.round((g.target || 0) / 5) * 5));
         inp.value = t;
         span.textContent = t;
         const row = inp.closest('.stat-row');
@@ -1866,7 +1866,7 @@ function applyTemplate(fighterId, tmpl, intensity) {
         const inp  = document.getElementById('floor-in-' + fighterId + '-' + stat);
         const span = document.getElementById('floor-' + fighterId + '-' + stat);
         if (!inp || !span) return;
-        const v = Math.max(50, Math.min(95, Math.round((val || 50) / 5) * 5));
+        const v = Math.max(50, Math.min(100, Math.round((val || 50) / 5) * 5));
         inp.value = v;
         span.textContent = v;
     });
@@ -2170,13 +2170,13 @@ function adjFloor(btn, delta) {
         const span = document.getElementById('floor-' + fid + '-' + stat);
         if (!inp || !span) return;
         const cur = parseInt(inp.value, 10) || 50;
-        const next = Math.max(50, Math.min(95, cur + d));
+        const next = Math.max(50, Math.min(100, cur + d));
         inp.value = next;
         span.textContent = next;
     }
 }
 
-// Target stepper — adjusts target by ±delta, clamped to [50, 99].
+// Target stepper — adjusts target by ±delta, clamped to [50, 100].
 // Below 50 (= the universal floor minimum) the value resets to 0
 // meaning "no goal". Updates progress bar + category summary live.
 function adjTarget(fid, stat, delta) {
@@ -2188,7 +2188,7 @@ function adjTarget(fid, stat, delta) {
     if (next < 50) {
         next = (delta < 0 && cur > 0) ? 0 : 50;
     }
-    if (next > 99) next = 95;
+    if (next > 100) next = 100;
     inp.value = next;
     span.textContent = (next > 0) ? next : '—';
     const row = inp.closest('.stat-row');
