@@ -1805,7 +1805,7 @@ class GameBridge:
                 camp.fighter_count += 1
         
         # Store rich data so _convert_real_fighter can read style/age/country
-        self._game_state._fighter_data[fighter_id] = {
+        _fdata = {
             "id":          fighter_id,
             "name":        fighter_data.get("name", "Unknown"),
             "weight_class":fighter_data.get("weight_class", "Lightweight"),
@@ -1816,6 +1816,37 @@ class GameBridge:
             "potential":   fighter_data.get("potential", fighter_data.get("overall", 65) + 10),
             "nickname":    fighter_data.get("nickname"),
         }
+        # Per-attribute stats — the whole 18-stat vector must land in
+        # _fighter_data so _compute_ovr can compute against real values
+        # instead of falling into the partial-zero collapse. If the
+        # incoming fighter_data is missing per-stat fields (legacy
+        # caller, older prospect dict shape), synthesize the vector
+        # via generate_prospect_attributes so no fresh player fighter
+        # ever ships with a hollow stat sheet.
+        _STAT_KEYS = [
+            "strength","speed","cardio","chin","recovery",
+            "boxing","kicks","clinch_striking","striking_defense",
+            "takedowns","takedown_defense","top_control","submissions",
+            "guard","clinch_control","heart","fight_iq","composure",
+        ]
+        _stats_in_input = sum(1 for k in _STAT_KEYS if k in fighter_data)
+        if _stats_in_input < 18:
+            try:
+                from game_start import generate_prospect_attributes
+                _synth = generate_prospect_attributes(
+                    fighter_data.get("overall", 65),
+                    fighter_data.get("style", "Balanced"),
+                )
+                for k in _STAT_KEYS:
+                    if k not in fighter_data:
+                        fighter_data[k] = _synth.get(k, 50)
+                print(f"  ⚠️  Synthesized {18 - _stats_in_input} missing stats "
+                      f"for {fighter.name} via generate_prospect_attributes")
+            except Exception as _se:
+                print(f"  ⚠️  Stat synthesis failed: {_se}")
+        for k in _STAT_KEYS:
+            _fdata[k] = fighter_data.get(k, 50)
+        self._game_state._fighter_data[fighter_id] = _fdata
 
         # Initialize founding-fighter contract. Closes pre-existing bug where
         # the starter never had a contract entry — _process_contracts would

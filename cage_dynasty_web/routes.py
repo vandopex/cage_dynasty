@@ -551,6 +551,29 @@ def register_routes(app):
                     "description": f"{p.potential_grade} potential {p.fighting_style.lower()} from {p.country}.",
                     "traits": getattr(p, 'traits', []),
                     "estimated_cost": getattr(p, 'estimated_cost', 30000),
+                    # Per-attribute stats — must be carried through so
+                    # _create_player_fighter can seed _fighter_data with
+                    # real values. Without these, OVR crashes to a
+                    # partial-zero weighted average once training trips
+                    # the legacy-save guard (10+ populated stats).
+                    "strength":          p.strength,
+                    "speed":             p.speed,
+                    "cardio":            p.cardio,
+                    "chin":              p.chin,
+                    "recovery":          p.recovery,
+                    "boxing":            p.boxing,
+                    "kicks":             p.kicks,
+                    "clinch_striking":   p.clinch_striking,
+                    "striking_defense":  p.striking_defense,
+                    "takedowns":         p.takedowns,
+                    "takedown_defense":  p.takedown_defense,
+                    "top_control":       p.top_control,
+                    "submissions":       p.submissions,
+                    "guard":             p.guard,
+                    "clinch_control":    p.clinch_control,
+                    "heart":             p.heart,
+                    "fight_iq":          p.fight_iq,
+                    "composure":         p.composure,
                 }
                 for p in prospects
             ]
