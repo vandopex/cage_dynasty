@@ -3025,7 +3025,13 @@ def register_routes(app):
         free_agent_ids = bridge._game_state.free_agents or set()
         free_agents = []
         for fid in free_agent_ids:
-            f = bridge._game_state.get_fighter(fid)
+            # Use bridge.get_fighter() (returns WebFighter) so fighting_style
+            # resolves via _convert_real_fighter's _STYLE_XLAT-translated
+            # _fighter_data['style'] pipeline — matches every other page.
+            # bridge._game_state.get_fighter() returned raw FighterRecord,
+            # which has no fighting_style attribute, so the free-agents
+            # list was silently defaulting to "Balanced" for every fighter.
+            f = bridge.get_fighter(fid)
             if not f or not f.is_active:
                 continue
             # Skip if currently in a fighter camp (defensive)
