@@ -2,12 +2,67 @@
 {% block title %}Training{% endblock %}
 {% block content %}
 
-<div class="page-header">
+{# TRAINING-ADVANCED-TOGGLE1 — CSS-only floor column visibility.
+   Floor inputs stay in the DOM regardless of toggle state so they
+   keep submitting with the form. Toggle just flips a container
+   class; per-row CSS overrides grid-template-columns to reclaim
+   the floor column's space when hidden. #}
+<style>
+.training-advanced-off .stat-row {
+    grid-template-columns: 130px 32px 82px 1fr 70px !important;
+}
+.training-advanced-off .floor-cell {
+    display: none !important;
+}
+.training-advanced-off .floor-help-copy {
+    display: none !important;
+}
+</style>
+
+<div class="page-header" style="display:flex;align-items:flex-start;
+     justify-content:space-between;gap:var(--spacing-md);flex-wrap:wrap;">
     <div>
         <h1 class="page-title">🏋️ Training Center</h1>
         <div class="page-subtitle">Set weekly training for your fighters</div>
     </div>
+    <label id="advanced-toggle-label"
+           style="display:inline-flex;align-items:center;gap:8px;
+                  padding:6px 12px;background:var(--bg-dark);
+                  border:1px solid var(--border-color);border-radius:6px;
+                  font-size:.72rem;color:var(--text-muted);cursor:pointer;
+                  user-select:none;">
+        <input type="checkbox" id="advanced-toggle"
+               style="cursor:pointer;margin:0;">
+        <span>Advanced (show floor sliders)</span>
+    </label>
 </div>
+
+<script>
+// TRAINING-ADVANCED-TOGGLE1: state persisted in localStorage.
+// Default OFF — the class is added to <html> so it applies before
+// the stat-row markup renders, avoiding a visible layout flash.
+(function () {
+    var KEY = 'cd_training_advanced';
+    var stored = localStorage.getItem(KEY);
+    var advancedOn = (stored === '1');
+    var html = document.documentElement;
+    if (!advancedOn) html.classList.add('training-advanced-off');
+    document.addEventListener('DOMContentLoaded', function () {
+        var box = document.getElementById('advanced-toggle');
+        if (!box) return;
+        box.checked = advancedOn;
+        box.addEventListener('change', function () {
+            if (box.checked) {
+                html.classList.remove('training-advanced-off');
+                localStorage.setItem(KEY, '1');
+            } else {
+                html.classList.add('training-advanced-off');
+                localStorage.setItem(KEY, '0');
+            }
+        });
+    });
+})();
+</script>
 
 {# Camp + Coach overview #}
 <div class="card mb-lg">
@@ -601,8 +656,11 @@
                                 {{ _tier_label }} {{ _tier_name }}
                             </span>
                         </div>
-                        {# Floor stepper #}
-                        <div style="display:flex;align-items:center;
+                        {# Floor stepper — CSS-hidden when advanced
+                           toggle is OFF (default). Hidden input keeps
+                           submitting the floor value regardless. #}
+                        <div class="floor-cell"
+                             style="display:flex;align-items:center;
                                     justify-content:center;gap:4px;">
                             <span style="font-size:.55rem;
                                          color:var(--text-muted);
@@ -700,9 +758,12 @@
         <div style="padding:0 var(--spacing-md) var(--spacing-md);
                     display:flex;justify-content:space-between;
                     align-items:center;gap:8px;">
-            <div style="font-size:.62rem;color:var(--text-muted);">
-                Floors lock decay at the chosen value (50 minimum).
-                Targets train the stat to the chosen value, then auto-lock the floor there.
+            <div class="floor-help-copy"
+                 style="font-size:.62rem;color:var(--text-muted);">
+                Floors trigger auto-retraining if a stat drifts close
+                to them — prevents long-term drift without hard-blocking
+                a single week's decay (50 minimum). Targets train the
+                stat to the chosen value, then auto-lock the floor there.
             </div>
             <button type="submit"
                     style="font-size:.78rem;padding:6px 16px;
