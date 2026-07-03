@@ -504,6 +504,79 @@ COACH_TYPE_MIGRATION = {
     'mma_head':         'boxing_coach',
 }
 
+
+# ── COACH-COVERAGE1b — hoisted single source of truth ────────────
+# Maps a coach's `specialty` field (canonical Coach-3 keys or legacy
+# strings from world_init / older saves) to the internal training
+# BUCKET used by _apply_weekly_training. Single source of truth: the
+# training loop references this dict directly (SPECIALTY_MAP =
+# COACH_SPECIALTY_TO_BUCKET); the display path uses get_coach_trained_stats
+# which also reads from here. No local copy, no drift possible.
+COACH_SPECIALTY_TO_BUCKET: Dict[str, str] = {
+    # Striking family
+    "striking":         "striking_coach",
+    "boxing":           "striking_coach",
+    "kickboxing":       "striking_coach",
+    "muay thai":        "striking_coach",
+    "muay_thai":        "striking_coach",
+    # Canonical Coach-3 keys — the current live shape
+    "boxing_coach":     "striking_coach",
+    "muay_thai_coach":  "striking_coach",
+    "kickboxing_coach": "striking_coach",
+    "wrestling_coach":  "grappling_coach",
+    "bjj_coach":        "grappling_coach",
+    "clinch_coach":     "grappling_coach",
+    "sc_coach":         "sc_coach",
+    # Grappling legacy
+    "wrestling":        "grappling_coach",
+    "grappling":        "grappling_coach",
+    "bjj":              "grappling_coach",
+    "submissions":      "grappling_coach",
+    "jiu-jitsu":        "grappling_coach",
+    "jiu_jitsu":        "grappling_coach",
+    # S&C legacy
+    "s&c":              "sc_coach",
+    "strength":         "sc_coach",
+    "conditioning":     "sc_coach",
+    "cardio":           "sc_coach",
+    "s and c":          "sc_coach",
+    # Head / MMA legacy
+    "mma":              "mma_coach",
+    "head coach":       "mma_coach",
+    "cornering":        "mma_coach",
+    "strategy":         "mma_coach",
+}
+
+# Bucket → stats actually trained by _apply_weekly_training. Single
+# source of truth: this constant is referenced directly by both the
+# training loop (`_COACH_ATTRS = COACH_BUCKET_ATTRS`) and the hire-
+# screen display path (`get_coach_trained_stats`) — no local copy,
+# no drift possible.
+COACH_BUCKET_ATTRS: Dict[str, List[str]] = {
+    "striking_coach":  ["boxing", "kicks", "clinch_striking",
+                        "clinch_control", "striking_defense"],
+    "grappling_coach": ["takedowns", "takedown_defense", "top_control",
+                        "submissions", "guard"],
+    "sc_coach":        ["strength", "speed", "cardio", "chin",
+                        "recovery", "heart"],
+    "mma_coach":       ["fight_iq", "composure"],
+}
+
+
+def get_coach_trained_stats(specialty) -> List[str]:
+    """Return the list of stats a coach with this specialty actually
+    trains. Resolves canonical or legacy specialty strings to a
+    bucket, then looks up the bucket's attr list. Empty list for
+    unknown specialties (safe default for display)."""
+    if not specialty:
+        return []
+    key = str(specialty).lower()
+    bucket = COACH_SPECIALTY_TO_BUCKET.get(key)
+    if bucket is None:
+        return []
+    return list(COACH_BUCKET_ATTRS.get(bucket, []))
+
+
 # fight_iq/composure/heart generation ranges by tier
 COACH_ATTR_RANGES = {
     'GARAGE':    (45, 65),
@@ -7760,29 +7833,15 @@ class GameBridge:
         camp_tier   = player_camp.tier.upper() if player_camp else "GARAGE"
         player_fighters = self._game_state.get_player_fighters()
 
-        # SPECIALTY_MAP + _ARCHETYPE_DOMAIN — reused per coach inside the
-        # fighter loop. Ship MC1b: training gain is multi-coach. Each coach
-        # on staff contributes independently; coaches sharing a domain
-        # apply diminishing rates (1.0 / 0.50 / 0.25 / 0.10).
-        SPECIALTY_MAP = {
-            # Striking
-            "striking": "striking_coach",    "boxing":   "striking_coach",
-            "kickboxing": "striking_coach",  "muay thai": "striking_coach",
-            "muay_thai":  "striking_coach",
-            # Grappling
-            "wrestling":   "grappling_coach", "grappling": "grappling_coach",
-            "bjj":         "grappling_coach", "submissions": "grappling_coach",
-            # Jiu-Jitsu — generated as "Jiu-Jitsu" by world-gen; both
-            # hyphen and underscore forms route to grappling_coach.
-            "jiu-jitsu":   "grappling_coach", "jiu_jitsu": "grappling_coach",
-            # S&C (merged strength + conditioning)
-            "s&c":         "sc_coach",        "strength":    "sc_coach",
-            "conditioning": "sc_coach",       "cardio":      "sc_coach",
-            "s and c":     "sc_coach",
-            # Head Coach / MMA
-            "mma":         "mma_coach",       "head coach":  "mma_coach",
-            "cornering":   "mma_coach",       "strategy":    "mma_coach",
-        }
+        # COACH-COVERAGE1b-FIX: SPECIALTY_MAP + _COACH_ATTRS were
+        # previously inline dicts here (Ship MC1b). Ship B added
+        # module-level constants (COACH_SPECIALTY_TO_BUCKET +
+        # COACH_BUCKET_ATTRS) as the display-side source of truth,
+        # and this method now references them directly so the
+        # training loop and the hire-screen card render from ONE
+        # dict, not two. _ARCHETYPE_DOMAIN stays inline — it's
+        # 4-entry ancillary metadata specific to this training loop.
+        SPECIALTY_MAP = COACH_SPECIALTY_TO_BUCKET
         _ARCHETYPE_DOMAIN = {
             "striking_coach":  "striking",
             "grappling_coach": "grappling",
@@ -8111,16 +8170,10 @@ class GameBridge:
                             else None)
             _lose_streak = getattr(fighter, 'lose_streak', 0) or 0
 
-            # Per-archetype attrs (which stats each archetype trains)
-            _COACH_ATTRS = {
-                "striking_coach":  ["boxing", "kicks", "clinch_striking",
-                                    "clinch_control", "striking_defense"],
-                "grappling_coach": ["takedowns", "takedown_defense", "top_control",
-                                    "submissions", "guard"],
-                "sc_coach":        ["strength", "speed", "cardio", "chin",
-                                    "recovery", "heart"],
-                "mma_coach":       ["fight_iq", "composure"],
-            }
+            # Per-archetype attrs — reference the module-level
+            # COACH_BUCKET_ATTRS added in Ship B so the hire-screen
+            # display and this training loop can never drift.
+            _COACH_ATTRS = COACH_BUCKET_ATTRS
 
             # Specialist attr sets (reused per coach)
             _GRAPPLING_ATTRS    = {'takedowns','takedown_defense',

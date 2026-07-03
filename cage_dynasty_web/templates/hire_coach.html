@@ -42,9 +42,37 @@
         </div>
         {% endif %}
         <div style="font-size:.7rem;color:var(--text-muted);
-                    margin-bottom:var(--spacing-md);min-height:2.5em;">
+                    margin-bottom:var(--spacing-sm);min-height:2.5em;">
             {{ coach.description }}
         </div>
+        {# COACH-COVERAGE1b: honest stats list derived from training
+           bucket — same source as setup_coach.html. #}
+        {% if coach.trained_stats %}
+        <div style="font-size:.58rem;color:var(--text-muted);
+                    text-transform:uppercase;letter-spacing:.06em;
+                    margin-bottom:4px;">Trains</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;
+                    margin-bottom:var(--spacing-md);">
+            {% for s in coach.trained_stats %}
+            <span style="font-size:.58rem;padding:1px 6px;border-radius:3px;
+                         background:rgba(33,150,243,.15);color:var(--info);
+                         border:1px solid rgba(33,150,243,.4);font-weight:600;">
+                {{ s | replace('_', ' ') | title }}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {# Best-fit hint — kept as flavor so Muay Thai still reads
+           different from Boxing even though they share a bucket. #}
+        {% if coach.style_match %}
+        <div style="font-size:.65rem;color:var(--text-muted);
+                    margin-bottom:var(--spacing-sm);">
+            🎯 Best for:
+            <span style="color:var(--gold);">
+                {{ coach.style_match | join(', ') }}
+            </span>
+        </div>
+        {% endif %}
         <div style="font-size:.7rem;color:var(--text-muted);">Weekly salary</div>
         <div style="font-family:var(--font-display);font-size:1.2rem;
                     color:var(--neon-green);margin-bottom:var(--spacing-md);">

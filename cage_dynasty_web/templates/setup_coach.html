@@ -152,37 +152,24 @@
                     {{ coach.type_desc }}
                 </div>
                 {% endif %}
-                {% if coach.primary_stats or coach.secondary_stats %}
+                {# COACH-COVERAGE1b: honest stats list — derived from
+                   the coach's actual training bucket. Every stat here
+                   is one the coach will genuinely improve during
+                   weekly training. #}
+                {% if coach.trained_stats %}
+                <div style="font-size:.58rem;color:var(--text-muted);
+                            text-transform:uppercase;letter-spacing:.06em;
+                            margin-bottom:4px;">Trains</div>
                 <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:var(--spacing-md);">
-                    {% for s in coach.primary_stats %}
+                    {% for s in coach.trained_stats %}
                     <span style="font-size:.58rem;padding:1px 6px;border-radius:3px;
                                  background:rgba(33,150,243,.15);color:var(--info);
                                  border:1px solid rgba(33,150,243,.4);font-weight:600;">
                         {{ s | replace('_', ' ') | title }}
                     </span>
                     {% endfor %}
-                    {% for s in coach.secondary_stats %}
-                    <span style="font-size:.55rem;padding:1px 5px;border-radius:3px;
-                                 background:rgba(255,255,255,.04);color:var(--text-muted);
-                                 border:1px solid rgba(255,255,255,.1);">
-                        {{ s | replace('_', ' ') | title }}
-                    </span>
-                    {% endfor %}
                 </div>
                 {% endif %}
-                {% endif %}
-
-                {# Legacy "Stats trained" pills — kept for any old market entries
-                   that still expose .focus from systems.game_start. #}
-                {% if coach.focus and not coach.primary_stats %}
-                <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:var(--spacing-md);">
-                    {% for stat in coach.focus %}
-                    <span style="font-size:.6rem;padding:2px 6px;border-radius:3px;
-                                 background:rgba(255,255,255,.05);
-                                 border:1px solid rgba(255,255,255,.1);
-                                 color:var(--text-muted);">{{ stat }}</span>
-                    {% endfor %}
-                </div>
                 {% endif %}
 
                 {# Salary #}
