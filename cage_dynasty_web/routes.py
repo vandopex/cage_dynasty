@@ -12,14 +12,12 @@ import traceback
 import subprocess  # NEW — for /api/git-pull webhook
 
 
-# MULTIUSER-ISOLATION1 — legacy claim constants
+# MULTIUSER-ISOLATION1 — legacy user_id (Van's pre-multiuser saves).
+# Bound via the secret-gated /api/claim-legacy route below, NOT via a
+# first-visitor race — the earlier auto-claim mechanism lost to a bot
+# ping between deploy and Van's first request. Replaced with an env-
+# var-gated deterministic claim path.
 _LEGACY_USER_ID = "van"
-# Marker file signals the one-shot legacy claim has already fired.
-# When absent, the FIRST cookieless visitor claims _LEGACY_USER_ID.
-# When present, all cookieless visitors get a fresh uuid.
-def _legacy_marker_path() -> str:
-    _here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(_here, 'saves', '.legacy_claimed')
 
 
 # Trait display labels — maps internal enum strings to (label, category)
@@ -345,10 +343,10 @@ def register_routes(app):
     """Register all routes with the Flask application."""
 
     # ── MULTIUSER-ISOLATION1: session identity + bridge dispatch ──────
-    # Every request needs a stable session['user_id']. The FIRST
-    # cookieless visitor after deploy claims 'van' (one-shot, gated
-    # on saves/.legacy_claimed marker); everyone else gets a fresh
-    # uuid. Bridges live in app.game_bridges dict, keyed by user_id.
+    # Every request needs a stable session['user_id']. Unclaimed
+    # sessions get a fresh uuid; the legacy identity 'van' is
+    # bound only via the secret-gated /api/claim-legacy route.
+    # Bridges live in app.game_bridges dict, keyed by user_id.
     from game_bridge import GameBridge as _GameBridge
 
     @app.before_request
@@ -360,24 +358,11 @@ def register_routes(app):
             return None
         if 'user_id' in session:
             return None
-        # No user_id yet — check whether we should hand out the
-        # legacy claim or a fresh uuid.
-        marker = _legacy_marker_path()
-        if not os.path.exists(marker):
-            session['user_id'] = _LEGACY_USER_ID
-            try:
-                # Write the marker so subsequent visitors get uuids.
-                _saves_dir = os.path.dirname(marker)
-                os.makedirs(_saves_dir, exist_ok=True)
-                with open(marker, 'w') as fp:
-                    fp.write(f"claimed_by=session; user_id={_LEGACY_USER_ID}\n")
-                print(f"✅ [LEGACY CLAIM] user_id='{_LEGACY_USER_ID}' "
-                      f"assigned to first visitor; marker written")
-            except OSError as _e:
-                print(f"⚠️  [LEGACY CLAIM] marker write failed: {_e} — "
-                      f"claim may re-fire until marker exists")
-        else:
-            session['user_id'] = str(uuid.uuid4())
+        # Every unclaimed session gets a fresh uuid. The old first-
+        # visitor legacy claim was replaced with the secret-gated
+        # /api/claim-legacy route below — deterministic instead of
+        # first-come-first-served.
+        session['user_id'] = str(uuid.uuid4())
         return None
 
     # Helper to get the game bridge for the CURRENT session's user_id.
@@ -390,6 +375,30 @@ def register_routes(app):
             _b._user_id = uid
             app.game_bridges[uid] = _b
         return app.game_bridges[uid]
+
+    # ── LEGACY-CLAIM-FIX1: secret-gated legacy identity claim ────────
+    # Replaces the racy first-visitor auto-claim that a bot ping won
+    # between deploy and Van's first visit. Route is only enabled when
+    # LEGACY_CLAIM_TOKEN env var is set. Wrong or missing token → 404
+    # (no leak of route existence). Correct token → binds this session
+    # to user_id='van' and redirects to /saves.
+    from flask import abort as _abort
+    import hmac as _hmac  # constant-time comparison for token check
+    @app.route('/api/claim-legacy', methods=['GET'])
+    def claim_legacy():
+        expected = os.environ.get('LEGACY_CLAIM_TOKEN')
+        # Route DISABLED when env var unset — never fall back to a
+        # hardcoded default. Return 404 so an attacker can't tell the
+        # route exists on any deployment where the token is off.
+        if not expected:
+            _abort(404)
+        provided = request.args.get('token', '')
+        if not provided or not _hmac.compare_digest(provided, expected):
+            _abort(404)
+        session['user_id'] = _LEGACY_USER_ID
+        print(f"✅ [LEGACY CLAIM] session bound to "
+              f"user_id='{_LEGACY_USER_ID}' via /api/claim-legacy")
+        return redirect(url_for('saves_menu'))
 
     # Ship S2: inject sidebar badge counts into every template render
     # so nav badges work on all pages, not just the dashboard route.
