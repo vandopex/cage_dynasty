@@ -67,8 +67,7 @@
 </div>
 
 {# ── 4-stat header ── #}
-<div class="dash-stats-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-md);
-            margin-bottom:var(--spacing-lg);">
+<div class="dash-stats-grid grid grid-4" style="margin-bottom:var(--spacing-lg);">
     {# Balance #}
     <div class="stat-box" style="position:relative;overflow:hidden;">
         <div class="stat-value success">${{ "{:,}".format(balance) }}</div>
@@ -352,8 +351,7 @@
 {% endif %}
 
 {# ── Main 2-column layout ── #}
-<div class="dash-main-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);
-            align-items:start;">
+<div class="dash-main-grid grid grid-2" style="gap:var(--spacing-lg);align-items:start;">
 
     {# ════ LEFT COLUMN ════ #}
     <div>
@@ -613,7 +611,7 @@
                         </span>
                     </div>
                     {# 4-week strip — each entry is a compact week column #}
-                    <div style="display:grid;grid-template-columns:repeat({{ entries|length }}, 1fr);
+                    <div class="grid-collapse-mobile" style="display:grid;grid-template-columns:repeat({{ entries|length }}, 1fr);
                                 gap:6px;">
                         {% for entry in entries %}
                         <div style="background:var(--bg-dark);border-radius:4px;padding:6px;
@@ -743,8 +741,7 @@
         <div class="card">
             <div class="card-header"><h3>💰 Financial Pulse</h3></div>
             <div style="padding:var(--spacing-lg);">
-                <div class="dash-training-grid" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--spacing-md);
-                            text-align:center;">
+                <div class="dash-training-grid grid grid-3" style="text-align:center;">
                     <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);">
                         <div style="font-family:var(--font-display);font-size:1.1rem;
                                     color:var(--success);">${{ "{:,}".format(balance) }}</div>

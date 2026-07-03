@@ -307,7 +307,7 @@
 {% endif %}
 
 {# ── 2-column layout ── #}
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--spacing-lg);align-items:start;">
+<div class="grid grid-2" style="gap:var(--spacing-lg);align-items:start;">
 
     {# ════ LEFT: Card results + Notable ════ #}
     <div>
@@ -707,7 +707,7 @@
     <div class="card mb-lg">
         <div class="card-header"><h3>💰 Weekly Finances</h3></div>
         <div style="padding:var(--spacing-lg);">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--spacing-md);text-align:center;">
+            <div class="grid grid-3" style="text-align:center;">
                 <div style="background:var(--bg-dark);border-radius:6px;padding:var(--spacing-md);">
                     <div style="font-family:var(--font-display);font-size:1.15rem;color:var(--neon-green);">
                         ${{ "{:,}".format(finances.balance) }}
