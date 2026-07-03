@@ -19006,16 +19006,21 @@ class GameBridge:
         return pool
 
     def _specialty_to_archetype(self, specialty: str) -> str:
-        """Map specialty string to archetype bucket. Ship MC1b."""
+        """Map specialty string to archetype bucket. Ship MC1b.
+        Post-COACH-COVERAGE1a: also recognises canonical Coach-3
+        keys emitted by the current game_start generator."""
         _s = str(specialty).lower()
         if _s in {'boxing','kickboxing','muay thai','muay_thai',
-                  'striking','clinch'}:
+                  'striking','clinch',
+                  'boxing_coach','muay_thai_coach','kickboxing_coach'}:
             return 'striking'
         if _s in {'wrestling','bjj','judo','grappling','submissions',
-                  'sambo','jiu-jitsu','jiu_jitsu'}:
+                  'sambo','jiu-jitsu','jiu_jitsu',
+                  'wrestling_coach','bjj_coach','clinch_coach'}:
             return 'grappling'
         if _s in {'strength','conditioning','sc','s&c','s and c',
-                  'fitness','athletic','cardio'}:
+                  'fitness','athletic','cardio',
+                  'sc_coach'}:
             return 'sc'
         return 'mma_head'
 

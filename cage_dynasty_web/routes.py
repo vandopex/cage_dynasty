@@ -102,18 +102,19 @@ def _generate_available_coaches(tier):
 
     Hoisted to module level (Ship C2) so mid-game `/coach/hire` can reuse
     the same pool generator the new-game setup flow uses.
+
+    Post-COACH-COVERAGE1a: bumped num_coaches to 7 (matches full
+    canonical type coverage from game_start.generate_starting_coaches);
+    dropped the legacy-string half of _SPEC_LABEL and _CANON since
+    game_start no longer emits those specialty strings.
     """
-    # Try to use real game_start module
     try:
         from systems.game_start import generate_starting_coaches
-        coaches = generate_starting_coaches(num_coaches=6)
-        # Maps both canonical coach_type keys (Coach-3) and legacy
-        # specialty strings (game_start) → (label, icon). Keep both
-        # so the game_start path returns the same specialist labels
-        # the fallback path uses, and the template's arch_color map
-        # finds the right styling.
+        coaches = generate_starting_coaches(num_coaches=7)
+        # Canonical coach_type → (display label, icon). game_start
+        # now emits ONLY canonical keys, so the legacy-string half of
+        # this table was dead code and has been removed.
         _SPEC_LABEL = {
-            # Canonical 7 specialist types
             "boxing_coach":      ("Boxing Coach",     "🥊"),
             "muay_thai_coach":   ("Muay Thai Coach",  "🦵"),
             "kickboxing_coach":  ("Kickboxing Coach", "⚡"),
@@ -121,24 +122,6 @@ def _generate_available_coaches(tier):
             "bjj_coach":         ("BJJ Coach",        "🥋"),
             "clinch_coach":      ("Clinch Coach",     "💪"),
             "sc_coach":          ("S&C Coach",        "🏋️"),
-            # Legacy fallbacks — old game_start specialty strings
-            "striking":          ("Boxing Coach",     "🥊"),
-            "boxing":            ("Boxing Coach",     "🥊"),
-            "kickboxing":        ("Kickboxing Coach", "⚡"),
-            "muay thai":         ("Muay Thai Coach",  "🦵"),
-            "muay_thai":         ("Muay Thai Coach",  "🦵"),
-            "wrestling":         ("Wrestling Coach",  "🤼"),
-            "grappling":         ("Wrestling Coach",  "🤼"),
-            "bjj":               ("BJJ Coach",        "🥋"),
-            "submissions":       ("BJJ Coach",        "🥋"),
-            "clinch":            ("Clinch Coach",     "💪"),
-            "conditioning":      ("S&C Coach",        "🏋️"),
-            "strength":          ("S&C Coach",        "🏋️"),
-            "cardio":            ("S&C Coach",        "🏋️"),
-            "s&c":               ("S&C Coach",        "🏋️"),
-            "mma":               ("S&C Coach",        "🏋️"),
-            "cornering":         ("S&C Coach",        "🏋️"),
-            "strategy":          ("S&C Coach",        "🏋️"),
         }
         # Style-fit map per canonical specialty — enriches the result
         # so the "Best fit:" hint can render in the template.
@@ -157,29 +140,14 @@ def _generate_available_coaches(tier):
                                   "Muay Thai", "Pressure Fighter"],
             "sc_coach":         [],  # universal
         }
-        # Legacy specialty → canonical key so style_fit lookup works
-        # for both schemas.
-        _CANON = {
-            "striking": "boxing_coach", "boxing": "boxing_coach",
-            "kickboxing": "kickboxing_coach",
-            "muay thai": "muay_thai_coach",
-            "muay_thai": "muay_thai_coach",
-            "wrestling": "wrestling_coach",
-            "grappling": "wrestling_coach",
-            "bjj": "bjj_coach",
-            "submissions": "bjj_coach",
-            "clinch": "clinch_coach",
-            "conditioning": "sc_coach",
-            "strength": "sc_coach", "cardio": "sc_coach",
-            "s&c": "sc_coach", "mma": "sc_coach",
-            "cornering": "sc_coach", "strategy": "sc_coach",
-        }
         result = []
         for c in coaches:
             spec = getattr(c, "specialty", "mma").lower()
             label, icon = _SPEC_LABEL.get(spec, ("Head Coach", "🧠"))
-            _canon_key = (spec if spec in _STYLE_FIT
-                          else _CANON.get(spec, "sc_coach"))
+            # spec is now always a canonical coach_type key from
+            # game_start's post-COACH-COVERAGE1a generator, so it
+            # looks up directly in _STYLE_FIT with no legacy mapping.
+            _canon_key = spec if spec in _STYLE_FIT else "sc_coach"
             # Normalize traits: accept enum values, enum objects, or strings.
             _raw_traits = getattr(c, 'traits', []) or []
             _traits = []
@@ -197,7 +165,9 @@ def _generate_available_coaches(tier):
                 "icon":          icon,
                 "rating":        c.skill_level,
                 "salary":        c.weekly_salary,
-                "description":   f"{c.personality_desc}. {c.get_bonus_description()}",
+                "description":   (
+                    f"{getattr(c, 'personality_desc', '')}. "
+                    f"{c.get_bonus_description()}").lstrip('. '),
                 "traits":        _traits,
                 "trait_display": [_TRAIT_DISPLAY.get(t, (t.replace('_',' ').title(), 'personality'))
                                   for t in _traits],
@@ -205,138 +175,14 @@ def _generate_available_coaches(tier):
             })
         return result
     except ImportError as e:
+        # COACH-COVERAGE1a: the previous inline fallback (a 130-line
+        # COACH_TYPES_SETUP + tier-rating generation block) was dead
+        # code — the try import above always succeeds in a live tree.
+        # Deleted to reduce noise. If systems.game_start ever genuinely
+        # fails to import, the mid-game hire market surfaces empty
+        # rather than falling through to a stale duplicate generator.
         print(f"Could not import game_start: {e}")
-
-    # Fallback to simple generation
-    import random
-
-    tier_ratings = {
-        "GARAGE": (55, 75),
-        "LOCAL": (60, 80),
-        "REGIONAL": (65, 85),
-        "NATIONAL": (75, 90),
-        "ELITE": (85, 98),
-    }
-
-    min_r, max_r = tier_ratings.get(tier, (55, 75))
-
-    # Seven specialist types — matches game_bridge.py COACH_TYPES so
-    # the style-fit bonus system is visible from day 1. Each shows
-    # the canonical coach_type key (boxing_coach / muay_thai_coach /
-    # etc.) as specialty so downstream code can look up COACH_TYPES.
-    COACH_TYPES_SETUP = [
-        {
-            "specialty":  "boxing_coach",
-            "label":      "Boxing Coach",
-            "icon":       "🥊",
-            "desc":       ("Develops boxing, kicks, and striking "
-                           "defense. Best fit: Boxers, Kickboxers, "
-                           "Brawlers."),
-            "focus":      ["Boxing", "Kicks", "Striking Defense"],
-            "style_fit":  ["Orthodox Boxer", "Kickboxer",
-                           "Brawler", "Counter Striker"],
-        },
-        {
-            "specialty":  "muay_thai_coach",
-            "label":      "Muay Thai Coach",
-            "icon":       "🦵",
-            "desc":       ("Develops kicks, clinch striking and "
-                           "clinch control. Eight limbs philosophy. "
-                           "Best fit: Muay Thai, Clinch Fighters."),
-            "focus":      ["Kicks", "Clinch Striking", "Clinch Control"],
-            "style_fit":  ["Muay Thai", "Clinch Fighter",
-                           "Pressure Fighter"],
-        },
-        {
-            "specialty":  "kickboxing_coach",
-            "label":      "Kickboxing Coach",
-            "icon":       "⚡",
-            "desc":       ("Develops kicks, boxing combos and "
-                           "striking defense. Range and power. "
-                           "Best fit: Kickboxers, Karate, Point "
-                           "Fighters."),
-            "focus":      ["Kicks", "Boxing", "Striking Defense"],
-            "style_fit":  ["Kickboxer", "Karate", "Point Fighter"],
-        },
-        {
-            "specialty":  "wrestling_coach",
-            "label":      "Wrestling Coach",
-            "icon":       "🤼",
-            "desc":       ("Develops takedowns, takedown defense "
-                           "and top control. Best fit: Wrestlers, "
-                           "Sambo, Sprawl & Brawl."),
-            "focus":      ["Takedowns", "TD Defense", "Top Control"],
-            "style_fit":  ["Wrestler", "Sambo", "Judo",
-                           "Sprawl & Brawl", "Ground & Pound"],
-        },
-        {
-            "specialty":  "bjj_coach",
-            "label":      "BJJ Coach",
-            "icon":       "🥋",
-            "desc":       ("Develops submissions, guard and top "
-                           "control. Submission hunting from any "
-                           "position. Best fit: BJJ Specialists, "
-                           "Submission Grapplers."),
-            "focus":      ["Submissions", "Guard", "Top Control"],
-            "style_fit":  ["BJJ Specialist", "Sambo", "Ground & Pound"],
-        },
-        {
-            "specialty":  "clinch_coach",
-            "label":      "Clinch Coach",
-            "icon":       "💪",
-            "desc":       ("Develops clinch control, clinch striking "
-                           "and takedowns from the tie-up. Best fit: "
-                           "Clinch Fighters, Judo, Muay Thai."),
-            "focus":      ["Clinch Control", "Clinch Striking",
-                           "Takedowns"],
-            "style_fit":  ["Clinch Fighter", "Judo", "Muay Thai",
-                           "Pressure Fighter"],
-        },
-        {
-            "specialty":  "sc_coach",
-            "label":      "S&C Coach",
-            "icon":       "🏋️",
-            "desc":       ("Develops strength, cardio, chin and "
-                           "recovery. Universal benefit — every "
-                           "fighter needs conditioning."),
-            "focus":      ["Strength", "Cardio", "Chin", "Recovery"],
-            "style_fit":  [],  # universal — every style benefits
-        },
-    ]
-
-    first_names = ["Mike", "John", "Carlos", "Greg", "Dave", "Tony",
-                   "Rafael", "Alex", "Firas", "Mark", "Jackson", "Duke",
-                   "Eddie", "Trevor", "Bas", "Renzo"]
-    last_names  = ["Johnson", "Martinez", "Smith", "Williams", "Garcia",
-                   "Brown", "Davis", "Miller", "Zahabi", "DellaGrotte",
-                   "Wittman", "Pederneiras", "Cordeiro"]
-
-    coaches = []
-    # One coach per specialist type — clear menu, no duplicates.
-    for i, arch in enumerate(COACH_TYPES_SETUP):
-        rating = random.randint(min_r, max_r)
-        name   = f"{random.choice(first_names)} {random.choice(last_names)}"
-        if rating >= 80:
-            salary = 2000 + (rating - 80) * 150
-        elif rating >= 70:
-            salary = 1200 + (rating - 70) * 80
-        else:
-            salary = 600  + (rating - 50) * 30
-        coaches.append({
-            "id":          f"coach_{i}",
-            "name":        name,
-            "specialty":   arch["specialty"],
-            "label":       arch["label"],
-            "icon":        arch["icon"],
-            "rating":      rating,
-            "salary":      salary,
-            "description": arch["desc"],
-            "focus":       arch["focus"],
-            "style_fit":   arch["style_fit"],
-        })
-
-    coaches.sort(key=lambda c: c['rating'], reverse=True)
-    return coaches
+        return []
 
 
 def register_routes(app):

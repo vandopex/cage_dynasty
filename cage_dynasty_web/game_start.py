@@ -687,39 +687,80 @@ def generate_starting_prospects(
     return prospects
 
 
-def generate_starting_coaches(num_coaches: int = 10) -> List[StartingCoach]:
+def generate_starting_coaches(num_coaches: int = 7) -> List[StartingCoach]:
     """
     Generate starting coaches for selection.
-    
-    Creates a diverse pool of coaches with weighted random specialties.
-    Player picks from more options for varied starts.
-    
+
+    Post-COACH-COVERAGE1a: samples from the 7 canonical coach_type
+    keys (Coach-3 registry in game_bridge.COACH_TYPES). Legacy pool
+    ({Striking / Wrestling / BJJ / Conditioning / Strength / Cornering})
+    is retired — it could never produce Muay Thai, Kickboxing, or Clinch
+    coaches even though the banner advertises them.
+
+    Coverage policy (deliberate, documented — this is the 6-vs-7 slot
+    resolution called out in COACH-COVERAGE1-IMPL):
+      • num_coaches >= 7: guarantee one of each canonical type, then
+        fill any remainder with weighted random. This is the default
+        and matches setup + hire callers.
+      • num_coaches < 7: sample weighted-random without replacement,
+        preferring higher-weight types. Rare path — only fires if a
+        caller explicitly asks for fewer than 7.
+
     Args:
-        num_coaches: Number of coaches to generate (default 10)
-    
+        num_coaches: Number of coaches to generate. Default 7 = full
+                     coverage of the canonical type set.
+
     Returns:
-        List of StartingCoach objects
+        List of StartingCoach objects, each with .specialty set to a
+        canonical coach_type key (e.g. "boxing_coach", "muay_thai_coach").
     """
     coaches = []
-    
-    # Weighted specialties - Striking/Wrestling/BJJ more common
-    specialty_weights = {
-        "Striking": 25,
-        "Wrestling": 20,
-        "BJJ": 20,
-        "Conditioning": 15,
-        "Strength": 10,
-        "Cornering": 10,
+
+    # Canonical Coach-3 types with weighted-random distribution for
+    # the "extra" slots when num_coaches > 7. Weights reflect real MMA
+    # coaching distribution — more strikers/wrestlers, fewer clinch/
+    # muay-thai specialists. Keys must match game_bridge.COACH_TYPES.
+    canonical_type_weights = {
+        "boxing_coach":      25,
+        "muay_thai_coach":   15,
+        "kickboxing_coach":  12,
+        "wrestling_coach":   20,
+        "bjj_coach":         12,
+        "clinch_coach":      6,
+        "sc_coach":          10,
     }
-    specialties = list(specialty_weights.keys())
-    weights = list(specialty_weights.values())
-    
+    canonical_types = list(canonical_type_weights.keys())
+    canonical_weights = list(canonical_type_weights.values())
+
+    # Build the specialty list for this pool:
+    #   • >=7 requested: one of each + weighted-random filler
+    #   • <7 requested: weighted-random without replacement, top-N
+    if num_coaches >= len(canonical_types):
+        pool_specialties = list(canonical_types)  # one of each
+        _extra = num_coaches - len(canonical_types)
+        for _ in range(_extra):
+            pool_specialties.append(
+                random.choices(canonical_types,
+                               weights=canonical_weights, k=1)[0])
+        random.shuffle(pool_specialties)
+    else:
+        # <7 requested — weighted-random without replacement
+        _remaining = list(canonical_types)
+        _remaining_w = list(canonical_weights)
+        pool_specialties = []
+        for _ in range(num_coaches):
+            _pick = random.choices(_remaining,
+                                    weights=_remaining_w, k=1)[0]
+            _idx = _remaining.index(_pick)
+            _remaining.pop(_idx)
+            _remaining_w.pop(_idx)
+            pool_specialties.append(_pick)
+
     # Track used names to avoid duplicates
     used_names = set()
-    
+
     for i in range(num_coaches):
-        # Random weighted specialty
-        specialty = random.choices(specialties, weights=weights, k=1)[0]
+        specialty = pool_specialties[i]
         
         # Generate unique name
         attempts = 0
