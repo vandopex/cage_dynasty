@@ -8197,7 +8197,17 @@ class GameBridge:
                 cs_rating    = int(_cs.get("rating", 60) or 60)
                 cs_name      = _cs.get("name", "Coach")
                 cs_traits    = _cs.get("traits", []) or []
-                cs_passive   = max(0.1, (cs_rating - 50) / 25)
+                # COACH-RATING-CURVE1: compressed from the old
+                # (rating-50)/25 curve (which gave a 21× spread from
+                # rating 45→95, drowning out every other coach decision).
+                # New curve gives ~3.5× spread across live rating ranges:
+                # 45→0.4× · 60→0.7× · 75→1.0× · 90→1.3× · 95→1.4×.
+                # FLOOR is 0.3 — defensive-only; the minimum live spawn
+                # rating (45 via retirement replacement) already returns
+                # 0.4 from the formula, so the floor never fires in
+                # normal play. Kept as a guard against future generator
+                # changes that could spawn coaches below 40.
+                cs_passive   = max(0.3, (cs_rating - 50) / 50 + 0.5)
                 cs_focus     = SPECIALTY_MAP.get(cs_specialty, "mma_coach")
                 cs_attrs     = _COACH_ATTRS.get(cs_focus, ["fight_iq"])
                 cs_boost     = self._ARCHETYPE_BOOST.get(cs_focus, 1.0)
