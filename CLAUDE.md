@@ -1,9 +1,29 @@
 ## Ship History (compact)
 
-Full recaps for older ships in `CLAUDE_archive.md`. Most recent 7 days kept in full below.
+Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
 
 | Date | Ship | Commit | What |
 |---|---|---|---|
+| 2026-07-03 | TRAINING-ADVANCED-TOGGLE1 | 586fc0a | Hide floor column by default; CSS-only, floor inputs stay in DOM |
+| 2026-07-03 | TITLE-TRANSFER-FIX1 | 5e4bbe1 | AI champions correctly lose belt in fallback-path fights |
+| 2026-07-03 | COACH-RATING-CURVE1 | d10003c | Compress training-gain rating curve 21× → 3.4× |
+| 2026-07-03 | COACH-COVERAGE1b | eaff397 | Coach cards advertise real bucket stats; single SPECIALTY_MAP source |
+| 2026-07-03 | COACH-COVERAGE1a | 208608a | 7 canonical coach types with coverage guarantee |
+| 2026-07-03 | LEGACY-CLAIM-FIX1 | ea595b0 | Secret-gated /api/claim-legacy replaces racy first-visitor claim |
+| 2026-07-03 | MULTIUSER-ISOLATION1 | 29b0b55 | Session-scoped GameBridge dict + per-bridge lock + save-file namespacing |
+| 2026-07-03 | OVR-FIX1 | 98d6c00 | Player-fighter 18-stat vector persists at creation |
+| 2026-07-03 | FREEAGENT-STYLE1 | e30a883 | Free-agent list uses bridge.get_fighter (real styles, not Balanced) |
+| 2026-07-03 | CARDSLOT-BACKFILL1 | 222a502 | Cosmetic Main Card backfill for weak-prelim weeks |
+| 2026-07-03 | CARDSLOT-FIX-PLAYERSLOT1 | bcf69bd | accept_fight_offer routes through assign_player_fight_to_card |
+| 2026-07-03 | COMPARE-LABEL1 | 2a0afed | Compare page: Wrestling → Takedowns label |
+| 2026-07-03 | COMPARE-GUARD1 | a1b7c67 | Compare page: guard_work → guard (silent-0 bug) |
+| 2026-07-03 | NEG-STATMIRROR1 | 256281c | Negotiation screen mirrors player style pill + stats |
+| 2026-07-02 | MOBILE-SINGLECOL1 | cb83170 | Dashboard + week_results collapse to single column on phones |
+| 2026-07-01 | COACH-TRAIT1 (Phase 2) | ac9a2a6 | Repair dead maintenance trait path; Taskmaster intensity-gated |
+| 2026-07-01 | DASH-FEUD-REMOVE1 | c69ff04 | Remove Active Feuds dashboard card (engine untouched) |
+| 2026-07-01 | DASH-CHAMP1 | 6cc9f29 | url_for('champions') → 'champions_history' — dashboard BuildError |
+| 2026-07-01 | Save slots + delete | 579a0ab | 5 slots (was 3) + delete button with confirmation |
+| 2026-07-01 | Fix setup_camp Jinja | dc3434e | loop.parent removed (Python 3.13 Jinja2 compat) |
 | 2026-05-30 | Ship C2 | 0139e11 | Coach contracts (dumber version) — see full recap below |
 | 2026-05-11 | Ship A | 9709f16 | Training report deepening — dashboard 4-week log |
 | 2026-05-11 | Ship B | 411b265 | Starter contracts + founding fighter loyalty |
@@ -48,65 +68,75 @@ Full recaps for older ships in `CLAUDE_archive.md`. Most recent 7 days kept in f
 | 2026-04-27 | Multiple | (various) | OVR-out-of-rankings Phase 1, Bug F, Bug D, etc. |
 | 2026-04-26 | Multiple | (various) | Slot Bug A, dashboard digest, NameError patches |
 
-## Shipped 2026-05-30
+## Current deployment state
 
-### Ship C2 — Coach contracts (dumber version of fighter contracts)
+Multi-user isolation shipped 2026-07-03 (MULTIUSER-ISOLATION1 + LEGACY-CLAIM-FIX1).
+Save files namespaced as `bridge_{user_id}_{slot}.json` in `cage_dynasty_web/saves/`.
+Session-scoped `GameBridge` dict at `app.game_bridges`, keyed by `session['user_id']`,
+lazy-created on first request per user. Per-bridge `threading.RLock` around the six
+mutating operations (`new_game`, `advance_week`, `web_save`, `web_load`,
+`accept_fight_offer`, `_book_fight_from_neg`).
 
-First ship after a ~2.5 week break. Closes pre-existing dead-code
-bug (coach salary stored but never deducted) and adds parallel-
-but-simpler contract system: coaches as financial-pressure system,
-not relationship system.
+**Required PA environment variables** (both currently set on the live app):
+- `SECRET_KEY` — signs session cookies. Fallback exists but logs a security warning
+  to stderr and is forgeable by anyone reading the source.
+- `LEGACY_CLAIM_TOKEN` — gates `/api/claim-legacy?token=<value>` which binds a
+  session to `user_id='van'`. Route returns 404 (not 403) when the env var is unset
+  or the token doesn't match, so the route is invisible to anyone without the token.
 
-**Two morale triggers only:** underpaid (salary < 85% market) and
-skipped paychecks (balance insufficient to cover salary). No W/L
-morale, no holdout, no severance. Asymmetric from fighters by
-design — fighters give you a window to fix things; coaches give
-you a final straw moment.
+**Legacy save migration already ran** on both dev and PA — `bridge_slot*.json` and
+`bridge_autosave.json` were backed up (`.bak`) then renamed to `bridge_van_*.json`.
+The old `.legacy_claimed` marker file (from the retired first-visitor auto-claim) is
+inert — no code reads it anymore.
 
-**New UI surfaces:** Facility page Head Coach panel + new
-/coach/hire page with tier-gated contract length picker.
+**Multiple saves per user** via the 5-slot + autosave system (Ship 2026-07-01). To
+check current save state on any deploy: read the Save/Load page in-browser, or
+`ls -lt cage_dynasty_web/saves/bridge_*_autosave.json` on the server for the most
+recent by mtime. Do NOT hardcode a specific fighter name or save slot as "the"
+active save — describe the mechanism, not the instance.
 
-**Architectural pattern instance #7** of "data exists but doesn't
-reach the surface" — dead-code-with-promise subvariant. Salary
-was stored AND surfaced to player at setup, but the runtime never
-read it. Three-way gap closed.
+## Deploy workflow
 
-**Tier 2 verified:** fire flow + hire flow end-to-end. Long-term
-quit triggers (underpaid, skipped paychecks) deferred to natural
-play.
+`./deploy.sh` from repo root: pushes to GitHub `main` → triggers a PA webhook
+that runs `git pull` in `~/cage_dynasty/cage_dynasty_web` → reloads the PA web app
+via the PA API. Confirmed working end-to-end across ~20 ships between 2026-07-01
+and 2026-07-03.
 
-**Next:** Corner advice during player fights (the other stated
-pre-deploy must-have).
+If the webhook returns HTTP 500 (rare, intermittent): manual fallback is `git pull`
+on the PA bash console, then "Reload" on the PA Web tab.
 
-## Next session priority
-**Bug AA — DOWNGRADED 2026-04-30.** Architectural gap confirmed at `game_bridge.py:1743-1758`
-(reads `_scheduled_fights` only), but Bug Z's fix neutralized the live reproduction path —
-no code path today writes player fighters into `_upcoming_cards`, so the gap is dead under
-current code. Revisit only if a concrete failure surfaces or if a future feature reintroduces
-a player-fight write to `_upcoming_cards`. Not shipping defensive code for a hypothetical.
-See `memory/bug_AA_offer_queue_doesnt_reconcile_2026-04-29.md`.
+## Top-of-backlog
 
-**Filed: challenge_fighter same-family gap, harmless under current code.** `game_bridge.py:5166-5173`
-reads `_scheduled_fights` only when validating challenge target. UI gates the Challenge button via
-`scheduled_map` (routes.py:875-886) which reads both sinks, so unreachable in normal play. Defensive
-note for future UI work — any new challenge entry point that doesn't reuse `scheduled_map` would
-expose the gap. Same UI/backend predicate-source-divergence family as Bug AA. See
-`memory/challenge_fighter_harmless_gap_2026-04-30.md`.
+**#1 (elevated 2026-07-03) — Auto-load most recent save on landing.** Blocks new-user
+onboarding. Under current behavior a session with existing saves still drops on the
+New Game screen when landing on `/`; users must manually go to `/saves` and pick a
+slot. This matches Van's own workflow (deliberate fresh restarts) but is a bad first
+impression for anyone else. Fix scope: when a session hits `/` with an unstarted
+bridge, check for saves under this `user_id` and auto-load the most recent by mtime.
 
-Then: Pre-gen world history (Phase 2 of OVR-out-of-rankings) — `_generate_initial_history`
-in `game_state.py` is currently a trivial stub. Either build engine-driven pre-gen there
-or wire up the dormant `world_init.HistorySimulator`. Decision needed at session start.
+**Queued after #1, not scheduled:**
+- **COACH-GRAPPLE-SPLIT1** — split the `grappling_coach` training bucket into
+  distinct wrestling and BJJ archetypes. Sandman-grade fighter-identity work
+  deferred from the 2026-07-03 coach arc.
+- **Coach trait design deepening** — 16-trait system is now wired (post-Ship
+  ac9a2a6) but under-tuned; some traits still don't produce visibly different
+  fighter outcomes across a play session.
+- **EC1 economy arc** — coach salaries are now differentiated by rating
+  (post-CURVE1), giving budget vs. elite a real tradeoff. Downstream: fight
+  purses, sponsorship depth, facility ROI curves.
+- **SUB-rate undershoot tuning** — see `memory/sub_rate_undershoots_2026-04-28.md`.
+  Pre-verify still applies against the current engine-tuning arc before shipping.
+- **Older Bug X items** filed pre-multiuser (Bug H, Bug C second path, Bug T, Bug Y).
+  Re-verify each against current code before shipping — several may already be closed
+  by the July ship cascade.
 
-Also queued: Bug H (AI offer skips gameplan — adjacent to Z/AA, may bundle), Bug C second
-path, Bug T (amateur tournament audit — not a fix, system verification), Bug Y (talent
-rarity rebalance — camp start only, design questions first), SUB-rate undershoot tuning
-(see `memory/sub_rate_undershoots_2026-04-28.md`).
-
-Deferred low-priority cleanup: Sub-bug O.1 (asymmetric round override at fight_integration.py),
-line 7923 redundant slot check, Sub-bug S.1 (rankings update missing in `_run_real_engine`),
-Sub-bug S.2 (`_fighter_data` mirror), Sub-bug S.3 (news headline — verify symptom first).
-Bundle whenever `fight_integration.py` or `_run_real_engine` is touched for another reason.
-See `CLAUDE_NOTES/2026-04-26-slot-fix-followup.md`.
+**Deferred low-priority cleanup:**
+- Sub-bug O.1 — asymmetric round override at `fight_integration.py:1228-1229`.
+  Bundle with any future `fight_integration.py` touch.
+- Off-week semantics contradiction — surfaced in TITLE-TRANSFER-DIAG1. Off weeks
+  discard the pipeline card but the fallback path (`_simulate_ai_fights_week`)
+  still generates fresh AI fights, contradicting the "no event" print. Not a
+  correctness bug — a design call on whether off weeks should truly skip AI sim.
 
 # CAGE DYNASTY — Claude Code instructions
 
@@ -184,6 +214,25 @@ accident.
   never `Dict`, `List`, `Set` type hints.
 - WebFighter dataclass crashed once because fields with defaults were placed
   before fields without. Always read the whole class before adding fields.
+- **CLI `fight_engine.py` manual constants on PA** (unverified). The PA copy
+  reportedly has manually-appended engine constants not in the repo. Working
+  tree matches HEAD as of 2026-07-01 audit; PA-side has not been re-audited
+  since. Anything that changes fight_engine constants should be checked against
+  PA's copy before deploy.
+- **PA `wsgi.py` manually edited** (unverified). Diverged from repo `wsgi.py`
+  during earlier deploy debugging. Repo file assumed authoritative but PA-side
+  not confirmed. Diff against PA's `/var/www/*_wsgi.py` before touching
+  WSGI-loaded modules.
+- **Multi-user env-var dependencies (post-2026-07-03).** `SECRET_KEY` unset →
+  cookies forgeable, session identity broken. `LEGACY_CLAIM_TOKEN` unset →
+  `/api/claim-legacy` becomes a 404 (safe default). Any new PA deployment or
+  environment migration needs both set BEFORE the first request or Van's own
+  session can't reach his save.
+- **`/api/claim-legacy` is a one-time bootstrap, not a repeatable pattern.**
+  It was built to solve the specific transition from single-tenant to multi-user.
+  Do NOT use it as a template for future "let admin log in as user X" flows —
+  it's a spent mechanism. Better patterns for admin work: signed magic links,
+  short-lived JWTs, or a proper login route.
 
 ## Recurring architectural pattern: "data exists but doesn't reach the surface"
 
@@ -218,7 +267,10 @@ After editing a .py file:
 I will:
 - Restart Flask myself. You don't run servers.
 - Test in the browser and report terminal output.
-- Save to slot3 (main save).
+- Multi-user is live (post-2026-07-03): save slot names are `bridge_van_*.json`.
+  Don't hardcode a specific slot as "the main save" — describe the mechanism
+  (`bridge_{user_id}_{slot}.json`, 5 slots + autosave per user) or read the
+  Save/Load page for the current session's most recent by timestamp.
 
 ## Communication
 
@@ -243,11 +295,10 @@ I will:
 
 ## Current top-of-list
 
-1. **DONE 2026-04-27** — Wire FOTN module to UI. Verified in play-test (FOTN headlines rendering on dashboard for Watanabe-Murphy Wk11 and Shavkat-MacDonald Wk13).
-2. **DONE 2026-05-02** — Fighter profile UI polish. Five-component bundle shipped at commit `f9c2a07`: style-class banner with family taglines, promoted nickname rendering, 4-quadrant accent-colored stat blocks (Striking=red / Physical=amber / Grappling=blue / Mental=teal), W(KO)-L(KO)-D record format. Verified across striker / grappler / hybrid / champion profiles. Nickname rendering ships dormant — generation/wiring filed at `memory/nickname_population_investigation_2026-05-02.md` for next session.
-3. Card builder slot assignment — `calculate_matchup_score` and `assign_slot`
-   already exist in `cage_dynasty_web/card_builder.py`, but the bridge
-   defaults everything to prelim. Need to wire them.
+See "Top-of-backlog" section near the top of this file (rewritten 2026-07-03).
+The April-May items previously listed here (FOTN wire, fighter profile polish,
+card-builder slot assignment) all shipped and were removed to prevent stale
+references. Historical ship recaps are in `CLAUDE_archive.md`.
 
 ## Key constants (don't change without telling me)
 
