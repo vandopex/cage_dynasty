@@ -2883,6 +2883,13 @@ class GameBridge:
                         "event_id":   ev_id,
                         "event_name": ev_name,
                         "week":       self._game_state.week_number,
+                        # EVENT-LOCATION-FIX1: player-fight events also
+                        # get the same deterministic city as any AI card
+                        # in the same week. On merge into ai_event
+                        # (advance_week ~3003-3010), ai_event's city
+                        # wins — but both are computed from the same
+                        # (week + _dfc_event_offset) seed so they match.
+                        "event_city": self._event_city(self._game_state.week_number),
                         "fights":     [],
                         "main_event": None,
                         "fotn":       None,
@@ -12978,6 +12985,12 @@ class GameBridge:
             "event_id":    card["event_id"],
             "event_name":  event_name,
             "week":        week,
+            # EVENT-LOCATION-FIX1: carry event_city from the source card
+            # (set by _create_empty_card_dict). Falls back to a fresh
+            # deterministic pick if the input card somehow lacks it —
+            # _event_city(week) is a seeded pick from _GLOBAL_CITIES and
+            # returns the same city for a given week across all callers.
+            "event_city":  card.get("event_city") or self._event_city(week),
             "fights":      [],
             "main_event":  None,
             "fotn":        None,
