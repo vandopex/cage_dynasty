@@ -8,6 +8,7 @@ a specific data format) and the real game engine classes.
 
 import sys
 import os
+import threading
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 
@@ -1326,10 +1327,24 @@ class GameBridge:
     """
     
     def __init__(self):
+        # MULTIUSER-ISOLATION1: user_id namespaces save files and identifies
+        # this bridge's owner. Set externally by routes.get_bridge() when
+        # the bridge is created for a given session. Defaults to 'anon' as
+        # a defensive fallback if a bridge is created outside the request
+        # path — should never fire in normal use.
+        self._user_id: str = 'anon'
+        # Reentrant lock — held around mutating operations (new_game,
+        # advance_week, web_save, web_load, accept_fight_offer,
+        # _book_fight_from_neg) to serialize concurrent requests hitting
+        # the SAME user's bridge. Different users' bridges have their own
+        # locks. Reentrant so nested acquires within one method don't
+        # deadlock.
+        self._lock = threading.RLock()
+
         self.game_started = False
         self._game_state: Optional[Any] = None
         self._mock_mode = not GAME_MODULES_AVAILABLE
-        
+
         # Cache for expensive operations
         self._fighter_cache: Dict[str, WebFighter] = {}
         self._camp_cache: Dict[str, WebCamp] = {}
@@ -1542,11 +1557,17 @@ class GameBridge:
                  coach_data: Dict, fighter_data: Dict) -> bool:
         """
         Start a new game with player's choices.
-        
+
         Returns True if successful, False otherwise.
         """
+        with self._lock:
+            return self._new_game_impl(camp_name, camp_location, camp_tier,
+                                        coach_data, fighter_data)
+
+    def _new_game_impl(self, camp_name: str, camp_location: str, camp_tier: str,
+                        coach_data: Dict, fighter_data: Dict) -> bool:
         if self._mock_mode:
-            return self._new_game_mock(camp_name, camp_location, camp_tier, 
+            return self._new_game_mock(camp_name, camp_location, camp_tier,
                                        coach_data, fighter_data)
         
         try:
@@ -1935,7 +1956,10 @@ class GameBridge:
 
     def _bridge_save_path(self, slot: str) -> str:
         import os
-        return os.path.join(self._saves_dir(), f"bridge_{slot}.json")
+        # MULTIUSER-ISOLATION1: user_id in filename so bridges for
+        # different sessions don't overwrite each other on disk.
+        uid = getattr(self, '_user_id', None) or 'anon'
+        return os.path.join(self._saves_dir(), f"bridge_{uid}_{slot}.json")
 
     _GLOBAL_CITIES: List[str] = [
         # North America
@@ -2036,6 +2060,10 @@ class GameBridge:
         Save complete game state to a named slot.
         Saves both CLI game_state (fighters/world) and bridge state (pipeline, money, etc.)
         """
+        with self._lock:
+            return self._web_save_impl(slot)
+
+    def _web_save_impl(self, slot: str) -> Dict[str, Any]:
         import json, os
         from datetime import datetime
 
@@ -2175,6 +2203,10 @@ class GameBridge:
         Load a saved game from a named slot.
         Restores both CLI game_state and bridge state.
         """
+        with self._lock:
+            return self._web_load_impl(slot)
+
+    def _web_load_impl(self, slot: str) -> Dict[str, Any]:
         import json, os
 
         bridge_path = self._bridge_save_path(slot)
@@ -2693,13 +2725,17 @@ class GameBridge:
     
     def advance_week(self) -> Dict[str, Any]:
         """Advance the game by one week"""
+        with self._lock:
+            return self._advance_week_impl()
+
+    def _advance_week_impl(self) -> Dict[str, Any]:
         if self._mock_mode:
             if hasattr(self, '_mock_generator'):
                 result = self._mock_generator.advance_week()
                 self._clear_cache()
                 return {"success": True, **result}
             return {"success": False}
-        
+
         if not self._game_state:
             return {"success": False}
 
@@ -5716,11 +5752,15 @@ class GameBridge:
     
     def accept_fight_offer(self, offer_id: str) -> Dict[str, Any]:
         """Accept a fight offer and schedule the fight"""
+        with self._lock:
+            return self._accept_fight_offer_impl(offer_id)
+
+    def _accept_fight_offer_impl(self, offer_id: str) -> Dict[str, Any]:
         if self._mock_mode:
             if hasattr(self, '_mock_generator'):
                 return self._mock_generator.accept_offer(offer_id)
             return {"success": False, "error": "No game loaded"}
-        
+
         if not self._game_state:
             return {"success": False, "error": "No game loaded"}
         
@@ -12192,6 +12232,10 @@ class GameBridge:
         UI shouldn't surface own-fighter targets, but the fallback
         keeps a future UI regression from silently booking a fighter
         against themselves."""
+        with self._lock:
+            return self._book_fight_from_neg_impl(neg)
+
+    def _book_fight_from_neg_impl(self, neg: Dict) -> Optional[Dict]:
         if neg.get("player_fighter_id") == neg.get("ai_fighter_id"):
             print(f"  ⚠️ [BOOK_NEG] Self-fight refused — "
                   f"{neg.get('player_fighter_name', '?')} vs themselves")

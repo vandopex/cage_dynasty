@@ -5,10 +5,21 @@ All route handlers for the web application.
 
 from flask import render_template, redirect, url_for, request, jsonify, flash, session
 from functools import wraps
+import os
 import uuid
 import sys
 import traceback
 import subprocess  # NEW — for /api/git-pull webhook
+
+
+# MULTIUSER-ISOLATION1 — legacy claim constants
+_LEGACY_USER_ID = "van"
+# Marker file signals the one-shot legacy claim has already fired.
+# When absent, the FIRST cookieless visitor claims _LEGACY_USER_ID.
+# When present, all cookieless visitors get a fresh uuid.
+def _legacy_marker_path() -> str:
+    _here = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(_here, 'saves', '.legacy_claimed')
 
 
 # Trait display labels — maps internal enum strings to (label, category)
@@ -333,9 +344,52 @@ def _generate_available_coaches(tier):
 def register_routes(app):
     """Register all routes with the Flask application."""
 
-    # Helper to get the game bridge
+    # ── MULTIUSER-ISOLATION1: session identity + bridge dispatch ──────
+    # Every request needs a stable session['user_id']. The FIRST
+    # cookieless visitor after deploy claims 'van' (one-shot, gated
+    # on saves/.legacy_claimed marker); everyone else gets a fresh
+    # uuid. Bridges live in app.game_bridges dict, keyed by user_id.
+    from game_bridge import GameBridge as _GameBridge
+
+    @app.before_request
+    def _ensure_user_identity():
+        # Skip identity assignment on static and webhook paths — no
+        # need to mint cookies for asset requests or the deploy hook.
+        _p = request.path
+        if _p.startswith('/static/') or _p.startswith('/api/git-pull'):
+            return None
+        if 'user_id' in session:
+            return None
+        # No user_id yet — check whether we should hand out the
+        # legacy claim or a fresh uuid.
+        marker = _legacy_marker_path()
+        if not os.path.exists(marker):
+            session['user_id'] = _LEGACY_USER_ID
+            try:
+                # Write the marker so subsequent visitors get uuids.
+                _saves_dir = os.path.dirname(marker)
+                os.makedirs(_saves_dir, exist_ok=True)
+                with open(marker, 'w') as fp:
+                    fp.write(f"claimed_by=session; user_id={_LEGACY_USER_ID}\n")
+                print(f"✅ [LEGACY CLAIM] user_id='{_LEGACY_USER_ID}' "
+                      f"assigned to first visitor; marker written")
+            except OSError as _e:
+                print(f"⚠️  [LEGACY CLAIM] marker write failed: {_e} — "
+                      f"claim may re-fire until marker exists")
+        else:
+            session['user_id'] = str(uuid.uuid4())
+        return None
+
+    # Helper to get the game bridge for the CURRENT session's user_id.
+    # Creates the bridge lazily on first request per user; stamps its
+    # _user_id so save-file paths become user-scoped.
     def get_bridge():
-        return app.game_bridge
+        uid = session.get('user_id') or 'anon'
+        if uid not in app.game_bridges:
+            _b = _GameBridge()
+            _b._user_id = uid
+            app.game_bridges[uid] = _b
+        return app.game_bridges[uid]
 
     # Ship S2: inject sidebar badge counts into every template render
     # so nav badges work on all pages, not just the dashboard route.
@@ -379,9 +433,23 @@ def register_routes(app):
     @app.route('/new-game-session', methods=['POST'])
     def new_game_session():
         """Clear active in-memory session, redirect to new game setup.
-        Save files are NOT deleted."""
-        app.game_bridge = type(app.game_bridge)()
-        session.clear()
+        Save files are NOT deleted.
+
+        MULTIUSER-ISOLATION1: only the current user's bridge is reset —
+        other users' bridges in app.game_bridges are untouched. session
+        keeps user_id so the fresh bridge lands under the same identity
+        (so their saves stay reachable)."""
+        _uid = session.get('user_id')
+        if _uid and _uid in app.game_bridges:
+            _fresh = _GameBridge()
+            _fresh._user_id = _uid
+            app.game_bridges[_uid] = _fresh
+        # Clear wizard-draft keys but keep user_id so this user's
+        # saves stay bound to the same identity across the reset.
+        for k in ('camp_name', 'camp_location', 'camp_tier',
+                  'selected_coach', 'selected_fighter',
+                  'available_prospects'):
+            session.pop(k, None)
         return redirect(url_for('new_game'))
 
     def _ceiling_to_display_grade(ceiling: int) -> str:
