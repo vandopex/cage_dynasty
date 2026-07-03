@@ -18,6 +18,32 @@
 </div>
 
 {# Fighter comparison #}
+{# Shared style maps — used by both player + opponent style pills below. #}
+{% set STYLE_FAMILY = {
+    "Orthodox Boxer":"striker","Muay Thai":"striker",
+    "Kickboxer":"striker","Counter Striker":"striker",
+    "Pressure Fighter":"striker","Brawler":"striker",
+    "Point Fighter":"striker","Striker":"striker",
+    "Karate":"striker",
+    "Wrestler":"grappler","BJJ Specialist":"grappler",
+    "Judo":"grappler","Sambo":"grappler",
+    "Ground & Pound":"hybrid","Sprawl & Brawl":"hybrid",
+    "Clinch Fighter":"hybrid","Hybrid":"hybrid",
+    "Balanced":"hybrid",
+} %}
+{% set STYLE_COLOR = {
+    "striker":  "var(--blood-red)",
+    "grappler": "var(--info)",
+    "hybrid":   "var(--violet, #a855f7)",
+} %}
+{% set STYLE_ICON = {
+    "Orthodox Boxer":"🥊","Muay Thai":"🦵","Wrestler":"🤼",
+    "BJJ Specialist":"🥋","Kickboxer":"🦶","Brawler":"💥",
+    "Counter Striker":"↩️","Point Fighter":"🎯",
+    "Pressure Fighter":"⬆️","Ground & Pound":"👊",
+    "Clinch Fighter":"💪","Sprawl & Brawl":"🛡️",
+    "Sambo":"⚔️","Judo":"🔄","Hybrid":"⚡","Karate":"🥋",
+} %}
 <div class="card mb-lg">
     <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:var(--spacing-lg);
                 padding:var(--spacing-lg);align-items:center;">
@@ -33,6 +59,53 @@
                 {% else %} · Unranked{% endif %}
             </div>
             <div style="font-size:.75rem;color:var(--info);">{{ player_fighter.overall_rating }} OVR</div>
+
+            {# ── Fighting style pill (symmetric with opponent) ── #}
+            {% if player_fighter.fighting_style %}
+            {% set _p_style_family = STYLE_FAMILY.get(player_fighter.fighting_style, "hybrid") %}
+            {% set _p_style_color  = STYLE_COLOR.get(_p_style_family, "var(--text-muted)") %}
+            {% set _p_style_icon   = STYLE_ICON.get(player_fighter.fighting_style, "🥊") %}
+            <div style="display:inline-flex;align-items:center;gap:5px;
+                        margin-top:6px;padding:3px 8px;border-radius:3px;
+                        background:{{ _p_style_color }}1a;
+                        border:1px solid {{ _p_style_color }}55;
+                        font-size:.68rem;color:{{ _p_style_color }};
+                        font-family:var(--font-display);
+                        letter-spacing:.04em;">
+                <span>{{ _p_style_icon }}</span>
+                <span>{{ player_fighter.fighting_style }}</span>
+            </div>
+            {% else %}
+            <div style="display:inline-flex;align-items:center;gap:5px;
+                        margin-top:6px;padding:3px 8px;border-radius:3px;
+                        background:rgba(255,255,255,.04);
+                        border:1px solid var(--border-color);
+                        font-size:.68rem;color:var(--text-muted);
+                        font-family:var(--font-display);
+                        letter-spacing:.04em;font-style:italic;">
+                <span>Style unproven</span>
+            </div>
+            {% endif %}
+
+            {# ── Top 3 stat pills (symmetric with opponent, right-aligned) ── #}
+            {% if player_top_stats %}
+            <div style="display:flex;flex-wrap:wrap;gap:4px;
+                        justify-content:flex-end;margin-top:6px;">
+                {% for label, val in player_top_stats %}
+                <span style="font-size:.62rem;padding:2px 6px;
+                             border-radius:3px;
+                             background:rgba(255,255,255,.04);
+                             border:1px solid var(--border-color);
+                             color:var(--text-muted);">
+                    {{ label }}
+                    <span style="color:{% if val >= 85 %}var(--gold){% elif val >= 70 %}var(--neon-green){% else %}var(--info){% endif %};
+                                 font-weight:600;margin-left:3px;">
+                        {{ val }}
+                    </span>
+                </span>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% endif %}
         </div>
         <div style="text-align:center;">
@@ -53,31 +126,9 @@
 
             {# ── Fighting style pill ── #}
             {% if opponent and opponent.fighting_style %}
-            {% set _style_family = {
-                "Orthodox Boxer":"striker","Muay Thai":"striker",
-                "Kickboxer":"striker","Counter Striker":"striker",
-                "Pressure Fighter":"striker","Brawler":"striker",
-                "Point Fighter":"striker","Striker":"striker",
-                "Karate":"striker",
-                "Wrestler":"grappler","BJJ Specialist":"grappler",
-                "Judo":"grappler","Sambo":"grappler",
-                "Ground & Pound":"hybrid","Sprawl & Brawl":"hybrid",
-                "Clinch Fighter":"hybrid","Hybrid":"hybrid",
-                "Balanced":"hybrid",
-            }.get(opponent.fighting_style, "hybrid") %}
-            {% set _style_color = {
-                "striker":  "var(--blood-red)",
-                "grappler": "var(--info)",
-                "hybrid":   "var(--violet, #a855f7)",
-            }.get(_style_family, "var(--text-muted)") %}
-            {% set _style_icon = {
-                "Orthodox Boxer":"🥊","Muay Thai":"🦵","Wrestler":"🤼",
-                "BJJ Specialist":"🥋","Kickboxer":"🦶","Brawler":"💥",
-                "Counter Striker":"↩️","Point Fighter":"🎯",
-                "Pressure Fighter":"⬆️","Ground & Pound":"👊",
-                "Clinch Fighter":"💪","Sprawl & Brawl":"🛡️",
-                "Sambo":"⚔️","Judo":"🔄","Hybrid":"⚡","Karate":"🥋",
-            }.get(opponent.fighting_style, "🥊") %}
+            {% set _style_family = STYLE_FAMILY.get(opponent.fighting_style, "hybrid") %}
+            {% set _style_color  = STYLE_COLOR.get(_style_family, "var(--text-muted)") %}
+            {% set _style_icon   = STYLE_ICON.get(opponent.fighting_style, "🥊") %}
             <div style="display:inline-flex;align-items:center;gap:5px;
                         margin-top:6px;padding:3px 8px;border-radius:3px;
                         background:{{ _style_color }}1a;

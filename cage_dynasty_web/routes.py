@@ -2049,31 +2049,34 @@ def register_routes(app):
             pass
 
         # ── Opponent intel — style pill data + top 3 stats + scout lines ──
-        top_stats = []
+        _stat_keys = [
+            ('Boxing', 'boxing'), ('Kicks', 'kicks'),
+            ('Clinch', 'clinch_striking'),
+            ('Clinch Ctrl', 'clinch_control'),
+            ('Striking D', 'striking_defense'),
+            ('Takedowns', 'takedowns'),
+            ('TD Defense', 'takedown_defense'),
+            ('Top Control', 'top_control'),
+            ('Submissions', 'submissions'),
+            ('Guard', 'guard'),
+            ('Strength', 'strength'), ('Speed', 'speed'),
+            ('Cardio', 'cardio'), ('Chin', 'chin'),
+            ('Fight IQ', 'fight_iq'),
+            ('Composure', 'composure'),
+            ('Heart', 'heart'),
+        ]
+
+        def _top_3_stats(f):
+            if not f:
+                return []
+            vals = [(label, getattr(f, key, 0)) for label, key in _stat_keys]
+            vals.sort(key=lambda x: -(x[1] or 0))
+            return vals[:3]
+
+        top_stats = _top_3_stats(opponent)
+        player_top_stats = _top_3_stats(player_fighter)
         scout_lines = []
         if opponent:
-            _stat_keys = [
-                ('Boxing', 'boxing'), ('Kicks', 'kicks'),
-                ('Clinch', 'clinch_striking'),
-                ('Clinch Ctrl', 'clinch_control'),
-                ('Striking D', 'striking_defense'),
-                ('Takedowns', 'takedowns'),
-                ('TD Defense', 'takedown_defense'),
-                ('Top Control', 'top_control'),
-                ('Submissions', 'submissions'),
-                ('Guard', 'guard'),
-                ('Strength', 'strength'), ('Speed', 'speed'),
-                ('Cardio', 'cardio'), ('Chin', 'chin'),
-                ('Fight IQ', 'fight_iq'),
-                ('Composure', 'composure'),
-                ('Heart', 'heart'),
-            ]
-            _stat_vals = [
-                (label, getattr(opponent, key, 0))
-                for label, key in _stat_keys
-            ]
-            _stat_vals.sort(key=lambda x: -(x[1] or 0))
-            top_stats = _stat_vals[:3]
             try:
                 scout_lines = bridge._generate_opponent_tendencies(opponent)
             except Exception:
@@ -2084,6 +2087,7 @@ def register_routes(app):
             player_fighter=player_fighter,
             opponent=opponent,
             top_stats=top_stats,
+            player_top_stats=player_top_stats,
             scout_lines=scout_lines,
             week=bridge.week_number,
         )
