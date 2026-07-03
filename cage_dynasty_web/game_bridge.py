@@ -15481,6 +15481,29 @@ class GameBridge:
             if slot == "main_event" and main_event_dict is None:
                 main_event_dict = f
 
+        # ── CARDSLOT-BACKFILL: cosmetic upward promotion ──
+        # If MAIN_CARD ended up empty AND PRELIM has 4+ fights AND the
+        # top-scoring PRELIM fight has real credibility (score >= 45),
+        # promote that one fight to MAIN_CARD so the upper undercard
+        # doesn't render empty on weak matchmaking weeks. Presentation-
+        # only — doesn't alter scoring, matchmaking, or which fights
+        # were proposed. Fires only when initial routing already left
+        # MAIN_CARD empty; a week with any real ranked matchup will
+        # have populated MAIN_CARD via the normal score/rank path and
+        # this branch is skipped.
+        _main_card_count = sum(1 for f in fight_dicts
+                               if f.get("card_slot") == "main_card")
+        _prelim_fights = [f for f in fight_dicts
+                          if f.get("card_slot") == "prelim"]
+        if _main_card_count == 0 and len(_prelim_fights) >= 4:
+            _top_prelim = max(_prelim_fights,
+                              key=lambda f: f.get("_g1_score", 0))
+            if _top_prelim.get("_g1_score", 0) >= 45:
+                _top_prelim["card_slot"] = "main_card"
+                if CARD_BUILDER_AVAILABLE:
+                    self._card_builder.update_card_state_from_fights(
+                        event_name, target_week, fight_dicts)
+
         # Clean up the temporary scoring key — don't pollute the saved dict
         for f in fight_dicts:
             f.pop("_g1_score", None)
