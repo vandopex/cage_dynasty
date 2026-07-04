@@ -3016,8 +3016,16 @@ class GameBridge:
             card = self._upcoming_cards.pop(current_week, None)
             _is_off_week = (current_week % 3 == 0)
             if _is_off_week and card:
-                print(f"  🏖️  [OFF WEEK] Week {current_week} — no Cage Dynasty event "
-                      f"(skipped {len(card.get('fights', []))} AI fights)")
+                # OFFWEEK-SEMANTICS1: the flagship pre-built card is
+                # discarded here but the fallback `_simulate_ai_fights_week`
+                # at line ~3059 still fires, generating a lighter card
+                # via the same matchmaking/slot pipeline (Ship G1
+                # unified). Wording reflects reality — the world keeps
+                # simulating, only the flagship event is absent.
+                print(f"  🏖️  [OFF WEEK] Week {current_week} — no flagship "
+                      f"Cage Dynasty event this week — smaller cards still ran "
+                      f"(pre-built card of {len(card.get('fights', []))} "
+                      f"fights discarded; fallback matchmaker picks lighter alternates)")
                 card = None  # discard; player fights already handled
             if card and card["fights"]:
                 # Only simulate AI fights (player fights already handled above)

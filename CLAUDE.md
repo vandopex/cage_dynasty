@@ -130,6 +130,19 @@ bridge, check for saves under this `user_id` and auto-load the most recent by mt
   Re-verify each against current code before shipping — several may already be closed
   by the July ship cascade.
 
+**Recently reconciled (closed):**
+- **Matchmaking diversity / rematch prevention** — filed as an in-conversation
+  concern 2026-07-04; MATCHMAKING-RECONCILE1 (2026-07-05) confirmed this is
+  substantively closed by two prior ships: `07491d1` (2026-06-22) replaced the
+  old 6w/12w recency-only cooldown with a 16w hard minimum (20w for title
+  rematches) PLUS an intervening-fight guard (`_both_fought_since`) and
+  contender-earned-title-shot guard (≥2 wins vs different opponents since last
+  meeting), and mirrored the same guards into world-gen. `b3b16c8` (2026-06-27)
+  added tiered rivalry heat bonus into `_matchup_score` (0/5/15/25/35 by heat
+  30/50/70/90). Empirical on 2026-07-03 autosave: 99 unique pairs across 10
+  events, only 2 pairs met twice, only 1 pair met three times, max = 3.
+  Yesterday's investigation predated these ships and is stale.
+
 **Deferred low-priority cleanup:**
 - Sub-bug O.1 — asymmetric round override at `fight_integration.py:1228-1229`.
   Bundle with any future `fight_integration.py` touch.
@@ -137,6 +150,17 @@ bridge, check for saves under this `user_id` and auto-load the most recent by mt
   discard the pipeline card but the fallback path (`_simulate_ai_fights_week`)
   still generates fresh AI fights, contradicting the "no event" print. Not a
   correctness bug — a design call on whether off weeks should truly skip AI sim.
+- `card_builder.calculate_matchup_score(is_rivalry=False)` param is dead — no
+  caller passes it (game_bridge's `_matchup_score` adds `_rivalry_heat_bonus`
+  on the returned score instead). The 12.0 flat rivalry bonus at
+  `card_builder.py:348` never fires. Small cleanup, no behavior change.
+- Empty-main_card residual rate ~10% of events (1/10 on the 2026-07-03
+  autosave). `CARDSLOT-BACKFILL1` (`222a502`, 2026-07-03) cosmetically promotes
+  a top-scoring prelim into MAIN_CARD when it routes empty, so the visible
+  symptom is masked. Root cause (main_card score threshold ≥55 misses on
+  thin-week candidate pools) is unaddressed. Design call, not a bug — either
+  loosen threshold, thicken matchmaking density in thin weeks, or leave the
+  cosmetic backfill as-is.
 
 # CAGE DYNASTY — Claude Code instructions
 
