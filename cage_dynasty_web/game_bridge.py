@@ -523,14 +523,17 @@ COACH_SPECIALTY_TO_BUCKET: Dict[str, str] = {
     "boxing_coach":     "striking_coach",
     "muay_thai_coach":  "striking_coach",
     "kickboxing_coach": "striking_coach",
-    # COACH-GRAPPLE-SPLIT1: wrestling/bjj now split into distinct
-    # buckets so a fighter under one-domain-only coaching develops the
-    # correct archetype. clinch_coach → wrestling for now; clinch
-    # bucket rework is deferred (clinch_control still sits in the
-    # striking bucket — resolving that mismatch is out of scope here).
+    # COACH-GRAPPLE-SPLIT1 + COACH-CLINCH-SPLIT1: wrestling/bjj/clinch
+    # each own a real bucket. Clinch's bucket contains both clinch stats
+    # (clinch_control, clinch_striking) shared with the Striking bucket —
+    # Striking-only camps still develop Muay Thai / Clinch archetypes
+    # (no regression), while a dedicated Clinch coach specializes on
+    # the shared pair. See _ARCHETYPE_DOMAIN — clinch_coach shares the
+    # "striking" domain so same-domain diminishing prevents shared-stat
+    # double-counting (mirrors top_control precedent in the grapple-split).
     "wrestling_coach":  "wrestling_coach",
     "bjj_coach":        "bjj_coach",
-    "clinch_coach":     "wrestling_coach",
+    "clinch_coach":     "clinch_coach",
     "sc_coach":         "sc_coach",
     # Grappling legacy — ambiguous strings map to the closer bucket.
     # "grappling" alone is ambiguous, defaults to Wrestling; "bjj"/
@@ -579,6 +582,16 @@ COACH_BUCKET_ATTRS: Dict[str, List[str]] = {
     # the unified bucket.
     "wrestling_coach": ["takedowns", "takedown_defense", "top_control"],
     "bjj_coach":       ["submissions", "guard", "top_control"],
+    # COACH-CLINCH-SPLIT1: dedicated Clinch bucket. Both stats stay
+    # shared with the Striking bucket above so pure-Striking camps
+    # still develop Muay Thai's clinch_score (retained for backward
+    # compatibility — clinch_control also feeds real engine mechanics:
+    # clinch entry attack + clinch mastery initiative bonus). A
+    # dedicated Clinch coach concentrates on the two clinch stats at
+    # ~2.5× per-stat rate vs Striking's 5-stat spread. Same "striking"
+    # domain in _ARCHETYPE_DOMAIN triggers same-domain diminishing so
+    # the shared stats aren't double-counted when both coaches are hired.
+    "clinch_coach":    ["clinch_control", "clinch_striking"],
     # Backward-compat alias — the pre-split unified bucket. Kept so any
     # runtime path that resolves the "grappling_coach" bucket key
     # directly (rather than via COACH_SPECIALTY_TO_BUCKET) still
@@ -7310,11 +7323,12 @@ class GameBridge:
     # widens its effective per-week contribution.
     _ARCHETYPE_BOOST = {
         "striking_coach":  1.0,
-        # COACH-GRAPPLE-SPLIT1: same 1.0 as the pre-split grappling
-        # bucket for both halves — the split doesn't rebalance
+        # COACH-GRAPPLE-SPLIT1 + COACH-CLINCH-SPLIT1: same 1.0 baseline
+        # as the pre-split unified buckets — splits don't rebalance
         # per-bucket power, only what each bucket trains.
         "wrestling_coach": 1.0,
         "bjj_coach":       1.0,
+        "clinch_coach":    1.0,
         "grappling_coach": 1.0,  # backward-compat alias
         "sc_coach":        2.0,
         "mma_coach":       1.5,
@@ -7899,8 +7913,15 @@ class GameBridge:
         # (Wrestling primary 1.0 + BJJ diminished 0.5), matching the
         # prior unified-bucket behavior when two grappling coaches
         # shared all five stats.
+        # COACH-CLINCH-SPLIT1: clinch_coach shares the "striking"
+        # domain with striking_coach — same reason. Their two shared
+        # stats (clinch_control, clinch_striking) get 1.0 (primary
+        # coach in loop order) + 0.5 (second same-domain coach) = 1.5×
+        # combined rate. Own-domain would double-count; grappling-
+        # domain wouldn't align with the shared clinch stats.
         _ARCHETYPE_DOMAIN = {
             "striking_coach":  "striking",
+            "clinch_coach":    "striking",
             "wrestling_coach": "grappling",
             "bjj_coach":       "grappling",
             "grappling_coach": "grappling",  # backward-compat alias
@@ -8345,16 +8366,20 @@ class GameBridge:
                                        'clinch_striking',
                                        'clinch_control',
                                        'striking_defense'],
-                    # COACH-GRAPPLE-SPLIT1: focus-match lists mirror
-                    # the split bucket stats so a wrestling-focused
-                    # training plan gets the 1.35× bonus only under a
-                    # wrestling coach, not a BJJ coach (and inverse).
-                    # top_control appears in both — matches whichever
-                    # coach is present.
+                    # COACH-GRAPPLE-SPLIT1 + COACH-CLINCH-SPLIT1: focus-
+                    # match lists mirror the split bucket stats so a
+                    # wrestling-focused plan gets the 1.35× bonus only
+                    # under a Wrestling coach, not BJJ (and inverse);
+                    # a clinch-focused plan matches Clinch OR Striking
+                    # (both train the clinch stats). Shared stats
+                    # (top_control, clinch_control, clinch_striking)
+                    # appear in every bucket that trains them.
                     'wrestling_coach': ['takedowns','takedown_defense',
                                         'top_control'],
                     'bjj_coach':       ['submissions','guard',
                                         'top_control'],
+                    'clinch_coach':    ['clinch_control',
+                                        'clinch_striking'],
                     'grappling_coach': ['takedowns','top_control',
                                         'submissions','guard',
                                         'takedown_defense'],
@@ -12799,7 +12824,8 @@ class GameBridge:
         """Map coach archetype to recommended gameplan stance."""
         _SP = specialty.lower()
         if _SP in ("striking", "boxing", "kickboxing", "muay thai",
-                   "muay_thai", "striking_coach"):
+                   "muay_thai", "striking_coach",
+                   "clinch", "clinch_coach"):
             return "AGGRESSIVE"
         if _SP in ("wrestling", "grappling", "bjj", "submissions",
                    "grappling_coach", "wrestling_coach", "bjj_coach",
