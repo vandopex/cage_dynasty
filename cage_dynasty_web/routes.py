@@ -585,8 +585,21 @@ def register_routes(app):
         """Main dashboard/hub view."""
         bridge = get_bridge()
 
+        # AUTOLOAD-SHIP1: on a fresh bridge (post-deploy or new session),
+        # silently pick up this user's most recent save so returning
+        # visitors don't see the New Game screen. Never touch a live
+        # in-memory session — the game_started gate above ensures the
+        # picker only runs when the bridge is empty. If load fails
+        # (corrupt/unreadable), fall back to New Game rather than
+        # render a broken dashboard.
         if not bridge.game_started:
-            return redirect(url_for('new_game'))
+            _newest = bridge.get_newest_save_slot()
+            if _newest is None:
+                return redirect(url_for('new_game'))
+            _result = bridge.web_load(_newest)
+            if not (isinstance(_result, dict) and _result.get('success')):
+                return redirect(url_for('new_game'))
+            # Fall through — bridge is now populated, render dashboard.
 
         camp      = bridge.get_player_camp()
         fighters  = bridge.get_player_fighters()

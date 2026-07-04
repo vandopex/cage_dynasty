@@ -2814,6 +2814,32 @@ class GameBridge:
                 })
         return saves
 
+    def get_newest_save_slot(self) -> Optional[str]:
+        """Return the slot name of this user's most-recently-written save,
+        or None if no save files exist on disk. Newest = max file mtime.
+
+        Pure read — no mutation, no lock needed. Per-slot try/except
+        guards against a stat race where a file vanishes between
+        exists() and getmtime() (e.g. concurrent delete). AUTOLOAD-SHIP1.
+        """
+        import os
+        slots = ["slot1", "slot2", "slot3", "slot4", "slot5", "autosave"]
+        newest_slot = None
+        newest_mtime = -1.0
+        for slot in slots:
+            path = self._bridge_save_path(slot)
+            try:
+                if not os.path.exists(path):
+                    continue
+                mtime = os.path.getmtime(path)
+            except OSError:
+                # File vanished mid-loop, or permissions changed — skip.
+                continue
+            if mtime > newest_mtime:
+                newest_mtime = mtime
+                newest_slot = slot
+        return newest_slot
+
     def delete_web_save(self, slot: str) -> Dict[str, Any]:
         """Delete a save slot's bridge file (and any legacy CLI file)."""
         import os
