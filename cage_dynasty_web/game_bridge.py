@@ -505,14 +505,21 @@ COACH_TYPE_MIGRATION = {
 }
 
 
-# ── COACH-COVERAGE1b — hoisted single source of truth ────────────
+# ── COACH-LOOKUP-REFACTOR-SHIP1 — single source of truth ─────────
+# Absorbs the pre-refactor COACH_SPECIALTY_TO_BUCKET table plus the two
+# intentional coverage additions from COACH-JUDOSAMBO-DIAG1
+# ('judo' / 'sambo' → clinch_coach). Every specialty-keyed consumer that
+# used to grep against its own drifted alias set now normalizes here
+# via `resolve_specialty()` — see it and the collapse-table in
+# COACH-LOOKUP-REFACTOR-DIAG1 for the sites.
+#
 # Maps a coach's `specialty` field (canonical Coach-3 keys or legacy
-# strings from world_init / older saves) to the internal training
-# BUCKET used by _apply_weekly_training. Single source of truth: the
-# training loop references this dict directly (SPECIALTY_MAP =
-# COACH_SPECIALTY_TO_BUCKET); the display path uses get_coach_trained_stats
-# which also reads from here. No local copy, no drift possible.
-COACH_SPECIALTY_TO_BUCKET: Dict[str, str] = {
+# strings from world_init / older saves) to the internal training BUCKET
+# key used by _apply_weekly_training. Bucket keys are the canonical set:
+# {striking_coach, wrestling_coach, bjj_coach, clinch_coach, sc_coach,
+#  mma_coach}. Backward-compat 'grappling_coach' input string routes to
+# wrestling_coach.
+_SPECIALTY_ALIASES: Dict[str, str] = {
     # Striking family
     "striking":         "striking_coach",
     "boxing":           "striking_coach",
@@ -560,7 +567,46 @@ COACH_SPECIALTY_TO_BUCKET: Dict[str, str] = {
     "head coach":       "mma_coach",
     "cornering":        "mma_coach",
     "strategy":         "mma_coach",
+    # COACH-LOOKUP-REFACTOR-SHIP1 intentional coverage adds. Route
+    # to the Clinch bucket per COACH-JUDOSAMBO-DIAG1 (aligns with
+    # clinch_coach's "Clinch & Judo Coach" display name and its
+    # existing style_match list). Two entries here propagate to every
+    # site that reads via resolve_specialty() or the strict dict lookup
+    # — the bucket dict lookup (get_coach_trained_stats), the training-
+    # loop routing, and the _sc_specialties predicate. Gameplan is
+    # added separately in _gameplan_from_specialty's if-tree because
+    # that site is not consolidated through the resolver (see the ship
+    # memo for why).
+    "judo":             "clinch_coach",
+    "sambo":            "clinch_coach",
 }
+
+# Backward-compat: the pre-refactor name is kept as an alias so any
+# archived code (or in-flight edits) that grep for the old identifier
+# still resolves to the same dict. New code should use
+# _SPECIALTY_ALIASES or resolve_specialty(). Grep-verified: no
+# out-of-file consumers, but kept defensively for one release cycle.
+COACH_SPECIALTY_TO_BUCKET = _SPECIALTY_ALIASES
+
+
+def resolve_specialty(specialty: Any) -> str:
+    """Normalize any coach specialty string to a canonical training-bucket key.
+
+    Returns one of the canonical bucket keys:
+      striking_coach / wrestling_coach / bjj_coach / clinch_coach /
+      sc_coach / mma_coach
+
+    Falls back to 'mma_coach' for unknown input — matches the current
+    _apply_weekly_training fallthrough (SPECIALTY_MAP.get(k, "mma_coach"))
+    so callers routing through this get equivalent-or-safer behavior.
+
+    Callers relying on the stricter "unknown-specialty renders nothing"
+    contract (namely get_coach_trained_stats for the hire-card display)
+    should check _SPECIALTY_ALIASES membership first before calling
+    this — the strict fall-through is [], not mma_coach's attrs list.
+    """
+    key = str(specialty or '').strip().lower()
+    return _SPECIALTY_ALIASES.get(key, 'mma_coach')
 
 # Bucket → stats actually trained by _apply_weekly_training. Single
 # source of truth: this constant is referenced directly by both the
@@ -605,6 +651,48 @@ COACH_BUCKET_ATTRS: Dict[str, List[str]] = {
 }
 
 
+# COACH-LOOKUP-REFACTOR-SHIP1 — hoisted from _apply_weekly_training
+# (previously inline at line ~7998 / ~8440). Contents unchanged. The
+# hoist lets other consumers share the maps without redeclaring; today
+# only the training loop reads them, but the sc-check predicate now
+# also uses bucket-keyed logic and future consolidations of the
+# specialty→archetype and specialty→focus sites can pull from here.
+#
+# Bucket → multi-coach domain string. Same-domain coaches on the same
+# staff dilute via the 1.0 / 0.5 / 0.25 / 0.10 rate curve inside
+# _apply_weekly_training. NOT to be conflated with the DISPLAY archetype
+# label produced by _specialty_to_archetype — that concept groups
+# clinch_coach under 'grappling' (a display taxonomy call), while THIS
+# dict puts clinch_coach under 'striking' (a training-diminishing call).
+# Both are correct for their respective concerns.
+_ARCHETYPE_DOMAIN: Dict[str, str] = {
+    "striking_coach":  "striking",
+    "clinch_coach":    "striking",
+    "wrestling_coach": "grappling",
+    "bjj_coach":       "grappling",
+    "grappling_coach": "grappling",  # backward-compat alias
+    "sc_coach":        "sc",
+    "mma_coach":       "mma_head",
+}
+
+# Bucket → focus-stat allowlist for the training-plan focus 1.35× bonus.
+# The plan's focus stat must appear in the coach's bucket-list to earn
+# the bonus. Split entries mirror COACH_BUCKET_ATTRS with the shared
+# stats (top_control across wrestling/bjj, clinch_control/clinch_striking
+# across clinch/striking) appearing in every bucket that trains them.
+_FOCUS_MATCH: Dict[str, List[str]] = {
+    'striking_coach':  ['boxing', 'kicks', 'clinch_striking',
+                        'clinch_control', 'striking_defense'],
+    'wrestling_coach': ['takedowns', 'takedown_defense', 'top_control'],
+    'bjj_coach':       ['submissions', 'guard', 'top_control'],
+    'clinch_coach':    ['clinch_control', 'clinch_striking'],
+    'grappling_coach': ['takedowns', 'top_control',
+                        'submissions', 'guard', 'takedown_defense'],
+    'sc_coach':        ['strength', 'cardio', 'chin', 'recovery', 'speed'],
+    'mma_coach':       ['fight_iq', 'composure', 'heart', 'sparring'],
+}
+
+
 def get_coach_trained_stats(specialty) -> List[str]:
     """Return the list of stats a coach with this specialty actually
     trains. Resolves canonical or legacy specialty strings to a
@@ -613,10 +701,14 @@ def get_coach_trained_stats(specialty) -> List[str]:
     if not specialty:
         return []
     key = str(specialty).lower()
-    bucket = COACH_SPECIALTY_TO_BUCKET.get(key)
-    if bucket is None:
+    # COACH-LOOKUP-REFACTOR-SHIP1: strict membership check against
+    # _SPECIALTY_ALIASES preserves the pre-refactor "unknown → []"
+    # contract for the hire-card display. Do NOT call resolve_specialty
+    # here — its mma_coach fallback would render fight_iq/composure for
+    # any unrecognized string, changing display behavior.
+    if key not in _SPECIALTY_ALIASES:
         return []
-    return list(COACH_BUCKET_ATTRS.get(bucket, []))
+    return list(COACH_BUCKET_ATTRS.get(_SPECIALTY_ALIASES[key], []))
 
 
 # fight_iq/composure/heart generation ranges by tier
@@ -7472,13 +7564,20 @@ class GameBridge:
             # ── S&C Coach fatigue modifier ────────────────────
             # S&C coaches specialize in managing training load.
             # Check head coach + any multi-coach staff member.
-            _sc_specialties = ('s&c', 'strength', 'conditioning',
-                               'cardio', 's and c', 'sc_coach')
+            # COACH-LOOKUP-REFACTOR-SHIP1: predicate consolidated to the
+            # shared resolver. Every string that the previous inline
+            # tuple contained ('s&c', 'strength', 'conditioning',
+            # 'cardio', 's and c', 'sc_coach') resolves to 'sc_coach' via
+            # _SPECIALTY_ALIASES, and no non-sc string does — verified
+            # in the ship's equivalence table. If _SPECIALTY_ALIASES ever
+            # gains a new sc-family alias, the fatigue mod picks it up
+            # automatically instead of drifting.
             _sc_rating = 0
-            if self._coach and self._coach.get('specialty', '').lower() in _sc_specialties:
+            if self._coach and resolve_specialty(
+                    self._coach.get('specialty', '')) == 'sc_coach':
                 _sc_rating = max(_sc_rating, self._coach.get('rating', 60))
             for _c in (self._coaching_staff or []):
-                if str(_c.get('specialty', '')).lower() in _sc_specialties:
+                if resolve_specialty(_c.get('specialty', '')) == 'sc_coach':
                     _sc_rating = max(_sc_rating, _c.get('rating', 60))
             if _sc_rating >= 60:
                 _sc_mod = max(0.70, 1.0 - (_sc_rating - 60) * 0.015)
@@ -7930,30 +8029,10 @@ class GameBridge:
         # training loop and the hire-screen card render from ONE
         # dict, not two. _ARCHETYPE_DOMAIN stays inline — it's
         # 4-entry ancillary metadata specific to this training loop.
-        SPECIALTY_MAP = COACH_SPECIALTY_TO_BUCKET
-        # COACH-GRAPPLE-SPLIT1: wrestling_coach and bjj_coach BOTH map
-        # to the "grappling" domain so hiring one of each triggers the
-        # standard same-domain diminishing (1.0 → 0.5 → 0.25 → 0.10)
-        # on the second coach's contribution. That's what gives the
-        # shared top_control stat a 1.5× total rate with both on staff
-        # (Wrestling primary 1.0 + BJJ diminished 0.5), matching the
-        # prior unified-bucket behavior when two grappling coaches
-        # shared all five stats.
-        # COACH-CLINCH-SPLIT1: clinch_coach shares the "striking"
-        # domain with striking_coach — same reason. Their two shared
-        # stats (clinch_control, clinch_striking) get 1.0 (primary
-        # coach in loop order) + 0.5 (second same-domain coach) = 1.5×
-        # combined rate. Own-domain would double-count; grappling-
-        # domain wouldn't align with the shared clinch stats.
-        _ARCHETYPE_DOMAIN = {
-            "striking_coach":  "striking",
-            "clinch_coach":    "striking",
-            "wrestling_coach": "grappling",
-            "bjj_coach":       "grappling",
-            "grappling_coach": "grappling",  # backward-compat alias
-            "sc_coach":        "sc",
-            "mma_coach":       "mma_head",
-        }
+        # COACH-LOOKUP-REFACTOR-SHIP1: _ARCHETYPE_DOMAIN + _FOCUS_MATCH
+        # hoisted to module scope; the specialty→bucket resolution now
+        # goes through resolve_specialty() directly, so the local
+        # SPECIALTY_MAP alias is no longer needed here.
 
         report = {}
 
@@ -8314,7 +8393,7 @@ class GameBridge:
                 # normal play. Kept as a guard against future generator
                 # changes that could spawn coaches below 40.
                 cs_passive   = max(0.3, (cs_rating - 50) / 50 + 0.5)
-                cs_focus     = SPECIALTY_MAP.get(cs_specialty, "mma_coach")
+                cs_focus     = resolve_specialty(cs_specialty)
                 cs_attrs     = _COACH_ATTRS.get(cs_focus, ["fight_iq"])
                 cs_boost     = self._ARCHETYPE_BOOST.get(cs_focus, 1.0)
 
@@ -8386,34 +8465,8 @@ class GameBridge:
 
                 # ── Specialty focus match bonus ───────────
                 # Coach is extra effective when player's training
-                # focus matches the coach's domain.
-                _FOCUS_MATCH = {
-                    'striking_coach': ['boxing','kicks',
-                                       'clinch_striking',
-                                       'clinch_control',
-                                       'striking_defense'],
-                    # COACH-GRAPPLE-SPLIT1 + COACH-CLINCH-SPLIT1: focus-
-                    # match lists mirror the split bucket stats so a
-                    # wrestling-focused plan gets the 1.35× bonus only
-                    # under a Wrestling coach, not BJJ (and inverse);
-                    # a clinch-focused plan matches Clinch OR Striking
-                    # (both train the clinch stats). Shared stats
-                    # (top_control, clinch_control, clinch_striking)
-                    # appear in every bucket that trains them.
-                    'wrestling_coach': ['takedowns','takedown_defense',
-                                        'top_control'],
-                    'bjj_coach':       ['submissions','guard',
-                                        'top_control'],
-                    'clinch_coach':    ['clinch_control',
-                                        'clinch_striking'],
-                    'grappling_coach': ['takedowns','top_control',
-                                        'submissions','guard',
-                                        'takedown_defense'],
-                    'sc_coach': ['strength','cardio','chin',
-                                 'recovery','speed'],
-                    'mma_coach': ['fight_iq','composure',
-                                  'heart','sparring'],
-                }
+                # focus matches the coach's domain. _FOCUS_MATCH hoisted
+                # to module scope by COACH-LOOKUP-REFACTOR-SHIP1.
                 _active_focus = active_plan.get('focus', 'sparring')
                 _focus_matches = _FOCUS_MATCH.get(cs_focus, [])
                 _focus_bonus = (
@@ -12867,7 +12920,15 @@ class GameBridge:
             return "AGGRESSIVE"
         if _SP in ("wrestling", "grappling", "bjj", "submissions",
                    "grappling_coach", "wrestling_coach", "bjj_coach",
-                   "jiu-jitsu", "jiu_jitsu"):
+                   "jiu-jitsu", "jiu_jitsu",
+                   # COACH-LOOKUP-REFACTOR-SHIP1 — intentional coverage
+                   # add. Judo/Sambo route to Clinch's bucket for
+                   # training/stats (see _SPECIALTY_ALIASES), but at the
+                   # gameplan-suggestion site the closer thematic match
+                   # is SUBMISSION rather than Clinch's AGGRESSIVE — both
+                   # arts are throw/pin-based grappling systems, not
+                   # dirty-boxing pressure fighters.
+                   "judo", "sambo"):
             return "SUBMISSION"
         if _SP in ("s&c", "strength", "conditioning", "cardio", "sc_coach"):
             return "MEASURED"  # S&C coaches preach pacing and attrition
