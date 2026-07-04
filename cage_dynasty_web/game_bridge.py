@@ -7473,7 +7473,7 @@ class GameBridge:
             # S&C coaches specialize in managing training load.
             # Check head coach + any multi-coach staff member.
             _sc_specialties = ('s&c', 'strength', 'conditioning',
-                               'cardio', 's and c')
+                               'cardio', 's and c', 'sc_coach')
             _sc_rating = 0
             if self._coach and self._coach.get('specialty', '').lower() in _sc_specialties:
                 _sc_rating = max(_sc_rating, self._coach.get('rating', 60))
