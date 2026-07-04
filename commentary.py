@@ -2128,6 +2128,35 @@ LATE_ROUND_CONTEXT = [
     "Heart and grit being tested here!"
 ]
 
+class _DedupCommentaryLog(list):
+    """List subclass that suppresses within-window duplicate appends.
+
+    Sits underneath every self.commentary_log.append(...) — internal AND
+    external (fight_integration.py appends directly to this attribute).
+    Belt-and-suspenders behind _select_template's per-pool cooldown: catches
+    duplicates that come in via direct random.choice() paths (position
+    announcements, hurt buildup, submission escape/buildup in
+    fight_integration.py) which bypass _select_template entirely.
+
+    Bracketed structural markers ('[Round 2: ...]', '[CORNER] ...') bypass
+    suppression — they are round-boundary metadata, not action commentary.
+    """
+    __slots__ = ()
+    _WINDOW = 4  # look back this many lines for a match
+
+    def append(self, line):
+        if not line:
+            return
+        if line.startswith("["):
+            list.append(self, line)
+            return
+        if self:
+            window_start = max(0, len(self) - self._WINDOW)
+            if line in self[window_start:]:
+                return
+        list.append(self, line)
+
+
 FINISH_TEMPLATES = {
     "ko": [
         "IT'S ALL OVER! What a knockout!",
@@ -2363,19 +2392,21 @@ class FightCommentarySystem:
         self.context = context
         self.events: List[FightEvent] = []
         self.round_summaries: List[RoundSummary] = []
-        self.commentary_log: List[str] = []
-        
+        # _DedupCommentaryLog intercepts .append to drop adjacent duplicates
+        # regardless of caller (see class docstring). Behaves as list otherwise.
+        self.commentary_log: List[str] = _DedupCommentaryLog()
+
         # === Repetition avoidance — per-pool dedupe ===
-        # Each template pool gets its own recent-fired deque (maxlen=5).
-        # Prior implementation used a single global set across all pools,
-        # which meant a 5-slot global rotation: pool-specific repetition
-        # (e.g. GNP_BACK_MOUNT firing 36× in one fight) wasn't actually
-        # prevented because other pools' lines kept evicting the back-mount
-        # entries. Keyed by id(templates) — stable for module-level pools.
+        # Each template pool gets its own recent-fired deque (maxlen=8, was 5).
+        # Widened from 5 → 8 after transcripts showed 6-11 line gap repeats:
+        # with pool sizes of 6-9 items and cooldown=5, the just-evicted
+        # template could reappear within 6 lines. maxlen=8 pushes the min
+        # repeat gap out to 8 lines for pools ≥9 items, matching a natural
+        # broadcast rhythm.
         from collections import deque as _deque
         self._deque_cls = _deque
         self._recent_templates: Dict[int, "_deque"] = {}
-        self.template_cooldown = 5
+        self.template_cooldown = 8
 
         # Legacy attributes — kept for callers that read them directly.
         # The dedupe logic ignores these; per-pool deques above are
@@ -2467,9 +2498,19 @@ class FightCommentarySystem:
 
         available = [t for t in templates if t not in recent]
         if not available:
-            # Whole pool has fired recently — reset to full pool.
+            # Whole pool has fired recently — reset the deque and refill the
+            # candidate pool. Guard against back-to-back repeats: exclude the
+            # most-recently-fired template from the reset pool so the very
+            # next selection can't match the previous one. Falls back to the
+            # full pool only if that exclusion leaves nothing (pool size 1).
+            last_fired = recent[-1] if len(recent) else None
             recent.clear()
-            available = list(templates)
+            if last_fired is not None and len(templates) > 1:
+                available = [t for t in templates if t != last_fired]
+                if not available:
+                    available = list(templates)
+            else:
+                available = list(templates)
 
         selected = random.choice(available)
         recent.append(selected)
@@ -3449,7 +3490,7 @@ class FightCommentarySystem:
     # ========================================================================
     # EVENT LOGGING
     # ========================================================================
-    
+
     def log_event(
         self,
         action_type: ActionType,
@@ -3539,10 +3580,10 @@ class FightCommentarySystem:
             buildup = self._generate_hurt_buildup(actor, target, target_health)
             if buildup:
                 self.commentary_log.append(buildup)
-        
+
         # Update round stats
         self._update_round_stats(actor, action_type, success, damage)
-        
+
         return event
     
     def _generate_position_announcement(
@@ -3808,17 +3849,17 @@ class FightCommentarySystem:
         self.current_round = round_num
         self.current_exchange = 0
         self._init_round_stats()
-        
+
         template = self._select_template(ROUND_START_TEMPLATES)
         commentary = template.format(round_num=round_num)
-        
+
         # Add context for title fights or late rounds
         if self.context:
             if self.context.is_title_fight and round_num >= 4:
                 commentary += " " + random.choice(TITLE_FIGHT_CONTEXT)
             elif round_num >= 3:
                 commentary += " " + random.choice(LATE_ROUND_CONTEXT)
-        
+
         self.commentary_log.append(commentary)
         return commentary
     
@@ -4389,7 +4430,7 @@ class FightCommentarySystem:
         self.current_round = round_num
         self.current_exchange = 0
         self._init_round_stats()
-        
+
         # Select appropriate template based on round
         if round_num == 1:
             template = random.choice(ROUND_START_ROUND_1)
@@ -4413,10 +4454,10 @@ class FightCommentarySystem:
             commentary += " " + random.choice(TITLE_FIGHT_CONTEXT)
         elif round_num >= 3:
             commentary += " " + random.choice(LATE_ROUND_CONTEXT)
-        
+
         self.commentary_log.append(commentary)
         return commentary
-    
+
     def end_round_enhanced(
         self,
         round_num: int,
