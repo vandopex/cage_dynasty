@@ -17,6 +17,15 @@
 .training-advanced-off .floor-help-copy {
     display: none !important;
 }
+/* TRAINING-MAINTAIN1: Maintain button state.
+   Idle: muted; hover: brighter. Locked: green tint + slight glow. */
+.maintain-btn { opacity: .55; transition: opacity .12s, background .12s, border-color .12s; }
+.maintain-btn:hover { opacity: 1; }
+.maintain-btn.is-locked {
+    opacity: 1;
+    background: rgba(0,230,118,.14) !important;
+    border-color: rgba(0,230,118,.5) !important;
+}
 </style>
 
 <div class="page-header" style="display:flex;align-items:flex-start;
@@ -633,6 +642,17 @@
                     {% set _is_training = _target > _cur %}
                     {% set _pct = (_cur * 100 // _target) if (_is_training and _target > 0) else 0 %}
                     {% if _pct > 100 %}{% set _pct = 100 %}{% endif %}
+                    {# TRAINING-MAINTAIN1: Maintain lock value =
+                       ceil(cur/5)*5, clamped [50,100]. "Already
+                       locked" render state = floor is above the
+                       universal 50 minimum AND already >= the
+                       lock value. Default floor=50 alone is the
+                       engine's universal minimum, not a user
+                       commitment, so it doesn't count as locked. #}
+                    {% set _lock_val = ((_cur + 4) // 5) * 5 %}
+                    {% if _lock_val < 50 %}{% set _lock_val = 50 %}{% endif %}
+                    {% if _lock_val > 100 %}{% set _lock_val = 100 %}{% endif %}
+                    {% set _is_locked = (_floor > 50) and (_floor >= _lock_val) %}
                     <div class="stat-row"
                          data-stat="{{ stat_key }}"
                          data-fid="{{ fighter.fighter_id }}"
@@ -733,6 +753,21 @@
                                            border:1px solid rgba(255,255,255,.12);
                                            border-radius:3px;cursor:pointer;
                                            color:var(--text-muted);padding:0;">+</button>
+                            {# TRAINING-MAINTAIN1: Maintain quick-action.
+                               Sets floor + target to ceil(cur/5)*5 clamped
+                               [50,100], overriding any existing target. #}
+                            <button type="button"
+                                    class="maintain-btn {% if _is_locked %}is-locked{% endif %}"
+                                    id="maintain-btn-{{ fighter.fighter_id }}-{{ stat_key }}"
+                                    onclick="maintainStat('{{ fighter.fighter_id }}','{{ stat_key }}')"
+                                    title="Maintain — protect at {{ _lock_val }}"
+                                    style="width:24px;height:24px;
+                                           margin-left:6px;
+                                           font-size:.75rem;line-height:1;
+                                           background:rgba(255,255,255,.04);
+                                           border:1px solid rgba(255,255,255,.12);
+                                           border-radius:3px;cursor:pointer;
+                                           padding:0;">🔒</button>
                         </div>
                         {# Progress bar / maintained indicator #}
                         <div id="bar-cell-{{ fighter.fighter_id }}-{{ stat_key }}"
@@ -2199,6 +2234,37 @@ function adjTarget(fid, stat, delta) {
         span.style.color = 'var(--neon-green)';
     } else {
         span.style.color = 'var(--text-muted)';
+    }
+    updateBar(fid, stat);
+    if (row && row.dataset.cat) updateCatSummary(fid, row.dataset.cat);
+}
+
+// TRAINING-MAINTAIN1: Set floor + target to ceil(cur/5)*5, clamped
+// [50,100]. Overrides any existing growth target on this stat —
+// Maintain means "stop chasing, protect what I have now."
+function maintainStat(fid, stat) {
+    const floorIn   = document.getElementById('floor-in-' + fid + '-' + stat);
+    const floorSpan = document.getElementById('floor-' + fid + '-' + stat);
+    const tgtIn     = document.getElementById('target-in-' + fid + '-' + stat);
+    const tgtSpan   = document.getElementById('target-' + fid + '-' + stat);
+    if (!floorIn || !tgtIn) return;
+    const row = floorIn.closest('.stat-row');
+    const cur = row ? parseInt(row.dataset.cur, 10) : 0;
+    let lock  = Math.ceil(cur / 5) * 5;
+    if (lock < 50)  lock = 50;
+    if (lock > 100) lock = 100;
+    floorIn.value = lock;
+    if (floorSpan) floorSpan.textContent = lock;
+    tgtIn.value = lock;
+    if (tgtSpan) {
+        tgtSpan.textContent = lock;
+        // Not a growth goal — muted color, same as adjTarget's non-training branch.
+        tgtSpan.style.color = 'var(--text-muted)';
+    }
+    const btn = document.getElementById('maintain-btn-' + fid + '-' + stat);
+    if (btn) {
+        btn.classList.add('is-locked');
+        btn.title = 'Maintain — protect at ' + lock;
     }
     updateBar(fid, stat);
     if (row && row.dataset.cat) updateCatSummary(fid, row.dataset.cat);
