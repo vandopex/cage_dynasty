@@ -12725,6 +12725,18 @@ class GameBridge:
                 "bjj": "bjj",           "submissions": "submissions",
                 "s&c": "cardio",        "strength": "strength",  "conditioning": "cardio",
                 "mma": "sparring",      "head coach": "fight_iq","cornering": "fight_iq",
+                # Canonical Coach-3 keys (game_start.py:723-731). Each
+                # aligns with the focus its legacy sibling already
+                # produces; clinch_coach uses clinch_striking, which
+                # _FOCUS_LEGACY_MAP resolves to ("STRIKING","clinch") —
+                # not SPARRING — verified before commit.
+                "boxing_coach":     "boxing",
+                "muay_thai_coach":  "kicks",
+                "kickboxing_coach": "kicks",
+                "wrestling_coach":  "wrestling",
+                "bjj_coach":        "bjj",
+                "clinch_coach":     "clinch_striking",
+                "sc_coach":         "cardio",
             }
             rec_gameplan  = self._gameplan_from_specialty(coach_specialty)
             rec_focus     = _SPEC_TO_FOCUS.get(coach_specialty.lower(), "sparring")
