@@ -523,17 +523,29 @@ COACH_SPECIALTY_TO_BUCKET: Dict[str, str] = {
     "boxing_coach":     "striking_coach",
     "muay_thai_coach":  "striking_coach",
     "kickboxing_coach": "striking_coach",
-    "wrestling_coach":  "grappling_coach",
-    "bjj_coach":        "grappling_coach",
-    "clinch_coach":     "grappling_coach",
+    # COACH-GRAPPLE-SPLIT1: wrestling/bjj now split into distinct
+    # buckets so a fighter under one-domain-only coaching develops the
+    # correct archetype. clinch_coach → wrestling for now; clinch
+    # bucket rework is deferred (clinch_control still sits in the
+    # striking bucket — resolving that mismatch is out of scope here).
+    "wrestling_coach":  "wrestling_coach",
+    "bjj_coach":        "bjj_coach",
+    "clinch_coach":     "wrestling_coach",
     "sc_coach":         "sc_coach",
-    # Grappling legacy
-    "wrestling":        "grappling_coach",
-    "grappling":        "grappling_coach",
-    "bjj":              "grappling_coach",
-    "submissions":      "grappling_coach",
-    "jiu-jitsu":        "grappling_coach",
-    "jiu_jitsu":        "grappling_coach",
+    # Grappling legacy — ambiguous strings map to the closer bucket.
+    # "grappling" alone is ambiguous, defaults to Wrestling; "bjj"/
+    # "submissions"/"jiu-jitsu" clearly belong on the BJJ side.
+    "wrestling":        "wrestling_coach",
+    "grappling":        "wrestling_coach",
+    "bjj":              "bjj_coach",
+    "submissions":      "bjj_coach",
+    "jiu-jitsu":        "bjj_coach",
+    "jiu_jitsu":        "bjj_coach",
+    # Backward-compat: if any legacy save wrote the bucket key
+    # "grappling_coach" as a specialty string (defensive), route to
+    # Wrestling. Coaches persisted with proper Coach-3 keys
+    # ("wrestling_coach" / "bjj_coach") route via those entries above.
+    "grappling_coach":  "wrestling_coach",
     # S&C legacy
     "s&c":              "sc_coach",
     "strength":         "sc_coach",
@@ -555,6 +567,23 @@ COACH_SPECIALTY_TO_BUCKET: Dict[str, str] = {
 COACH_BUCKET_ATTRS: Dict[str, List[str]] = {
     "striking_coach":  ["boxing", "kicks", "clinch_striking",
                         "clinch_control", "striking_defense"],
+    # COACH-GRAPPLE-SPLIT1: two disjoint offensive lists that share
+    # top_control (both wrestling and BJJ work off it — cage control
+    # from the top position is the shared skill). A fighter with both
+    # coaches on staff trains top_control via the same same-domain
+    # diminishing rule as any other multi-coach overlap; _both are
+    # mapped to the "grappling" domain in _ARCHETYPE_DOMAIN so the
+    # 2nd-coach 0.5× rate applies. Net top_control gain with both on
+    # staff: 1.0 (Wrestling primary) + 0.5 (BJJ diminished) = 1.5×,
+    # matching prior behavior when two grappling_coach coaches shared
+    # the unified bucket.
+    "wrestling_coach": ["takedowns", "takedown_defense", "top_control"],
+    "bjj_coach":       ["submissions", "guard", "top_control"],
+    # Backward-compat alias — the pre-split unified bucket. Kept so any
+    # runtime path that resolves the "grappling_coach" bucket key
+    # directly (rather than via COACH_SPECIALTY_TO_BUCKET) still
+    # returns a sensible 5-stat list. Not routed to by any specialty
+    # under the new mapping — new writes emit wrestling_coach/bjj_coach.
     "grappling_coach": ["takedowns", "takedown_defense", "top_control",
                         "submissions", "guard"],
     "sc_coach":        ["strength", "speed", "cardio", "chin",
@@ -7273,7 +7302,12 @@ class GameBridge:
     # widens its effective per-week contribution.
     _ARCHETYPE_BOOST = {
         "striking_coach":  1.0,
-        "grappling_coach": 1.0,
+        # COACH-GRAPPLE-SPLIT1: same 1.0 as the pre-split grappling
+        # bucket for both halves — the split doesn't rebalance
+        # per-bucket power, only what each bucket trains.
+        "wrestling_coach": 1.0,
+        "bjj_coach":       1.0,
+        "grappling_coach": 1.0,  # backward-compat alias
         "sc_coach":        2.0,
         "mma_coach":       1.5,
     }
@@ -7849,9 +7883,19 @@ class GameBridge:
         # dict, not two. _ARCHETYPE_DOMAIN stays inline — it's
         # 4-entry ancillary metadata specific to this training loop.
         SPECIALTY_MAP = COACH_SPECIALTY_TO_BUCKET
+        # COACH-GRAPPLE-SPLIT1: wrestling_coach and bjj_coach BOTH map
+        # to the "grappling" domain so hiring one of each triggers the
+        # standard same-domain diminishing (1.0 → 0.5 → 0.25 → 0.10)
+        # on the second coach's contribution. That's what gives the
+        # shared top_control stat a 1.5× total rate with both on staff
+        # (Wrestling primary 1.0 + BJJ diminished 0.5), matching the
+        # prior unified-bucket behavior when two grappling coaches
+        # shared all five stats.
         _ARCHETYPE_DOMAIN = {
             "striking_coach":  "striking",
-            "grappling_coach": "grappling",
+            "wrestling_coach": "grappling",
+            "bjj_coach":       "grappling",
+            "grappling_coach": "grappling",  # backward-compat alias
             "sc_coach":        "sc",
             "mma_coach":       "mma_head",
         }
@@ -8293,6 +8337,16 @@ class GameBridge:
                                        'clinch_striking',
                                        'clinch_control',
                                        'striking_defense'],
+                    # COACH-GRAPPLE-SPLIT1: focus-match lists mirror
+                    # the split bucket stats so a wrestling-focused
+                    # training plan gets the 1.35× bonus only under a
+                    # wrestling coach, not a BJJ coach (and inverse).
+                    # top_control appears in both — matches whichever
+                    # coach is present.
+                    'wrestling_coach': ['takedowns','takedown_defense',
+                                        'top_control'],
+                    'bjj_coach':       ['submissions','guard',
+                                        'top_control'],
                     'grappling_coach': ['takedowns','top_control',
                                         'submissions','guard',
                                         'takedown_defense'],
@@ -12740,7 +12794,8 @@ class GameBridge:
                    "muay_thai", "striking_coach"):
             return "AGGRESSIVE"
         if _SP in ("wrestling", "grappling", "bjj", "submissions",
-                   "grappling_coach"):
+                   "grappling_coach", "wrestling_coach", "bjj_coach",
+                   "jiu-jitsu", "jiu_jitsu"):
             return "SUBMISSION"
         if _SP in ("s&c", "strength", "conditioning", "cardio", "sc_coach"):
             return "MEASURED"  # S&C coaches preach pacing and attrition
