@@ -332,8 +332,31 @@ references. Historical ship recaps are in `CLAUDE_archive.md`.
 
 ## Key constants (don't change without telling me)
 
-- `cage_dynasty_web/fight_engine.py`: `DAMAGE_MULTIPLIER = 0.55`
-- `cage_dynasty_web/fight_integration.py`: `FI_DAMAGE_MULTIPLIER = 0.32`
+**Damage multipliers — three live composing sites, one dead artifact.**
+DAMAGE-MULT-DIAG1 (2026-07-05, `outputs/damage_mult_diag1.md`) traced all
+four and confirmed PA=repo byte-parity via DAMAGE-MULT-PARITY1.
+Effective per-strike scale (no rivalry): **0.48 × 0.24 = 0.1152**.
+
+- `cage_dynasty_web/fight_integration.py:59` `FI_DAMAGE_MULTIPLIER = 0.48`
+  — LIVE wrapper-level dampener applied to every landed strike at `:658`.
+  (Previously docd here as 0.32 — that value was stale; live PA runs 0.48.)
+- `cage_dynasty_web/game_bridge.py:{13499, 13979, 17719}`
+  `damage_multiplier = 0.24` — LIVE per-fight FightConfig override, passed
+  to `_FightConfig(...)` at all three bridge instantiation sites; composes
+  multiplicatively with FI\_DAMAGE\_MULTIPLIER.
+- `cage_dynasty_web/fight_engine.py:735` `FightConfig.damage_multiplier`
+  default = 0.42 — dead in practice: bridge always overrides with 0.24,
+  and none of the classmethod constructors (`standard_fight()` etc.) are
+  called by the bridge. Kept for engine-side callers that build the
+  config without arguments.
+- `cage_dynasty_web/fight_engine.py:415` `DAMAGE_MULTIPLIER = 0.55` —
+  **DEAD.** Imported at `fight_integration.py:41`, never read anywhere.
+  Historical tuning artifact; do not tune, do not delete without a
+  paired PA-parity check.
+- Rivalry heat further compounds `config.damage_multiplier` at
+  `fight_engine.py:3690` via `replace(config, damage_multiplier=... *
+  heat_damage_mult)` — only in live rivalries.
+
 - Submission threshold: 70.0
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
 - Contract: `HOLDOUT = 25`, `WALKOUT = 10`, `HOLDOUT_WINDOW = 4 weeks`
