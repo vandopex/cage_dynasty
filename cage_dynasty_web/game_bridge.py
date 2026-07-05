@@ -2594,7 +2594,15 @@ class GameBridge:
                  'fights': [clean_fight(f) for f in ev.get('fights', [])]}
                 for ev in self._completed_events[-50:]  # Last 50 events
             ],
-            "news_items":               self._news_items[-100:],
+            # NEWS-TRUNCATION-FIX1: save preserves full news history.
+            # Prior code sliced `[-100:]` which — combined with mixed
+            # insert(0, ...) and .append(...) writes — silently dropped
+            # up to two-thirds of the feed on a save/load round-trip
+            # (FULL-LOOP-AUDIT1 §A2: 164 in-memory → 85 post-load).
+            # Display-side limits (routes.py get_news_feed(limit=…))
+            # stay as pagination concerns; persistence is no longer
+            # a data-destroying operation.
+            "news_items":               list(self._news_items),
             # Ship WS1: serialize game_state so fighters persist across saves
             "fighters":             {fid: f.to_dict() for fid, f in self._game_state.fighters.items()},
             "fighter_data":         dict(self._game_state._fighter_data),
