@@ -107,14 +107,7 @@ on the PA bash console, then "Reload" on the PA Web tab.
 
 ## Top-of-backlog
 
-**#1 (elevated 2026-07-03) — Auto-load most recent save on landing.** Blocks new-user
-onboarding. Under current behavior a session with existing saves still drops on the
-New Game screen when landing on `/`; users must manually go to `/saves` and pick a
-slot. This matches Van's own workflow (deliberate fresh restarts) but is a bad first
-impression for anyone else. Fix scope: when a session hits `/` with an unstarted
-bridge, check for saves under this `user_id` and auto-load the most recent by mtime.
-
-**Queued after #1, not scheduled:**
+**Queued, not scheduled:**
 - **COACH-GRAPPLE-SPLIT1** — split the `grappling_coach` training bucket into
   distinct wrestling and BJJ archetypes. Sandman-grade fighter-identity work
   deferred from the 2026-07-03 coach arc.
@@ -131,6 +124,19 @@ bridge, check for saves under this `user_id` and auto-load the most recent by mt
   by the July ship cascade.
 
 **Recently reconciled (closed):**
+- **Auto-load most recent save on landing** — filed as top-of-backlog #1 on
+  2026-07-03; AUTOLOAD-RECONCILE1 (2026-07-05) confirmed the feature was
+  already shipped at `484e7f8` (feat(session): auto-load most recent save
+  on landing) between the elevation and the reconcile. AUTOLOAD-SAVE-DIAG1
+  (`outputs/autoload_save_diag1.md`) traced the landing path end-to-end
+  and verified guards hold: `dashboard()` (`routes.py:583-602`) gates on
+  `bridge.game_started`, `get_newest_save_slot()`
+  (`game_bridge.py:3133-3157`) picks by mtime scoped to
+  `bridge_{user_id}_{slot}.json`, per-bridge `_lock` serializes `web_load`.
+  Coverage note: autoload fires only on `/` — bookmarks to other routes
+  (e.g. `/roster`) still bounce returning users to `/new-game`. Optional
+  polish items (dead `require_game_started` decorator, corrupt-save flash
+  message, hardcoded slot list) filed in the diag §7 but not blocking.
 - **Matchmaking diversity / rematch prevention** — filed as an in-conversation
   concern 2026-07-04; MATCHMAKING-RECONCILE1 (2026-07-05) confirmed this is
   substantively closed by two prior ships: `07491d1` (2026-06-22) replaced the
