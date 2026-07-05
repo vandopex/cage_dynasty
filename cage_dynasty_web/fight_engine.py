@@ -756,6 +756,40 @@ class FightConfig:
 
 
 # ============================================================================
+# GAMEPLAN (GAMEPLAN-WIRE1 — additive tendency dial; not yet consumed)
+# ============================================================================
+
+@dataclass(frozen=True)
+class Gameplan:
+    """Per-fighter tendency dial threaded through the fight call chain.
+
+    GAMEPLAN-WIRE1 (this ship) threads the object through
+    simulate_narrated_fight → NarratedFightSimulator → select_action
+    with an additive contract: existing callers that don't pass a
+    Gameplan get byte-identical behavior. select_action accepts the
+    param and does not read it — SHIP2 (GAMEPLAN-DIAL-AGGR1) will
+    activate the first dial. See outputs/gameplan_design1.md §3 for
+    the full dial-step table and outcome tradeoffs.
+
+    Fields (all default to identity — no bias):
+        aggression:   -1 patient · 0 neutral · +1 forward
+        range_bias:   -1 grapple · 0 neutral · +1 keep-standing
+        finish_seek:  -1 safe    · 0 neutral · +1 hunt
+        preset_name:  optional label for logging/UI ('AGGRESSIVE', etc.)
+    """
+    aggression: int = 0
+    range_bias: int = 0
+    finish_seek: int = 0
+    preset_name: str = 'BALANCED'
+
+
+def neutral_gameplan() -> Gameplan:
+    """Identity Gameplan — no bias on any dial. Used as the effective
+    default when None is passed through the call chain."""
+    return Gameplan()
+
+
+# ============================================================================
 # FIGHT EVENT (for commentary generation)
 # ============================================================================
 
@@ -1312,11 +1346,17 @@ def select_action(
     fighter_attrs: FighterAttributes,
     opponent_attrs: FighterAttributes,
     fight_state: FightState,
-    fighter_state: FighterState
+    fighter_state: FighterState,
+    gameplan: Optional['Gameplan'] = None,
 ) -> Tuple[str, Any]:
     """
     Select the best action based on position, attributes, and fight state.
     Now style-aware: wrestlers clinch against strikers, etc.
+
+    GAMEPLAN-WIRE1: `gameplan` is accepted for future dial-based tendency
+    bias but is NOT read this ship. SHIP2 (GAMEPLAN-DIAL-AGGR1) activates
+    the AGGRESSION dial. Zero behavior change when the param is None or
+    when a neutral Gameplan() is passed.
     """
     is_top = fight_state.top_fighter_id == fighter_attrs.fighter_id
     position = fight_state.position

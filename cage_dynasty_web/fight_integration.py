@@ -30,6 +30,8 @@ from fight_engine import (
     # State classes
     FighterAttributes, FighterState, FightState, FightConfig,
     RoundStats, FightResult, BodyPartDamage,
+    # GAMEPLAN-WIRE1: threaded through the call chain, not yet consumed
+    Gameplan,
     # Functions
     get_available_strikes, get_available_submissions,
     get_available_grappling_actions, select_action,
@@ -327,11 +329,20 @@ class NarratedFightSimulator:
         corner_bonus_f2: float = 0.0,
         starting_stamina_f1: float = 100.0,
         starting_stamina_f2: float = 100.0,
+        gameplan_f1: Optional[Gameplan] = None,
+        gameplan_f2: Optional[Gameplan] = None,
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
         self.config = config or FightConfig.standard_fight()
         self.verbose = verbose
+
+        # GAMEPLAN-WIRE1: per-fighter tendency dial. Threaded to
+        # select_action but not consumed this ship — SHIP2 activates.
+        # Stored verbatim; None means "no gameplan", which select_action
+        # currently treats identically to a neutral Gameplan().
+        self._gameplan_f1 = gameplan_f1
+        self._gameplan_f2 = gameplan_f2
 
         # Cornering bonuses (0.0 to 0.5 scale)
         # Affects between-round recovery and composure when hurt
@@ -516,10 +527,19 @@ class NarratedFightSimulator:
         actor_id = self._determine_initiative()
         actor, actor_state = self._get_fighter_and_state(actor_id)
         defender, defender_state = self._get_opponent_and_state(actor_id)
-        
+
+        # GAMEPLAN-WIRE1: hand the actor's gameplan to select_action.
+        # select_action currently ignores it (SHIP2 will consume the
+        # aggression dial). None flows through unchanged so callers
+        # that didn't pass a Gameplan get byte-identical behavior.
+        _actor_gameplan = (self._gameplan_f1
+                           if actor_id == self.fighter1.fighter_id
+                           else self._gameplan_f2)
+
         # Select action
         action_type, action_data = select_action(
-            actor, defender, self.fight_state, actor_state
+            actor, defender, self.fight_state, actor_state,
+            gameplan=_actor_gameplan,
         )
 
         # ── Sambo chain — force immediate sub attempt ─────
@@ -1776,12 +1796,18 @@ def simulate_narrated_fight(
     starting_stamina_f1: float = 100.0,
     starting_stamina_f2: float = 100.0,
     config: 'FightConfig' = None,
+    gameplan_f1: Optional[Gameplan] = None,
+    gameplan_f2: Optional[Gameplan] = None,
 ) -> NarratedFightResult:
     """
     Simulate a fight with full commentary.
     If config is provided, use it directly (preserves bridge
     per-fight tuning — damage_multiplier, thresholds, etc).
     Otherwise build config from fight type flags.
+
+    GAMEPLAN-WIRE1: gameplan_f1 / gameplan_f2 are threaded to the
+    simulator and on to select_action, but are not yet consumed
+    (SHIP2 will activate the AGGRESSION dial). Defaults None → no-op.
     """
     if config is None:
         if is_title_fight:
@@ -1793,11 +1819,13 @@ def simulate_narrated_fight(
 
     if rounds == 5:
         config.scheduled_rounds = 5
-    
+
     simulator = NarratedFightSimulator(
         fighter1, fighter2, config,
         starting_stamina_f1=starting_stamina_f1,
         starting_stamina_f2=starting_stamina_f2,
+        gameplan_f1=gameplan_f1,
+        gameplan_f2=gameplan_f2,
     )
     return simulator.simulate()
 
