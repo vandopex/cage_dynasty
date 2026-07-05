@@ -3931,32 +3931,34 @@ def register_routes(app):
         scorecard = fight_result.get('scorecard')
 
         # Coach corner label — only meaningful for player fights
-        # (engine only injects corner advice for the player). Mirrors
-        # COACH_IQ_*_THRESHOLD bands in game_bridge.py.
+        # (engine only injects corner advice for the player). Tier
+        # bands mirror COACH_IQ_*_THRESHOLD in game_bridge.py.
+        #
+        # CORNER-DEDUPE-FIX1: name + tier now sourced from bridge._coach
+        # (the head coach), matching the coach_dict that
+        # game_bridge._inject_corner_advice passes into
+        # corner_advice.generate_corner_advice at line 17266. The prior
+        # implementation scanned _coaching_staff for the highest-fight_iq
+        # member — that attribution belongs to the pre-fight buff, not to
+        # the between-round quote. Whoever _inject_corner_advice hands to
+        # generate_corner_advice is who the quote-line prefix names, so
+        # the header must read off the same dict.
         coach_corner = None
         if fight_result.get('is_player_fight'):
-            _staff = getattr(bridge, '_coaching_staff', None) or []
-            _best_iq = 0
-            _best_name = ''
-            for _sc in _staff:
-                _iq = _sc.get('fight_iq', 0) or 0
-                if _iq > _best_iq:
-                    _best_iq = _iq
-                    _best_name = _sc.get('name', '')
-            if not _best_name and getattr(bridge, '_coach', None):
-                _best_iq = int(bridge._coach.get('fight_iq', 0) or 0)
-                _best_name = bridge._coach.get('name', '')
-            if _best_name:
-                if _best_iq >= 88:
-                    coach_corner = {'name': _best_name,
+            _head = getattr(bridge, '_coach', None) or {}
+            _name = _head.get('name', '') or ''
+            _iq   = int(_head.get('fight_iq', 0) or 0)
+            if _name:
+                if _iq >= 88:
+                    coach_corner = {'name': _name,
                                     'tier': 'Elite Corner',
                                     'icon': '🧠'}
-                elif _best_iq >= 75:
-                    coach_corner = {'name': _best_name,
+                elif _iq >= 75:
+                    coach_corner = {'name': _name,
                                     'tier': 'Good Corner',
                                     'icon': '💬'}
                 else:
-                    coach_corner = {'name': _best_name,
+                    coach_corner = {'name': _name,
                                     'tier': 'Basic Corner',
                                     'icon': '📋'}
 
