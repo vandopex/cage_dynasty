@@ -489,8 +489,15 @@ COACH_TYPE_MIGRATION = {
     'bjj_coach':        'bjj_coach',
     'jiu-jitsu':        'bjj_coach',
     'jiu_jitsu':        'bjj_coach',
-    'judo':             'clinch_coach',
-    'sambo':            'clinch_coach',
+    # JUDO-SAMBO-BUCKET-FIX1: display key now matches the training
+    # bucket (see _SPECIALTY_ALIASES). Every other site in the codebase
+    # treats Judo/Sambo as Wrestler-family grappling — attribute
+    # weights (game_bridge.py:7520/7526), style translation
+    # (Judo/Sambo → Wrestler at 7124/7125), engine style-family sets
+    # (fight_engine.py:1422+), gameplan (SUBMISSION), archetype
+    # (grappling). Coach specialty routing here now matches.
+    'judo':             'wrestling_coach',
+    'sambo':            'wrestling_coach',
     'clinch':           'clinch_coach',
     'clinch_coach':     'clinch_coach',
     'conditioning':     'sc_coach',
@@ -577,8 +584,18 @@ _SPECIALTY_ALIASES: Dict[str, str] = {
     # added separately in _gameplan_from_specialty's if-tree because
     # that site is not consolidated through the resolver (see the ship
     # memo for why).
-    "judo":             "clinch_coach",
-    "sambo":            "clinch_coach",
+    # JUDO-SAMBO-BUCKET-FIX1 (supersedes original clinch_coach routing).
+    # The original mapping followed COACH_TYPES['clinch_coach']['style_match']
+    # aspirationally, but clinch_coach's actual bucket
+    # (clinch_control + clinch_striking — dirty-boxing stats) doesn't
+    # match Judo/Sambo's throw/pin philosophy. Every other site treats
+    # them as Wrestler-family grappling — attribute weights at 7520/7526,
+    # style translation at 7124/7125 (Judo/Sambo → Wrestler), engine
+    # style-family sets in fight_engine.py:1422+, gameplan SUBMISSION,
+    # archetype 'grappling'. wrestling_coach's bucket (takedowns,
+    # takedown_defense, top_control) matches that philosophy.
+    "judo":             "wrestling_coach",
+    "sambo":            "wrestling_coach",
 }
 
 # Backward-compat: the pre-refactor name is kept as an alias so any
