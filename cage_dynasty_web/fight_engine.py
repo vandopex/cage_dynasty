@@ -2693,8 +2693,19 @@ def process_submission_progress(
     # Attacker tightens - VERY FAST once locked in
     offense = attacker.submissions * (attacker_state.stamina / 100)
     
-    # PURE SUBMISSION SPECIALIST (92+) tightens MUCH faster
-    tighten_rate = 0.30 if attacker.submissions >= 92 else 0.20
+    # PURE SUBMISSION SPECIALIST (92+) tightens MUCH faster.
+    # SUBMISSION-CONVERSION-FIX2: base 0.20 → 0.45, specialist 0.30 → 0.65.
+    # Diagnosis (FIX1 Step 2): 54.5% of locked-in attempts died to
+    # fight_integration._start_new_round line 464 wiping submission_active
+    # before the finish/escape race resolved. Raising tighten_rate is the
+    # skill-scaling lever: per-tick progress = attacker.submissions ×
+    # stamina × tighten_rate × rand, so specialists still tighten faster
+    # per tick than mediocre grapplers (verified 1.77-2.22× ratio held).
+    # Landing point picked on the realistic-stat per-style harness:
+    # BJJ Spec 29→44% (design 55%), Wrestler 7→16% (design 20%), while
+    # strikers stay at 0-2% (no leakage) and KO+TKO stays at 35.9% (was
+    # 36.4%, guardrail intact — DEC drained entirely into SUB).
+    tighten_rate = 0.65 if attacker.submissions >= 92 else 0.45
     fight_state.submission_progress += offense * tighten_rate * random.uniform(0.75, 1.25)
     
     # Defender fights escape - EXTREMELY HARD to escape
