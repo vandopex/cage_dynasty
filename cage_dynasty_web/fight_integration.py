@@ -30,8 +30,9 @@ from fight_engine import (
     # State classes
     FighterAttributes, FighterState, FightState, FightConfig,
     RoundStats, FightResult, BodyPartDamage,
-    # GAMEPLAN-WIRE1: threaded through the call chain, not yet consumed
-    Gameplan,
+    # GAMEPLAN-DIAL-AGGR1 (SHIP2): dial infra now consumed for the
+    # AGGRESSION dial + flash-KO scaling. See gameplan_design1.md §3/§4.
+    Gameplan, dial_execution,
     # Functions
     get_available_strikes, get_available_submissions,
     get_available_grappling_actions, select_action,
@@ -337,12 +338,34 @@ class NarratedFightSimulator:
         self.config = config or FightConfig.standard_fight()
         self.verbose = verbose
 
-        # GAMEPLAN-WIRE1: per-fighter tendency dial. Threaded to
-        # select_action but not consumed this ship — SHIP2 activates.
-        # Stored verbatim; None means "no gameplan", which select_action
-        # currently treats identically to a neutral Gameplan().
+        # GAMEPLAN-DIAL-AGGR1: per-fighter tendency dial. Threaded to
+        # select_action + _determine_initiative. Stored verbatim; None
+        # means "no gameplan" (SHIP1 additive contract) — no mutation
+        # below either.
         self._gameplan_f1 = gameplan_f1
         self._gameplan_f2 = gameplan_f2
+
+        # GAMEPLAN-DIAL-AGGR1 · AGGRESSION pre-fight stat mutation.
+        # Applied ONCE at fight start (cannot compound over exchanges —
+        # the compounding was the root cause of finish-rate inflation
+        # that the tuning arc exposed on realistic populations).
+        # Forward → attacker +4 boxing, +4 kicks (harder strikes).
+        # Patient → +4 striking_defense (harder to hit).
+        # Neutral / None → no mutation.
+        # Not IQ-gated: plan-set stat posture is inherent to the plan,
+        # not skill-execution. Safe to mutate the throwaway
+        # FighterAttributes constructed per fight by the bridge /
+        # harness (mirrors _apply_corner_prefight_buff pattern).
+        for _fa, _gp in ((fighter1, gameplan_f1), (fighter2, gameplan_f2)):
+            if _gp is None:
+                continue
+            _agg = int(getattr(_gp, 'aggression', 0) or 0)
+            if _agg > 0:
+                _fa.boxing = min(99, int(getattr(_fa, 'boxing', 60)) + 4)
+                _fa.kicks  = min(99, int(getattr(_fa, 'kicks',  60)) + 4)
+            elif _agg < 0:
+                _fa.striking_defense = min(99,
+                    int(getattr(_fa, 'striking_defense', 60)) + 4)
 
         # Cornering bonuses (0.0 to 0.5 scale)
         # Affects between-round recovery and composure when hurt
@@ -490,19 +513,36 @@ class NarratedFightSimulator:
         """Determine which fighter acts this exchange"""
         f1_init = self.fighter1.speed + random.randint(-10, 10)
         f2_init = self.fighter2.speed + random.randint(-10, 10)
-        
+
         # Momentum bonus
         if self.fight_state.momentum_fighter_id == self.fighter1.fighter_id:
             f1_init += 5
         elif self.fight_state.momentum_fighter_id == self.fighter2.fighter_id:
             f2_init += 5
-        
+
         # Position advantage
         if self.fight_state.top_fighter_id == self.fighter1.fighter_id:
             f1_init += 10
         elif self.fight_state.top_fighter_id == self.fighter2.fighter_id:
             f2_init += 10
-        
+
+        # GAMEPLAN-DIAL-AGGR1: aggression tilts who moves first.
+        # ±2 per aggression step (kept below the momentum-feedback
+        # threshold at ±3 — see gameplan_design1.md §3 tuning arc).
+        # NOT IQ-gated: positioning tendency (who steps forward first)
+        # is inherent to the plan, not a skill-execution matter.
+        # Since damage / flash-KO payoffs are gone (see the decouple
+        # in _execute_strike + pre-fight mutation in __init__),
+        # initiative is the primary asymmetric-swing lever.
+        if self._gameplan_f1 is not None:
+            _a1 = int(getattr(self._gameplan_f1, 'aggression', 0) or 0)
+            if _a1 != 0:
+                f1_init += 2 * _a1
+        if self._gameplan_f2 is not None:
+            _a2 = int(getattr(self._gameplan_f2, 'aggression', 0) or 0)
+            if _a2 != 0:
+                f2_init += 2 * _a2
+
         return self.fighter1.fighter_id if f1_init >= f2_init else self.fighter2.fighter_id
     
     def _simulate_exchange(self, exchange_num: int) -> Optional[Tuple[str, str]]:
@@ -528,13 +568,20 @@ class NarratedFightSimulator:
         actor, actor_state = self._get_fighter_and_state(actor_id)
         defender, defender_state = self._get_opponent_and_state(actor_id)
 
-        # GAMEPLAN-WIRE1: hand the actor's gameplan to select_action.
-        # select_action currently ignores it (SHIP2 will consume the
-        # aggression dial). None flows through unchanged so callers
-        # that didn't pass a Gameplan get byte-identical behavior.
+        # GAMEPLAN-DIAL-AGGR1: hand the actor's gameplan to select_action
+        # AND stash both fighters' gameplans on their FighterStates so
+        # the strike executor + flash-KO block can read them without
+        # threading extra params through the exchange machinery.
+        # None stays None — SHIP1 additive contract preserved when the
+        # caller (bridge, today) doesn't opt in.
         _actor_gameplan = (self._gameplan_f1
                            if actor_id == self.fighter1.fighter_id
                            else self._gameplan_f2)
+        _defender_gameplan = (self._gameplan_f2
+                              if actor_id == self.fighter1.fighter_id
+                              else self._gameplan_f1)
+        actor_state._gameplan = _actor_gameplan
+        defender_state._gameplan = _defender_gameplan
 
         # Select action
         action_type, action_data = select_action(
@@ -916,13 +963,13 @@ class NarratedFightSimulator:
                 
                 # Cap the chance
                 flash_ko_chance = min(flash_ko_chance, FLASH_KO_MAX_CHANCE)
-                
+
                 if random.random() < flash_ko_chance:
                     # Flash KO!
                     caused_knockdown = True
                     is_finish = True
                     defender_state.health = 0
-            
+
             # === V7 TKO GNP SYSTEM ===
             # Referee stops fight when defender takes sustained damage from dominant position
             if (not is_finish and 
@@ -1066,8 +1113,19 @@ class NarratedFightSimulator:
         
         # Spend stamina
         props = STRIKE_PROPERTIES.get(strike, (5, 0.02, 4, "head"))
-        attacker_state.spend_stamina(props[2])
-        
+        _stamina_cost = float(props[2])
+        # GAMEPLAN-DIAL-AGGR1: forward aggression drains stamina faster
+        # (higher output pace), patient conserves. IQ-gated: elite
+        # cardio-aware fighters execute the pace target; dim fighters
+        # slip toward their default. None / neutral aggression → no-op.
+        _att_gp_s = getattr(attacker_state, '_gameplan', None)
+        if _att_gp_s is not None:
+            _att_agg_s = int(getattr(_att_gp_s, 'aggression', 0) or 0)
+            if _att_agg_s != 0:
+                _exec_s = dial_execution(attacker, attacker_state)
+                _stamina_cost *= (1.0 + 0.15 * _att_agg_s * _exec_s)
+        attacker_state.spend_stamina(_stamina_cost)
+
         # Update momentum
         if landed and damage > 8:
             self.fight_state.momentum_fighter_id = attacker.fighter_id

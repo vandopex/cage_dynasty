@@ -789,6 +789,25 @@ def neutral_gameplan() -> Gameplan:
     return Gameplan()
 
 
+# GAMEPLAN-DIAL-AGGR1 — IQ execution gate for dial effects.
+# Per gameplan_design1.md §4: low-IQ fighters under-execute the plan;
+# tired fighters revert further. Applied to the DELTA from 1.0, not
+# to the multiplier itself — so at IQ 50 the fighter gets 40% of the
+# intended dial swing; at IQ 86+ full effect. Extracted as a helper
+# so all dial sites use the same formula (no per-site drift).
+def dial_execution(fighter_attrs, fighter_state) -> float:
+    """Return the fraction of a dial delta the fighter actually executes.
+    IQ 50 → 0.4 · IQ 80 → 0.9 · IQ 86+ → 1.0. Stamina under 40 → ×0.7.
+    Safe on missing attrs (defaults IQ 65, stamina 100)."""
+    _iq = getattr(fighter_attrs, 'fight_iq', 65) or 65
+    _exec = min(1.0, 0.4 + (_iq - 50) / 60.0)
+    _exec = max(0.0, _exec)
+    _stamina = getattr(fighter_state, 'stamina', 100.0) or 100.0
+    if _stamina < 40:
+        _exec *= 0.7
+    return _exec
+
+
 # ============================================================================
 # FIGHT EVENT (for commentary generation)
 # ============================================================================
@@ -1818,6 +1837,37 @@ def select_action(
     strike_weight = int(strike_weight * _sw["strike"])
     grapple_weight = int(grapple_weight * _sw["grapple"])
     sub_weight = int(sub_weight * _sw["submission"])
+
+    # ── GAMEPLAN-DIAL-AGGR1 · AGGRESSION dial ─────────────
+    # Aggression multiplies AFTER _STYLE_WEIGHTS so it composes with
+    # style, not overrides it (memo §3): a wrestler on AGGRESSIVE
+    # stays majority-grapple, just more forward. Only strike output
+    # is affected (grapple/sub weights untouched — grapple vs strike
+    # bias is RANGE dial's territory, SHIP3). Delta is IQ-gated via
+    # dial_execution(). `gameplan=None` (SHIP1 callers / live bridge
+    # today) skips this block and is byte-identical to SHIP1.
+    # Neutral Gameplan(aggression=0) engages the block but the
+    # multiplier evaluates to 1.0 → also identical.
+    #
+    # Asymmetric per memo §3 table: forward +15% strike weight,
+    # patient −10% (patient is a smaller step so it stays viable
+    # for defensive strikers).
+    if gameplan is not None:
+        _agg = int(getattr(gameplan, 'aggression', 0) or 0)
+        # Forward tilts strike_weight up +8%; patient tilts it down
+        # −5% (asymmetric: patient is the smaller step so defensive
+        # gameplans stay legitimate). IQ-gated via dial_execution().
+        # Bounds tuned so a wrestler on AGGRESSIVE stays majority-
+        # grapple — the dial biases within the style envelope, doesn't
+        # override it. Larger bumps were tested and destabilized
+        # (over-committed strikers get grappled — see the tuning arc
+        # in gameplan_design1.md §3).
+        if _agg > 0:
+            _exec = dial_execution(fighter_attrs, fighter_state)
+            strike_weight = int(strike_weight * (1.0 + 0.08 * _exec))
+        elif _agg < 0:
+            _exec = dial_execution(fighter_attrs, fighter_state)
+            strike_weight = int(strike_weight * (1.0 - 0.05 * _exec))
 
     # ── Late-round cardio advantage ──────────────────────
     # Cardio gap widens the longer the fight goes.
