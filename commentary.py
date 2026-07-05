@@ -2147,7 +2147,11 @@ class _DedupCommentaryLog(list):
     def append(self, line):
         if not line:
             return
-        if line.startswith("["):
+        # Structural markers (round summaries, boundary tags) skip dedup.
+        # FIGHT-ROUND-SEG-FIX1 adds "<<..." prefix for the boundary
+        # marker family that survives \n round-trip through the bridge
+        # storage layer.
+        if line.startswith("[") or line.startswith("<<"):
             list.append(self, line)
             return
         if self:
@@ -3850,6 +3854,15 @@ class FightCommentarySystem:
         self.current_exchange = 0
         self._init_round_stats()
 
+        # FIGHT-ROUND-SEG-FIX1 — emit a machine-parseable round-boundary
+        # marker before the human-visible opener. The watch-fight
+        # assembler buckets on THIS tag (not on the `[Round N: summary]`
+        # end-of-round line), which fixes finish-terminated rounds:
+        # they now open their own bucket at start_round(N) and stay
+        # open through the finish and post-fight content. Marker line
+        # is stripped by the assembler and never rendered.
+        self.commentary_log.append(f"<<ROUND_BOUNDARY:{round_num}>>")
+
         template = self._select_template(ROUND_START_TEMPLATES)
         commentary = template.format(round_num=round_num)
 
@@ -4430,6 +4443,11 @@ class FightCommentarySystem:
         self.current_round = round_num
         self.current_exchange = 0
         self._init_round_stats()
+
+        # FIGHT-ROUND-SEG-FIX1 — mirror the boundary tag emission on
+        # the enhanced path so both start-round entry points produce
+        # the same bucket boundary for the assembler.
+        self.commentary_log.append(f"<<ROUND_BOUNDARY:{round_num}>>")
 
         # Select appropriate template based on round
         if round_num == 1:

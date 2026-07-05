@@ -3818,49 +3818,110 @@ def register_routes(app):
 
         commentary = _semantic_dedup(commentary)
 
-        # Parse commentary into rounds. Ship K1: use the engine's
-        # `[Round N: <summary>]` bracketed end-of-round line as the
-        # round boundary — round-start lines from the engine are
-        # inconsistent (sometimes "Round N", sometimes mid-round prose,
-        # sometimes missing). Corner advice between `=== CORNER ===`
-        # and `=== /CORNER ===` markers attaches to the round that
-        # just closed.
+        # Parse commentary into rounds.
+        #
+        # FIGHT-ROUND-SEG-FIX1: primary bucketing is now on the
+        # `<<ROUND_BOUNDARY:N>>` structural tag the engine emits at
+        # every start_round() call. This tag opens a bucket for round
+        # N and holds it open until either the next boundary marker,
+        # the next `=== CORNER ===` block, or end of stream. The
+        # previous approach used the `[Round N: <summary>]` end-of-
+        # round summary line as the boundary — that failed for finish-
+        # terminated rounds because a finish never emits an end-summary,
+        # so the finishing round had no bucket and its content spilled
+        # into the prior round's card (including the corner block,
+        # which then appeared AFTER the finish).
+        #
+        # Fallback: for legacy cached fights whose commentary predates
+        # the boundary tag, fall through to the old `[Round N:]`
+        # parsing so old saves still render round-boxed.
         import re
+        ROUND_BOUNDARY_PATTERN = re.compile(r"^<<ROUND_BOUNDARY:(\d+)>>$")
         ROUND_END_PATTERN = re.compile(r"^\[Round (\d+):", re.IGNORECASE)
+
+        _has_boundary = any(
+            ROUND_BOUNDARY_PATTERN.match(l.strip()) for l in commentary
+        )
+
         rounds = []
         buffer_lines = []
         in_corner = False
-        for line in commentary:
-            line = line.strip()
-            if not line:
-                continue
-            if line.startswith('=== CORNER ==='):
-                in_corner = True
-                continue  # marker not displayed
-            if line.startswith('=== /CORNER ==='):
-                in_corner = False
-                continue  # marker not displayed
-            if in_corner:
-                if rounds:
-                    rounds[-1].setdefault('corner', []).append(line)
-                continue
-            buffer_lines.append(line)
-            m = ROUND_END_PATTERN.match(line)
-            if m:
-                rounds.append({
-                    'num':   int(m.group(1)),
-                    'lines': buffer_lines,
-                })
-                buffer_lines = []
 
-        # Trailing post-final-round content (result line, scorecard
-        # hint) attaches to the last round's card.
-        if buffer_lines and rounds:
-            rounds[-1]['lines'].extend(buffer_lines)
-        elif buffer_lines:
-            # No `[Round N:` markers detected — fall back to single
-            # block so the watch page still renders something.
-            rounds = [{'num': 0, 'lines': buffer_lines}]
+        if _has_boundary:
+            current_round_num = None
+
+            def _close_bucket():
+                nonlocal current_round_num, buffer_lines
+                if current_round_num is not None:
+                    rounds.append({
+                        'num':   current_round_num,
+                        'lines': buffer_lines,
+                    })
+                    buffer_lines = []
+                    current_round_num = None
+
+            for line in commentary:
+                line = line.strip()
+                if not line:
+                    continue
+                bm = ROUND_BOUNDARY_PATTERN.match(line)
+                if bm:
+                    # Boundary marker: close current bucket, open new
+                    # one. Marker itself is stripped (not rendered).
+                    _close_bucket()
+                    current_round_num = int(bm.group(1))
+                    continue
+                if line.startswith('=== CORNER ==='):
+                    # Corner block fires between rounds. Close the
+                    # currently-open bucket first so the corner
+                    # attaches to the round that just closed (its
+                    # break-to-next-round advice), not to whatever
+                    # bucket the assembler happens to be building.
+                    _close_bucket()
+                    in_corner = True
+                    continue
+                if line.startswith('=== /CORNER ==='):
+                    in_corner = False
+                    continue
+                if in_corner:
+                    if rounds:
+                        rounds[-1].setdefault('corner', []).append(line)
+                    continue
+                buffer_lines.append(line)
+
+            # Close whatever bucket is still open at end of stream —
+            # this is the finish-terminated round on a KO/TKO/SUB fight,
+            # or the final round on a decision that just ran to time.
+            _close_bucket()
+        else:
+            # Legacy fallback — old cached fights without boundary tags.
+            # Same logic as pre-FIX1: bucket on `[Round N: summary]`.
+            for line in commentary:
+                line = line.strip()
+                if not line:
+                    continue
+                if line.startswith('=== CORNER ==='):
+                    in_corner = True
+                    continue
+                if line.startswith('=== /CORNER ==='):
+                    in_corner = False
+                    continue
+                if in_corner:
+                    if rounds:
+                        rounds[-1].setdefault('corner', []).append(line)
+                    continue
+                buffer_lines.append(line)
+                m = ROUND_END_PATTERN.match(line)
+                if m:
+                    rounds.append({
+                        'num':   int(m.group(1)),
+                        'lines': buffer_lines,
+                    })
+                    buffer_lines = []
+            if buffer_lines and rounds:
+                rounds[-1]['lines'].extend(buffer_lines)
+            elif buffer_lines:
+                rounds = [{'num': 0, 'lines': buffer_lines}]
 
         # Final safety net for the truly-empty-commentary case
         if not rounds and commentary:
