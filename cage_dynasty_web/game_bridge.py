@@ -711,6 +711,213 @@ def get_coach_trained_stats(specialty) -> List[str]:
     return list(COACH_BUCKET_ATTRS.get(_SPECIALTY_ALIASES[key], []))
 
 
+def analyze_matchup(player, opponent, depth: int = 1) -> Dict[str, Any]:
+    """
+    COACH-INTEL-BUILD1 — matchup analysis primitive.
+
+    Compare player vs opponent stat profiles to surface actionable
+    risks and edges specific to this pairing. Standalone module-level
+    helper (not a method) so a follow-up ship can import it into
+    corner-advice without pulling GameBridge state.
+
+    Callers pass anything duck-typed to the 17 combat-stat attrs —
+    typically WebFighter, but any object with the same attribute
+    surface works.
+
+    Ranking is gap magnitude, not absolute threshold: an 88-takedowns
+    opponent vs 48-TDD player produces a 40-point critical risk, while
+    a 60-takedowns opponent vs the same 48-TDD player produces a
+    12-point significant risk. Fixed-threshold logic would emit the
+    same warning for both — that's the failure mode
+    COACH-INTEL-DIAG1 identified in the pre-refactor
+    _find_vulnerability.
+
+    Two comparison modes:
+      - Attack/defense pairs (asymmetric): the aggressor's offensive
+        attr vs the target's defensive attr. Emits a risk (opponent
+        attacks, player defends) AND an edge (player attacks, opponent
+        defends) for each pair.
+      - Attribute axes (symmetric): both fighters compare on the same
+        attr; the higher fighter's advantage is a risk to the lower.
+
+    Low-data guard: if either fighter has >12 of its 17 combat attrs
+    at exactly the getattr fallback default (50), the fighter is
+    treated as a defaulted stub — the primitive returns the honest
+    "even" case immediately. A real fighter with one legitimate 50
+    stat is unaffected; a fully-defaulted stub is what this catches.
+
+    Style-hint kicker (non-load-bearing): if opponent.fighting_style
+    maps to a known discipline, add a +3 bump to that discipline's
+    offensive stats before the gap calc — a Wrestler with 80
+    takedowns is a bigger takedown threat than a Balanced fighter
+    with the same 80. Style is nice-to-have, not required: unknown
+    styles fall through with no bump, and ranking still fires.
+
+    Args:
+        player, opponent: objects with the 17 combat-stat attrs.
+        depth: how many risks/edges to keep (worst-first for risks,
+            best-first for edges). The caller derives depth from the
+            coach's fight_iq via the existing COACH_IQ_BONUS_THRESHOLD
+            / COACH_IQ_ELITE_THRESHOLD ladder; primitive itself is
+            depth-agnostic.
+
+    Returns dict with:
+        risks:   list of entry dicts, ranked worst-first, len ≤ depth
+        edges:   list of entry dicts, ranked best-first,  len ≤ depth
+        even:    True when no gap crossed the notable (6) threshold
+        summary: worst-risk threat_name, or worst-edge if no risks,
+                 or "" if even
+
+    Each entry dict:
+        player_attr:   str    (the attr the player value comes from)
+        opponent_attr: str    (same as player_attr for attribute axes)
+        player_val:    int
+        opponent_val:  int
+        gap:           int    (positive; higher = more severe)
+        threat_name:   str    (human-readable phrase)
+        severity:      str    ("critical" | "significant" | "notable")
+        kind:          str    ("attack_defense" | "attribute_axis")
+
+    Every citable number (for build-2's coach-quote layer) lives on
+    a `player_val` or `opponent_val` — the quote may never reference
+    a stat that isn't in risks + edges.
+    """
+    ATTACK_DEFENSE_PAIRS = [
+        ("takedowns",       "takedown_defense",  "wrestling entries"),
+        ("top_control",     "guard",             "top-position control"),
+        ("submissions",     "guard",             "submission grappling"),
+        ("clinch_control",  "takedown_defense",  "cage-clinch trips"),
+        ("boxing",          "striking_defense",  "boxing"),
+        ("kicks",           "striking_defense",  "kicking game"),
+        ("clinch_striking", "clinch_control",    "dirty boxing in the clinch"),
+    ]
+    ATTRIBUTE_AXES = [
+        ("cardio",    "the pace"),
+        ("fight_iq",  "the read"),
+        ("chin",      "durability"),
+        ("composure", "poise under fire"),
+    ]
+    _SEVERITY_LEVELS = (("critical", 20), ("significant", 12), ("notable", 6))
+    _NOTABLE_MIN = 6
+    STYLE_OFFENSE_HINTS = {
+        "Wrestler":         {"takedowns": 3, "top_control": 3},
+        "Ground & Pound":   {"takedowns": 3, "top_control": 3},
+        "BJJ Specialist":   {"submissions": 3},
+        "Striker":          {"boxing": 3},
+        "Muay Thai":        {"kicks": 3, "clinch_striking": 3},
+        "Clinch Fighter":   {"clinch_control": 3, "clinch_striking": 3},
+        "Pressure Fighter": {"cardio": 3},
+    }
+    _COMBAT_ATTRS = (
+        "boxing", "kicks", "clinch_striking", "clinch_control",
+        "striking_defense", "takedowns", "takedown_defense",
+        "top_control", "submissions", "guard",
+        "strength", "speed", "cardio", "chin", "recovery",
+        "heart", "fight_iq", "composure",
+    )
+    _EVEN = {"risks": [], "edges": [], "even": True, "summary": ""}
+
+    def _severity(gap):
+        for label, threshold in _SEVERITY_LEVELS:
+            if gap >= threshold:
+                return label
+        return None
+
+    def _looks_defaulted(f):
+        n_default = sum(1 for a in _COMBAT_ATTRS if getattr(f, a, 50) == 50)
+        return n_default > 12
+
+    if _looks_defaulted(player) or _looks_defaulted(opponent):
+        return _EVEN
+
+    opp_style = str(getattr(opponent, "fighting_style", "") or "")
+    opp_hints = STYLE_OFFENSE_HINTS.get(opp_style, {})
+
+    def _opp_atk(attr):
+        return getattr(opponent, attr, 50) + opp_hints.get(attr, 0)
+
+    risks, edges = [], []
+
+    # Attack/defense pairs (asymmetric)
+    for atk_attr, def_attr, phrase in ATTACK_DEFENSE_PAIRS:
+        ply_atk = getattr(player, atk_attr, 50)
+        ply_def = getattr(player, def_attr, 50)
+        opp_atk_val = _opp_atk(atk_attr)
+        opp_def = getattr(opponent, def_attr, 50)
+
+        gap_risk = opp_atk_val - ply_def
+        sev = _severity(gap_risk)
+        if sev is not None:
+            risks.append({
+                "player_attr":   def_attr,
+                "opponent_attr": atk_attr,
+                "player_val":    int(ply_def),
+                "opponent_val":  int(opp_atk_val),
+                "gap":           int(gap_risk),
+                "threat_name":   f"his {phrase}",
+                "severity":      sev,
+                "kind":          "attack_defense",
+            })
+
+        gap_edge = ply_atk - opp_def
+        sev = _severity(gap_edge)
+        if sev is not None:
+            edges.append({
+                "player_attr":   atk_attr,
+                "opponent_attr": def_attr,
+                "player_val":    int(ply_atk),
+                "opponent_val":  int(opp_def),
+                "gap":           int(gap_edge),
+                "threat_name":   f"your {phrase}",
+                "severity":      sev,
+                "kind":          "attack_defense",
+            })
+
+    # Attribute axes (symmetric — higher wins on both sides)
+    for attr, phrase in ATTRIBUTE_AXES:
+        ply_v = getattr(player, attr, 50)
+        opp_v = getattr(opponent, attr, 50)
+        diff = ply_v - opp_v
+        if diff >= _NOTABLE_MIN:
+            edges.append({
+                "player_attr":   attr,
+                "opponent_attr": attr,
+                "player_val":    int(ply_v),
+                "opponent_val":  int(opp_v),
+                "gap":           int(diff),
+                "threat_name":   f"your {phrase}",
+                "severity":      _severity(diff),
+                "kind":          "attribute_axis",
+            })
+        elif -diff >= _NOTABLE_MIN:
+            risks.append({
+                "player_attr":   attr,
+                "opponent_attr": attr,
+                "player_val":    int(ply_v),
+                "opponent_val":  int(opp_v),
+                "gap":           int(-diff),
+                "threat_name":   f"his {phrase}",
+                "severity":      _severity(-diff),
+                "kind":          "attribute_axis",
+            })
+
+    risks.sort(key=lambda e: -e["gap"])
+    edges.sort(key=lambda e: -e["gap"])
+    risks = risks[:max(0, depth)]
+    edges = edges[:max(0, depth)]
+
+    if not risks and not edges:
+        return _EVEN
+
+    summary = risks[0]["threat_name"] if risks else edges[0]["threat_name"]
+    return {
+        "risks":   risks,
+        "edges":   edges,
+        "even":    False,
+        "summary": summary,
+    }
+
+
 # fight_iq/composure/heart generation ranges by tier
 COACH_ATTR_RANGES = {
     'GARAGE':    (45, 65),
@@ -12823,6 +13030,22 @@ class GameBridge:
         else:
             iq_tier, iq_bonus = 'basic', 0
 
+        # COACH-INTEL-BUILD1 — additive matchup_analysis field. Reuses
+        # the same _best_iq metric the tier ladder already computed
+        # (existing COACH_IQ_* thresholds; no new constants). Depth
+        # ladder mirrors the tier ladder: elite → 3, good → 2, basic
+        # → 1. Dead data this ship — no consumer reads it yet; the
+        # build-2 ship rewires _build_coach_quote / _find_vulnerability
+        # to activate it.
+        if _best_iq >= COACH_IQ_ELITE_THRESHOLD:
+            _derived_depth = 3
+        elif _best_iq >= COACH_IQ_BONUS_THRESHOLD:
+            _derived_depth = 2
+        else:
+            _derived_depth = 1
+        _matchup_analysis = analyze_matchup(player, opponent,
+                                             depth=_derived_depth)
+
         return {
             "gameplan":      rec_gameplan,
             "focus":         rec_focus,
@@ -12837,6 +13060,7 @@ class GameBridge:
             "coach_iq_bonus": iq_bonus,
             "coach_best_iq":  _best_iq,
             "coach_best_name": _best_name,
+            "matchup_analysis": _matchup_analysis,
         }
 
     def _gameplan_from_style_matchup(self, player_style: str, opp_style: str) -> str:
@@ -12916,6 +13140,13 @@ class GameBridge:
         _SP = specialty.lower()
         if _SP in ("striking", "boxing", "kickboxing", "muay thai",
                    "muay_thai", "striking_coach",
+                   # COACH-GAMEPLAN-COVERAGE-FIX3: canonical Coach-3
+                   # keys that modern generation writes. Without these,
+                   # every modern striking coach's fight-camp gameplan
+                   # suggestion rendered BALANCED (final-default) —
+                   # only legacy aliases like "boxing"/"kickboxing" hit
+                   # this tuple pre-fix.
+                   "boxing_coach", "muay_thai_coach", "kickboxing_coach",
                    "clinch", "clinch_coach"):
             return "AGGRESSIVE"
         if _SP in ("wrestling", "grappling", "bjj", "submissions",
