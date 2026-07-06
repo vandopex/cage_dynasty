@@ -4,6 +4,11 @@ Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron
 
 | Date | Ship | Commit | What |
 |---|---|---|---|
+| 2026-07-05 | AGGRESSION-NARRATION1 | b97e7bd | Fight-open intent line in watched-fight timeline for forward/patient sides |
+| 2026-07-05 | BRIDGE-WIRE-AGGR1 | 0f3154b | Player gameplan resolved → Gameplan and passed into real engine at `_run_real_engine` |
+| 2026-07-05 | GAMEPLAN-DIAL-AGGR1 | d1d927d | Aggression dial live in engine (config B — initiative ±2, pre-fight ±4, IQ-gated strike weights) |
+| 2026-07-05 | GAMEPLAN-WIRE1 | ec78b3b | Optional Gameplan threaded through `simulate_narrated_fight` → simulator → `select_action` (additive) |
+| 2026-07-05 | JUDO-SAMBO-BUCKET-FIX1 | bd38a2f | judo/sambo coach specialty routes to wrestling bucket (was clinch) — legacy-save training corrected |
 | 2026-07-03 | TRAINING-ADVANCED-TOGGLE1 | 586fc0a | Hide floor column by default; CSS-only, floor inputs stay in DOM |
 | 2026-07-03 | TITLE-TRANSFER-FIX1 | 5e4bbe1 | AI champions correctly lose belt in fallback-path fights |
 | 2026-07-03 | COACH-RATING-CURVE1 | d10003c | Compress training-gain rating curve 21× → 3.4× |
@@ -107,6 +112,46 @@ on the PA bash console, then "Reload" on the PA Web tab.
 
 ## Top-of-backlog
 
+**Gameplan dial state (live as of 2026-07-05):**
+Four ships wired the aggression axis end-to-end: GAMEPLAN-WIRE1 (`ec78b3b`,
+threading) → GAMEPLAN-DIAL-AGGR1 (`d1d927d`, engine behaviour, config B) →
+BRIDGE-WIRE-AGGR1 (`0f3154b`, resolve stored gameplan in `_run_real_engine`)
+→ AGGRESSION-NARRATION1 (`b97e7bd`, fight-open intent line). Live on PA.
+
+Only the **aggression** axis is wired. The eight UI presets collapse to
+three live behaviours today:
+
+| Preset (routes.py:2213) | Aggression | Live behaviour |
+|---|---|---|
+| AGGRESSIVE, GNP, CLINCH | +1 | Forward — press-the-pace intent line + initiative +2 + pre-fight boxing/kicks +4 |
+| BALANCED, TAKEDOWN, SUBMISSION, unset | 0 → None | Neutral — byte-identical to pre-wire, no intent line |
+| MEASURED, DEFENSIVE | −1 | Patient — patience intent line + initiative −2 + pre-fight striking_defense +4 |
+
+**Known debt from that collapse (queued, filed against future dials):**
+- **RANGE dial** — separates TAKEDOWN and SUBMISSION from AGGRESSIVE-family
+  and pulls GNP/CLINCH off the "≡ Go Forward" alias. Design memo:
+  `outputs/gameplan_range_design1.md`.
+- **finish-seek dial** — separates SUBMISSION from TAKEDOWN and gives DEFENSIVE
+  its own posture distinct from MEASURED.
+- Until those ship, the UI-vs-engine mismatch is real and documented:
+  TAKEDOWN and SUBMISSION are placebo, GNP ≡ CLINCH ≡ AGGRESSIVE (same forward
+  behaviour), DEFENSIVE ≡ MEASURED.
+
+**Counter-window finding (also filed, do not misdiagnose as a Patient bug):**
+The engine's counter-window logic keys on **fighting style** (Counter Striker,
+Point Fighter, Sprawl & Brawl in the STRIKER_FAMILY at `styles.py`), not on
+Gameplan and not on any trait. So a Patient MEASURED gameplan on a Muay Thai
+or Pressure fighter does not activate a counter mechanic — patience is a
+posture/output shift only. Do not tune counter values in response to
+"MEASURED doesn't counter" reports; the mechanism lives elsewhere.
+
+**Small logging debt (demote-to-debug):**
+The 🎯 `[GAMEPLAN WIRE]` stdout print in `game_bridge.py:_run_real_engine`
+(added by BRIDGE-WIRE-AGGR1 for the tier-2 live gate) still fires on every
+non-neutral player fight. Useful during rollout — noise now that it's live.
+Demote to a debug-guarded print (e.g. behind an env flag or a module-level
+`_GAMEPLAN_DEBUG = False`) on the next `game_bridge.py` touch.
+
 **Queued, not scheduled:**
 - **COACH-GRAPPLE-SPLIT1** — split the `grappling_coach` training bucket into
   distinct wrestling and BJJ archetypes. Sandman-grade fighter-identity work
@@ -124,6 +169,17 @@ on the PA bash console, then "Reload" on the PA Web tab.
   by the July ship cascade.
 
 **Recently reconciled (closed):**
+- **Judo/Sambo coach bucket routes to wrestling** — JUDO-SAMBO-BUCKET-DIAG1
+  (2026-07-05, `outputs/judo_sambo_bucket_diag1.md`) traced the outlier: the
+  `_SPECIALTY_ALIASES` table sent `judo`/`sambo` to `clinch_coach` while every
+  other consumer treated them as grappling/wrestler-family (style-inference,
+  attribute weights, engine style bucket, gameplan bucket). Closed by
+  JUDO-SAMBO-BUCKET-FIX1 (`bd38a2f`, 2026-07-05) — two-line alias change +
+  matching hire-card banner. Legacy saves with judo/sambo coaches now train
+  the takedowns/top_control stats the fighter identity implies instead of the
+  clinch_control/clinch_striking stats every other system disagrees with.
+  `COACH_TYPE_MIGRATION` display migration for existing coach labels is a
+  cosmetic follow-up, not blocking.
 - **Auto-load most recent save on landing** — filed as top-of-backlog #1 on
   2026-07-03; AUTOLOAD-RECONCILE1 (2026-07-05) confirmed the feature was
   already shipped at `484e7f8` (feat(session): auto-load most recent save
