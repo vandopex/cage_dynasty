@@ -443,7 +443,37 @@ class NarratedFightSimulator:
         self.finish_result = None
         self.all_round_stats = []
         self.round_scores = []
-    
+
+        # AGGRESSION-NARRATION1: fight-open framing line per side, only
+        # if that side has an active Gameplan with non-zero aggression.
+        # Intent-only prose — states the plan going in, never asserts
+        # a strike or position — so it cannot contradict the sim.
+        # Silent for None / neutral: BALANCED, unset, and (this ship)
+        # every AI side all skip. Appended before any round marker so
+        # the watched-fight assembler treats it as pre-round intro.
+        for _fa, _gp in ((self.fighter1, self._gameplan_f1),
+                         (self.fighter2, self._gameplan_f2)):
+            if _gp is None:
+                continue
+            _agg = int(getattr(_gp, 'aggression', 0) or 0)
+            if _agg > 0:
+                _forward_lines = [
+                    f"{_fa.name} walks him down — the plan is to press the pace.",
+                    f"{_fa.name} looks to force the fight from the opening bell.",
+                    f"{_fa.name} is here to cut the cage off and make him work.",
+                ]
+                self.commentary.commentary_log.append(random.choice(_forward_lines))
+            elif _agg < 0:
+                # Patient framing — dial is aggression only, no counter
+                # mechanic in the engine, so language stays on
+                # patience/shot-selection, not counter-striking promise.
+                _patient_lines = [
+                    f"{_fa.name} stays measured — content to pick his shots.",
+                    f"{_fa.name} plans to stay patient and make him lead.",
+                    f"{_fa.name} keeps it sharp, waiting for the opening.",
+                ]
+                self.commentary.commentary_log.append(random.choice(_patient_lines))
+
     def _init_round(self):
         """Initialize round state"""
         self.round_stats = {
