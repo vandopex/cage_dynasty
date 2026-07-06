@@ -210,14 +210,33 @@ try:
         FI_DAMAGE_MULTIPLIER = _fem.FI_DAMAGE_MULTIPLIER if hasattr(_fem, 'FI_DAMAGE_MULTIPLIER') else 0.42
     except Exception:
         FI_DAMAGE_MULTIPLIER = 0.42
+    # BRIDGE-WIRE-AGGR1: grab Gameplan for the AGGRESSION dial wire-up
+    # into _run_real_engine. None-fallback keeps the score-only path safe.
+    try:
+        _Gameplan = _fem.Gameplan if hasattr(_fem, 'Gameplan') else None
+    except Exception:
+        _Gameplan = None
     FIGHT_ENGINE_AVAILABLE      = True
     print("✅ fight engine loaded from fight_integration")
 except Exception as _fe_e:
     print(f"⚠️ fight_integration not available: {_fe_e}")
     _FightConfig = None
+    _Gameplan = None
     FI_DAMAGE_MULTIPLIER = 0.42
 if not FIGHT_ENGINE_AVAILABLE:
     print("⚠️ fight engine falling back to score-based simulation")
+
+# BRIDGE-WIRE-AGGR1: player gameplan → AGGRESSION dial map.
+# +1 forward (initiative +2, boxing/kicks +4 pre-fight).
+# -1 patient (initiative −2, striking_defense +4 pre-fight).
+#  0 neutral → helper returns None → byte-identical pre-wire path
+#  (BALANCED / TAKEDOWN / SUBMISSION / unset all collapse here).
+# AI side always None this ship; counter-planning is SHIP5.
+_GAMEPLAN_AGGRESSION = {
+    "AGGRESSIVE": 1, "GNP": 1, "CLINCH": 1,
+    "BALANCED":   0, "TAKEDOWN": 0, "SUBMISSION": 0,
+    "MEASURED":  -1, "DEFENSIVE": -1,
+}
 
 POPULARITY_AVAILABLE = False
 for _pop_mod in ["popularity", "systems.popularity"]:
@@ -17586,6 +17605,25 @@ class GameBridge:
 
         return out
 
+    def _resolve_player_gameplan(self, fighter_attrs, fight, player_fids):
+        """BRIDGE-WIRE-AGGR1: resolve one side to a Gameplan or None.
+
+        AI side (fighter not in player_fids) → None.
+        Neutral aggression (BALANCED/TAKEDOWN/SUBMISSION/unset) → None,
+        preserving the byte-identical no-gameplan path from before the
+        wire. Only ±1 presets construct a Gameplan and reach the
+        NarratedFightSimulator's pre-fight mutation + initiative bias.
+        """
+        if _Gameplan is None:
+            return None
+        if getattr(fighter_attrs, 'fighter_id', None) not in player_fids:
+            return None
+        _gp_str = fight.get("gameplan", "BALANCED") or "BALANCED"
+        _aggr = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
+        if _aggr == 0:
+            return None
+        return _Gameplan(aggression=_aggr, preset_name=_gp_str)
+
     def _run_real_engine(self, fight: Dict, fighter1, fighter2,
                           f1_name: str, f2_name: str) -> Optional[Dict]:
         """
@@ -17718,6 +17756,22 @@ class GameBridge:
             submission_escape_threshold=85.0,
             damage_multiplier=0.24,
         ) if _FightConfig else None
+
+        # BRIDGE-WIRE-AGGR1: resolve player's saved gameplan → Gameplan.
+        # AI side always None this ship (counter-planning ships in SHIP5).
+        # aggression == 0 collapses to None → byte-identical pre-wire.
+        _player_fids_gp = (
+            {f.fighter_id for f in self._game_state.get_player_fighters()}
+            if (self._game_state and self._game_state.player_camp_id) else set()
+        )
+        _gp_f1 = self._resolve_player_gameplan(fa1, fight, _player_fids_gp)
+        _gp_f2 = self._resolve_player_gameplan(fa2, fight, _player_fids_gp)
+        if _gp_f1 is not None or _gp_f2 is not None:
+            print(f"  🎯 [GAMEPLAN WIRE] f1={getattr(_gp_f1, 'preset_name', None)} "
+                  f"aggr={getattr(_gp_f1, 'aggression', 0)} | "
+                  f"f2={getattr(_gp_f2, 'preset_name', None)} "
+                  f"aggr={getattr(_gp_f2, 'aggression', 0)}")
+
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
             rounds        = total_rounds,
@@ -17725,6 +17779,8 @@ class GameBridge:
             is_main_event = is_main,
             starting_stamina_f1=_f1_stamina,
             starting_stamina_f2=_f2_stamina,
+            gameplan_f1   = _gp_f1,
+            gameplan_f2   = _gp_f2,
             **({"config": _fight_cfg} if _fight_cfg else {})
         )
         _eng_sub_type = getattr(eng_result, 'sub_type', '') or ''
