@@ -772,9 +772,9 @@ class Gameplan:
     the full dial-step table and outcome tradeoffs.
 
     Fields (all default to identity — no bias):
-        aggression:   -1 patient · 0 neutral · +1 forward
-        range_bias:   -1 grapple · 0 neutral · +1 keep-standing
-        finish_seek:  -1 safe    · 0 neutral · +1 hunt
+        aggression:   -1 patient       · 0 neutral · +1 forward
+        range_bias:   -1 keep-standing · 0 neutral · +1 grapple-seek
+        finish_seek:  -1 safe          · 0 neutral · +1 hunt
         preset_name:  optional label for logging/UI ('AGGRESSIVE', etc.)
     """
     aggression: int = 0
@@ -1869,6 +1869,36 @@ def select_action(
             _exec = dial_execution(fighter_attrs, fighter_state)
             strike_weight = int(strike_weight * (1.0 - 0.05 * _exec))
 
+        # ── GAMEPLAN-DIAL-RANGE-CORE1 · RANGE dial (§1a + §1f) ─
+        # Sign convention: range_bias = +1 grapple-seek, -1 keep-
+        # standing, 0 neutral. Multipliers per gameplan_range_
+        # design1.md §1a and diag §1a: grapple_weight ×1.20 / ×0.85,
+        # sub_weight ×1.10 / ×0.80. Both IQ-gated on the delta from
+        # 1.0 (same primitive AGGRESSION uses). strike_weight is
+        # untouched here — AGGRESSION owns it; no overlap risk. §1f
+        # sprawl reflex fires only on keep-standing in STANDING when
+        # opponent has a takedown threat and I'm not already S&B
+        # (S&B block at :1521-1526 already runs — double-fire guard).
+        # Composition audit: diag §2 confirms clean — no shared
+        # mutable state with AGGRESSION, no weight-variable overlap.
+        _rng = int(getattr(gameplan, 'range_bias', 0) or 0)
+        if _rng > 0:
+            _exec_r = dial_execution(fighter_attrs, fighter_state)
+            grapple_weight = int(grapple_weight * (1.0 + 0.20 * _exec_r))
+            sub_weight     = int(sub_weight     * (1.0 + 0.10 * _exec_r))
+        elif _rng < 0:
+            _exec_r = dial_execution(fighter_attrs, fighter_state)
+            grapple_weight = int(grapple_weight * (1.0 - 0.15 * _exec_r))
+            sub_weight     = int(sub_weight     * (1.0 - 0.20 * _exec_r))
+            # §1f sprawl reflex — commit to striking-first posture
+            # when a real TD threat is across the cage. Not IQ-gated
+            # (pre-fight posture, per design §4a). Excludes S&B
+            # (already gets +30/-20 at :1521-1526) so no double-fire.
+            if (position in STANDING_POSITIONS
+                    and my_style != "sprawl_and_brawl"
+                    and getattr(opponent_attrs, 'takedowns', 0) >= 70):
+                strike_weight += 8
+
     # ── Late-round cardio advantage ──────────────────────
     # Cardio gap widens the longer the fight goes.
     # A fighter with much better cardio dominates round 3.
@@ -1940,7 +1970,9 @@ def select_action(
         sub = random.choice(submissions)
         return ("submission", sub)
     else:
-        action = select_grappling_action(grappling, fighter_attrs, position, is_top)
+        action = select_grappling_action(
+            grappling, fighter_attrs, position, is_top,
+            gameplan=gameplan, fighter_state=fighter_state)
         return ("grappling", action)
 
 
@@ -1988,30 +2020,63 @@ def select_grappling_action(
     available: List[GrapplingAction],
     fighter: FighterAttributes,
     position: Position,
-    is_top: bool
+    is_top: bool,
+    gameplan: Optional['Gameplan'] = None,
+    fighter_state: Optional[FighterState] = None,
 ) -> GrapplingAction:
-    """Select grappling action based on attributes and situation."""
+    """Select grappling action based on attributes and situation.
+
+    GAMEPLAN-DIAL-RANGE-CORE1 (§1b, §1c): optional `gameplan` +
+    `fighter_state` power the RANGE-dial per-action bias. Both
+    default to None → byte-identical to pre-RANGE behavior (SHIP1
+    additive contract). §1b biases CLINCH_BREAK vs. TDs in CLINCH.
+    §1c biases STAND_UP + guard-work sweeps in INFERIOR_POSITIONS.
+    """
+    # Range-dial IQ gate — computed once if the dial is engaged and
+    # fighter_state is available. dial_execution needs both; when
+    # fighter_state is None (older callers), gate defaults to 1.0.
+    _rng = 0
+    if gameplan is not None:
+        _rng = int(getattr(gameplan, 'range_bias', 0) or 0)
+    _rng_iq = 1.0
+    if _rng != 0 and fighter_state is not None:
+        _rng_iq = dial_execution(fighter, fighter_state)
+
     weights = {}
-    
+
     for action in available:
         weight = 10
-        
+
         # Takedown-based actions (use takedowns attribute)
         if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG,
                      GrapplingAction.BODY_LOCK_TAKEDOWN, GrapplingAction.SUPLEX,
                      GrapplingAction.HIP_TOSS, GrapplingAction.TRIP}:
             weight += fighter.takedowns // 4
-        
+            # §1b clinch tendency — from CLINCH, grapple-seek wants
+            # the takedown out; keep-standing wants to break instead.
+            if _rng != 0 and position in CLINCH_POSITIONS:
+                if _rng > 0:
+                    weight += int(20 * _rng_iq)
+                else:
+                    weight -= int(20 * _rng_iq)
+
         # Guard/sweep actions (use guard attribute)
         elif action in {GrapplingAction.SCISSOR_SWEEP, GrapplingAction.FLOWER_SWEEP,
                        GrapplingAction.BUTTERFLY_SWEEP, GrapplingAction.SHRIMP_ESCAPE}:
             weight += fighter.guard // 4
-        
+            # §1c work guard — grapple-seek accepts bottom, hunts
+            # sweeps rather than escape. Only fires from bottom
+            # positions where sweeps make sense.
+            if (_rng > 0
+                    and position in (INFERIOR_POSITIONS | GUARD_POSITIONS)
+                    and not is_top):
+                weight += int(15 * _rng_iq)
+
         # Top control actions (use top_control attribute)
         elif action in {GrapplingAction.PASS_TO_SIDE, GrapplingAction.TAKE_BACK,
                        GrapplingAction.PASS_TO_MOUNT, GrapplingAction.KNEE_SLICE}:
             weight += fighter.top_control // 4
-        
+
         # Clinch entry - wrestlers and Muay Thai fighters
         # Uses clinch_control (positional grappling), not clinch_striking
         # (damage). Entering the clinch is a control action.
@@ -2019,23 +2084,38 @@ def select_grappling_action(
             weight += (fighter.takedowns + fighter.clinch_control) // 6
             if fighter.clinch_control >= 70:
                 weight += 15  # Clinch specialist bonus
-        
+
         # Stand up attempts (guard + explosiveness)
         elif action == GrapplingAction.STAND_UP:
             if fighter.guard > 60 or fighter.strength > 60:
                 weight += 15
-        
+            # §1c stand-up preference — keep-standing pushes STAND_UP
+            # +25, grapple-seek pulls it −15. IQ-gated. Diag §1a
+            # anchor correction: this is the real STAND_UP selection
+            # site (design memo :2613 pointed at the position-change
+            # writer, not the selector).
+            if _rng > 0:
+                weight -= int(15 * _rng_iq)
+            elif _rng < 0:
+                weight += int(25 * _rng_iq)
+
         # Clinch break - strikers want this
         elif action == GrapplingAction.CLINCH_BREAK:
             if fighter.boxing > fighter.takedowns:
                 weight += 20  # Strikers really want to break clinch
+            # §1b clinch tendency — keep-standing wants out of clinch,
+            # grapple-seek stays committed. IQ-gated.
+            if _rng < 0:
+                weight += int(30 * _rng_iq)
+            elif _rng > 0:
+                weight -= int(20 * _rng_iq)
 
         # Guard pull - BJJ fighters with low takedowns
         elif action == GrapplingAction.GUARD_PULL:
             weight += fighter.guard // 4  # Better guard = more confident pulling
 
         weights[action] = max(1, int(weight))
-    
+
     actions_list = list(weights.keys())
     probs = list(weights.values())
     return random.choices(actions_list, weights=probs, k=1)[0]
