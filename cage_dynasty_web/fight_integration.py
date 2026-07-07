@@ -744,10 +744,21 @@ class NarratedFightSimulator:
                 defender_state._counter_window = 1
 
         if landed:
+            # GNP-DAMAGE-BUFF1: flag applies only when this attacker is
+            # the top fighter in a DOMINANT position — GnP from mount
+            # / side-control / back-mount / etc. Passed to
+            # calculate_strike_damage so the amplifier composes with
+            # every other damage modifier BEFORE FI_DAMAGE_MULTIPLIER.
+            _is_dominant_top = (
+                self.fight_state.position in DOMINANT_POSITIONS
+                and self.fight_state.top_fighter_id == attacker.fighter_id
+            )
+
             # Calculate damage
             damage, target_area = calculate_strike_damage(
                 attacker, defender, strike,
-                attacker_state, defender_state, was_counter
+                attacker_state, defender_state, was_counter,
+                is_dominant_position=_is_dominant_top,
             )
 
             # Use fight_integration specific multiplier — tuned separately from

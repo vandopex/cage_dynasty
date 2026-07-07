@@ -422,6 +422,17 @@ TKO_GNP_MAX_CHANCE           = 0.45
 TKO_STANDING_HEALTH_THRESHOLD= 20.0
 TKO_STANDING_BASE_CHANCE     = 0.10
 
+# GNP-DAMAGE-BUFF1 — dominant-position damage multiplier.
+# Read by calculate_strike_damage when the attacker is the top fighter
+# in a DOMINANT position (MOUNT / SIDE_CONTROL_TOP / BACK_MOUNT / etc.).
+# Applied BEFORE FI_DAMAGE_MULTIPLIER so composition is clean:
+#   final_damage = base × strength × … × dominant_mult × FI_DAMAGE_MULTIPLIER
+# Real-MMA reference: strikes from mount are 2-3× standing damage. The
+# sim historically ran GnP at ~0.6× standing (CONTROL-CONVERSION-DIAG1
+# §2b: Wr-Str wrestler ground damage 52 ≈ striker ground damage 48
+# despite 64% control). Value chosen by GNP-DAMAGE-BUFF1 sweep.
+GNP_DOMINANT_DAMAGE_MULT     = 1.6
+
 
 # ============================================================================
 # DAMAGE & HEALTH SYSTEM
@@ -2236,18 +2247,28 @@ def calculate_strike_damage(
     strike: StrikeType,
     attacker_state: FighterState,
     defender_state: FighterState,
-    was_counter: bool = False
+    was_counter: bool = False,
+    is_dominant_position: bool = False,
 ) -> Tuple[float, str]:
-    """Calculate damage from a strike. Returns (damage, target_area)."""
+    """Calculate damage from a strike. Returns (damage, target_area).
+
+    GNP-DAMAGE-BUFF1: `is_dominant_position` is True when the attacker
+    is the top fighter in a DOMINANT position (MOUNT / SIDE_CONTROL_TOP
+    / BACK_MOUNT / etc.). Real-MMA reference: mount strikes are 2-3×
+    standing damage. Applied BEFORE the caller's FI_DAMAGE_MULTIPLIER so
+    composition stays clean. Default False preserves byte-identical
+    behavior for callers that don't opt in (e.g., the dead
+    fight_engine.simulate_exchange path).
+    """
     base_damage, ko_power, stamina_cost, target = STRIKE_PROPERTIES[strike]
-    
+
     # Strength adds damage
     damage = base_damage + (attacker.strength - 50) / 10
-    
+
     # Power punchers bonus
     if strike in {StrikeType.CROSS, StrikeType.HOOK, StrikeType.OVERHAND}:
         damage *= 1 + (attacker.strength / 200)
-    
+
     # MUAY THAI VS BOXER: Kicks do extra damage to non-kickers
     # Boxers don't check kicks properly and their legs get chewed up
     if "kick" in strike.value.lower():
@@ -2255,21 +2276,32 @@ def calculate_strike_damage(
             damage *= 1.25  # 25% bonus damage
         elif attacker.kicks >= 65 and defender.kicks < 50:
             damage *= 1.15  # 15% bonus
-    
+
     # Counter bonus
     if was_counter:
         damage *= 1.3
-    
+
     # Stamina affects power
     damage *= (attacker_state.stamina / 100) * 0.5 + 0.5
-    
+
     # Compromised chin
     if target == "head" and defender_state.chin_compromised:
         damage *= 1.2
-    
+
+    # GNP-DAMAGE-BUFF1: attacker landing from top of a dominant
+    # position gets a real-MMA-shaped amplifier. The strike menu here
+    # is GNP_PUNCH / GNP_HAMMER_FIST / GNP_ELBOW (bases 6-9) — without
+    # this bump they hit softer than standing power strikes, which
+    # inverts the control-to-damage conversion the DIAG1 memo traced.
+    # The check is deliberately narrow: only DOMINANT positions with the
+    # actor on top qualify — guard-top passes / side-control-top rides
+    # do not. See outputs/control_conversion_diag1.md §5.
+    if is_dominant_position:
+        damage *= GNP_DOMINANT_DAMAGE_MULT
+
     # Variance
     damage *= random.uniform(0.8, 1.2)
-    
+
     return damage, target
 
 
