@@ -227,15 +227,37 @@ if not FIGHT_ENGINE_AVAILABLE:
     print("⚠️ fight engine falling back to score-based simulation")
 
 # BRIDGE-WIRE-AGGR1: player gameplan → AGGRESSION dial map.
-# +1 forward (initiative +2, boxing/kicks +4 pre-fight).
-# -1 patient (initiative −2, striking_defense +4 pre-fight).
-#  0 neutral → helper returns None → byte-identical pre-wire path
-#  (BALANCED / TAKEDOWN / SUBMISSION / unset all collapse here).
+# +1 forward (initiative +2, boxing/kicks +4 pre-fight, strike_weight
+# +8%×IQ inside select_action).
+# -1 patient (initiative −2, striking_defense +4 pre-fight,
+# strike_weight −5%×IQ).
 # AI side always None this ship; counter-planning is SHIP5.
 _GAMEPLAN_AGGRESSION = {
     "AGGRESSIVE": 1, "GNP": 1, "CLINCH": 1,
     "BALANCED":   0, "TAKEDOWN": 0, "SUBMISSION": 0,
     "MEASURED":  -1, "DEFENSIVE": -1,
+}
+
+# BRIDGE-WIRE-RANGE1: player gameplan → RANGE dial map. Wires the
+# now-live range_bias lever (GAMEPLAN-DIAL-RANGE-CORE1, b26f584).
+# +1 grapple-seek (grapple_weight ×1.20, sub_weight ×1.10, CLINCH_BREAK
+# discouraged, TDs preferred, sweeps from bottom).
+# -1 keep-standing (grapple_weight ×0.85, sub_weight ×0.80,
+# CLINCH_BREAK preferred, STAND_UP preferred, sprawl reflex).
+# Preset intent mapping (see routes.py:2213 for the UI copy):
+#  AGGRESSIVE/CLINCH/MEASURED: pace-only dials, range agnostic (0).
+#  GNP:        forward + grapple (Khabib-style).
+#  DEFENSIVE:  patient + keep-standing (Machida-style).
+#  TAKEDOWN:   neutral pace, seek ground — was placebo pre-CORE1;
+#              now grapple_weight ×1.20 fires.
+#  SUBMISSION: same as TAKEDOWN but the intent is sub-hunting; RANGE
+#              biases grapple engagement, submission threshold is
+#              still SHIP3b (range-subs) territory. Placebo → live
+#              grapple engagement this ship.
+_GAMEPLAN_RANGE = {
+    "AGGRESSIVE": 0, "GNP":  1, "CLINCH":     0,
+    "BALANCED":   0, "TAKEDOWN": 1, "SUBMISSION": 1,
+    "MEASURED":   0, "DEFENSIVE": -1,
 }
 
 POPULARITY_AVAILABLE = False
@@ -17606,23 +17628,33 @@ class GameBridge:
         return out
 
     def _resolve_player_gameplan(self, fighter_attrs, fight, player_fids):
-        """BRIDGE-WIRE-AGGR1: resolve one side to a Gameplan or None.
+        """BRIDGE-WIRE-AGGR1 / BRIDGE-WIRE-RANGE1: resolve one side to
+        a Gameplan or None.
 
-        AI side (fighter not in player_fids) → None.
-        Neutral aggression (BALANCED/TAKEDOWN/SUBMISSION/unset) → None,
-        preserving the byte-identical no-gameplan path from before the
-        wire. Only ±1 presets construct a Gameplan and reach the
-        NarratedFightSimulator's pre-fight mutation + initiative bias.
+        AI side (fighter not in player_fids) → None. BALANCED and unset
+        collapse to None (aggr=0 AND range=0) → byte-identical
+        pre-wire path. Any other preset builds a real Gameplan; the
+        engine's `if gameplan is not None:` guard reads whichever
+        dials are non-zero.
+
+        BRIDGE-WIRE-RANGE1 collapse-guard note: the guard is now
+        `aggr == 0 AND range == 0`. Under the aggr-only guard,
+        TAKEDOWN and SUBMISSION (both aggr=0, range=+1) would still
+        collapse to None and stay placebo — losing the point of this
+        ship. The AND-guard lets them build Gameplan(range_bias=+1)
+        and reach the live RANGE lever from CORE1 (b26f584).
         """
         if _Gameplan is None:
             return None
         if getattr(fighter_attrs, 'fighter_id', None) not in player_fids:
             return None
         _gp_str = fight.get("gameplan", "BALANCED") or "BALANCED"
-        _aggr = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
-        if _aggr == 0:
+        _aggr  = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
+        _range = _GAMEPLAN_RANGE.get(_gp_str, 0)
+        if _aggr == 0 and _range == 0:
             return None
-        return _Gameplan(aggression=_aggr, preset_name=_gp_str)
+        return _Gameplan(
+            aggression=_aggr, range_bias=_range, preset_name=_gp_str)
 
     def _run_real_engine(self, fight: Dict, fighter1, fighter2,
                           f1_name: str, f2_name: str) -> Optional[Dict]:
@@ -17768,9 +17800,11 @@ class GameBridge:
         _gp_f2 = self._resolve_player_gameplan(fa2, fight, _player_fids_gp)
         if _gp_f1 is not None or _gp_f2 is not None:
             print(f"  🎯 [GAMEPLAN WIRE] f1={getattr(_gp_f1, 'preset_name', None)} "
-                  f"aggr={getattr(_gp_f1, 'aggression', 0)} | "
+                  f"aggr={getattr(_gp_f1, 'aggression', 0)} "
+                  f"range={getattr(_gp_f1, 'range_bias', 0)} | "
                   f"f2={getattr(_gp_f2, 'preset_name', None)} "
-                  f"aggr={getattr(_gp_f2, 'aggression', 0)}")
+                  f"aggr={getattr(_gp_f2, 'aggression', 0)} "
+                  f"range={getattr(_gp_f2, 'range_bias', 0)}")
 
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
