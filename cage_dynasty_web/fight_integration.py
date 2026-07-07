@@ -1578,10 +1578,25 @@ class NarratedFightSimulator:
                     # Bug V — dominant positions count as half-activity:
                     # holding back mount / mount / side control is real
                     # work even without a flashy transition this exchange.
+                    # GROUND-TIME-L2-SHIP1: asymmetric ref stand-up.
+                    # Dominant positions (legit top control — mount /
+                    # back mount / side control) accrue inactivity
+                    # slower so the referee doesn't stand up a legit
+                    # grappler working position. Non-dominant ground
+                    # (guard, inferior, scramble) accrues faster so a
+                    # stalled scramble gets stood up. Bug V's activity-
+                    # reset on any grappling attempt is untouched — this
+                    # only affects the WEIGHT of an idle exchange, not
+                    # whether an active exchange resets the counter.
+                    # Partial mitigation of striker-mirror ground-time
+                    # inflation (~35% → 32.5% per DIAG2 probe). The full
+                    # fix is upstream at DIAG2-D (control-to-win
+                    # conversion — wrestler dominates ground but loses
+                    # the fight in wrestler-vs-striker).
                     if self.fight_state.position in DOMINANT_POSITIONS:
-                        self.fight_state.ground_inactivity += 0.5
+                        self.fight_state.ground_inactivity += 0.25
                     else:
-                        self.fight_state.ground_inactivity += 1
+                        self.fight_state.ground_inactivity += 2
 
                     if self.fight_state.ground_inactivity >= self.config.standup_threshold:
                         # Log the referee standup
