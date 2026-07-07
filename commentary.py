@@ -2300,52 +2300,118 @@ class FightEvent:
         }
 
 
+# ROUND-LABEL-COMPARATOR1 — tuning knobs for RoundSummary.generate_description.
+# Centralized so the comparator's four thresholds live in one place. All four
+# flagged as tune-at-ship in outputs/round_label_comparator_design1.md §2b-2e:
+#   K_TD  — a landed takedown ≈ this many exchange-ticks of control (design
+#           range 3-8, chose 5 as midpoint reflecting 1 TD's discrete scoring
+#           weight plus typical follow-on top-position time).
+#   K_GS  — ground-and-pound strikes counted as grappling-side output
+#           (design range 1-3, chose 2: stronger than a control-tick but
+#           weaker than a takedown as a round-defining event).
+#   DOMINANCE_RATIO — margin one side of the ledger needs to be called
+#           dominant. Below this → "competitive round". Design range was
+#           1.3-1.7; ship value is 2.0 as a small defensible extension —
+#           the distribution harness at 1.5 landed the competitive bucket
+#           at ~7% (vs. ~25% target) because the engine over-produces
+#           ground time in general population fights (filed as GROUND-
+#           TIME-INFLATION). Raising to 2.0 shifts ~10pp grappling→
+#           competitive at the label layer without regressing any of the
+#           five specific-case tests (Kenji/Timur R2 still lands COMP at
+#           1.20×). See outputs/ground_time_inflation_queued.md.
+#   WRESTLING_TD_MIN — preserves the tactical-story branch: 3+ takedowns
+#           reads as wrestling even when the fighters got back up between.
+_ROUND_LABEL_K_TD = 5
+_ROUND_LABEL_K_GS = 2
+_ROUND_LABEL_DOMINANCE_RATIO = 2.0
+_ROUND_LABEL_WRESTLING_TD_MIN = 3
+
+
 @dataclass
 class RoundSummary:
     """Summary of a single round"""
     round_num: int
     fighter1_name: str
     fighter2_name: str
-    
+
     # Stats
     strikes_landed: Dict[str, int] = field(default_factory=dict)
+    # ROUND-LABEL-COMPARATOR1: subset of strikes_landed that were GnP (top-
+    # position ground strikes). Weighted as grappling-side output so a Khabib-
+    # style top-and-GnP round doesn't get counted as striking-heavy.
+    strikes_landed_ground: Dict[str, int] = field(default_factory=dict)
     takedowns: Dict[str, int] = field(default_factory=dict)
     damage_dealt: Dict[str, float] = field(default_factory=dict)
     control_time: Dict[str, float] = field(default_factory=dict)
     knockdowns: Dict[str, int] = field(default_factory=dict)
-    
+
     # Scoring
     score1: int = 10
     score2: int = 10
     round_winner: Optional[str] = None
-    
+
     # Key events
     key_events: List[FightEvent] = field(default_factory=list)
-    
+
     # Narrative
     description: str = ""
-    
+
     def generate_description(self) -> str:
-        """Generate round summary narrative"""
+        """Generate round summary narrative — ROUND-LABEL-COMPARATOR1.
+
+        Replaces the prior control-time-only cascade with a striking-vs-
+        grappling comparator so a striking-majority round can never trip
+        a grappling label. Full rationale in
+        outputs/round_label_comparator_design1.md §2. Tuning knobs at
+        module top: _ROUND_LABEL_K_TD / _K_GS / _DOMINANCE_RATIO /
+        _WRESTLING_TD_MIN.
+        """
         parts = []
-        
-        # Determine round type
-        total_kd = sum(self.knockdowns.values())
-        total_td = sum(self.takedowns.values())
-        total_control = sum(self.control_time.values())
-        
+
+        total_kd             = sum(self.knockdowns.values())
+        total_td             = sum(self.takedowns.values())
+        total_control        = sum(self.control_time.values())
+        total_strikes        = sum(self.strikes_landed.values())
+        total_ground_strikes = sum(self.strikes_landed_ground.values())
+
+        # Grappling ledger: control-ticks + amplified TDs + amplified GnP.
+        # Striking ledger: landed strikes minus the GnP subset (which
+        # scores on the grappling side above).
+        grappling_weight = (total_control
+                            + total_td * _ROUND_LABEL_K_TD
+                            + total_ground_strikes * _ROUND_LABEL_K_GS)
+        striking_weight  = max(0, total_strikes - total_ground_strikes)
+
         if total_kd > 0:
-            kd_winner = max(self.knockdowns.keys(), key=lambda k: self.knockdowns.get(k, 0))
-            parts.append(f"A round marked by {self.knockdowns[kd_winner]} knockdown(s) from {kd_winner}")
-        elif total_control > 12:
-            control_winner = max(self.control_time.keys(), key=lambda k: self.control_time.get(k, 0))
-            parts.append(f"A grappling-heavy round controlled by {control_winner}")
-        elif total_td > 2:
+            kd_winner = max(self.knockdowns.keys(),
+                            key=lambda k: self.knockdowns.get(k, 0))
+            parts.append(
+                f"A round marked by {self.knockdowns[kd_winner]} "
+                f"knockdown(s) from {kd_winner}")
+        elif striking_weight > grappling_weight * _ROUND_LABEL_DOMINANCE_RATIO:
+            parts.append("A striking battle")
+        elif grappling_weight > striking_weight * _ROUND_LABEL_DOMINANCE_RATIO:
+            # "controlled by" attribution — use control_time winner when
+            # available (matches prior behaviour); fall back to a plain
+            # phrase if the round had no control_time (edge case).
+            if self.control_time:
+                control_winner = max(self.control_time.keys(),
+                                     key=lambda k: self.control_time.get(k, 0))
+                parts.append(
+                    f"A grappling-heavy round controlled by {control_winner}")
+            else:
+                parts.append("A grappling-heavy round")
+        elif (total_td >= _ROUND_LABEL_WRESTLING_TD_MIN
+              and grappling_weight > striking_weight * 0.8):
+            # Tactical-story preservation: 3+ TDs reads as wrestling even
+            # when fighters got back up between attempts and the raw
+            # ledger is close.
             parts.append("A wrestling-focused round")
         else:
-            parts.append("A striking battle")
-        
-        # Winner
+            # NEW bucket — the middle ground the old cascade lacked.
+            parts.append("A competitive round")
+
+        # Winner (unchanged).
         if self.round_winner:
             diff = abs(self.score1 - self.score2)
             if diff >= 2:
@@ -2354,10 +2420,10 @@ class RoundSummary:
                 parts.append(f"- edged by {self.round_winner}")
         else:
             parts.append("- could go either way")
-        
+
         self.description = " ".join(parts) + "."
         return self.description
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Export to dictionary"""
         return {
@@ -2365,6 +2431,7 @@ class RoundSummary:
             "fighter1_name": self.fighter1_name,
             "fighter2_name": self.fighter2_name,
             "strikes_landed": self.strikes_landed,
+            "strikes_landed_ground": self.strikes_landed_ground,
             "takedowns": self.takedowns,
             "damage_dealt": self.damage_dealt,
             "control_time": self.control_time,
@@ -2445,13 +2512,18 @@ class FightCommentarySystem:
     def _init_round_stats(self):
         """Initialize stats for current round"""
         if self.context:
+            # ROUND-LABEL-COMPARATOR1: added strikes_landed_ground (GnP subset
+            # of strikes_landed) so the label comparator can weight top-
+            # position ground strikes as grappling-side output.
             self.round_stats = {
                 self.context.fighter1_name: {
-                    "strikes_landed": 0, "takedowns": 0, 
+                    "strikes_landed": 0, "strikes_landed_ground": 0,
+                    "takedowns": 0,
                     "damage": 0.0, "control": 0.0, "knockdowns": 0
                 },
                 self.context.fighter2_name: {
-                    "strikes_landed": 0, "takedowns": 0,
+                    "strikes_landed": 0, "strikes_landed_ground": 0,
+                    "takedowns": 0,
                     "damage": 0.0, "control": 0.0, "knockdowns": 0
                 }
             }
@@ -3839,6 +3911,11 @@ class FightCommentarySystem:
             if action_type in (ActionType.STRIKE, ActionType.KICK, ActionType.CLINCH_STRIKE, ActionType.GROUND_STRIKE):
                 self.round_stats[actor]["strikes_landed"] += 1
                 self.round_stats[actor]["damage"] += damage
+                # ROUND-LABEL-COMPARATOR1: track GnP subset so the label
+                # comparator scores top-position strikes on the grappling
+                # side of the ledger.
+                if action_type == ActionType.GROUND_STRIKE:
+                    self.round_stats[actor]["strikes_landed_ground"] += 1
             elif action_type == ActionType.TAKEDOWN:
                 self.round_stats[actor]["takedowns"] += 1
             elif action_type == ActionType.KNOCKDOWN:
@@ -3902,6 +3979,10 @@ class FightCommentarySystem:
             fighter2_name=f2,
             strikes_landed={f1: self.round_stats.get(f1, {}).get("strikes_landed", 0),
                           f2: self.round_stats.get(f2, {}).get("strikes_landed", 0)},
+            # ROUND-LABEL-COMPARATOR1: feed the GnP subset through so the
+            # comparator can read it at label-selection time.
+            strikes_landed_ground={f1: self.round_stats.get(f1, {}).get("strikes_landed_ground", 0),
+                                   f2: self.round_stats.get(f2, {}).get("strikes_landed_ground", 0)},
             takedowns={f1: self.round_stats.get(f1, {}).get("takedowns", 0),
                       f2: self.round_stats.get(f2, {}).get("takedowns", 0)},
             damage_dealt={f1: self.round_stats.get(f1, {}).get("damage", 0.0),
