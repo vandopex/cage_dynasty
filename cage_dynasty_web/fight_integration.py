@@ -332,11 +332,23 @@ class NarratedFightSimulator:
         starting_stamina_f2: float = 100.0,
         gameplan_f1: Optional[Gameplan] = None,
         gameplan_f2: Optional[Gameplan] = None,
+        card_slot: str = "prelim",
+        is_main_event: bool = False,
+        intro_f1: Optional[dict] = None,
+        intro_f2: Optional[dict] = None,
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
         self.config = config or FightConfig.standard_fight()
         self.verbose = verbose
+
+        # COMMENTARY-ENTRANCES1: fight-open surface data. Stored and
+        # forwarded to create_commentary_system below. Defaults keep
+        # non-opted callers byte-identical to pre-ENTRANCES1.
+        self._card_slot = card_slot or "prelim"
+        self._entrances_is_main_event = bool(is_main_event)
+        self._intro_f1 = intro_f1 or {}
+        self._intro_f2 = intro_f2 or {}
 
         # GAMEPLAN-DIAL-AGGR1: per-fighter tendency dial. Threaded to
         # select_action + _determine_initiative. Stored verbatim; None
@@ -390,12 +402,18 @@ class NarratedFightSimulator:
         self._fatigue_penalty_f2 = _fatigue_to_penalty(starting_stamina_f2)
         
         # Initialize commentary system
+        # COMMENTARY-ENTRANCES1: thread card_slot + per-fighter intro
+        # dicts so emit_fight_open can select the right pool.
         self.commentary = create_commentary_system(
             fighter1_name=fighter1.name,
             fighter2_name=fighter2.name,
             total_rounds=self.config.scheduled_rounds,
             is_title_fight=self.config.is_title_fight,
-            exchanges_per_round=self.config.exchanges_per_round
+            exchanges_per_round=self.config.exchanges_per_round,
+            card_slot=self._card_slot,
+            is_main_event=self._entrances_is_main_event,
+            fighter1_data=self._intro_f1,
+            fighter2_data=self._intro_f2,
         )
         
         # Fight state
@@ -443,6 +461,13 @@ class NarratedFightSimulator:
         self.finish_result = None
         self.all_round_stats = []
         self.round_scores = []
+
+        # COMMENTARY-ENTRANCES1: card-position line + slot-scaled
+        # fighter entrances, emitted once at fight open BEFORE the
+        # AGGRESSION-NARRATION1 intent lines below and before the
+        # first start_round. Idempotent — subsequent _init_fight
+        # calls (shouldn't happen, but safe) no-op.
+        self.commentary.emit_fight_open()
 
         # AGGRESSION-NARRATION1: fight-open framing line per side, only
         # if that side has an active Gameplan with non-zero aggression.
@@ -1912,6 +1937,9 @@ def simulate_narrated_fight(
     config: 'FightConfig' = None,
     gameplan_f1: Optional[Gameplan] = None,
     gameplan_f2: Optional[Gameplan] = None,
+    card_slot: str = "prelim",
+    intro_f1: Optional[dict] = None,
+    intro_f2: Optional[dict] = None,
 ) -> NarratedFightResult:
     """
     Simulate a fight with full commentary.
@@ -1940,6 +1968,10 @@ def simulate_narrated_fight(
         starting_stamina_f2=starting_stamina_f2,
         gameplan_f1=gameplan_f1,
         gameplan_f2=gameplan_f2,
+        card_slot=card_slot,
+        is_main_event=is_main_event,
+        intro_f1=intro_f1,
+        intro_f2=intro_f2,
     )
     return simulator.simulate()
 

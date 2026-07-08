@@ -397,6 +397,24 @@ _STYLE_TO_CANONICAL = {
 }
 
 
+def _build_intro_dict(fighter) -> dict:
+    """COMMENTARY-ENTRANCES1: extract per-fighter fight-open intro data
+    as a dict. Every field is defensive: missing attrs silently drop
+    to safe defaults so a partially-populated fighter record doesn't
+    break the emit. Consumed by commentary.emit_fight_open."""
+    if fighter is None:
+        return {}
+    wins   = int(getattr(fighter, 'wins',   0) or 0)
+    losses = int(getattr(fighter, 'losses', 0) or 0)
+    return {
+        "nickname":       getattr(fighter, 'nickname', None) or None,
+        "record":         f"{wins}-{losses}",
+        "fighting_style": getattr(fighter, 'fighting_style', '') or '',
+        "is_champion":    bool(getattr(fighter, 'is_champion', False)),
+        "division":       getattr(fighter, 'weight_class', '') or '',
+    }
+
+
 # ============================================================================
 # WEIGHT CLASS CONSTANTS
 # ============================================================================
@@ -13578,12 +13596,21 @@ class GameBridge:
                     )
                     _gp_f1_cf = self._resolve_gameplan(fa1, fight, _pfids_cf)
                     _gp_f2_cf = self._resolve_gameplan(fa2, fight, _pfids_cf)
+                    # COMMENTARY-ENTRANCES1: thread card_slot + intro
+                    # dicts so the commentary emit picks the right pool.
+                    _slot_cf = str(fight.get("card_slot", "prelim") or "prelim")
+                    _intro_f1_cf = _build_intro_dict(f1)
+                    _intro_f2_cf = _build_intro_dict(f2)
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
                         starting_stamina_f1=_f1_stam,
                         starting_stamina_f2=_f2_stam,
                         gameplan_f1=_gp_f1_cf,
                         gameplan_f2=_gp_f2_cf,
+                        card_slot=_slot_cf,
+                        is_main_event=(_slot_cf == "main_event"),
+                        intro_f1=_intro_f1_cf,
+                        intro_f2=_intro_f2_cf,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page
@@ -14072,12 +14099,23 @@ class GameBridge:
                     )
                     _gp_f1_af = self._resolve_gameplan(fa1, {}, _pfids_af)
                     _gp_f2_af = self._resolve_gameplan(fa2, {}, _pfids_af)
+                    # COMMENTARY-ENTRANCES1: no fight dict here (AI-only
+                    # fallback week). Infer card position from is_title:
+                    # title fights are structurally main-event; else
+                    # default to main_card.
+                    _slot_af = "main_event" if is_title else "main_card"
+                    _intro_f1_af = _build_intro_dict(f1)
+                    _intro_f2_af = _build_intro_dict(f2)
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
                         starting_stamina_f1=_f1_stam,
                         starting_stamina_f2=_f2_stam,
                         gameplan_f1=_gp_f1_af,
                         gameplan_f2=_gp_f2_af,
+                        card_slot=_slot_af,
+                        is_main_event=(_slot_af == "main_event"),
+                        intro_f1=_intro_f1_af,
+                        intro_f2=_intro_f2_af,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page
@@ -17865,6 +17903,12 @@ class GameBridge:
                   f"aggr={getattr(_gp_f2, 'aggression', 0)} "
                   f"range={getattr(_gp_f2, 'range_bias', 0)}")
 
+        # COMMENTARY-ENTRANCES1: card_slot + intro dicts for the
+        # watched fight — this is where the player sees the fight-open.
+        _slot_re = str(fight.get("card_slot", "prelim") or "prelim")
+        _intro_f1_re = _build_intro_dict(fighter1)
+        _intro_f2_re = _build_intro_dict(fighter2)
+
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
             rounds        = total_rounds,
@@ -17874,6 +17918,9 @@ class GameBridge:
             starting_stamina_f2=_f2_stamina,
             gameplan_f1   = _gp_f1,
             gameplan_f2   = _gp_f2,
+            card_slot     = _slot_re,
+            intro_f1      = _intro_f1_re,
+            intro_f2      = _intro_f2_re,
             **({"config": _fight_cfg} if _fight_cfg else {})
         )
         _eng_sub_type = getattr(eng_result, 'sub_type', '') or ''

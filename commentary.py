@@ -142,6 +142,114 @@ FIGHT_INTRO_CLOSING = [
     "And HERE... WE... GO!",
 ]
 
+
+# ============================================================================
+# COMMENTARY-ENTRANCES1 — card-position + slot-scaled fighter entrances
+# ============================================================================
+# One card-position line per slot, scaled from grand (main event) to
+# terse (early prelim). One or two entrance lines per slot, folding in
+# nickname + record + descriptor (champion status if available, else
+# a short style-tag). Consumed by FightCommentarySystem.emit_fight_open.
+
+CARD_POSITION_MAIN_EVENT = [
+    "This is the MAIN EVENT of the evening. The house lights come down.",
+    "Coming up now — your MAIN EVENT. Everything the crowd came for.",
+    "The MAIN EVENT is upon us. Prime time.",
+    "Time for the MAIN EVENT. All eyes on the cage.",
+]
+
+CARD_POSITION_CO_MAIN = [
+    "Your co-main event of the evening.",
+    "The co-main event is next.",
+    "Co-main slot — one fight before the main event.",
+    "Time for the co-main.",
+]
+
+CARD_POSITION_MAIN_CARD = [
+    "Next on the main card.",
+    "Main card action continues.",
+    "Coming up on the main card.",
+    "Main card fight, coming your way.",
+]
+
+CARD_POSITION_PRELIM = [
+    "Prelim fight, next.",
+    "On the prelims — here we go.",
+    "Preliminary bout is up.",
+    "Prelim card action.",
+]
+
+CARD_POSITION_EARLY_PRELIM = [
+    "Early prelims underway.",
+    "Kicking off the night with an early prelim.",
+    "First fight of the night — early prelim.",
+]
+
+# Main-event corner intros. Two-line ceiling (one red, one blue).
+# {descriptor} folds in champion tag OR a short style-tag OR a safe
+# generic default. See FightCommentarySystem._entrance_descriptor.
+FIGHTER_ENTRANCE_MAIN_EVENT_RED = [
+    "In the red corner — {name}{nick_clause}, {record}, {descriptor}.",
+    "Making his way to the cage in red: {name}{nick_clause} — {record}, {descriptor}.",
+    "The red corner belongs to {name}{nick_clause} — {record}, {descriptor}.",
+]
+
+FIGHTER_ENTRANCE_MAIN_EVENT_BLUE = [
+    "And in the blue corner — {name}{nick_clause}, {record}, {descriptor}.",
+    "Standing across in blue: {name}{nick_clause} — {record}, {descriptor}.",
+    "Blue corner: {name}{nick_clause} — {record}, {descriptor}.",
+]
+
+# Co-main: one combined line naming both fighters + records.
+FIGHTER_ENTRANCE_CO_MAIN = [
+    "{f1_name}{f1_nick} ({f1_rec}) meets {f2_name}{f2_nick} ({f2_rec}) in the co-main.",
+    "{f1_name} vs {f2_name} — {f1_rec} against {f2_rec}.",
+    "Co-main: {f1_name} ({f1_rec}) faces {f2_name} ({f2_rec}).",
+    "Set for the co-main — {f1_name}{f1_nick} takes on {f2_name}{f2_nick}.",
+]
+
+# Main-card: one short line.
+FIGHTER_ENTRANCE_MAIN_CARD = [
+    "{f1_name} takes on {f2_name}.",
+    "{f1_name} faces {f2_name} on the main card.",
+    "Tonight on the main card: {f1_name} vs {f2_name}.",
+]
+
+# Prelim / early-prelim: terse one-liner.
+FIGHTER_ENTRANCE_PRELIM = [
+    "Red corner {f1_name}, blue corner {f2_name}. Let's go.",
+    "{f1_name} vs {f2_name} — prelim card.",
+    "In the red corner {f1_name}. In the blue corner {f2_name}.",
+]
+
+# Main-event / co-main champion intro. Prepended only when a fighter's
+# is_champion flag is set AND division is available. Two-line ceiling
+# for main-event entrances is corner intros only — champion line is
+# additional (max 3 lines at main_event with a champ present).
+FIGHTER_ENTRANCE_CHAMPION_LINE = [
+    "{name} carries the DFC {division} title into this one — the belt is on the line.",
+    "The reigning DFC {division} champion, {name}, defends tonight.",
+    "Wearing the DFC {division} gold: {name}. Defending the strap.",
+]
+
+# Short style-tag used inside entrance descriptors. Covers all 11
+# canonical fighting_style display_name strings. Missing / unknown
+# style → the entrance uses a safe generic descriptor.
+_STYLE_ENTRANCE_TAG = {
+    "Striker":          "a striker",
+    "Counter Striker":  "a counter striker",
+    "Pressure Fighter": "a pressure fighter",
+    "Point Fighter":    "a point fighter",
+    "Muay Thai":        "a Muay Thai specialist",
+    "Wrestler":         "a wrestler",
+    "Ground & Pound":   "a ground-and-pound specialist",
+    "BJJ Specialist":   "a BJJ specialist",
+    "Clinch Fighter":   "a clinch fighter",
+    "Sprawl & Brawl":   "a sprawl-and-brawler",
+    "Balanced":         "a well-rounded fighter",
+}
+
+
 # ============================================================================
 # RIVALRY HEAT COMMENTARY TEMPLATES
 # ============================================================================
@@ -2247,7 +2355,16 @@ class FightContext:
     is_title_fight: bool = False
     is_main_event: bool = False
     exchanges_per_round: int = 55  # Must match FightConfig default
-    
+
+    # COMMENTARY-ENTRANCES1: card-position + per-fighter intro data.
+    # card_slot values: "main_event", "co_main", "main_card",
+    # "prelim", "early_prelim". fighter1_data / fighter2_data are
+    # dicts with optional keys nickname, record, fighting_style,
+    # is_champion, division — silently skipped when missing.
+    card_slot: str = "prelim"
+    fighter1_data: Dict[str, Any] = field(default_factory=dict)
+    fighter2_data: Dict[str, Any] = field(default_factory=dict)
+
     # Fight state tracking
     current_damage: Dict[str, float] = field(default_factory=dict)
     knockdowns: Dict[str, int] = field(default_factory=dict)
@@ -3960,7 +4077,118 @@ class FightCommentarySystem:
 
         self.commentary_log.append(commentary)
         return commentary
-    
+
+    # ========================================================================
+    # COMMENTARY-ENTRANCES1 — fight-open surface
+    # ========================================================================
+
+    def _entrance_descriptor(self, fdata: Dict[str, Any]) -> str:
+        """Return the descriptor clause used inside main-event entrance
+        lines: 'the DFC {division} champion' if that fighter carries the
+        belt AND division is known, else a short style-tag, else a safe
+        generic fallback. Never returns an empty string."""
+        if fdata.get("is_champion") and fdata.get("division"):
+            return f"the DFC {fdata['division']} champion"
+        style = fdata.get("fighting_style") or ""
+        tag = _STYLE_ENTRANCE_TAG.get(style)
+        return tag or "with something to prove"
+
+    def _nick_clause(self, fdata: Dict[str, Any]) -> str:
+        """Return ' \"The Nickname\"' if a nickname exists, else empty."""
+        n = fdata.get("nickname")
+        return f' "{n}"' if n else ""
+
+    def emit_fight_open(self) -> None:
+        """Append card-position line + slot-scaled fighter entrances to
+        the log. Called once at fight open, BEFORE the first
+        start_round. Idempotent — subsequent calls no-op. Silent when
+        context or fighter data is missing (safe additive contract).
+
+        Emits, in order:
+          1. one card-position line, keyed by card_slot
+          2. optional champion line (main_event / co_main only, if
+             either fighter has is_champion + division)
+          3. entrance lines: two lines at main_event (one per corner),
+             one combined line at co_main, one short line at main_card,
+             one terse line at prelim / early_prelim
+        Callers that don't opt in (no fighter data, default slot) get
+        the default prelim card-position + terse entrance line.
+        """
+        if getattr(self, '_fight_open_emitted', False):
+            return
+        self._fight_open_emitted = True
+        if not self.context:
+            return
+
+        slot = (self.context.card_slot or "prelim").lower()
+        f1_data = self.context.fighter1_data or {}
+        f2_data = self.context.fighter2_data or {}
+        f1_name = self.context.fighter1_name
+        f2_name = self.context.fighter2_name
+
+        # 1. Card-position line
+        if slot == "main_event":
+            self.commentary_log.append(random.choice(CARD_POSITION_MAIN_EVENT))
+        elif slot == "co_main":
+            self.commentary_log.append(random.choice(CARD_POSITION_CO_MAIN))
+        elif slot == "main_card":
+            self.commentary_log.append(random.choice(CARD_POSITION_MAIN_CARD))
+        elif slot == "early_prelim":
+            self.commentary_log.append(random.choice(CARD_POSITION_EARLY_PRELIM))
+        else:
+            self.commentary_log.append(random.choice(CARD_POSITION_PRELIM))
+
+        # 2. Optional champion line — main_event / co_main only
+        if slot in ("main_event", "co_main"):
+            champ_name = champ_div = ""
+            if f1_data.get("is_champion") and f1_data.get("division"):
+                champ_name = f1_name
+                champ_div = f1_data["division"]
+            elif f2_data.get("is_champion") and f2_data.get("division"):
+                champ_name = f2_name
+                champ_div = f2_data["division"]
+            if champ_name:
+                self.commentary_log.append(
+                    random.choice(FIGHTER_ENTRANCE_CHAMPION_LINE).format(
+                        name=champ_name, division=champ_div))
+
+        # 3. Entrance lines — scaled by slot
+        if slot == "main_event":
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_MAIN_EVENT_RED).format(
+                    name=f1_name,
+                    nick_clause=self._nick_clause(f1_data),
+                    record=f1_data.get("record") or "0-0",
+                    descriptor=self._entrance_descriptor(f1_data),
+                ))
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_MAIN_EVENT_BLUE).format(
+                    name=f2_name,
+                    nick_clause=self._nick_clause(f2_data),
+                    record=f2_data.get("record") or "0-0",
+                    descriptor=self._entrance_descriptor(f2_data),
+                ))
+        elif slot == "co_main":
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_CO_MAIN).format(
+                    f1_name=f1_name,
+                    f1_nick=self._nick_clause(f1_data),
+                    f1_rec=f1_data.get("record") or "0-0",
+                    f2_name=f2_name,
+                    f2_nick=self._nick_clause(f2_data),
+                    f2_rec=f2_data.get("record") or "0-0",
+                ))
+        elif slot == "main_card":
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_MAIN_CARD).format(
+                    f1_name=f1_name, f2_name=f2_name,
+                ))
+        else:  # prelim, early_prelim, or unknown → terse
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_PRELIM).format(
+                    f1_name=f1_name, f2_name=f2_name,
+                ))
+
     def end_round(
         self, 
         score1: int = 10, 
@@ -4645,15 +4873,30 @@ def create_commentary_system(
     fighter2_name: str,
     total_rounds: int = 3,
     is_title_fight: bool = False,
-    exchanges_per_round: int = 55
+    exchanges_per_round: int = 55,
+    card_slot: str = "prelim",
+    is_main_event: bool = False,
+    fighter1_data: Optional[Dict[str, Any]] = None,
+    fighter2_data: Optional[Dict[str, Any]] = None,
 ) -> FightCommentarySystem:
-    """Create a new commentary system with context"""
+    """Create a new commentary system with context.
+
+    COMMENTARY-ENTRANCES1 kwargs are additive and default to safe
+    values (prelim slot, no per-fighter intro data). Callers that
+    don't opt in get byte-identical behavior on every hook other
+    than the new emit_fight_open (which stays silent without
+    fighter1_data / fighter2_data).
+    """
     context = FightContext(
         fighter1_name=fighter1_name,
         fighter2_name=fighter2_name,
         total_rounds=total_rounds,
         is_title_fight=is_title_fight,
-        exchanges_per_round=exchanges_per_round
+        exchanges_per_round=exchanges_per_round,
+        card_slot=card_slot,
+        is_main_event=is_main_event,
+        fighter1_data=fighter1_data or {},
+        fighter2_data=fighter2_data or {},
     )
     return FightCommentarySystem(context)
 
