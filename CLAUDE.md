@@ -1,3 +1,68 @@
+## 🚨 CRITICAL — LIVE COMMENTARY FILE (read before any commentary work)
+
+**Verified empirically 2026-07-07.** Under PA's actual wsgi.py sys.path
+(`cage_dynasty_web/`, `systems/`, `narrative/`, `simulation/` — **NOT
+repo root**), `from commentary import` at `fight_integration.py:140`
+resolves to `narrative/commentary.py`, **NOT** the repo-root
+`commentary.py`. The repo-root file is **dead-in-runtime** — PA never
+loads it because repo root is not on sys.path.
+
+- **Live commentary file on PA**: `narrative/commentary.py`
+- **Dead-in-runtime**: repo-root `commentary.py`
+- **How verified**: PA's `/var/www/vandopegaming_pythonanywhere_com_wsgi.py`
+  fetched via Files API + local Python replicated its exact sys.path
+  and imported `commentary` → resolved to narrative/commentary.py.
+  Files API fetch of narrative/commentary.py on PA showed NONE of
+  our recent ship signatures (no `emit_fight_open`, no
+  `_maybe_emit_contrast_callout`, no championship-fix markers) — the
+  running file has none of the three commentary ships below.
+
+**Consequence — three shipped commits are INERT in production:**
+
+| Commit | Ship | Target |
+|---|---|---|
+| `642c43c` | COMMENTARY-CHAMPIONSHIP-FIX1 | repo-root commentary.py (dead) |
+| `cf34aa9` | COMMENTARY-ENTRANCES1 | repo-root commentary.py (dead) — game_bridge/fight_integration edits DO reach PA, but the emit hooks call methods that don't exist on narrative/commentary.py |
+| `a46487c` | COMMENTARY-GAMEPLAN-CONTRAST1 | repo-root commentary.py (dead) — same story |
+
+These features will NOT appear in-game until either (A) the changes
+are ported to narrative/commentary.py, or (B) wsgi.py is amended to
+add repo root to sys.path (which reintroduces the CLI-fork shadowing
+that wsgi.py was specifically designed to prevent). **NOT YET
+FIXED — deferred to next session for a clear-headed A-vs-B decision.**
+
+The prior memory `architecture_commentary_live_file_2026-06-20.md`
+claiming root is live / narrative is the drifted dead fork is
+**WRONG for PA's actual config** and is superseded by this notice
+and by the corrected memory pointer of the same name.
+
+Full trace + evidence in the CROSS-TREE-IMPORT-TRACE1 session output
+2026-07-07 (session transcript, not committed).
+
+## 🚨 ALSO — PA silent-fail feature losses (same root cause)
+
+Under PA's sys.path, `from systems.injury import (...)` and
+`from systems.coaches import CoachSystem, Coach` both **FAIL** —
+because `systems` resolves to `cage_dynasty_web/systems/` (a
+stub package containing only `game_start.py`), and Python does not
+continue searching sys.path for a `systems` package that has the
+requested submodule.
+
+- **Injury system disabled on PA.** All champion-injury slices
+  (auto-vacate, hold-path cardio decay, cleared-to-fight gate,
+  injury news headlines) depend on `INJURY_AVAILABLE` — silently
+  `False` in production. `⚠️ injury system not available: No module
+  named 'systems.injury'` prints at PA startup.
+- **Coach save/restore disabled** (lazy at `game_bridge.py:11912`).
+  Hiring UI still works via the local `COACH_TYPES` constant, but
+  reloading a save with existing coach state warns and skips coach
+  reconstruction. Only visible when loading pre-existing saves.
+
+Separate finding from the commentary issue but same class of cause
+(sys.path resolution hitting the shadowing stub package before
+reaching the CLI tree). File for later — do NOT fix in the same
+sitting as the commentary re-target.
+
 ## Ship History (compact)
 
 Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
@@ -305,10 +370,14 @@ accident.
   tree matches HEAD as of 2026-07-01 audit; PA-side has not been re-audited
   since. Anything that changes fight_engine constants should be checked against
   PA's copy before deploy.
-- **PA `wsgi.py` manually edited** (unverified). Diverged from repo `wsgi.py`
-  during earlier deploy debugging. Repo file assumed authoritative but PA-side
-  not confirmed. Diff against PA's `/var/www/*_wsgi.py` before touching
-  WSGI-loaded modules.
+- **PA `wsgi.py` VERIFIED match** as of 2026-07-07 (via Files API fetch of
+  `/var/www/vandopegaming_pythonanywhere_com_wsgi.py`, 479 bytes). Byte-
+  equivalent to repo's `cage_dynasty_web/wsgi.py` modulo comments. sys.path
+  adds `simulation/`, `narrative/`, `systems/`, `cage_dynasty_web/` in that
+  insertion order (project_home ends up at index 0). Repo root is
+  **explicitly NOT** on sys.path — this is what makes bare `import
+  commentary` resolve to `narrative/commentary.py` on PA (see the CRITICAL
+  block at the top of this file).
 - **Multi-user env-var dependencies (post-2026-07-03).** `SECRET_KEY` unset →
   cookies forgeable, session identity broken. `LEGACY_CLAIM_TOKEN` unset →
   `/api/claim-legacy` becomes a 404 (safe default). Any new PA deployment or
