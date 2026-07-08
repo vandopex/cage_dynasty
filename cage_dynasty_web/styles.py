@@ -583,6 +583,61 @@ def get_style_for_attributes(attributes: Dict[str, int]) -> FightingStyle:
     return max(scores, key=scores.get)
 
 
+# ============================================================================
+# GAMEPLAN-AI-SELECT1 — AI style → gameplan map
+# ============================================================================
+# Deterministic, complete, no fall-through. Covers all 11 canonical
+# fighting_style display_name strings from STYLE_DEFINITIONS above.
+# BALANCED is legitimate only for the "Balanced" style — never a fallthrough.
+# Judgment calls (documented for future revisit):
+#   Striker         → AGGRESSIVE (was MEASURED; flipped on GAMEPLAN-AI-SELECT1
+#                                 probe evidence — MEASURED's +4
+#                                 striking_defense / -2 initiative pre-fight
+#                                 mutation produced a broken "striker" identity:
+#                                 Str-mir cell showed +9pp KO surge from
+#                                 defensively-buffed strikers spending more
+#                                 exchanges attriting chins, and BJJ-Str cell
+#                                 lost -3.2pp SUB rate because MEASURED
+#                                 strikers stopped committing to strikes the
+#                                 BJJ hunter could counter into grapple.
+#                                 AGGRESSIVE = +4 boxing/kicks, +2 initiative,
+#                                 forward intent — matches "plain striker
+#                                 pushes the pace" identity.)
+#   Point Fighter   → MEASURED   (alt: DEFENSIVE for out-point safety.
+#                                 MEASURED works here because Point Fighter's
+#                                 IDENTITY is patient point accumulation —
+#                                 the +4 striking_defense buff matches intent.)
+#   Muay Thai       → CLINCH     (alt: AGGRESSIVE for stand-and-bang)
+#   Sprawl & Brawl  → AGGRESSIVE (alt: DEFENSIVE if anti-wrestling reads
+#                                 more than the brawl)
+_AI_STYLE_TO_GAMEPLAN: Dict[str, str] = {
+    "Striker":          "AGGRESSIVE",
+    "Counter Striker":  "DEFENSIVE",
+    "Pressure Fighter": "AGGRESSIVE",
+    "Point Fighter":    "MEASURED",
+    "Muay Thai":        "CLINCH",
+    "Wrestler":         "TAKEDOWN",
+    "Ground & Pound":   "GNP",
+    "BJJ Specialist":   "SUBMISSION",
+    "Clinch Fighter":   "CLINCH",
+    "Sprawl & Brawl":   "AGGRESSIVE",
+    "Balanced":         "BALANCED",
+}
+
+
+def ai_gameplan_for_style(style: str) -> str:
+    """Return the AI's deterministic gameplan for a fighting style.
+
+    Style-identity only — no opponent scouting, no variance. Same style
+    → same plan, every fight. Style input is the display_name string
+    from STYLE_DEFINITIONS (e.g. "Wrestler", "BJJ Specialist"). Unknown
+    inputs return "BALANCED" as a safe fallback, but every real style
+    in the codebase has an explicit entry so BALANCED is never reached
+    by a legitimate call.
+    """
+    return _AI_STYLE_TO_GAMEPLAN.get(style or "", "BALANCED")
+
+
 __all__ = [
     "StyleDefinition", "STYLE_DEFINITIONS", "STYLE_MATCHUPS",
     "COUNTRY_STYLE_WEIGHTS", "DEFAULT_STYLE_WEIGHTS", "CAMP_STYLE_PRESETS",
@@ -591,6 +646,7 @@ __all__ = [
     "determine_fight_method", "get_style_commentary", "get_all_styles",
     "get_styles_by_category", "get_style_for_attributes",
     "calculate_style_score", "check_secondary_style", "get_style_display_name",
+    "ai_gameplan_for_style",
 ]
 
 

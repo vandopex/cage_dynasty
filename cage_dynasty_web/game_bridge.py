@@ -359,12 +359,42 @@ except Exception as _me:
 
 STYLES_AVAILABLE = False
 try:
-    from styles import get_style_matchup_modifier
+    from styles import get_style_matchup_modifier, ai_gameplan_for_style
     from core.types import FightingStyle as _FightingStyleEnum
     STYLES_AVAILABLE = True
     print("✅ styles loaded")
 except Exception as _se:
     print(f"⚠️ styles not available: {_se}")
+    def ai_gameplan_for_style(_s):  # safe stub if styles.py fails
+        return "BALANCED"
+
+# GAMEPLAN-AI-SELECT1: translate legacy / amateur-graduate style
+# strings to the canonical 11 display_names before ai_gameplan_for_style
+# lookup. Prior to this ship, `_STYLE_XLAT` lived as a local dict
+# inside `get_fighter_details` (line 7183). Lifted to module scope +
+# extended with 5 amateur-graduate strings that were falling through
+# to BALANCED (BJJ, Boxer, Athlete, Technical, MMA). See
+# outputs/gameplan_ai_select_coverage1.md for the audit trail.
+_STYLE_TO_CANONICAL = {
+    "Karate":            "Point Fighter",
+    "MMA Hybrid":        "Balanced",
+    "Boxing":            "Striker",
+    "Orthodox Boxer":    "Striker",
+    "Kickboxer":         "Striker",
+    "Kickboxing":        "Striker",
+    "Judo":              "Wrestler",
+    "Sambo":             "Wrestler",
+    "Brawler":           "Pressure Fighter",
+    "Submission Artist": "BJJ Specialist",
+    "Submissions":       "BJJ Specialist",
+    "Grappling":         "Wrestler",
+    # Amateur-graduation vocabulary (amateur.py:770-784)
+    "BJJ":       "BJJ Specialist",
+    "Boxer":     "Striker",
+    "Athlete":   "Striker",
+    "Technical": "Point Fighter",
+    "MMA":       "Balanced",
+}
 
 
 # ============================================================================
@@ -5050,17 +5080,19 @@ class GameBridge:
                 pass
 
         # ── Gameplan modifier — player uses saved gameplan, AI uses style-based ──
-        # Style → gameplan lookup (mirrors _gameplan_from_style_matchup)
-        _STYLE_GAMEPLAN = {
-            "Wrestler":        "TAKEDOWN",   "Ground & Pound":  "GNP",
-            "BJJ Specialist":  "SUBMISSION", "Clinch Fighter":  "CLINCH",
-            "Muay Thai":       "AGGRESSIVE", "Brawler":         "AGGRESSIVE",
-            "Pressure Fighter":"AGGRESSIVE", "Counter Striker": "DEFENSIVE",
-            "Point Fighter":   "DEFENSIVE",  "Sprawl & Brawl":  "DEFENSIVE",
-            "Sambo":           "TAKEDOWN",   "Judo":            "TAKEDOWN",
-            "Kickboxer":       "MEASURED",   "Orthodox Boxer":  "MEASURED",
-            "Karate":          "DEFENSIVE",  "Hybrid":          "BALANCED",
-        }
+        # GAMEPLAN-AI-SELECT1: AI gameplan sourced from the shared
+        # `ai_gameplan_for_style` helper — same function the narrated
+        # engine path uses via _resolve_gameplan. The prior inline
+        # _STYLE_GAMEPLAN table drifted from the ship's locked map on
+        # Muay Thai, Sprawl & Brawl, and Point Fighter; this collapse
+        # onto one source of truth also fixes those entries.
+        # GAMEPLAN_BONUS scoring below is unchanged (score-fallback's
+        # own compositional model — see BRIDGE-WIRE-DIAG1 §2 for why).
+        def _ai_gp(f):
+            _raw = getattr(f, 'fighting_style', '') or ''
+            _canonical = _STYLE_TO_CANONICAL.get(_raw, _raw)
+            return ai_gameplan_for_style(_canonical)
+
         player_fids = set()
         if self._game_state and self._game_state.player_camp_id:
             player_fids = {
@@ -5070,18 +5102,14 @@ class GameBridge:
         # Player gameplan from fight dict; AI gameplan from style
         if fighter1.fighter_id in player_fids:
             f1_gameplan = fight.get("gameplan", "BALANCED")
-            f2_gameplan = _STYLE_GAMEPLAN.get(
-                getattr(fighter2, 'fighting_style', ''), "BALANCED")
+            f2_gameplan = _ai_gp(fighter2)
         elif fighter2.fighter_id in player_fids:
             f2_gameplan = fight.get("gameplan", "BALANCED")
-            f1_gameplan = _STYLE_GAMEPLAN.get(
-                getattr(fighter1, 'fighting_style', ''), "BALANCED")
+            f1_gameplan = _ai_gp(fighter1)
         else:
             # AI vs AI — both get style-based gameplans
-            f1_gameplan = _STYLE_GAMEPLAN.get(
-                getattr(fighter1, 'fighting_style', ''), "BALANCED")
-            f2_gameplan = _STYLE_GAMEPLAN.get(
-                getattr(fighter2, 'fighting_style', ''), "BALANCED")
+            f1_gameplan = _ai_gp(fighter1)
+            f2_gameplan = _ai_gp(fighter2)
 
         GAMEPLAN_BONUS = {
             "AGGRESSIVE":  8,   "DEFENSIVE":   4,   "MEASURED":    5,
@@ -7179,22 +7207,10 @@ class GameBridge:
         age            = int(fdata.get("age", 26))
         country        = str(fdata.get("country", "USA"))
         _raw_style     = str(fdata.get("style", fdata.get("fighting_style", "Balanced")))
-        # Translate legacy martial art names to display names
-        _STYLE_XLAT = {
-            "Karate":            "Point Fighter",
-            "MMA Hybrid":        "Balanced",
-            "Boxing":            "Striker",
-            "Orthodox Boxer":    "Striker",
-            "Kickboxer":         "Striker",
-            "Kickboxing":        "Striker",
-            "Judo":              "Wrestler",
-            "Sambo":             "Wrestler",
-            "Brawler":           "Pressure Fighter",
-            "Submission Artist": "BJJ Specialist",
-            "Submissions":       "BJJ Specialist",
-            "Grappling":         "Wrestler",
-        }
-        fighting_style = _STYLE_XLAT.get(_raw_style, _raw_style)
+        # Translate legacy martial art names to canonical display names.
+        # Table lifted to module scope as _STYLE_TO_CANONICAL for reuse
+        # by the AI-side gameplan resolver (GAMEPLAN-AI-SELECT1).
+        fighting_style = _STYLE_TO_CANONICAL.get(_raw_style, _raw_style)
         nickname       = fighter.nickname or fdata.get("nickname")
         fatigue        = int(fdata.get("fatigue", 0))
 
@@ -13551,10 +13567,23 @@ class GameBridge:
                         _f2_stam = get_starting_stamina(_f2_fat)
                     except Exception:
                         _f1_stam = _f2_stam = 100.0
+                    # GAMEPLAN-AI-SELECT1: AI-vs-AI gameplan resolution.
+                    # Symmetric to _run_real_engine — same helper. If a
+                    # player fighter appears on this card (rare cross-camp
+                    # case), their fight['gameplan'] is honored; otherwise
+                    # both sides use ai_gameplan_for_style.
+                    _pfids_cf = (
+                        {p.fighter_id for p in self._game_state.get_player_fighters()}
+                        if (self._game_state and self._game_state.player_camp_id) else set()
+                    )
+                    _gp_f1_cf = self._resolve_gameplan(fa1, fight, _pfids_cf)
+                    _gp_f2_cf = self._resolve_gameplan(fa2, fight, _pfids_cf)
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
                         starting_stamina_f1=_f1_stam,
                         starting_stamina_f2=_f2_stam,
+                        gameplan_f1=_gp_f1_cf,
+                        gameplan_f2=_gp_f2_cf,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page
@@ -14031,10 +14060,24 @@ class GameBridge:
                         _f2_stam = get_starting_stamina(_f2_fat)
                     except Exception:
                         _f1_stam = _f2_stam = 100.0
+                    # GAMEPLAN-AI-SELECT1: AI-only card — no player
+                    # fighters expected here. Pass empty `fight` dict so
+                    # the resolver falls into the AI branch for both
+                    # sides (fight.get('gameplan') returns None, path
+                    # unreached for the AI branch). Symmetric with the
+                    # other two narrated sites.
+                    _pfids_af = (
+                        {p.fighter_id for p in self._game_state.get_player_fighters()}
+                        if (self._game_state and self._game_state.player_camp_id) else set()
+                    )
+                    _gp_f1_af = self._resolve_gameplan(fa1, {}, _pfids_af)
+                    _gp_f2_af = self._resolve_gameplan(fa2, {}, _pfids_af)
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
                         starting_stamina_f1=_f1_stam,
                         starting_stamina_f2=_f2_stam,
+                        gameplan_f1=_gp_f1_af,
+                        gameplan_f2=_gp_f2_af,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page
@@ -17627,28 +17670,43 @@ class GameBridge:
 
         return out
 
-    def _resolve_player_gameplan(self, fighter_attrs, fight, player_fids):
-        """BRIDGE-WIRE-AGGR1 / BRIDGE-WIRE-RANGE1: resolve one side to
-        a Gameplan or None.
+    def _resolve_gameplan(self, fighter_attrs, fight, player_fids):
+        """Resolve one side to a Gameplan or None.
 
-        AI side (fighter not in player_fids) → None. BALANCED and unset
-        collapse to None (aggr=0 AND range=0) → byte-identical
-        pre-wire path. Any other preset builds a real Gameplan; the
-        engine's `if gameplan is not None:` guard reads whichever
-        dials are non-zero.
+        Player side (fighter_id in player_fids) reads
+        `fight['gameplan']` — the UI preset chosen at fight-camp.
 
-        BRIDGE-WIRE-RANGE1 collapse-guard note: the guard is now
-        `aggr == 0 AND range == 0`. Under the aggr-only guard,
+        AI side (fighter_id NOT in player_fids) reads the fighter's
+        `fighting_style` field, translates any legacy string to
+        canonical via `_STYLE_TO_CANONICAL`, and looks up the
+        deterministic gameplan via `ai_gameplan_for_style`
+        (GAMEPLAN-AI-SELECT1). Style-identity only — no opponent
+        scouting, no variance (future ships).
+
+        BALANCED and unset collapse to None (aggr=0 AND range=0) so
+        untouched saves (and Balanced-style AI) stay byte-identical
+        to pre-wire. The engine's `if gameplan is not None:` guard
+        reads whichever dials are non-zero.
+
+        BRIDGE-WIRE-RANGE1 collapse-guard note: the guard is
+        `aggr == 0 AND range == 0`. Under an aggr-only guard,
         TAKEDOWN and SUBMISSION (both aggr=0, range=+1) would still
-        collapse to None and stay placebo — losing the point of this
-        ship. The AND-guard lets them build Gameplan(range_bias=+1)
-        and reach the live RANGE lever from CORE1 (b26f584).
+        collapse to None and stay placebo — losing the RANGE lever.
+        The AND-guard lets them build Gameplan(range_bias=+1) and
+        reach the live RANGE dial from CORE1 (b26f584).
         """
         if _Gameplan is None:
             return None
-        if getattr(fighter_attrs, 'fighter_id', None) not in player_fids:
-            return None
-        _gp_str = fight.get("gameplan", "BALANCED") or "BALANCED"
+        _fid = getattr(fighter_attrs, 'fighter_id', None)
+        if _fid in player_fids:
+            _gp_str = fight.get("gameplan", "BALANCED") or "BALANCED"
+        else:
+            # AI side — GAMEPLAN-AI-SELECT1
+            _record = (self._game_state.get_fighter(_fid)
+                       if (self._game_state and _fid) else None)
+            _raw = str(getattr(_record, 'fighting_style', '') or '')
+            _canonical = _STYLE_TO_CANONICAL.get(_raw, _raw)
+            _gp_str = ai_gameplan_for_style(_canonical)
         _aggr  = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
         _range = _GAMEPLAN_RANGE.get(_gp_str, 0)
         if _aggr == 0 and _range == 0:
@@ -17789,15 +17847,16 @@ class GameBridge:
             damage_multiplier=0.24,
         ) if _FightConfig else None
 
-        # BRIDGE-WIRE-AGGR1: resolve player's saved gameplan → Gameplan.
-        # AI side always None this ship (counter-planning ships in SHIP5).
-        # aggression == 0 collapses to None → byte-identical pre-wire.
+        # BRIDGE-WIRE-AGGR1 / GAMEPLAN-AI-SELECT1: resolve both sides'
+        # gameplans. Player reads fight['gameplan']; AI reads its own
+        # fighting_style via ai_gameplan_for_style. BALANCED-style AI
+        # collapses to None → byte-identical pre-wire on that side.
         _player_fids_gp = (
             {f.fighter_id for f in self._game_state.get_player_fighters()}
             if (self._game_state and self._game_state.player_camp_id) else set()
         )
-        _gp_f1 = self._resolve_player_gameplan(fa1, fight, _player_fids_gp)
-        _gp_f2 = self._resolve_player_gameplan(fa2, fight, _player_fids_gp)
+        _gp_f1 = self._resolve_gameplan(fa1, fight, _player_fids_gp)
+        _gp_f2 = self._resolve_gameplan(fa2, fight, _player_fids_gp)
         if _gp_f1 is not None or _gp_f2 is not None:
             print(f"  🎯 [GAMEPLAN WIRE] f1={getattr(_gp_f1, 'preset_name', None)} "
                   f"aggr={getattr(_gp_f1, 'aggression', 0)} "
