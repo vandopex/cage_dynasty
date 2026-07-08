@@ -143,6 +143,209 @@ FIGHT_INTRO_CLOSING = [
 ]
 
 # ============================================================================
+# COMMENTARY-ENTRANCES1 — card-position + fighter-entrance pools
+# ============================================================================
+# Card-position line pools, keyed by slot. One line picked per fight at
+# emit_fight_open. Slot is passed in via FightContext.card_slot.
+CARD_POSITION_MAIN_EVENT = [
+    "This is the MAIN EVENT of the evening. The house lights come down.",
+    "Coming up now — your MAIN EVENT. Everything the crowd came for.",
+    "The MAIN EVENT is upon us. Prime time.",
+    "Time for the MAIN EVENT. All eyes on the cage.",
+]
+
+CARD_POSITION_CO_MAIN = [
+    "Your co-main event of the evening.",
+    "The co-main event is next.",
+    "Co-main slot — one fight before the main event.",
+    "Time for the co-main.",
+]
+
+CARD_POSITION_MAIN_CARD = [
+    "Next on the main card.",
+    "Main card action continues.",
+    "Coming up on the main card.",
+    "Main card fight, coming your way.",
+]
+
+CARD_POSITION_PRELIM = [
+    "Prelim fight, next.",
+    "On the prelims — here we go.",
+    "Preliminary bout is up.",
+    "Prelim card action.",
+]
+
+CARD_POSITION_EARLY_PRELIM = [
+    "Early prelims underway.",
+    "Kicking off the night with an early prelim.",
+    "First fight of the night — early prelim.",
+]
+
+# Main-event corner intros. Two-line ceiling (one red, one blue).
+# {descriptor} folds in champion tag OR a short style-tag OR a safe
+# generic default. See FightCommentarySystem._entrance_descriptor.
+FIGHTER_ENTRANCE_MAIN_EVENT_RED = [
+    "In the red corner — {name}{nick_clause}, {record}, {descriptor}.",
+    "Making his way to the cage in red: {name}{nick_clause} — {record}, {descriptor}.",
+    "The red corner belongs to {name}{nick_clause} — {record}, {descriptor}.",
+]
+
+FIGHTER_ENTRANCE_MAIN_EVENT_BLUE = [
+    "And in the blue corner — {name}{nick_clause}, {record}, {descriptor}.",
+    "Standing across in blue: {name}{nick_clause} — {record}, {descriptor}.",
+    "Blue corner: {name}{nick_clause} — {record}, {descriptor}.",
+]
+
+# Co-main: one combined line naming both fighters + records.
+FIGHTER_ENTRANCE_CO_MAIN = [
+    "{f1_name}{f1_nick} ({f1_rec}) meets {f2_name}{f2_nick} ({f2_rec}) in the co-main.",
+    "{f1_name} vs {f2_name} — {f1_rec} against {f2_rec}.",
+    "Co-main: {f1_name} ({f1_rec}) faces {f2_name} ({f2_rec}).",
+    "Set for the co-main — {f1_name}{f1_nick} takes on {f2_name}{f2_nick}.",
+]
+
+# Main-card: one short line.
+FIGHTER_ENTRANCE_MAIN_CARD = [
+    "{f1_name} takes on {f2_name}.",
+    "{f1_name} faces {f2_name} on the main card.",
+    "Tonight on the main card: {f1_name} vs {f2_name}.",
+]
+
+# Prelim / early-prelim: terse one-liner.
+FIGHTER_ENTRANCE_PRELIM = [
+    "Red corner {f1_name}, blue corner {f2_name}. Let's go.",
+    "{f1_name} vs {f2_name} — prelim card.",
+    "In the red corner {f1_name}. In the blue corner {f2_name}.",
+]
+
+# Main-event / co-main champion intro. Prepended only when a fighter's
+# is_champion flag is set AND division is available. Two-line ceiling
+# for main-event entrances is corner intros only — champion line is
+# additional (max 3 lines at main_event with a champ present).
+FIGHTER_ENTRANCE_CHAMPION_LINE = [
+    "{name} carries the DFC {division} title into this one — the belt is on the line.",
+    "The reigning DFC {division} champion, {name}, defends tonight.",
+    "Wearing the DFC {division} gold: {name}. Defending the strap.",
+]
+
+# Short style-tag used inside entrance descriptors. Covers all 11
+# canonical fighting_style display_name strings. Missing / unknown
+# style → the entrance uses a safe generic descriptor.
+_STYLE_ENTRANCE_TAG = {
+    "Striker":          "a striker",
+    "Counter Striker":  "a counter striker",
+    "Pressure Fighter": "a pressure fighter",
+    "Point Fighter":    "a point fighter",
+    "Muay Thai":        "a Muay Thai specialist",
+    "Wrestler":         "a wrestler",
+    "Ground & Pound":   "a ground-and-pound specialist",
+    "BJJ Specialist":   "a BJJ specialist",
+    "Clinch Fighter":   "a clinch fighter",
+    "Sprawl & Brawl":   "a sprawl-and-brawler",
+    "Balanced":         "a well-rounded fighter",
+}
+
+
+# ============================================================================
+# COMMENTARY-GAMEPLAN-CONTRAST1 — style-vs-plan contrast callouts
+# ============================================================================
+# Three contrast categories, each armed at fight open by comparing a
+# fighter's style against their chosen gameplan preset/aggression/
+# range_bias. Detection is one-time; the mid-fight callout fires ONCE
+# per fighter per fight, tied to a real ActionType event (never on a
+# non-event). Balanced style + on-type combinations stay silent —
+# that's the AI-SELECT1 intent line's territory.
+#
+# Guard invariants (locked in Van's Step-0 approval):
+#   - Trigger #2 (aggressor-going-patient) requires BOTH forward style
+#     AND patient plan. A forward fighter on AGGRESSIVE who happens to
+#     STAND_UP/ESCAPE fires nothing — the guard demands the plan itself
+#     be patient.
+#   - Callouts comment on plan CHOICE, never on winning/losing state.
+
+# Category-1 style set (grapple-based). Category-1 fires when style is
+# here AND plan preset is in {AGGRESSIVE, DEFENSIVE} (explicit
+# non-grapple direction). Wrestler+MEASURED and other neutral-plan
+# cases stay silent per Van's exclude list.
+_CONTRAST_GRAPPLE_STYLES = {
+    "Wrestler", "BJJ Specialist", "Ground & Pound",
+}
+_CONTRAST_C1_OFFTYPE_PRESETS = {"AGGRESSIVE", "DEFENSIVE"}
+
+# Category-2 style set (forward stand-up). Category-2 fires when style
+# is here AND aggression < 0 (DEFENSIVE/MEASURED — patient plans).
+_CONTRAST_FORWARD_STYLES = {
+    "Pressure Fighter", "Sprawl & Brawl", "Muay Thai",
+    "Clinch Fighter", "Striker",
+}
+
+# Category-3 style set (counter/point). Category-3 fires when style is
+# here AND aggression > 0 (AGGRESSIVE/GNP/CLINCH — forward plans).
+_CONTRAST_COUNTER_STYLES = {"Counter Striker", "Point Fighter"}
+
+# Style label used inside contrast pool templates. Lowercase to flow
+# naturally inside sentences that start with "A {label}..." or
+# "The {label}...". Balanced omitted — never has contrast.
+_CONTRAST_STYLE_LABEL = {
+    "Wrestler":          "wrestler",
+    "BJJ Specialist":    "BJJ specialist",
+    "Ground & Pound":    "ground-and-pound fighter",
+    "Pressure Fighter":  "pressure fighter",
+    "Sprawl & Brawl":    "sprawl-and-brawler",
+    "Muay Thai":         "Muay Thai specialist",
+    "Clinch Fighter":    "clinch fighter",
+    "Striker":           "striker",
+    "Counter Striker":   "counter striker",
+    "Point Fighter":     "point fighter",
+}
+
+# Mid-fight callout pools. Fire on the actor's first matching trigger
+# action (see FightCommentarySystem._maybe_emit_contrast_callout).
+# Phrasing invariant: comment on plan choice, never on outcome.
+CONTRAST_GRAPPLER_NOT_GRAPPLING = [
+    "A {label} content to keep the fight standing? Someone left the takedowns at home.",
+    "{name} is a {label} — but the plan tonight is standup. That's a choice.",
+    "The takedowns were supposed to be the whole point. {name} is picking a different fight.",
+    "A {label} who's decided to trade in the pocket. Not the game he trained for.",
+]
+
+CONTRAST_AGGRESSOR_GOING_PATIENT = [
+    "A {label}, choosing to hang back? That's not his fight.",
+    "{name} is a {label} — coming in patient tonight. Deliberate choice.",
+    "The pressure was supposed to be the story. {name} decided to wait instead.",
+    "Interesting plan — a {label} playing patient. Out of character.",
+]
+
+CONTRAST_COUNTER_BECOMING_AGGRESSOR = [
+    "The {label} is forcing the action tonight — out of character.",
+    "{name} usually waits. Not tonight — he's the one bringing it.",
+    "A {label} planning to be the aggressor? That's the fight he chose.",
+    "{name} is stepping outside the counter role. Deliberately.",
+]
+
+# Mode-B pre-fight setup pools. Optional "watch for this" line at
+# fight open, matched by the same mid-fight callout when the trigger
+# fires. Roll happens per-armed-contrast at fight open (~50/50).
+CONTRAST_SETUP_GRAPPLER = [
+    "One thing to watch: {name} is a {label} with a plan that isn't. See if the takedowns come.",
+    "Question mark going in — a {label} on an off-type plan. Watch what he actually goes to.",
+    "Watch closely: a {label} with a plan that doesn't match his identity.",
+]
+
+CONTRAST_SETUP_PATIENT = [
+    "Watch for this: {name} is a {label} coming in patient. Not what we usually see.",
+    "A note going in — a {label} choosing measured tonight. Off-brand for him.",
+    "One thing to watch — {name} is going against his own aggression on this one.",
+]
+
+CONTRAST_SETUP_COUNTER = [
+    "Watch for this — the {label} is planning to lead, not counter.",
+    "Different look from {name} — a {label} choosing to be the aggressor.",
+    "One thing to watch: {name} planning to force the action. Not his usual game.",
+]
+
+
+# ============================================================================
 # RIVALRY HEAT COMMENTARY TEMPLATES
 # ============================================================================
 
@@ -338,8 +541,8 @@ ROUND_START_CHAMPIONSHIP = [
 ROUND_START_FINAL = [
     "FINAL ROUND! Round {round_num}! IT ALL COMES DOWN TO THIS!",
     "The LAST round! Winner takes ALL! Round {round_num}!",
-    "Fifth and final round! Leave NOTHING in the tank!",
-    "Championship round FIVE! This is what you trained your whole life for!",
+    "Final round! Leave NOTHING in the tank!",
+    "The last round of the war! This is what you trained your whole life for!",
     "One round left! Three judges watching! WHO TAKES IT HOME?!",
 ]
 
@@ -2205,7 +2408,23 @@ class FightContext:
     is_title_fight: bool = False
     is_main_event: bool = False
     exchanges_per_round: int = 55  # Must match FightConfig default
-    
+
+    # COMMENTARY-ENTRANCES1: card-position + per-fighter intro data.
+    # card_slot values: "main_event", "co_main", "main_card",
+    # "prelim", "early_prelim". fighter1_data / fighter2_data are
+    # dicts with optional keys nickname, record, fighting_style,
+    # is_champion, division — silently skipped when missing.
+    card_slot: str = "prelim"
+    fighter1_data: Dict[str, Any] = field(default_factory=dict)
+    fighter2_data: Dict[str, Any] = field(default_factory=dict)
+
+    # COMMENTARY-GAMEPLAN-CONTRAST1: per-fighter gameplan snapshot
+    # (preset, aggression, range_bias). Consumed by emit_gameplan_setup
+    # + the log_event contrast-firing hook. Empty dict = no gameplan,
+    # no contrast possible (silent).
+    fighter1_gameplan: Dict[str, Any] = field(default_factory=dict)
+    fighter2_gameplan: Dict[str, Any] = field(default_factory=dict)
+
     # Fight state tracking
     current_damage: Dict[str, float] = field(default_factory=dict)
     knockdowns: Dict[str, int] = field(default_factory=dict)
@@ -3459,6 +3678,14 @@ class FightCommentarySystem:
         if should_log and commentary:
             self.commentary_log.append(commentary)
 
+        # COMMENTARY-GAMEPLAN-CONTRAST1: fire the once-per-fighter
+        # style-vs-plan contrast callout when the current event matches
+        # the armed contrast's real-action trigger. Silent when actor
+        # has no armed contrast, has already fired, or event doesn't
+        # match. Never asserts an outcome — plan/intent observation
+        # prose only.
+        self._maybe_emit_contrast_callout(actor, action_type, damage_level, success)
+
         # === Position announcement when position changes ===
         # Suppress when action_type already mentioned position
         # (TAKEDOWN / CLINCH / POSITION_ADVANCE) to avoid the
@@ -3658,27 +3885,303 @@ class FightCommentarySystem:
                 self.round_stats[actor]["takedowns"] += 1
             elif action_type == ActionType.KNOCKDOWN:
                 self.round_stats[actor]["knockdowns"] += 1
-    
+
+    # ========================================================================
+    # COMMENTARY-ENTRANCES1 — fight-open surface
+    # ========================================================================
+
+    def _entrance_descriptor(self, fdata: Dict[str, Any]) -> str:
+        """Return the descriptor clause used inside main-event entrance
+        lines: 'the DFC {division} champion' if that fighter carries the
+        belt AND division is known, else a short style-tag, else a safe
+        generic fallback. Never returns an empty string."""
+        if fdata.get("is_champion") and fdata.get("division"):
+            return f"the DFC {fdata['division']} champion"
+        style = fdata.get("fighting_style") or ""
+        tag = _STYLE_ENTRANCE_TAG.get(style)
+        return tag or "with something to prove"
+
+    def _nick_clause(self, fdata: Dict[str, Any]) -> str:
+        """Return ' \"The Nickname\"' if a nickname exists, else empty."""
+        n = fdata.get("nickname")
+        return f' "{n}"' if n else ""
+
+    def emit_fight_open(self) -> None:
+        """Append card-position line + slot-scaled fighter entrances to
+        the log. Called once at fight open, BEFORE the first
+        start_round. Idempotent — subsequent calls no-op. Silent when
+        context or fighter data is missing (safe additive contract).
+
+        Emits, in order:
+          1. one card-position line, keyed by card_slot
+          2. optional champion line (main_event / co_main only, if
+             either fighter has is_champion + division)
+          3. entrance lines: two lines at main_event (one per corner),
+             one combined line at co_main, one short line at main_card,
+             one terse line at prelim / early_prelim
+        Callers that don't opt in (no fighter data, default slot) get
+        the default prelim card-position + terse entrance line.
+        """
+        if getattr(self, '_fight_open_emitted', False):
+            return
+        self._fight_open_emitted = True
+        if not self.context:
+            return
+
+        slot = (self.context.card_slot or "prelim").lower()
+        f1_data = self.context.fighter1_data or {}
+        f2_data = self.context.fighter2_data or {}
+        f1_name = self.context.fighter1_name
+        f2_name = self.context.fighter2_name
+
+        # 1. Card-position line
+        if slot == "main_event":
+            self.commentary_log.append(random.choice(CARD_POSITION_MAIN_EVENT))
+        elif slot == "co_main":
+            self.commentary_log.append(random.choice(CARD_POSITION_CO_MAIN))
+        elif slot == "main_card":
+            self.commentary_log.append(random.choice(CARD_POSITION_MAIN_CARD))
+        elif slot == "early_prelim":
+            self.commentary_log.append(random.choice(CARD_POSITION_EARLY_PRELIM))
+        else:
+            self.commentary_log.append(random.choice(CARD_POSITION_PRELIM))
+
+        # 2. Optional champion line — main_event / co_main only
+        if slot in ("main_event", "co_main"):
+            champ_name = champ_div = ""
+            if f1_data.get("is_champion") and f1_data.get("division"):
+                champ_name = f1_name
+                champ_div = f1_data["division"]
+            elif f2_data.get("is_champion") and f2_data.get("division"):
+                champ_name = f2_name
+                champ_div = f2_data["division"]
+            if champ_name:
+                self.commentary_log.append(
+                    random.choice(FIGHTER_ENTRANCE_CHAMPION_LINE).format(
+                        name=champ_name, division=champ_div))
+
+        # 3. Entrance lines — scaled by slot
+        if slot == "main_event":
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_MAIN_EVENT_RED).format(
+                    name=f1_name,
+                    nick_clause=self._nick_clause(f1_data),
+                    record=f1_data.get("record") or "0-0",
+                    descriptor=self._entrance_descriptor(f1_data),
+                ))
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_MAIN_EVENT_BLUE).format(
+                    name=f2_name,
+                    nick_clause=self._nick_clause(f2_data),
+                    record=f2_data.get("record") or "0-0",
+                    descriptor=self._entrance_descriptor(f2_data),
+                ))
+        elif slot == "co_main":
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_CO_MAIN).format(
+                    f1_name=f1_name,
+                    f1_nick=self._nick_clause(f1_data),
+                    f1_rec=f1_data.get("record") or "0-0",
+                    f2_name=f2_name,
+                    f2_nick=self._nick_clause(f2_data),
+                    f2_rec=f2_data.get("record") or "0-0",
+                ))
+        elif slot == "main_card":
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_MAIN_CARD).format(
+                    f1_name=f1_name, f2_name=f2_name,
+                ))
+        else:  # prelim, early_prelim, or unknown → terse
+            self.commentary_log.append(
+                random.choice(FIGHTER_ENTRANCE_PRELIM).format(
+                    f1_name=f1_name, f2_name=f2_name,
+                ))
+
+    # ========================================================================
+    # COMMENTARY-GAMEPLAN-CONTRAST1 — style-vs-plan contrast callouts
+    # ========================================================================
+
+    def _detect_contrast(self, style: str, gp: Dict[str, Any]) -> Optional[str]:
+        """Return a contrast tag ('grappler_not_grappling',
+        'aggressor_going_patient', 'counter_becoming_aggressor') or
+        None if no contrast is armed for this style/plan pair.
+
+        Category-1 (grappler_not_grappling): grapple-based style AND
+        preset in {AGGRESSIVE, DEFENSIVE}. Wrestler+MEASURED and
+        neutral cases stay silent per Van's exclude list.
+
+        Category-2 (aggressor_going_patient): forward stand-up style
+        AND aggression < 0. Van's guard: BOTH conditions required —
+        a forward fighter on AGGRESSIVE who's forced to disengage
+        fires nothing.
+
+        Category-3 (counter_becoming_aggressor): counter/point style
+        AND aggression > 0.
+        """
+        if not style or not gp:
+            return None
+        preset = str(gp.get("preset", "") or "").upper()
+        aggression = int(gp.get("aggression", 0) or 0)
+        if style in _CONTRAST_GRAPPLE_STYLES and preset in _CONTRAST_C1_OFFTYPE_PRESETS:
+            return "grappler_not_grappling"
+        if style in _CONTRAST_FORWARD_STYLES and aggression < 0:
+            return "aggressor_going_patient"
+        if style in _CONTRAST_COUNTER_STYLES and aggression > 0:
+            return "counter_becoming_aggressor"
+        return None
+
+    def _actor_to_key(self, actor_name: str) -> Optional[str]:
+        """Match actor name to 'f1'/'f2' or None."""
+        if not self.context or not actor_name:
+            return None
+        if actor_name == self.context.fighter1_name:
+            return "f1"
+        if actor_name == self.context.fighter2_name:
+            return "f2"
+        return None
+
+    def _init_contrast_state(self) -> None:
+        """One-time init of contrast tracking state. Called lazily so
+        older callers that don't invoke emit_gameplan_setup still get
+        safe defaults (all fighters unarmed → no fires).
+        """
+        if getattr(self, '_contrast_state_ready', False):
+            return
+        self._contrast_state_ready = True
+        self._contrast_armed = {"f1": None, "f2": None}
+        self._contrast_fired = {"f1": False, "f2": False}
+        # Mode B setup emitted at fight open — flag is just for
+        # bookkeeping / verification; doesn't gate the mid-fight callout.
+        self._contrast_setup_emitted = {"f1": False, "f2": False}
+
+    def emit_gameplan_setup(self) -> None:
+        """Detect contrast for both sides and, per armed side, roll
+        Mode A / Mode B (~50/50). If Mode B, append a pre-fight setup
+        line to the log. Called ONCE at fight open, AFTER
+        emit_fight_open and AFTER the AGGRESSION-NARRATION1 intent
+        block. Silent when a fighter has no contrast armed (default).
+        """
+        self._init_contrast_state()
+        if not self.context:
+            return
+
+        for key, name, data_field, gp_field in (
+            ("f1", self.context.fighter1_name,
+             self.context.fighter1_data, self.context.fighter1_gameplan),
+            ("f2", self.context.fighter2_name,
+             self.context.fighter2_data, self.context.fighter2_gameplan),
+        ):
+            style = str((data_field or {}).get("fighting_style", "") or "")
+            tag = self._detect_contrast(style, gp_field or {})
+            if tag is None:
+                continue
+            self._contrast_armed[key] = tag
+            # Roll Mode A / Mode B. Mode B → emit a setup line now.
+            if random.random() < 0.5:
+                setup_pool = {
+                    "grappler_not_grappling":     CONTRAST_SETUP_GRAPPLER,
+                    "aggressor_going_patient":    CONTRAST_SETUP_PATIENT,
+                    "counter_becoming_aggressor": CONTRAST_SETUP_COUNTER,
+                }[tag]
+                self.commentary_log.append(
+                    random.choice(setup_pool).format(
+                        name=name,
+                        label=_CONTRAST_STYLE_LABEL.get(style, "fighter"),
+                    ))
+                self._contrast_setup_emitted[key] = True
+
+    def _contrast_trigger_matches(self, tag: str, event_type: 'ActionType',
+                                   damage_level: 'DamageLevel',
+                                   success: bool) -> bool:
+        """Return True if this event is the real-action trigger for
+        the given contrast tag. Only successful actions count for
+        triggers 1 and 3 (an air-swing miss isn't an observation of
+        the plan behavior).
+        """
+        if tag == "grappler_not_grappling":
+            # Actor engaged on the feet with a strike.
+            return success and event_type in (
+                ActionType.STRIKE, ActionType.KICK, ActionType.CLINCH_STRIKE)
+        if tag == "aggressor_going_patient":
+            # Actor explicitly disengaged. STAND_UP / ESCAPE fire even
+            # without success — the intent to disengage IS the signal.
+            return event_type in (ActionType.STAND_UP, ActionType.ESCAPE)
+        if tag == "counter_becoming_aggressor":
+            # Actor committed hard: TAKEDOWN attempt (any) or a
+            # HEAVY/DEVASTATING successful strike.
+            if event_type == ActionType.TAKEDOWN:
+                return True
+            if success and event_type in (
+                ActionType.STRIKE, ActionType.KICK, ActionType.CLINCH_STRIKE,
+                ActionType.GROUND_STRIKE,
+            ):
+                return damage_level in (DamageLevel.HEAVY, DamageLevel.DEVASTATING)
+        return False
+
+    def _maybe_emit_contrast_callout(self, actor_name: str,
+                                      event_type: 'ActionType',
+                                      damage_level: 'DamageLevel',
+                                      success: bool) -> None:
+        """Called from log_event AFTER the base commentary append.
+        Fires the mid-fight contrast callout ONCE per fighter per
+        fight when the trigger matches. Silent when the actor has no
+        armed contrast, has already fired, or the event doesn't
+        match the tag's trigger."""
+        self._init_contrast_state()
+        key = self._actor_to_key(actor_name)
+        if key is None:
+            return
+        tag = self._contrast_armed.get(key)
+        if tag is None:
+            return
+        if self._contrast_fired.get(key):
+            return
+        if not self._contrast_trigger_matches(tag, event_type, damage_level, success):
+            return
+
+        # Resolve style label + name for template format
+        data_field = (self.context.fighter1_data if key == "f1"
+                      else self.context.fighter2_data) or {}
+        style = str(data_field.get("fighting_style", "") or "")
+        label = _CONTRAST_STYLE_LABEL.get(style, "fighter")
+        name = actor_name
+
+        pool = {
+            "grappler_not_grappling":     CONTRAST_GRAPPLER_NOT_GRAPPLING,
+            "aggressor_going_patient":    CONTRAST_AGGRESSOR_GOING_PATIENT,
+            "counter_becoming_aggressor": CONTRAST_COUNTER_BECOMING_AGGRESSOR,
+        }[tag]
+        self.commentary_log.append(random.choice(pool).format(name=name, label=label))
+        self._contrast_fired[key] = True
+
     # ========================================================================
     # ROUND MANAGEMENT
     # ========================================================================
-    
+
     def start_round(self, round_num: int) -> str:
         """Start a new round"""
         self.current_round = round_num
         self.current_exchange = 0
         self._init_round_stats()
-        
-        template = self._select_template(ROUND_START_TEMPLATES)
+
+        # COMMENTARY-CHAMPIONSHIP-FIX1 — read total_rounds so we pick
+        # the right pool. Final round of ANY fight → FINAL. Championship
+        # rounds (4-5) only exist in 5-round fights → CHAMPIONSHIP.
+        # R3 of a 3-round fight IS the final round, never championship.
+        # Everything else falls through to the generic mid-round pool.
+        # The prior addendum block (TITLE_FIGHT_CONTEXT / LATE_ROUND_
+        # CONTEXT) was a workaround for the old always-generic pool
+        # selection; now redundant since FINAL and CHAMPIONSHIP pools
+        # already carry that voice.
+        total = self.context.total_rounds if self.context else 3
+        if round_num == total:
+            template = random.choice(ROUND_START_FINAL)
+        elif total == 5 and round_num >= 4:
+            template = random.choice(ROUND_START_CHAMPIONSHIP)
+        else:
+            template = self._select_template(ROUND_START_TEMPLATES)
         commentary = template.format(round_num=round_num)
-        
-        # Add context for title fights or late rounds
-        if self.context:
-            if self.context.is_title_fight and round_num >= 4:
-                commentary += " " + random.choice(TITLE_FIGHT_CONTEXT)
-            elif round_num >= 3:
-                commentary += " " + random.choice(LATE_ROUND_CONTEXT)
-        
+
         self.commentary_log.append(commentary)
         return commentary
     
@@ -4357,15 +4860,34 @@ def create_commentary_system(
     fighter2_name: str,
     total_rounds: int = 3,
     is_title_fight: bool = False,
-    exchanges_per_round: int = 55
+    exchanges_per_round: int = 55,
+    card_slot: str = "prelim",
+    is_main_event: bool = False,
+    fighter1_data: Optional[Dict[str, Any]] = None,
+    fighter2_data: Optional[Dict[str, Any]] = None,
+    fighter1_gameplan: Optional[Dict[str, Any]] = None,
+    fighter2_gameplan: Optional[Dict[str, Any]] = None,
 ) -> FightCommentarySystem:
-    """Create a new commentary system with context"""
+    """Create a new commentary system with context.
+
+    COMMENTARY-ENTRANCES1 kwargs are additive and default to safe
+    values (prelim slot, no per-fighter intro data). Callers that
+    don't opt in get byte-identical behavior on every hook other
+    than the new emit_fight_open (which stays silent without
+    fighter1_data / fighter2_data).
+    """
     context = FightContext(
         fighter1_name=fighter1_name,
         fighter2_name=fighter2_name,
         total_rounds=total_rounds,
         is_title_fight=is_title_fight,
-        exchanges_per_round=exchanges_per_round
+        exchanges_per_round=exchanges_per_round,
+        card_slot=card_slot,
+        is_main_event=is_main_event,
+        fighter1_data=fighter1_data or {},
+        fighter2_data=fighter2_data or {},
+        fighter1_gameplan=fighter1_gameplan or {},
+        fighter2_gameplan=fighter2_gameplan or {},
     )
     return FightCommentarySystem(context)
 
