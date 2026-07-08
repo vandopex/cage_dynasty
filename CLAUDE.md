@@ -417,6 +417,50 @@ Effective per-strike scale (no rivalry): **0.48 × 0.24 = 0.1152**.
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
 - Contract: `HOLDOUT = 25`, `WALKOUT = 10`, `HOLDOUT_WINDOW = 4 weeks`
 
+## Certified cell baselines (symmetric skill)
+
+**Principle**: certified balance numbers live in this committed record
+with their harness shape + N + CI, never in session conversation — an
+uncommitted number mutates. Both of the entries below drifted precisely
+because they lived only in chat. If you find yourself citing a balance
+figure that isn't in this section, verify it against a fresh probe
+before treating it as authoritative.
+
+All numbers below are at symmetric OVR=75, `damage_multiplier=0.24`,
+3-round non-title, gameplan=None (neutral). Probe harnesses were
+committed inline in the referenced diag memos.
+
+### Wr-BJJ (Wrestler vs BJJ Specialist)
+
+- **Wrestler win rate ~48%** (Harness A 47.3% CI [43.3, 51.4] N=577;
+  reproduces 47-49% across 3 harness shapes — see
+  `outputs/wr_bjj_drift_diag1.md`).
+- **BJJ submission path intact ~16.5%** (99/600 subs, all landed by
+  the BJJ side).
+- Verified byte-identical across the 8e3f670→efaf7f6 boundary by
+  WR-BJJ-DRIFT-DIAG1 (2026-07-07) — this is the correct stable
+  baseline, **not a regression**.
+- **RETIRED**: the "60.2% CI [56.2, 64.0] N=600" figure never existed
+  in any committed artifact — a mis-reference, likely conflated with
+  Wr-Str's 60-70% band that GNP-BUFF certified. Do not treat 60.2%
+  as a prior baseline in any future work.
+- **48% is a design point, not a bug**: BJJ's off-back sub path has
+  no symmetric wrestler answer at OVR=75-vs-OVR=75. Moving wrestler%
+  upward here is a deliberate new tuning decision, not a
+  restoration.
+
+### Wr-Str (Wrestler vs Striker) — post-GNP-BUFF
+
+- **Wrestler win rate 50.3%**, 95% CI [46.3, 54.3], N=600 (variance
+  probe, stable, dispersion 0.67×).
+- **RETIRED**: the GNP-BUFF commit message's "40%→67%, into 60-70%
+  band" claim is retired — overstated from a single N=30 lucky draw
+  matrix. Real gain was ~40%→50%.
+- Residual gap to any 60% target is addressed by the asymmetric §7
+  lever from `outputs/control_conversion_diag1.md` §7, **NOT another
+  `GNP_DOMINANT_DAMAGE_MULT` bump** — that shared constant would
+  re-break Wr-BJJ.
+
 ## Terminal diagnostics (for tuning)
 
 - 📊 [DFC N] — fight card summary (KO/TKO/SUB/DEC counts)
