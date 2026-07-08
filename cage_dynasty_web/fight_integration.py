@@ -404,6 +404,18 @@ class NarratedFightSimulator:
         # Initialize commentary system
         # COMMENTARY-ENTRANCES1: thread card_slot + per-fighter intro
         # dicts so emit_fight_open can select the right pool.
+        # COMMENTARY-GAMEPLAN-CONTRAST1: additionally thread each
+        # side's Gameplan as a small dict so the commentary can detect
+        # style-vs-plan contrast and fire mid-fight callouts. None
+        # gameplans → empty dicts → no contrast possible → silent.
+        def _gp_to_dict(_gp):
+            if _gp is None:
+                return {}
+            return {
+                "preset":     str(getattr(_gp, "preset_name", "") or ""),
+                "aggression": int(getattr(_gp, "aggression", 0) or 0),
+                "range_bias": int(getattr(_gp, "range_bias", 0) or 0),
+            }
         self.commentary = create_commentary_system(
             fighter1_name=fighter1.name,
             fighter2_name=fighter2.name,
@@ -414,6 +426,8 @@ class NarratedFightSimulator:
             is_main_event=self._entrances_is_main_event,
             fighter1_data=self._intro_f1,
             fighter2_data=self._intro_f2,
+            fighter1_gameplan=_gp_to_dict(gameplan_f1),
+            fighter2_gameplan=_gp_to_dict(gameplan_f2),
         )
         
         # Fight state
@@ -498,6 +512,13 @@ class NarratedFightSimulator:
                     f"{_fa.name} keeps it sharp, waiting for the opening.",
                 ]
                 self.commentary.commentary_log.append(random.choice(_patient_lines))
+
+        # COMMENTARY-GAMEPLAN-CONTRAST1: detect style-vs-plan contrast
+        # per side and roll Mode A/Mode B. Mode B appends a pre-fight
+        # setup line here. Silent when no contrast is armed. Called
+        # AFTER the AGGRESSION-NARRATION1 intent block so the setup
+        # line lands after the fighter's stated intent — natural read.
+        self.commentary.emit_gameplan_setup()
 
     def _init_round(self):
         """Initialize round state"""
