@@ -338,8 +338,8 @@ ROUND_START_CHAMPIONSHIP = [
 ROUND_START_FINAL = [
     "FINAL ROUND! Round {round_num}! IT ALL COMES DOWN TO THIS!",
     "The LAST round! Winner takes ALL! Round {round_num}!",
-    "Fifth and final round! Leave NOTHING in the tank!",
-    "Championship round FIVE! This is what you trained your whole life for!",
+    "Final round! Leave NOTHING in the tank!",
+    "The last round of the war! This is what you trained your whole life for!",
     "One round left! Three judges watching! WHO TAKES IT HOME?!",
 ]
 
@@ -3940,15 +3940,23 @@ class FightCommentarySystem:
         # is stripped by the assembler and never rendered.
         self.commentary_log.append(f"<<ROUND_BOUNDARY:{round_num}>>")
 
-        template = self._select_template(ROUND_START_TEMPLATES)
+        # COMMENTARY-CHAMPIONSHIP-FIX1 — read total_rounds so we pick
+        # the right pool. Final round of ANY fight → FINAL. Championship
+        # rounds (4-5) only exist in 5-round fights → CHAMPIONSHIP.
+        # R3 of a 3-round fight IS the final round, never championship.
+        # Everything else falls through to the generic mid-round pool.
+        # The prior addendum block (TITLE_FIGHT_CONTEXT / LATE_ROUND_
+        # CONTEXT) was a workaround for the old always-generic pool
+        # selection; now redundant since FINAL and CHAMPIONSHIP pools
+        # already carry that voice.
+        total = self.context.total_rounds if self.context else 3
+        if round_num == total:
+            template = random.choice(ROUND_START_FINAL)
+        elif total == 5 and round_num >= 4:
+            template = random.choice(ROUND_START_CHAMPIONSHIP)
+        else:
+            template = self._select_template(ROUND_START_TEMPLATES)
         commentary = template.format(round_num=round_num)
-
-        # Add context for title fights or late rounds
-        if self.context:
-            if self.context.is_title_fight and round_num >= 4:
-                commentary += " " + random.choice(TITLE_FIGHT_CONTEXT)
-            elif round_num >= 3:
-                commentary += " " + random.choice(LATE_ROUND_CONTEXT)
 
         self.commentary_log.append(commentary)
         return commentary
