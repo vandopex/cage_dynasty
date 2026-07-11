@@ -2966,8 +2966,14 @@ class WorldInitializer:
                     print(f"  ⚠️ trait assignment failed for {fighter.fighter_id}: {_te}")
                     _fdata['traits'] = []
 
+            # OVR-AT-SIGNING-CAPTURE1: world-creation baseline.
+            # _sign_fighter_to_camp preserves this via first-write guard.
+            if 'ovr_at_signing' not in _fdata:
+                _fdata['ovr_at_signing'] = int(fighter.skill_rating)
+                _fdata['week_signed'] = 0
+
             self.game_state._fighter_data[fighter.fighter_id] = _fdata
-    
+
     def _update_division_state(self, weight_class: str) -> None:
         """Update division state with champion and rankings"""
         

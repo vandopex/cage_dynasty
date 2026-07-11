@@ -835,7 +835,15 @@ class GameState:
         fighter.camp_id = camp_id
         fighter.contract_id = contract_id
         camp.fighter_count += 1
-        
+
+        # OVR-AT-SIGNING-CAPTURE1: first-write guard. Player-sign wrappers
+        # (game_bridge.py:21324, 21774) overwrite after this call — intentional
+        # for "OVR when signed to YOUR camp" semantics.
+        _fdata = self._fighter_data.setdefault(fighter_id, {})
+        if not _fdata.get('ovr_at_signing'):
+            _fdata['ovr_at_signing'] = int(fighter.overall_rating)
+            _fdata['week_signed'] = int(self.week_number)
+
         # Remove from free agents
         self.free_agents.discard(fighter_id)
         
