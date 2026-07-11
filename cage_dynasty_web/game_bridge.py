@@ -7149,8 +7149,14 @@ class GameBridge:
         wc_str   = fighter.weight_class if isinstance(fighter.weight_class, str) else str(fighter.weight_class)
 
         # ── Streaks ───────────────────────────────────────────────
+        # STREAK-INAUGURAL-FILTER1: skip founding-champion tombstones
+        # (world_init.py:1275 appends a synthetic result="W" entry that
+        # is not a real fight and does not bump .wins).
         win_streak = lose_streak = 0
         for f in reversed(history):
+            _method = f.get('method') if isinstance(f, dict) else getattr(f, 'method', '')
+            if _method == 'Inaugural Crown':
+                continue
             res = f.get('result') if isinstance(f, dict) else getattr(f, 'result', '')
             if win_streak == 0 and lose_streak == 0:
                 if res == 'W':
@@ -7172,9 +7178,13 @@ class GameBridge:
 
         # ── Career-best win streak ───────────────────────────────
         # Walk full history forward, track max consecutive Ws.
+        # STREAK-INAUGURAL-FILTER1: same tombstone filter as above.
         _best_ws = 0
         _run_ws = 0
         for f in history:
+            _method = f.get('method') if isinstance(f, dict) else getattr(f, 'method', '')
+            if _method == 'Inaugural Crown':
+                continue
             res = f.get('result') if isinstance(f, dict) else getattr(f, 'result', '')
             if res == 'W':
                 _run_ws += 1
