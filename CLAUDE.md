@@ -549,8 +549,25 @@ committed inline in the referenced diag memos.
   simulation. In-band vs the 40-50% target.
 - **SUB 1.3%** pool (2/157). Ground truth from the same extraction.
 - Slot breakdown: main_event 7.7% DEC (13 fights, 9 title fights, all
-  9 title fights finished — real-MMA-consistent), co_main 26.7%,
-  main_card 48.8%, prelim 50.8%, early_prelim 51.7%.
+  9 finished), co_main 26.7%, main_card 48.8%, prelim 50.8%,
+  early_prelim 51.7%.
+- **HEADLINE-FINISH-TRACE (2026-07-10)** — the headline finish spike is
+  the 5-round confound, not a slot mechanic. Apples-to-apples restricted
+  to finished-by-R3 (what prelims can reach): headline 50.0% vs prelim
+  49.2%, statistically identical (P=0.56). 47% of headline finishes land
+  in R4-R5, rounds prelims don't have. Code trace exhaustive:
+  `is_title_fight` / `is_main_event` / `card_slot` do nothing in the
+  fight-resolution path beyond setting `scheduled_rounds=5`. No damage
+  boost, no threshold change, no attribute mutation — `FightConfig`
+  constants (damage_multiplier=0.24, standup_threshold=10, submission
+  thresholds) identical across slots. **No slot-specific finishing
+  mechanism to fix.**
+- Title-fight caveat (watch-on-accumulation, no task filed): 9/9
+  finished on N=9 is significant vs prelim rate (P=0.0017) but Wilson
+  CI on the underlying title finish rate is [70.1%, 100.0%] — could be
+  anywhere from ~75% to ~99%. If another 10-20 title fights keep
+  finishing, the CI tightens and the rate itself may become worth a
+  fresh read.
 - **RETIRED**: any citation of the decision rate at ~18-22%. That
   number was a main-event-slice observation (7.7% DEC on 13
   title-heavy headliners) mistaken for the pool rate. It never
