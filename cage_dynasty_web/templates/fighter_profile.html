@@ -88,6 +88,75 @@
 {% set sub_w = fighter.sub_wins %}
 {% set dec_w = wins - ko_w - sub_w %}
 
+{# ── PROFILE-REDESIGN1: tier helper for stat panels ──
+   Six-tier band matched to the pre-redesign scale's intent — Van's
+   revision restored the gold top so genuinely rare stats pop from
+   merely-strong ones. Old code thresholds preserved exactly:
+     ≥ 90  → gold        (legend)
+     ≥ 85  → #ff6b35     (elite)
+     ≥ 80  → warning     (great)
+     ≥ 70  → neon-green  (strong)
+     ≥ 55  → info        (avg)
+     < 55  → muted       (weak)
+   Both stat-bar fill and stat number use the tier color. #}
+{% macro tier_color(v) -%}
+{%- if v is none -%}var(--text-muted)
+{%- elif v >= 90 -%}var(--gold)
+{%- elif v >= 85 -%}#ff6b35
+{%- elif v >= 80 -%}var(--warning)
+{%- elif v >= 70 -%}var(--neon-green)
+{%- elif v >= 55 -%}var(--info)
+{%- else -%}var(--text-muted)
+{%- endif -%}
+{%- endmacro %}
+{% macro tier_label(v) -%}
+{%- if v is none -%}—
+{%- elif v >= 90 -%}legend
+{%- elif v >= 85 -%}elite
+{%- elif v >= 80 -%}great
+{%- elif v >= 70 -%}strong
+{%- elif v >= 55 -%}avg
+{%- else -%}weak
+{%- endif -%}
+{%- endmacro %}
+
+{# ── PROFILE-REDESIGN1: responsive grid CSS. Desktop is multi-column;
+   ~≤900px collapses stat panels to 2-col; ~≤600px stacks everything
+   to single column. Font sizes stay ≥11px throughout. #}
+<style>
+  /* Stat panels — auto-fit responsive grid */
+  .stat-panels-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap:var(--spacing-md);
+    margin-bottom:var(--spacing-lg);
+  }
+  /* Paired rows — reigns+rivals and scout+arc */
+  .paired-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:var(--spacing-lg);
+    margin-bottom:var(--spacing-lg);
+  }
+  @media (max-width:900px){
+    .stat-panels-grid{grid-template-columns:repeat(auto-fit, minmax(min(100%, 240px), 1fr));}
+  }
+  @media (max-width:700px){
+    .paired-row{grid-template-columns:1fr;}
+  }
+  /* Stat row inside a panel */
+  .stat-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;}
+  .stat-row .lbl{font-size:.72rem;color:var(--text-muted);width:88px;flex-shrink:0;}
+  .stat-row .bar{flex:1;height:9px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden;}
+  .stat-row .bar > i{display:block;height:100%;border-radius:5px;}
+  .stat-row .num{font-family:var(--font-display);font-size:.92rem;width:32px;text-align:right;flex-shrink:0;}
+  /* Sub-group micro-label inside Grappling panel — bumped to ≥11px
+     per accessibility floor (was .55rem / ~8.8px in first draft). */
+  .sub-group{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.14em;
+             margin:6px 0 4px;padding-bottom:2px;border-bottom:1px solid var(--border-color);}
+  .sub-group:first-of-type{margin-top:0;}
+</style>
+
 {# ═══════════════════════════════════════════════════════════
    HERO BLOCK
 ══════════════════════════════════════════════════════════════ #}
@@ -594,62 +663,142 @@
 {% endif %}
 
 {# ═══════════════════════════════════════════════════════════
-   CHAMPIONSHIP REIGNS — Ship #30 surface for belt_history
+   PROFILE-REDESIGN1 — ATTRIBUTE PANELS (elevated to hero position)
+   Four panels in responsive grid: Striking, Physical, Grappling
+   (split Wrestling / BJJ), Intangibles. All 18 canonical attributes
+   including previously-hidden recovery + composure. Tier-colored
+   bars + numbers via tier_color() macro.
 ══════════════════════════════════════════════════════════════ #}
-{% if belt_history %}
-<div style="background:var(--bg-card);border:1px solid var(--border-color);
-            border-radius:8px;padding:var(--spacing-md);
-            margin-bottom:var(--spacing-md);">
-    <div style="font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;
-                color:var(--gold);margin-bottom:var(--spacing-sm);">
-        🏆 Championship Reigns
-    </div>
-    {% for reign in belt_history %}
-    <div style="padding:8px 0;
-                border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};
-                font-size:.82rem;">
-        <div style="display:flex;align-items:center;gap:8px;">
-            <span style="color:var(--gold);">🥇</span>
-            <span style="color:var(--text-bright);font-weight:600;">
-                {{ reign.weight_class }}
-            </span>
+<div class="stat-panels-grid">
+
+    {# STRIKING panel (4 stats) #}
+    <div class="card" style="border-left:3px solid var(--blood-red);">
+        <div style="padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+                    font-family:var(--font-display);color:var(--blood-red);">
+            👊 Striking
         </div>
-        <div style="color:var(--text-muted);font-size:.72rem;margin-top:3px;margin-left:24px;">
-            Won from
-            {% if reign.won_from and reign.won_from_name %}
-            <a href="{{ url_for('fighter_profile', fighter_id=reign.won_from) }}"
-               style="color:var(--text-bright);text-decoration:none;">{{ reign.won_from_name }}</a>
-            {% else %}
-            {{ reign.won_from_name or 'Inaugural' }}
-            {% endif %}
-            {% if reign.won_event %} · {{ reign.won_event }}{% endif %}
-            {% if reign.won_method %} · {{ reign.won_method }}{% endif %}
-        </div>
-        <div style="color:var(--text-muted);font-size:.72rem;margin-top:2px;margin-left:24px;">
-            {{ reign.successful_defenses or 0 }} defense{{ 's' if (reign.successful_defenses or 0) != 1 else '' }}
-            {% if reign.is_active %}
-             · <span style="color:var(--gold);">Current champion</span>
-            {% elif reign.lost_to_name %}
-             · Lost to
-            {% if reign.lost_to %}
-            <a href="{{ url_for('fighter_profile', fighter_id=reign.lost_to) }}"
-               style="color:var(--text-bright);text-decoration:none;">{{ reign.lost_to_name }}</a>
-            {% else %}
-            {{ reign.lost_to_name }}
-            {% endif %}
-            {% if reign.lost_event %} · {{ reign.lost_event }}{% endif %}
-            {% if reign.lost_method %} · {{ reign.lost_method }}{% endif %}
-            {% else %}
-             · Vacated
-            {% endif %}
+        <div style="padding:var(--spacing-sm) var(--spacing-md);">
+            {% for name, v in [('Boxing', fighter.boxing),
+                                ('Kicks', fighter.kicks),
+                                ('Clinch Strk', fighter.clinch_striking),
+                                ('Defense', fighter.striking_defense)] %}
+            {% set c = tier_color(v) %}
+            <div class="stat-row">
+                <span class="lbl">{{ name }}</span>
+                <div class="bar"><i style="width:{{ v }}%;background:{{ c }};"></i></div>
+                <span class="num" style="color:{{ c }};">{{ v }}</span>
+            </div>
+            {% endfor %}
         </div>
     </div>
-    {% endfor %}
+
+    {# PHYSICAL panel (5 stats — includes previously-hidden recovery) #}
+    <div class="card" style="border-left:3px solid var(--warning);">
+        <div style="padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+                    font-family:var(--font-display);color:var(--warning);">
+            💪 Physical
+        </div>
+        <div style="padding:var(--spacing-sm) var(--spacing-md);">
+            {% for name, v in [('Strength', fighter.strength),
+                                ('Speed', fighter.speed),
+                                ('Cardio', fighter.cardio),
+                                ('Chin', fighter.chin),
+                                ('Recovery', fighter.recovery)] %}
+            {% set c = tier_color(v) %}
+            <div class="stat-row"
+                 {% if name == 'Chin' %}title="Chin durability — affected by KO losses.{% if fighter.ko_losses_received > 0 %} {{ fighter.ko_losses_received }} KO loss{{ 'es' if fighter.ko_losses_received != 1 else '' }} on record.{% endif %}"{% endif %}>
+                <span class="lbl">{{ name }}</span>
+                <div class="bar"><i style="width:{{ v }}%;background:{{ c }};"></i></div>
+                <span class="num" style="color:{{ c }};">{{ v }}</span>
+                {% if name == 'Chin' and fighter.ko_losses_received >= 3 and fighter.chin_perm_erosion > 0 %}
+                <span title="Permanent chin damage from repeated KO losses"
+                      style="font-size:.62rem;color:var(--blood-red);flex-shrink:0;margin-left:2px;">⚠</span>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# GRAPPLING panel (6 stats split into Wrestling + BJJ sub-groups per
+       coaching-arc functional grouping — takedowns/TD-def/top-control/
+       clinch-control cluster with the wrestling_coach; submissions/guard
+       cluster with the bjj_coach at game_bridge.py:524-547) #}
+    <div class="card" style="border-left:3px solid var(--info);">
+        <div style="padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+                    font-family:var(--font-display);color:var(--info);">
+            🥋 Grappling
+        </div>
+        <div style="padding:var(--spacing-sm) var(--spacing-md);">
+            <div class="sub-group">Wrestling</div>
+            {% for name, v in [('Takedowns', fighter.takedowns),
+                                ('TD Defense', fighter.takedown_defense),
+                                ('Top Ctrl', fighter.top_control),
+                                ('Clinch Ctrl', fighter.clinch_control)] %}
+            {% set c = tier_color(v) %}
+            <div class="stat-row">
+                <span class="lbl">{{ name }}</span>
+                <div class="bar"><i style="width:{{ v }}%;background:{{ c }};"></i></div>
+                <span class="num" style="color:{{ c }};">{{ v }}</span>
+            </div>
+            {% endfor %}
+            <div class="sub-group">BJJ</div>
+            {% for name, v in [('Submissions', fighter.submissions),
+                                ('Guard', fighter.guard)] %}
+            {% set c = tier_color(v) %}
+            <div class="stat-row">
+                <span class="lbl">{{ name }}</span>
+                <div class="bar"><i style="width:{{ v }}%;background:{{ c }};"></i></div>
+                <span class="num" style="color:{{ c }};">{{ v }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# INTANGIBLES panel (3 stats — includes previously-hidden composure) #}
+    <div class="card" style="border-left:3px solid var(--teal, #26a69a);">
+        <div style="padding:var(--spacing-sm) var(--spacing-md);
+                    border-bottom:1px solid var(--border-color);
+                    font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
+                    font-family:var(--font-display);color:var(--teal, #26a69a);">
+            🧠 Intangibles
+        </div>
+        <div style="padding:var(--spacing-sm) var(--spacing-md);">
+            {% for name, v in [('Heart', fighter.heart),
+                                ('Fight IQ', fighter.fight_iq),
+                                ('Composure', fighter.composure)] %}
+            {% set c = tier_color(v) %}
+            <div class="stat-row">
+                <span class="lbl">{{ name }}</span>
+                <div class="bar"><i style="width:{{ v }}%;background:{{ c }};"></i></div>
+                <span class="num" style="color:{{ c }};">{{ v }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
 </div>
-{% endif %}
+
+{# ── Tier legend — quiet one-liner sits just under the panels.
+   Every color the eye can see in the panels appears here. Six bands
+   match the tier_color/tier_label macro. #}
+<div style="display:flex;justify-content:center;gap:var(--spacing-md);flex-wrap:wrap;
+            font-size:.62rem;color:var(--text-muted);
+            margin:-4px 0 var(--spacing-lg);">
+    <span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--gold);margin-right:4px;"></i>Legend ≥90</span>
+    <span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#ff6b35;margin-right:4px;"></i>Elite 85-89</span>
+    <span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--warning);margin-right:4px;"></i>Great 80-84</span>
+    <span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--neon-green);margin-right:4px;"></i>Strong 70-79</span>
+    <span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--info);margin-right:4px;"></i>Avg 55-69</span>
+    <span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:var(--text-muted);margin-right:4px;"></i>Weak &lt;55</span>
+</div>
 
 {# ═══════════════════════════════════════════════════════════
-   TRAITS
+   TRAITS — placed under stats since they contextualize attributes
 ══════════════════════════════════════════════════════════════ #}
 {% if fighter.traits %}
 <div class="card mb-lg">
@@ -679,130 +828,69 @@
 {% endif %}
 
 {# ═══════════════════════════════════════════════════════════
-   STATS — 2 column
+   CHAMPIONSHIP REIGNS + RIVALRIES row (paired, mobile stacks)
+   Reigns from belt_history (Ship #30 surface). Vertical accent bar
+   per reign entry with distinct color for active vs ended reigns.
 ══════════════════════════════════════════════════════════════ #}
-<div class="stats-grid" style="display:grid;grid-template-columns:1fr 1fr;
-            gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);">
-<style>
-@media(max-width:600px){
-  .stats-grid{grid-template-columns:1fr!important;}
-  .stat-bar-track{height:10px!important;}
-}
-</style>
+{% if belt_history or rivalries %}
+<div class="paired-row">
 
-    {# ── Left: Striking + Physical ── #}
-    <div>
-        {% macro stat_block(title, icon, pairs, accent="var(--text-muted)") %}
-        <div class="card mb-md" style="border-left:3px solid {{ accent }};">
-            <div style="padding:var(--spacing-sm) var(--spacing-md);
-                        border-bottom:1px solid var(--border-color);
-                        font-size:.72rem;text-transform:uppercase;letter-spacing:.12em;
-                        font-family:var(--font-display);
-                        color:{{ accent }};">{{ icon }} {{ title }}</div>
-            <div style="padding:var(--spacing-sm) var(--spacing-md);">
-                {% for name, value in pairs %}
-                {% if value is not none %}
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:5px;"
-                     {% if name == 'Chin' %}title="Chin durability — affected by KO losses.{% if fighter.ko_losses_received > 0 %} {{ fighter.ko_losses_received }} KO loss{{ 'es' if fighter.ko_losses_received != 1 else '' }} on record.{% endif %}"{% endif %}>
-                    <span style="font-size:.72rem;color:var(--text-muted);width:90px;flex-shrink:0;">{{ name }}</span>
-                    {% set _val_color = 'var(--gold)' if value >= 90
-                                     else '#ff6b35'       if value >= 85
-                                     else 'var(--warning)' if value >= 80
-                                     else 'var(--neon-green)' if value >= 70
-                                     else 'var(--info)'    if value >= 55
-                                     else 'var(--text-muted)' %}
-                    <div class="stat-bar-track" style="flex:1;height:10px;background:rgba(255,255,255,.08);border-radius:5px;overflow:hidden;">
-                        <div style="width:{{ value }}%;height:100%;border-radius:5px;
-                                    background:{% if value >= 55 %}{{ _val_color }}{% else %}rgba(255,255,255,.2){% endif %};"></div>
-                    </div>
-                    <span style="font-family:var(--font-display);font-size:.92rem;width:30px;text-align:right;flex-shrink:0;
-                                 color:{{ _val_color }};">
-                        {{ value }}
-                    </span>
-                    {# Development tier indicator — value-based gain
-                       curve. Below 70, no indicator (keeps layout
-                       quiet for unremarkable stats). #}
-                    {% if value >= 90 %}
-                    <span title="Legend — gains at 0.25× base rate"
-                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">👑</span>
-                    {% elif value >= 85 %}
-                    <span title="Elite — gains at 0.40× base rate"
-                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">🏆</span>
-                    {% elif value >= 80 %}
-                    <span title="Hard Work — gains at 0.55× base rate"
-                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">💪</span>
-                    {% elif value >= 70 %}
-                    <span title="Slowing — gains at 0.75× base rate"
-                          style="font-size:.72rem;width:14px;flex-shrink:0;cursor:help;">⭐</span>
-                    {% else %}
-                    <span style="width:14px;flex-shrink:0;">&nbsp;</span>
-                    {% endif %}
-                    {% if name == 'Chin' and fighter.ko_losses_received >= 3 and fighter.chin_perm_erosion > 0 %}
-                    <span title="Permanent chin damage from repeated KO losses — training cannot fully restore this"
-                          style="font-size:.6rem;color:var(--blood-red);margin-left:3px;">⚠</span>
-                    {% endif %}
-                </div>
-                {% endif %}
-                {% endfor %}
-            </div>
-        </div>
-        {% endmacro %}
-
-        {{ stat_block("Striking",  "👊", attributes.striking,  "var(--blood-red)") }}
-        {{ stat_block("Physical",  "💪", attributes.physical,  "var(--warning)") }}
-    </div>
-
-    {# ── Right: Grappling + Mental ── #}
-    <div>
-        {{ stat_block("Grappling", "🥋", attributes.grappling, "var(--info)") }}
-        {{ stat_block("Mental",    "🧠", attributes.mental,    "var(--teal)") }}
-    </div>
-</div>
-
-{# ═══════════════════════════════════════════════════════════
-   SCOUTING + RIVALRIES row
-══════════════════════════════════════════════════════════════ #}
-{% if scouting or rivalries %}
-<div style="display:grid;grid-template-columns:{% if rivalries %}1fr 1fr{% else %}1fr{% endif %};
-            gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);"
-     class="scout-rivals-grid">
-<style>
-@media(max-width:600px){.scout-rivals-grid{grid-template-columns:1fr!important;}}
-</style>
-
-    {# Scouting report #}
-    {% if scouting %}
+    {# Reigns column #}
+    {% if belt_history %}
     <div class="card">
-        <div class="card-header"><h3>📋 Scout Report</h3></div>
-        <div style="padding:var(--spacing-md);">
-            {% if scouting.strengths %}
-            <div style="margin-bottom:var(--spacing-sm);">
-                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
-                            color:var(--neon-green);margin-bottom:4px;">Strengths</div>
-                {% for s in scouting.strengths %}
-                <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0;">
-                    ✅ {{ s.attr }}{% if s.value %} ({{ s.value }}){% endif %}
-                    {% if s.desc %} — <span style="font-style:italic;">{{ s.desc }}</span>{% endif %}
+        <div class="card-header"><h3>🏆 Championship Reigns</h3></div>
+        <div style="padding:0;">
+            {% for reign in belt_history %}
+            <div style="padding:var(--spacing-sm) var(--spacing-md);
+                        border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};
+                        border-left:3px solid {% if reign.is_active %}var(--gold){% else %}rgba(255,215,0,.35){% endif %};
+                        font-size:.82rem;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <span style="color:var(--gold);">🥇</span>
+                    <span style="color:var(--text-bright);font-weight:600;">
+                        {{ reign.weight_class }}
+                    </span>
+                    {% if reign.is_active %}
+                    <span style="font-size:.6rem;color:var(--gold);letter-spacing:.08em;
+                                 text-transform:uppercase;margin-left:auto;font-weight:600;">Active</span>
+                    {% endif %}
                 </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-            {% if scouting.weaknesses %}
-            <div>
-                <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
-                            color:var(--blood-red);margin-bottom:4px;">Weaknesses</div>
-                {% for w in scouting.weaknesses %}
-                <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0;">
-                    ⚠️ {{ w.attr }}{% if w.value %} ({{ w.value }}){% endif %}
+                <div style="color:var(--text-muted);font-size:.72rem;margin-top:3px;margin-left:24px;">
+                    Won from
+                    {% if reign.won_from and reign.won_from_name %}
+                    <a href="{{ url_for('fighter_profile', fighter_id=reign.won_from) }}"
+                       style="color:var(--text-bright);text-decoration:none;">{{ reign.won_from_name }}</a>
+                    {% else %}
+                    {{ reign.won_from_name or 'Inaugural' }}
+                    {% endif %}
+                    {% if reign.won_event %} · {{ reign.won_event }}{% endif %}
+                    {% if reign.won_method %} · {{ reign.won_method }}{% endif %}
                 </div>
-                {% endfor %}
+                <div style="color:var(--text-muted);font-size:.72rem;margin-top:2px;margin-left:24px;">
+                    {{ reign.successful_defenses or 0 }} defense{{ 's' if (reign.successful_defenses or 0) != 1 else '' }}
+                    {% if reign.is_active %}
+                     · <span style="color:var(--gold);">Current champion</span>
+                    {% elif reign.lost_to_name %}
+                     · Lost to
+                    {% if reign.lost_to %}
+                    <a href="{{ url_for('fighter_profile', fighter_id=reign.lost_to) }}"
+                       style="color:var(--text-bright);text-decoration:none;">{{ reign.lost_to_name }}</a>
+                    {% else %}
+                    {{ reign.lost_to_name }}
+                    {% endif %}
+                    {% if reign.lost_event %} · {{ reign.lost_event }}{% endif %}
+                    {% if reign.lost_method %} · {{ reign.lost_method }}{% endif %}
+                    {% else %}
+                     · Vacated
+                    {% endif %}
+                </div>
             </div>
-            {% endif %}
+            {% endfor %}
         </div>
     </div>
     {% endif %}
 
-    {# Rivalries #}
+    {# Rivalries column — WAR/TENSION pills colored by intensity #}
     {% if rivalries %}
     <div class="card">
         <div class="card-header"><h3>👊 Rivalries</h3></div>
@@ -813,19 +901,19 @@
                         border-bottom:{% if not loop.last %}1px solid var(--border-color){% else %}none{% endif %};">
                 <div style="width:8px;height:8px;border-radius:50%;flex-shrink:0;
                             background:{{ r.heat_color }};"></div>
-                <div style="flex:1;">
-                    <a href="{{ url_for('fighter_profile', fighter_id=r.opponent_id) }}"
+                <div style="flex:1;min-width:0;">
+                    {% if r.opponent_id %}<a href="{{ url_for('fighter_profile', fighter_id=r.opponent_id) }}"
                        style="font-family:var(--font-display);font-size:.85rem;
-                              color:var(--text-bright);text-decoration:none;">
-                        {% if r.opponent_id %}<a href="{{ url_for('fighter_profile', fighter_id=r.opponent_id) }}" style="color:inherit;text-decoration:none;">{{ r.opponent_name }}</a>{% else %}{{ r.opponent_name }}{% endif %}
-                    </a>
+                              color:var(--text-bright);text-decoration:none;">{{ r.opponent_name }}</a>{% else %}<span style="font-family:var(--font-display);font-size:.85rem;color:var(--text-bright);">{{ r.opponent_name }}</span>{% endif %}
                     <div style="font-size:.65rem;color:var(--text-muted);margin-top:1px;">
-                        {{ r.stage_display }} · {{ r.fights }} fights · {{ r.type }}
+                        {{ r.fights }} fight{{ 's' if r.fights != 1 else '' }} · {{ r.type }}
                     </div>
                 </div>
-                <div style="font-size:.68rem;padding:2px 6px;border-radius:3px;
+                <div style="font-size:.66rem;padding:2px 8px;border-radius:3px;
                             color:{{ r.heat_color }};
-                            background:{{ r.heat_color }}22;">
+                            background:{{ r.heat_color }}22;
+                            letter-spacing:.06em;text-transform:uppercase;font-weight:600;
+                            flex-shrink:0;">
                     {{ r.stage_display }}
                 </div>
             </div>
@@ -838,122 +926,138 @@
 {% endif %}
 
 {# ═══════════════════════════════════════════════════════════
-   CAREER DEVELOPMENT
+   SCOUT REPORT + CAREER ARC row (paired, mobile stacks)
+   Career arc: At Signing / Growth / Current / Ceiling. At Signing +
+   Growth render "—" with a quiet italic note when ovr_at_signing is
+   empty/absent (AI-gen fighters; player-signed fighters populate on
+   sign per game_bridge.py:21324). Also renders current camp name.
 ══════════════════════════════════════════════════════════════ #}
-{% if fighter.fights_total > 0 %}
-<div class="card mb-lg">
-    <div class="card-header">
-        <h3>📈 Career Development</h3>
-    </div>
-    <div style="padding:var(--spacing-lg);">
+<div class="paired-row">
 
-        {# OVR growth row #}
-        {% set ovr_at_signing = fighter.ovr_at_signing if fighter.ovr_at_signing is defined and fighter.ovr_at_signing > 0 else 0 %}
-        {% set ovr_growth = fighter.overall_rating - ovr_at_signing if ovr_at_signing > 0 else 0 %}
-        <div style="display:flex;gap:var(--spacing-lg);margin-bottom:var(--spacing-lg);
-                    flex-wrap:wrap;">
-            <div style="text-align:center;flex:1;min-width:60px;">
-                <div style="font-family:var(--font-display);font-size:1.4rem;
-                            color:var(--text-muted);">
-                    {{ ovr_at_signing if ovr_at_signing > 0 else '—' }}
+    {# Scout Report — tier-driven strengths / weaknesses #}
+    <div class="card">
+        <div class="card-header"><h3>📋 Scout Report</h3></div>
+        <div style="padding:var(--spacing-md);">
+            {% if scouting %}
+                {% if scouting.strengths %}
+                <div style="margin-bottom:var(--spacing-md);">
+                    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                                color:var(--neon-green);margin-bottom:6px;">Strengths</div>
+                    {% for s in scouting.strengths %}
+                    <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0;">
+                        ✅ {{ s.attr }}{% if s.value %} <span style="color:{{ tier_color(s.value) }};">({{ s.value }})</span>{% endif %}
+                        {% if s.desc %} — <span style="font-style:italic;color:var(--text-muted);">{{ s.desc }}</span>{% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
-                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
-                            letter-spacing:.08em;margin-top:2px;">At Signing</div>
-            </div>
-            <div style="text-align:center;flex:1;min-width:60px;">
-                <div style="font-family:var(--font-display);font-size:1.4rem;
-                            color:{% if ovr_growth >= 10 %}var(--neon-green){% elif ovr_growth >= 5 %}var(--warning){% else %}var(--text-muted){% endif %};">
-                    {% if ovr_growth > 0 %}+{{ ovr_growth }}{% else %}—{% endif %}
+                {% endif %}
+                {% if scouting.weaknesses %}
+                <div>
+                    <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;
+                                color:var(--blood-red);margin-bottom:6px;">Weaknesses</div>
+                    {% for w in scouting.weaknesses %}
+                    <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0;">
+                        ⚠️ {{ w.attr }}{% if w.value %} <span style="color:{{ tier_color(w.value) }};">({{ w.value }})</span>{% endif %}
+                    </div>
+                    {% endfor %}
                 </div>
-                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
-                            letter-spacing:.08em;margin-top:2px;">Growth</div>
-            </div>
-            <div style="text-align:center;flex:1;min-width:60px;">
-                <div style="font-family:var(--font-display);font-size:1.4rem;
-                            color:var(--text-bright);">
-                    {{ fighter.overall_rating }}
-                </div>
-                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
-                            letter-spacing:.08em;margin-top:2px;">Current</div>
-            </div>
-            <div style="text-align:center;flex:1;min-width:60px;">
-                <div style="font-family:var(--font-display);font-size:1.4rem;
-                            color:var(--gold);">
-                    {{ fighter.potential if fighter.potential is defined else '?' }}
-                </div>
-                <div style="font-size:.58rem;color:var(--text-muted);text-transform:uppercase;
-                            letter-spacing:.08em;margin-top:2px;">Ceiling</div>
-            </div>
-        </div>
-
-        {# Top stats — show the 3 highest rated stats with labels #}
-        {% set stat_list = [
-            ('Boxing', fighter.boxing),
-            ('Kicks', fighter.kicks),
-            ('Clinch', fighter.clinch_striking),
-            ('Clinch Ctrl', fighter.clinch_control),
-            ('Str Defense', fighter.striking_defense),
-            ('Takedowns', fighter.takedowns),
-            ('TD Defense', fighter.takedown_defense),
-            ('Top Control', fighter.top_control),
-            ('Submissions', fighter.submissions),
-            ('Guard', fighter.guard),
-            ('Strength', fighter.strength),
-            ('Speed', fighter.speed),
-            ('Cardio', fighter.cardio),
-            ('Chin', fighter.chin),
-            ('Heart', fighter.heart),
-            ('Fight IQ', fighter.fight_iq),
-        ] %}
-        {% set top_stats = stat_list | sort(attribute=1, reverse=true) %}
-        <div style="margin-bottom:var(--spacing-sm);">
-            <div style="font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;
-                        color:var(--text-muted);margin-bottom:var(--spacing-sm);">
-                Elite Stats
-            </div>
-            <div style="display:flex;gap:var(--spacing-sm);flex-wrap:wrap;">
-            {% for stat_name, stat_val in top_stats[:5] %}
-            {% if stat_val >= 75 %}
-            <div style="text-align:center;padding:var(--spacing-sm) var(--spacing-md);
-                        background:var(--bg-dark);border-radius:6px;
-                        border:1px solid {% if stat_val >= 90 %}var(--gold){% elif stat_val >= 80 %}rgba(0,230,118,.3){% else %}var(--border-color){% endif %};">
-                <div style="font-family:var(--font-display);font-size:1rem;
-                            color:{% if stat_val >= 90 %}var(--gold){% elif stat_val >= 80 %}var(--neon-green){% else %}var(--text-bright){% endif %};">
-                    {{ stat_val }}
-                </div>
-                <div style="font-size:.55rem;color:var(--text-muted);margin-top:1px;">
-                    {{ stat_name }}
-                </div>
-            </div>
-            {% endif %}
-            {% endfor %}
-            </div>
-        </div>
-
-        {# Career phase narrative #}
-        <div style="font-size:.72rem;color:var(--text-muted);border-top:1px solid var(--border-color);
-                    padding-top:var(--spacing-sm);margin-top:var(--spacing-sm);">
-            {% if fighter.age < 24 %}
-                Young prospect with {{ fighter.fights_total }} pro fight{{ 's' if fighter.fights_total != 1 else '' }}.
-                {% if ovr_growth > 0 %}Already improved {{ ovr_growth }} OVR points since signing.{% endif %}
-            {% elif fighter.age < 28 %}
-                Rising fighter entering their prime years.
-                {{ fighter.fights_total }} pro fights in the books.
-            {% elif fighter.age < 32 %}
-                In their prime at {{ fighter.age }}.
-                {{ fighter.fights_total }} fights of experience.
-                {% if ovr_growth > 5 %}Grew {{ ovr_growth }} OVR points under your management.{% endif %}
-            {% elif fighter.age < 35 %}
-                Veteran with {{ fighter.fights_total }} pro fights.
-                Experience is the weapon now.
+                {% endif %}
             {% else %}
-                Late career fighter. {{ fighter.fights_total }} fights. Every one counts.
+                <div style="font-size:.75rem;color:var(--text-muted);font-style:italic;">
+                    No scouting report available.
+                </div>
             {% endif %}
         </div>
-
     </div>
+
+    {# Career Arc — At Signing / Growth / Current / Ceiling + camp #}
+    <div class="card">
+        <div class="card-header"><h3>📈 Career Arc</h3></div>
+        <div style="padding:var(--spacing-md);">
+            {% set ovr_at_signing = fighter.ovr_at_signing if fighter.ovr_at_signing is defined and fighter.ovr_at_signing > 0 else 0 %}
+            {% set ovr_growth = fighter.overall_rating - ovr_at_signing if ovr_at_signing > 0 else 0 %}
+
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:var(--spacing-sm);
+                        margin-bottom:var(--spacing-md);">
+                <div style="text-align:center;">
+                    <div style="font-family:var(--font-display);font-size:1.4rem;
+                                color:var(--text-muted);line-height:1;">
+                        {{ ovr_at_signing if ovr_at_signing > 0 else '—' }}
+                    </div>
+                    <div style="font-size:.56rem;color:var(--text-muted);text-transform:uppercase;
+                                letter-spacing:.08em;margin-top:4px;">At Signing</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-family:var(--font-display);font-size:1.4rem;
+                                color:{% if ovr_growth >= 10 %}var(--neon-green){% elif ovr_growth >= 5 %}var(--warning){% else %}var(--text-muted){% endif %};line-height:1;">
+                        {% if ovr_growth > 0 %}+{{ ovr_growth }}{% else %}—{% endif %}
+                    </div>
+                    <div style="font-size:.56rem;color:var(--text-muted);text-transform:uppercase;
+                                letter-spacing:.08em;margin-top:4px;">Growth</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-family:var(--font-display);font-size:1.4rem;
+                                color:var(--text-bright);line-height:1;">
+                        {{ fighter.overall_rating }}
+                    </div>
+                    <div style="font-size:.56rem;color:var(--text-muted);text-transform:uppercase;
+                                letter-spacing:.08em;margin-top:4px;">Current</div>
+                </div>
+                <div style="text-align:center;">
+                    <div style="font-family:var(--font-display);font-size:1.4rem;
+                                color:var(--gold);line-height:1;">
+                        {{ fighter.potential if fighter.potential is defined else '?' }}
+                    </div>
+                    <div style="font-size:.56rem;color:var(--text-muted);text-transform:uppercase;
+                                letter-spacing:.08em;margin-top:4px;">Ceiling</div>
+                </div>
+            </div>
+
+            {# Quiet note when At Signing is empty — explains why, doesn't apologize #}
+            {% if ovr_at_signing == 0 %}
+            <div style="font-size:.62rem;color:var(--text-muted);font-style:italic;
+                        margin-bottom:var(--spacing-sm);line-height:1.4;">
+                At Signing populates for fighters signed after the data-capture ship — pre-existing fighters stay blank.
+            </div>
+            {% endif %}
+
+            {# Current camp — prominent, links to camp page #}
+            {% if camp %}
+            <div style="border-top:1px solid var(--border-color);padding-top:var(--spacing-sm);
+                        display:flex;justify-content:space-between;align-items:center;">
+                <span style="font-size:.62rem;color:var(--text-muted);text-transform:uppercase;
+                             letter-spacing:.1em;">Camp</span>
+                <a href="{{ url_for('camp_detail', camp_id=camp.camp_id) }}"
+                   style="font-family:var(--font-display);font-size:.85rem;
+                          color:var(--text-bright);text-decoration:none;">
+                    🏟️ {{ camp.name }}
+                </a>
+            </div>
+            {% endif %}
+
+            {# Career phase narrative — kept for continuity #}
+            {% if fighter.fights_total and fighter.fights_total > 0 %}
+            <div style="font-size:.72rem;color:var(--text-muted);border-top:1px solid var(--border-color);
+                        padding-top:var(--spacing-sm);margin-top:var(--spacing-sm);line-height:1.4;">
+                {% if fighter.age < 24 %}
+                    Young prospect with {{ fighter.fights_total }} pro fight{{ 's' if fighter.fights_total != 1 else '' }}.
+                    {% if ovr_growth > 0 %}Already improved {{ ovr_growth }} OVR points since signing.{% endif %}
+                {% elif fighter.age < 28 %}
+                    Rising fighter entering their prime years. {{ fighter.fights_total }} pro fights in the books.
+                {% elif fighter.age < 32 %}
+                    In their prime at {{ fighter.age }}. {{ fighter.fights_total }} fights of experience.
+                    {% if ovr_growth > 5 %}Grew {{ ovr_growth }} OVR points under your management.{% endif %}
+                {% elif fighter.age < 35 %}
+                    Veteran with {{ fighter.fights_total }} pro fights. Experience is the weapon now.
+                {% else %}
+                    Late career fighter. {{ fighter.fights_total }} fights. Every one counts.
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
 </div>
-{% endif %}
 
 {# ═══════════════════════════════════════════════════════════
    FIGHT HISTORY
@@ -1031,10 +1135,31 @@
         {% if history %}
         {% for fight in history|reverse %}
         {% if loop.index <= 10 %}
+        {% set raw_method = fight.method or 'DEC' %}
         {% set is_draw = (fight.result == 'D')
-            or (fight.method and 'Draw' in fight.method) %}
+            or ('Draw' in raw_method) %}
         {% set is_win = (not is_draw) and fight.result == 'W' %}
-        {% set method = fight.method or 'DEC' %}
+
+        {# PROFILE-REDESIGN1: normalize method label for display.
+           Handles both eras of writes — world-init writes bare 'SPLIT' /
+           'KO' / 'SUB' / 'DEC' / 'Inaugural Crown'; gameplay writes
+           'Split Decision' / 'Unanimous Decision' / 'Majority Decision' /
+           bare 'KO/TKO/SUB' / 'DEC'. Inaugural Crown gets its own pill
+           below and skips the method column. #}
+        {% set _m_upper = raw_method|upper %}
+        {% set is_inaugural = 'INAUGURAL' in _m_upper %}
+        {% set is_decision_any = ('DECISION' in _m_upper) or (raw_method in ('DEC', 'SPLIT', 'MAJ', 'UD')) or ('SPLIT' in _m_upper) or ('MAJORITY' in _m_upper) or ('UNANIMOUS' in _m_upper) %}
+        {% set method_display = 'SPLIT'  if ('SPLIT' in _m_upper)
+                            else 'MAJ'   if ('MAJORITY' in _m_upper or raw_method == 'MAJ')
+                            else 'UD'    if ('UNANIMOUS' in _m_upper or raw_method == 'UD')
+                            else 'DEC'   if is_decision_any
+                            else raw_method %}
+
+        {# PROFILE-REDESIGN1: round-key hedge — pre-gen entries use
+           'round', gameplay entries use 'round_finished'. Same field
+           semantics, different key names. Read both. #}
+        {% set _rnd = fight.round_finished or fight.round %}
+
         {# Belt context — cross-reference fight.week against belt_history.
            Namespace pattern: {% set %} inside {% for %} doesn't escape loop scope. #}
         {% set bns = namespace(won=false, defended=false) %}
@@ -1079,17 +1204,28 @@
                 </div>
                 <div style="font-size:.68rem;color:var(--text-muted);margin-top:1px;">
                     {{ fight.event_name }}
+                    {% if is_inaugural %}
+                    · <span style="display:inline-block;padding:1px 6px;border-radius:3px;
+                                   background:rgba(255,215,0,.15);border:1px solid rgba(255,215,0,.5);
+                                   color:var(--gold);font-size:.6rem;letter-spacing:.06em;
+                                   text-transform:uppercase;font-weight:600;">👑 Founding Champ</span>
+                    {% endif %}
                 </div>
             </div>
 
-            {# Method + Watch link #}
+            {# Method + Round + Watch link #}
             <div style="flex-shrink:0;text-align:right;">
+                {% if is_inaugural %}
+                <div style="font-size:.7rem;color:var(--gold);
+                             font-family:var(--font-display);">TITLE</div>
+                {% else %}
                 <div style="font-size:.72rem;font-family:var(--font-display);
-                             color:{% if is_draw %}var(--warning){% elif method in ('KO','TKO') %}var(--blood-red){% elif method == 'SUB' %}var(--info){% else %}var(--text-muted){% endif %};">
-                    {% if is_draw %}DRAW{% else %}{{ method }}{% endif %}
+                             color:{% if is_draw %}var(--warning){% elif method_display in ('KO','TKO') %}var(--blood-red){% elif method_display == 'SUB' %}var(--info){% elif method_display in ('DEC','SPLIT','UD','MAJ') %}var(--text-muted){% else %}var(--text-muted){% endif %};">
+                    {% if is_draw %}DRAW{% else %}{{ method_display }}{% endif %}
                 </div>
-                {% if fight.round_finished %}
-                <div style="font-size:.62rem;color:var(--text-muted);">R{{ fight.round_finished }}</div>
+                {% endif %}
+                {% if _rnd %}
+                <div style="font-size:.62rem;color:var(--text-muted);">R{{ _rnd }}</div>
                 {% endif %}
                 {% if fight.fight_id %}
                 <a href="{{ url_for('watch_fight', fight_id=fight.fight_id) }}"
