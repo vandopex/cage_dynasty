@@ -14997,12 +14997,22 @@ class GameBridge:
         else:
             headline = f"🚨 {name} knocked out for the {ko_losses}{'rd' if ko_losses==3 else 'th'} time. Serious durability questions."
 
-        self._news_items.insert(0, {
-            "headline":   headline,
-            "category":   "injury",
-            "week":       week,
-            "fighter_id": fighter.fighter_id,
-        })
+        # NEWS-CHIN-FILTER1: only emit durability news for "notable"
+        # fighters (player-owned OR current champion OR watchlisted).
+        # Broad-world AI KOs generated feed noise. Chin stat erosion
+        # above still runs for every fighter — only the news emit is
+        # gated.
+        _is_player = self._game_state.is_player_camp(
+            getattr(fighter, 'camp_id', None))
+        _is_champion = bool(getattr(fighter, 'is_champion', False))
+        _is_watchlisted = fighter.fighter_id in self._watchlist
+        if _is_player or _is_champion or _is_watchlisted:
+            self._news_items.insert(0, {
+                "headline":   headline,
+                "category":   "injury",
+                "week":       week,
+                "fighter_id": fighter.fighter_id,
+            })
 
         self._clear_cache()
 
