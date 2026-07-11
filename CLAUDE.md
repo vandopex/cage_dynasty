@@ -69,6 +69,12 @@ Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron
 
 | Date | Ship | Commit | What |
 |---|---|---|---|
+| 2026-07-11 | TITLE-SHOT-GATE1 | b069dad | Player challenges to the reigning champion had no eligibility gate and booked as non-title fights (hardcoded `is_title_fight=False`). Gated champion-challenges through `matchmaking.is_title_eligible` (top-5 + 3 pro fights, record fallbacks), derived `is_title_fight` from `division.champion_id` at booking (not rank proximity — anti-fire tested), hid Challenge button when ineligible with server-side gate as the real enforcement. Player-challenge path only; AI `_book_title_fight` untouched (filed for belt epic). Deployed. |
+| 2026-07-11 | EVENT-DETAIL-WC-LABEL1 | f00afcb | `event_detail.html` fight boxes omitted the weight-class pill that `week_results.html` renders. Mirrored the existing pill (3-letter uppercase, links to rankings), guarded for missing `weight_class`. Template-only; data was already populated on every fight record (zero data gap). Retroactive — all events, existing and new. Deployed. |
+| 2026-07-11 | STREAK-INAUGURAL-FILTER1 | 907ad19 | Win/best-win-streak loops counted the synthetic "Inaugural Crown" tombstone (`world_init.py:1275`) as a real win, inflating founding champions' streaks by 1 (the "14 on a 13-0 record" bug). Filtered `method=="Inaugural Crown"` from both loops at `game_bridge.py:7152`/`:7175`. Compute-time only — no `fight_history` mutation, no `wins`/record touch. Retroactive on existing saves. Deployed. |
+| 2026-07-11 | OVR-AT-SIGNING-CAPTURE1 | d4e16fb | `ovr_at_signing` was only captured at the two player-sign wrappers; world-gen and AI-signed fighters never got it, leaving the profile career-arc "At Signing / Growth" cells blank. Seeded world-creation baseline in `world_init.py` fdata block; added first-write-wins guard in `game_state._sign_fighter_to_camp` covering all AI + player sign callers. Existing player-sign wrappers still overwrite (intentional "OVR when signed to your camp" semantic). Forward-only. Deployed. |
+| 2026-07-11 | PROFILE-REDESIGN1 | 3e8d04f | `fighter_profile.html` restructure: stats-hero layout, four tier-colored attribute panels (Striking, Physical, Grappling with Wrestling/BJJ sub-groups, Intangibles), added previously-hidden `recovery` + `composure`, tier-colored bars+numbers with restored gold ≥90 elite band (6-tier scale), championship-reign arc, rivalries paired row, tier-driven scout report, career-arc row, mobile breakpoints. Fight history: round-key hedge (`fight.round_finished or fight.round` — pre-gen fights now show their round), decision-type display, Inaugural Crown pill. Template-only. Deployed. |
+| 2026-07-11 | FOTN-PERSIST-FIX1 | 2794aee | `career_fotn_awards` was incremented but not declared on `FighterRecord`, so it dropped every save round-trip; the profile FOTN badge never rendered persistently. Added field declaration + `to_dict`/`from_dict` serialization with backwards-compat default. Forward-only — new saves persist correctly; existing saves stay at whatever count they had at that boundary. Deployed. |
 | 2026-07-10 | MATCHMAKING-ENFORCE1 | 18a2438 | Score-driven opponent selection in `_build_card_for_week`'s "1 ranked left" branch, replaces `random.choice(unranked_pool)`. 75/25 competitive/step-up via 3 named module-level constants. Deployed. |
 | 2026-07-10 | NEWS-CHIN-FILTER1 | afa26f7 | Chin/durability news gate at `_apply_chin_erosion._news_items.insert` — emits only for player-owned OR current champion OR watchlisted fighters. Chin stat erosion still runs for every fighter; only the news emit is gated. Deployed. |
 | 2026-07-10 | GROUND-STOPPAGE-FIX1 | 40dd8d5 | Accumulated-damage TKO respects chin/heart/composure via `_tko_durability_mult`; TKO_GNP threshold 25.0→18.0, TKO_STANDING 20.0→15.0. Deployed non-regressive. **Founding premise (a ~22%→40% DEC gap) was false — the AI-vs-AI pool rate was already 44.6% pre-fix per the POOL-DEC-RATE1 extraction. Net live effect on the pool is unmeasured; treat as safe (in-band) but not as "closing a gap that didn't exist."** |
@@ -221,6 +227,29 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
 `_GAMEPLAN_DEBUG = False`) on the next `game_bridge.py` touch.
 
 **Queued, not scheduled:**
+- **PRE-GEN WORLD COHERENCE epic (HIGH, filed 2026-07-11).** World-init generates
+  self-contradicting title histories that no live-play code path can fix. Read-only
+  diagnostic first, then scoped ships. Three known threads:
+  - **Belt-state consistency.** Strawweight evidence on a week-9 save: a fighter
+    shown defending a belt he'd already lost per belt_history; two fighters both
+    claiming the active title; ladder view disagreeing with the reign records.
+    Suspected root cause: the post-gen `TITLE-TRANSFER-FIX1` (`5e4bbe1`, 2026-07-03)
+    that closed the AI-champion-doesn't-lose-belt bug was never ported to the
+    world-init generator — parallel unfixed copy in `world_init.py`. Also flagged:
+    `_book_title_fight` (AI title-booking path) needs a rank-discipline audit
+    (`is_title_eligible` / `find_title_challenger` exist in `matchmaking.py` but
+    are dead-in-runtime for the web app; AI title-booking has its own separate
+    logic that hasn't been audited against them).
+  - **Rematch rules parity.** Pre-gen opponent selection may not match post-gen's
+    rematch discipline (16w hard minimum, 20w for title rematches, intervening-fight
+    guard, contender-earned-title-shot guard — shipped `07491d1` 2026-06-22 for the
+    live paths and mirrored into world-gen at that time, but re-verify given the
+    belt evidence above).
+  - **Timing/spacing.** Pre-gen fights sometimes cluster rather than realistically
+    spacing across the simulated years.
+  - Discipline: forward-only (only affects fresh saves). Diagnostic first — do NOT
+    scope fixes cold. When picked up, this is a multi-session arc, not a single
+    ship.
 - **COACH-GRAPPLE-SPLIT1** — split the `grappling_coach` training bucket into
   distinct wrestling and BJJ archetypes. Sandman-grade fighter-identity work
   deferred from the 2026-07-03 coach arc.
@@ -230,13 +259,66 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
 - **EC1 economy arc** — coach salaries are now differentiated by rating
   (post-CURVE1), giving budget vs. elite a real tradeoff. Downstream: fight
   purses, sponsorship depth, facility ROI curves.
+- **FOTN full-fidelity scoring (unblocked, small).** Current FOTN badge reads a
+  lighter subset of per-round stats. The full per-round data (sig strikes /
+  takedowns / sub attempts / control time) already flows through
+  `all_round_stats` on every engine result and is aggregated into `career_*`
+  fields on `_fighter_data` — the plumbing that would have been a foundation
+  ship is already built. Upgrading FOTN scoring to consume the full-fidelity
+  slice is a small consumer change, not a plumbing project. See per-round
+  persistence reframe below.
 - **SUB-rate undershoot tuning** — see `memory/sub_rate_undershoots_2026-04-28.md`.
   Pre-verify still applies against the current engine-tuning arc before shipping.
 - **Older Bug X items** filed pre-multiuser (Bug H, Bug C second path, Bug T, Bug Y).
   Re-verify each against current code before shipping — several may already be closed
   by the July ship cascade.
 
+**Per-round persistence reframe (filed 2026-07-11):**
+What looked like one big "per-round persistence project" (foundation-level, weeks
+of work) is actually **two separate gaps wearing one umbrella**, and the larger
+half is already built:
+
+- **DONE (proven live):** sig strikes, takedowns, sub attempts, control time.
+  Engine computes per-round via `RoundStats` (`fight_engine.py:621-660`), carries
+  them as list-of-dicts on the result (`fight_integration.py:1815`, `.to_dict()`
+  conversion → `NarratedFightResult.fighter1_stats`), and the bridge aggregates
+  into `career_strikes` / `career_takedowns` / `career_sub_attempts` /
+  `career_control_time` on `_fighter_data` via `_accumulate_career_stats`
+  (`game_bridge.py:14981`) — called from all three fight-resolution paths
+  (`_simulate_card_fights:13747`, `_simulate_ai_fights_week:14255`,
+  `_run_real_engine:18069`). Verified on 2026-07-03 local `bridge_van_autosave`:
+  114/287 fighters carry `career_strikes > 0`, top-5 all active at 78-98 strikes,
+  Record Book renders full populated lists. **Foundation is complete for this
+  half.** Consumers: Record Book (works), FOTN full-fidelity scoring (unblocked).
+- **REMAINING (the actual gap):** finish position + specialty method label.
+  These are NOT on the fight-record write path — CLAUDE.md's 2026-07-10 note
+  on finish-composition already flagged this. Smaller, isolated instrumentation
+  ship — persist finish position + specialty method label in
+  `completed_events[].fights[]` in `_run_real_engine` /
+  `_simulate_ai_fights_week`. Same file, same site, similar shape. Unblocks
+  finish-composition measurement + the profile's specialty-method display.
+
+Practical implication: do NOT scope FOTN scoring or Record Book granular stats
+as "part of a foundation project." Both are one small consumer/plumbing change
+away. Finish-composition remains the only genuine per-round instrumentation
+ship on the board.
+
 **Recently reconciled (closed):**
+- **Record Book "No records yet" for granular stats — RESOLVED not-a-bug
+  (2026-07-11).** Original symptom: sig-strikes / takedowns / sub-attempts
+  categories showed the empty-branch placeholder despite the standard
+  wins/KOs/subs categories rendering. Diagnostic traced the full pipeline
+  end-to-end and found every layer wired: engine → carrier → aggregator
+  → career fields → Record Book read → template render. Grep on the
+  2026-07-03 local `bridge_van_autosave.json` confirmed 114/287 active
+  fighters carry `career_strikes > 0` (top-5 all active, values 78-98);
+  live PA save renders the full populated top-5 lists per Van's browser
+  verification. The original "No records yet" reading was honest reporting
+  on a thin/early save that hadn't accumulated enough live-play fights;
+  it self-resolved as the world played out. Closed as not-a-bug. Also
+  see the per-round persistence reframe above — this diagnostic bought
+  the reframe that stopped a phantom "foundation project" from being
+  filed.
 - **Judo/Sambo coach bucket routes to wrestling** — JUDO-SAMBO-BUCKET-DIAG1
   (2026-07-05, `outputs/judo_sambo_bucket_diag1.md`) traced the outlier: the
   `_SPECIALTY_ALIASES` table sent `judo`/`sambo` to `clinch_coach` while every
@@ -291,15 +373,18 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
   thin-week candidate pools) is unaddressed. Design call, not a bug — either
   loosen threshold, thicken matchmaking density in thin weeks, or leave the
   cosmetic backfill as-is.
-- **Finish-composition data instrumentation (filed 2026-07-10).** The
-  narrative-feel question ("does every finish read as back-mount GnP?")
-  is unmeasurable from the save today: finish position isn't persisted
-  and specialty method labels collapse to bare KO/TKO/SUB/DEC before
-  write. If finish-composition ever needs measuring, it's an
-  instrumentation ship — persist finish position + specialty method
-  label in the `completed_events[].fights[]` write path in
+- **Finish-composition data instrumentation (filed 2026-07-10, re-scoped
+  2026-07-11).** The narrative-feel question ("does every finish read as
+  back-mount GnP?") is unmeasurable from the save today: finish position
+  isn't persisted and specialty method labels collapse to bare
+  KO/TKO/SUB/DEC before write. If finish-composition ever needs measuring,
+  it's an instrumentation ship — persist finish position + specialty
+  method label in the `completed_events[].fights[]` write path in
   `_run_real_engine` / `_simulate_ai_fights_week`. Until then it's a
-  Van-eyeball call on narrated fights, not a data question.
+  Van-eyeball call on narrated fights, not a data question. Note: this
+  is the **only genuine per-round persistence gap remaining** post-reframe;
+  the sig-strikes/takedowns/sub-attempts half is proven live. See the
+  per-round persistence reframe under Top-of-backlog.
 
 # CAGE DYNASTY — Claude Code instructions
 
