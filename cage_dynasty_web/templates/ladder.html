@@ -148,16 +148,26 @@
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
         {% if player_in_division and player_fighter and not is_player %}
             {% if player_available and available %}
-            <form action="{{ url_for('challenge_fighter',
-                            player_fighter_id=player_fighter.fighter_id,
-                            target_id=fid) }}" method="POST">
-                <button type="submit"
-                        style="padding:4px 10px;font-family:var(--font-display);font-size:.72rem;
-                               background:rgba(0,230,118,.15);border:1px solid var(--neon-green);
-                               border-radius:4px;color:var(--neon-green);cursor:pointer;">
-                    Challenge
-                </button>
-            </form>
+                {# TITLE-SHOT-GATE1: hide Challenge on the champion when player
+                   isn't title-eligible. Server-side challenge_fighter is the
+                   real enforcement; this saves the wasted click. #}
+                {% if fighter.is_champion and not player_title_eligible %}
+                <span style="font-size:.62rem;color:var(--text-muted);"
+                      title="Top-5 rank + 3 pro fights, OR 8+ career wins, OR 6+ fights at 70%+ win rate.">
+                    🔒 Title shot not earned
+                </span>
+                {% else %}
+                <form action="{{ url_for('challenge_fighter',
+                                player_fighter_id=player_fighter.fighter_id,
+                                target_id=fid) }}" method="POST">
+                    <button type="submit"
+                            style="padding:4px 10px;font-family:var(--font-display);font-size:.72rem;
+                                   background:rgba(0,230,118,.15);border:1px solid var(--neon-green);
+                                   border-radius:4px;color:var(--neon-green);cursor:pointer;">
+                        Challenge
+                    </button>
+                </form>
+                {% endif %}
             {% elif not player_available %}
             <span style="font-size:.62rem;color:var(--text-muted);">You're unavailable</span>
             {% else %}

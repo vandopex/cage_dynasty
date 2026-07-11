@@ -12704,6 +12704,38 @@ class GameBridge:
 
         player_rank = self._get_fighter_rank(player_fighter)
 
+        # TITLE-SHOT-GATE1: if target is the reigning champion, require the
+        # challenger to be title-eligible per matchmaking.is_title_eligible
+        # (top-5 rank + ≥3 pro fights, OR 8+ wins, OR 6+ fights at ≥70%).
+        # Uses division.champion_id (belt source of truth) not the .is_champion
+        # mirror flag — the mirror can drift; champion_id cannot.
+        _p_div = self._game_state.divisions.get(player_fighter.weight_class)
+        if _p_div and _p_div.champion_id == target_fighter_id:
+            from matchmaking import (
+                is_title_eligible,
+                TITLE_MIN_RANK,
+                TITLE_MIN_PRO_FIGHTS,
+                TITLE_MIN_WINS,
+                TITLE_MIN_FIGHTS_RECORD,
+                TITLE_MIN_WIN_PCT,
+            )
+            if not is_title_eligible(
+                wins=player_fighter.wins,
+                losses=player_fighter.losses,
+                rank=player_rank if player_rank and player_rank >= 1 else None,
+                is_champion=False,
+            ):
+                return {
+                    "success": False,
+                    "error": (
+                        f"{player_fighter.name} hasn't earned a title shot yet. "
+                        f"Requires a top-{TITLE_MIN_RANK} ranking with "
+                        f"≥{TITLE_MIN_PRO_FIGHTS} pro fights, OR {TITLE_MIN_WINS}+ "
+                        f"career wins, OR {TITLE_MIN_FIGHTS_RECORD}+ fights at "
+                        f"≥{int(TITLE_MIN_WIN_PCT*100)}% win rate."
+                    ),
+                }
+
         # Ship K5: async challenge — AI responds in 1-2 weeks rather than
         # immediately. Pending challenge tracked in self._pending_challenges
         # and resolved by _process_pending_challenges each advance_week.
@@ -12829,6 +12861,15 @@ class GameBridge:
             print(f"  ⚠️ [BOOK_NEG] Self-fight refused — "
                   f"{neg.get('player_fighter_name', '?')} vs themselves")
             return None
+        # TITLE-SHOT-GATE1: derive is_title_fight from division.champion_id
+        # (belt source of truth). Fires only if one participant is the reigning
+        # champion of their division — never on rank-proximity.
+        _wc = neg["weight_class"]
+        _div = self._game_state.divisions.get(_wc)
+        _champ_id = _div.champion_id if _div else None
+        _is_title = _champ_id is not None and _champ_id in (
+            neg["player_fighter_id"], neg["ai_fighter_id"]
+        )
         fight = {
             "fight_id":      f"fight_{neg['player_fighter_id']}_{neg['ai_fighter_id']}",
             "fighter1_id":   neg["player_fighter_id"],
@@ -12841,7 +12882,7 @@ class GameBridge:
             "event_name":    neg["event_name"],
             "purse":         neg["current_purse"],
             "win_bonus":     neg["current_purse"] // 2,
-            "is_title_fight":  False,
+            "is_title_fight":  _is_title,
             "is_player_fight": True,
         }
         # Assign to the right DFC card

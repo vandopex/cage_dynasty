@@ -1628,6 +1628,21 @@ def register_routes(app):
                 avail_wk = cooldowns[pfid]
                 player_status = f"On cooldown · Available Wk {avail_wk}"
 
+        # TITLE-SHOT-GATE1: expose title eligibility so the ladder can hide
+        # the challenge button against the champion when the player hasn't
+        # earned a shot. Server-side gate in challenge_fighter is the actual
+        # enforcement; this is a UX convenience so the button doesn't lie.
+        player_title_eligible = False
+        if player_fighter:
+            from matchmaking import is_title_eligible
+            _p_rank_val = bridge._get_fighter_rank(player_fighter)
+            player_title_eligible = is_title_eligible(
+                wins=player_fighter.wins,
+                losses=player_fighter.losses,
+                rank=_p_rank_val if _p_rank_val and _p_rank_val >= 1 else None,
+                is_champion=bool(player_fighter.is_champion),
+            )
+
         return render_template('ladder.html',
             divisions=divisions,
             current_division=division,
@@ -1639,6 +1654,7 @@ def register_routes(app):
             player_in_division=player_in_division,
             player_available=player_available,
             player_status=player_status,
+            player_title_eligible=player_title_eligible,
             cooldowns=cooldowns,
             scheduled_map=scheduled_map,
             week=current_week,
