@@ -138,6 +138,13 @@
                 {% if is_fotn %}
                 <div style="font-size:.65rem;color:var(--gold);margin-top:2px;">🔥 FOTN</div>
                 {% endif %}
+                {# EVENT-DETAIL-WC-LABEL1: mirror week_results.html:366-371 pill #}
+                {% if fight.get('weight_class') %}
+                <span style="font-size:.55rem;color:var(--text-muted);display:block;margin-top:1px;
+                             text-transform:uppercase;letter-spacing:.04em;">
+                    {% if fight.weight_class %}<a href="{{ url_for('rankings', division=fight.weight_class) }}" style="color:inherit;text-decoration:none;">{{ fight.weight_class[:3] }}</a>{% endif %}
+                </span>
+                {% endif %}
                 {% if fight.is_rivalry %}
                 <div style="font-size:.6rem;color:var(--blood-red);margin-top:2px;">
                     🔥 Rivalry{% if fight.rivalry_heat %} ({{ fight.rivalry_heat }}){% endif %}
