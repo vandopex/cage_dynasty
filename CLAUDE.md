@@ -69,6 +69,9 @@ Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron
 
 | Date | Ship | Commit | What |
 |---|---|---|---|
+| 2026-07-10 | MATCHMAKING-ENFORCE1 | 18a2438 | Score-driven opponent selection in `_build_card_for_week`'s "1 ranked left" branch, replaces `random.choice(unranked_pool)`. 75/25 competitive/step-up via 3 named module-level constants. Deployed. |
+| 2026-07-10 | NEWS-CHIN-FILTER1 | afa26f7 | Chin/durability news gate at `_apply_chin_erosion._news_items.insert` — emits only for player-owned OR current champion OR watchlisted fighters. Chin stat erosion still runs for every fighter; only the news emit is gated. Deployed. |
+| 2026-07-10 | GROUND-STOPPAGE-FIX1 | 40dd8d5 | Accumulated-damage TKO respects chin/heart/composure via `_tko_durability_mult`; TKO_GNP threshold 25.0→18.0, TKO_STANDING 20.0→15.0. Deployed non-regressive. **Founding premise (a ~22%→40% DEC gap) was false — the AI-vs-AI pool rate was already 44.6% pre-fix per the POOL-DEC-RATE1 extraction. Net live effect on the pool is unmeasured; treat as safe (in-band) but not as "closing a gap that didn't exist."** |
 | 2026-07-05 | AGGRESSION-NARRATION1 | b97e7bd | Fight-open intent line in watched-fight timeline for forward/patient sides |
 | 2026-07-05 | BRIDGE-WIRE-AGGR1 | 0f3154b | Player gameplan resolved → Gameplan and passed into real engine at `_run_real_engine` |
 | 2026-07-05 | GAMEPLAN-DIAL-AGGR1 | d1d927d | Aggression dial live in engine (config B — initiative ±2, pre-fight ±4, IQ-gated strike weights) |
@@ -288,6 +291,15 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
   thin-week candidate pools) is unaddressed. Design call, not a bug — either
   loosen threshold, thicken matchmaking density in thin weeks, or leave the
   cosmetic backfill as-is.
+- **Finish-composition data instrumentation (filed 2026-07-10).** The
+  narrative-feel question ("does every finish read as back-mount GnP?")
+  is unmeasurable from the save today: finish position isn't persisted
+  and specialty method labels collapse to bare KO/TKO/SUB/DEC before
+  write. If finish-composition ever needs measuring, it's an
+  instrumentation ship — persist finish position + specialty method
+  label in the `completed_events[].fights[]` write path in
+  `_run_real_engine` / `_simulate_ai_fights_week`. Until then it's a
+  Van-eyeball call on narrated fights, not a data question.
 
 # CAGE DYNASTY — Claude Code instructions
 
@@ -529,6 +541,33 @@ committed inline in the referenced diag memos.
   lever from `outputs/control_conversion_diag1.md` §7, **NOT another
   `GNP_DOMINANT_DAMAGE_MULT` bump** — that shared constant would
   re-break Wr-BJJ.
+
+### Pool decision rate (live-save extraction, POOL-DEC-RATE1 2026-07-10)
+
+- **DEC 44.6%** pool, 157 AI-vs-AI fights, `bridge_van_autosave.json`
+  week 15 — read from `completed_events[].fights[].method`, zero
+  simulation. In-band vs the 40-50% target.
+- **SUB 1.3%** pool (2/157). Ground truth from the same extraction.
+- Slot breakdown: main_event 7.7% DEC (13 fights, 9 title fights, all
+  9 title fights finished — real-MMA-consistent), co_main 26.7%,
+  main_card 48.8%, prelim 50.8%, early_prelim 51.7%.
+- **RETIRED**: any citation of the decision rate at ~18-22%. That
+  number was a main-event-slice observation (7.7% DEC on 13
+  title-heavy headliners) mistaken for the pool rate. It never
+  appeared in this doc — recording preemptively so a future session
+  can't re-derive it from headline eyeballing and relaunch a
+  finish-rate chase.
+- **RETIRED**: any citation of the sub rate at 8-10%. Harness
+  population artifact — synthetic BJJ Specialists rolled sub-offense
+  means around 74; live-booked population means around 59. The sub
+  gate is not broken; the synthetic pool inflated it. Live is 1.3%
+  and stable.
+- Caveats: N=157 is thin (single save, week 15). Sample is pre-fix
+  engine (`e1be619`). The three 2026-07-10 ships are deployed but
+  their AI-vs-AI-pool effect is unmeasured until fresh fights
+  accumulate. In-band is confirmed for pre-fix, presumed for
+  post-fix. Worth one clean re-read after enough post-fix fights
+  land; not blocking.
 
 ## Terminal diagnostics (for tuning)
 
