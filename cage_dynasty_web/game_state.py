@@ -116,6 +116,10 @@ class FighterRecord:
     ko_wins: int = 0
     sub_wins: int = 0
     best_rank: int = 99  # Best 1-based rank ever held in this division (1=best, 99=never ranked)
+    # Career FOTN awards — incremented by the bridge when this fighter is
+    # part of the selected Fight of the Night. Prior to FOTN-PERSIST-FIX1
+    # this was set as a dynamic attribute and dropped on every save round-trip.
+    career_fotn_awards: int = 0
 
     # Fight history (list of fight records from world gen and gameplay)
     fight_history: List[Dict[str, Any]] = field(default_factory=list)
@@ -153,6 +157,7 @@ class FighterRecord:
             "ko_wins": self.ko_wins,
             "sub_wins": self.sub_wins,
             "best_rank": self.best_rank,
+            "career_fotn_awards": self.career_fotn_awards,
             "fight_history": self.fight_history.copy() if self.fight_history else [],
         }
     
@@ -163,6 +168,8 @@ class FighterRecord:
             data["popularity"] = 10  # Default
         if "fight_history" not in data:
             data["fight_history"] = []  # Default
+        if "career_fotn_awards" not in data:
+            data["career_fotn_awards"] = 0  # FOTN-PERSIST-FIX1: forward-only default
         return cls(**data)
 
 
