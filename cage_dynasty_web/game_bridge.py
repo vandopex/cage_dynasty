@@ -1547,6 +1547,42 @@ CARD_TARGET_FIGHTS = 12
 MIN_CARD_FIGHTS = 8
 
 # ============================================================================
+# MATCHMAKING-ENFORCE1 — score-driven opponent selection tunables
+# ============================================================================
+# Consumed by _build_card_for_week's "1 ranked left" branch. Every unranked
+# candidate is scored via _matchup_score (which wraps
+# card_builder.calculate_matchup_score + _rivalry_heat_bonus). Selection is
+# 75% best-score (competitive) / 25% bounded step-up (intentional gap
+# fight — prospect vs gatekeeper flavor). Prior behavior was
+# random.choice(unranked_pool), verified as the one non-title,
+# non-ranked-vs-ranked selection path that ignored the score.
+#
+# Rank-6+ guard on the branch itself (line 16524) already forbids top-5
+# ranked from being booked here; these knobs shape opponent quality
+# within that guard, not around it.
+
+# Probability a booking picks from the step-up window rather than the
+# highest-scoring candidate. 0.25 = ~1 in 4 bookings from this branch is
+# an intentional step-up; the rest chase the best available match.
+MATCHMAKING_STEP_UP_PROBABILITY = 0.25
+
+# When a step-up is picked, sample from candidates whose score is within
+# this many points BELOW the best candidate's score. Bounds the step-up
+# so it stays a "notch or two up," never a squash. calculate_matchup_score
+# outputs [0, 130]; a 20-point window inside the 1-ranked-left branch's
+# natural score range (~0-15) usually admits the full opponent pool
+# minus the best. Tune wider to loosen the step-up bound, narrower to
+# force step-ups closer to competitive.
+MATCHMAKING_STEP_UP_MAX_DELTA = 20.0
+
+# Minimum matchup score any candidate must reach to be considered at all.
+# card_builder clamps scores to [0, 130]; a floor of 0.0 accepts every
+# non-negative candidate (default). Raise to 1.0+ to exclude the pure-floor
+# pairings (top-5-vs-unranked, which shouldn't reach this branch anyway
+# because of the rank-6+ guard).
+MATCHMAKING_MIN_SCORE_FLOOR = 0.0
+
+# ============================================================================
 # PIPELINE WINDOW CONSTANT (Ship D2)
 # Rolling card pipeline depth. Shared across:
 # - Phase 3 build loop in _top_up_pipeline
@@ -16524,12 +16560,52 @@ class GameBridge:
                 if r is not None and r >= 6:
                     unranked_pool = [f for f in available if f.fighter_id not in ranked_ids]
                     if unranked_pool:
-                        opp = random.choice(unranked_pool)
-                        score = self._matchup_score(ranked_f, opp)
-                        # Sub-ship A: rank-aware lead time (one ranked, one unranked)
-                        _wks_out = self._weeks_out_for_fight(r, None)
-                        _ttw = self._game_state.week_number + _wks_out
-                        candidates.append((score, ranked_f, opp, wc, False, _ttw))
+                        # MATCHMAKING-ENFORCE1: score every candidate + 75/25
+                        # competitive/step-up split. Prior behavior was
+                        # random.choice(unranked_pool) — score was computed
+                        # AFTER selection for record-keeping only, so the
+                        # matchmaker was uniform-random across opponents in
+                        # this branch. Now it's score-driven, with a bounded
+                        # step-up path for the 25% intentional-gap fights.
+                        _scored = [
+                            (self._matchup_score(ranked_f, u), u)
+                            for u in unranked_pool
+                        ]
+                        _scored = [
+                            (s, u) for (s, u) in _scored
+                            if s >= MATCHMAKING_MIN_SCORE_FLOOR
+                        ]
+                        if not _scored:
+                            # Nothing survives the floor — division skipped.
+                            # (Rank-6+ guard above already prevents top-5 from
+                            # reaching here, so this is only hit if EVERY
+                            # candidate scored below the floor.)
+                            pass
+                        else:
+                            _scored.sort(key=lambda x: x[0], reverse=True)
+                            _best_score = _scored[0][0]
+                            if random.random() < MATCHMAKING_STEP_UP_PROBABILITY:
+                                # Step-up: sample from bounded window BELOW best.
+                                # Excludes best itself so a step-up is
+                                # deliberately non-optimal. Falls back to best
+                                # when only one candidate exists (no step-up
+                                # option available).
+                                _window = [
+                                    pair for pair in _scored
+                                    if _best_score - MATCHMAKING_STEP_UP_MAX_DELTA
+                                        <= pair[0] < _best_score
+                                ]
+                                if _window:
+                                    score, opp = random.choice(_window)
+                                else:
+                                    score, opp = _scored[0]
+                            else:
+                                # Competitive: pick highest-scoring candidate.
+                                score, opp = _scored[0]
+                            # Sub-ship A: rank-aware lead time (one ranked, one unranked)
+                            _wks_out = self._weeks_out_for_fight(r, None)
+                            _ttw = self._game_state.week_number + _wks_out
+                            candidates.append((score, ranked_f, opp, wc, False, _ttw))
 
             elif not ranked_avail and len(available) >= 2:
                 # Unranked matchup — pair by record similarity, not pure random
