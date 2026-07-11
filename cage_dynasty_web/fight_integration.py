@@ -45,7 +45,27 @@ from fight_engine import (
     FLASH_KO_DAMAGE_THRESHOLD, FLASH_KO_BASE_CHANCE, FLASH_KO_MAX_CHANCE,
     TKO_GNP_HEALTH_THRESHOLD, TKO_GNP_BASE_CHANCE, TKO_GNP_MAX_CHANCE,
     TKO_STANDING_HEALTH_THRESHOLD, TKO_STANDING_BASE_CHANCE,
+    # GROUND-STOPPAGE-FIX1 durability multiplier constants
+    TKO_DURABILITY_FLOOR, TKO_DURABILITY_CHIN_DIVISOR,
+    TKO_DURABILITY_HEART_DIVISOR, TKO_DURABILITY_COMPOSURE_DIVISOR,
 )
+
+
+def _tko_durability_mult(defender):
+    """GROUND-STOPPAGE-FIX1: shared durability multiplier for the
+    TKO_GNP and TKO_STANDING accumulated-damage stoppage paths.
+    Elite chin/heart/composure clamps to the floor (roughly halves the
+    tko_chance); poor durability leaves it near base. Mirrors the shape
+    used by the smaller accumulator paths (Path C/D/E) — this ship
+    extends the same durability language to the two big paths and adds
+    chin as a first-class factor across all of them."""
+    return max(
+        TKO_DURABILITY_FLOOR,
+        1.0
+        - getattr(defender, 'chin', 70) / TKO_DURABILITY_CHIN_DIVISOR
+        - getattr(defender, 'heart', 70) / TKO_DURABILITY_HEART_DIVISOR
+        - getattr(defender, 'composure', 70) / TKO_DURABILITY_COMPOSURE_DIVISOR,
+    )
 
 # fight_integration runs a longer commentary exchange loop than fight_engine.simulate_fight
 # so the effective damage per fight is higher — this multiplier is tuned separately
@@ -1059,28 +1079,35 @@ class NarratedFightSimulator:
 
             # === V7 TKO GNP SYSTEM ===
             # Referee stops fight when defender takes sustained damage from dominant position
-            if (not is_finish and 
+            if (not is_finish and
                 self.fight_state.top_fighter_id == attacker.fighter_id and
                 defender_state.health < TKO_GNP_HEALTH_THRESHOLD and
                 self.fight_state.position in DOMINANT_POSITIONS):
-                
+
                 tko_chance = TKO_GNP_BASE_CHANCE
-                
+
                 # Rocked bonus
                 if defender_state.is_rocked:
                     tko_chance += 0.03
-                
+
                 # Multiple knockdowns bonus
                 if defender_state.knockdowns_this_round >= 2:
                     tko_chance += 0.04
-                
+
                 # GnP specialist bonus
                 if attacker.top_control >= 85:
                     tko_chance += 0.02
-                
+
                 # Cap the chance
                 tko_chance = min(tko_chance, TKO_GNP_MAX_CHANCE)
-                
+
+                # GROUND-STOPPAGE-FIX1: apply defender durability multiplier.
+                # Elite chin+heart+composure roughly halves the stoppage
+                # roll; poor durability leaves it near base. Preserves the
+                # "fragile fighter under sustained GnP still gets finished"
+                # case while letting granite chins weather it.
+                tko_chance *= _tko_durability_mult(defender)
+
                 if random.random() < tko_chance:
                     # TKO by GnP!
                     is_finish = True
@@ -1091,17 +1118,23 @@ class NarratedFightSimulator:
                 defender_state.is_rocked and
                 defender_state.health < TKO_STANDING_HEALTH_THRESHOLD and
                 self.fight_state.position in STANDING_POSITIONS):
-                
+
                 tko_standing_chance = TKO_STANDING_BASE_CHANCE
-                
+
                 # Very low health bonus
                 if defender_state.health < 20:
                     tko_standing_chance += 0.05
-                
+
                 # Multiple knockdowns in round
                 if defender_state.knockdowns_this_round >= 1:
                     tko_standing_chance += 0.04
-                
+
+                # GROUND-STOPPAGE-FIX1: apply defender durability multiplier.
+                # Symmetric to the TKO_GNP path — same durability language
+                # applies whether the accumulated damage came from top
+                # position or standing volume.
+                tko_standing_chance *= _tko_durability_mult(defender)
+
                 if random.random() < tko_standing_chance:
                     # Standing TKO!
                     is_finish = True

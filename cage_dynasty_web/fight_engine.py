@@ -416,11 +416,34 @@ DAMAGE_MULTIPLIER            = 0.55   # Tuned: was 0.70 (produced 73% finish rat
 FLASH_KO_DAMAGE_THRESHOLD    = 70.0
 FLASH_KO_BASE_CHANCE         = 0.03
 FLASH_KO_MAX_CHANCE          = 0.12
-TKO_GNP_HEALTH_THRESHOLD     = 25.0
-TKO_GNP_BASE_CHANCE          = 0.15
-TKO_GNP_MAX_CHANCE           = 0.45
-TKO_STANDING_HEALTH_THRESHOLD= 20.0
+TKO_GNP_HEALTH_THRESHOLD     = 18.0   # GROUND-STOPPAGE-FIX1: was 25.0 —
+TKO_GNP_BASE_CHANCE          = 0.15   # raised so fighters must be more
+TKO_GNP_MAX_CHANCE           = 0.45   # hurt before ref-stop rolls are
+TKO_STANDING_HEALTH_THRESHOLD= 15.0   # eligible. Was 20.0 for standing.
 TKO_STANDING_BASE_CHANCE     = 0.10
+
+# GROUND-STOPPAGE-FIX1 — defender-durability multiplier for the two big
+# accumulated-damage TKO paths (TKO_GNP + TKO_STANDING at
+# fight_integration.py:1060-1107). Pre-fix, both fired on pure
+# health-under-threshold + rocked/KD-count checks with ZERO defender-
+# attribute respect — a granite-chinned fighter got stopped at the same
+# rate as a china-chinned one. Post-fix, the tko_chance is scaled by:
+#   max(FLOOR, 1 - chin/CHIN_DIV - heart/HEART_DIV - composure/COMP_DIV)
+# Mirrors the shape already used by the smaller Path C / D / E accumulator
+# stoppages (GnP-accumulator TKO, clinch body TKO, ref stoppage — all at
+# fight_integration.py:901-1000) that ALREADY factor heart+composure.
+# This ship extends the same durability language to A + B and adds CHIN
+# as a first-class factor across all of them, so flash-KO (post its own
+# fix) and accumulated-TKO now respect the same attribute set.
+#
+# Calibration reference: elite durability (chin 90 / heart 90 / composure
+# 90) → 1 - 0.30 - 0.26 - 0.20 = 0.24 → clamped to FLOOR (0.35). Roughly
+# HALVES the TKO roll. Poor durability (all 40) → 1 - 0.13 - 0.11 - 0.09
+# = 0.67 → 67% of base roll. Fragile fighters still get stopped.
+TKO_DURABILITY_FLOOR             = 0.35
+TKO_DURABILITY_CHIN_DIVISOR      = 300.0
+TKO_DURABILITY_HEART_DIVISOR     = 350.0
+TKO_DURABILITY_COMPOSURE_DIVISOR = 450.0
 
 # GNP-DAMAGE-BUFF1 — dominant-position damage multiplier.
 # Read by calculate_strike_damage when the attacker is the top fighter
