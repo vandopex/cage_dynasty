@@ -184,6 +184,23 @@ and 2026-07-03.
 If the webhook returns HTTP 500 (rare, intermittent): manual fallback is `git pull`
 on the PA bash console, then "Reload" on the PA Web tab.
 
+**Where startup diagnostics land on PA (verified 2026-07-12).**
+Under uWSGI, module-load-time prints from `game_bridge.py`, `app.py`, and the
+rest of the web app go to **`server.log`**, regardless of whether they use
+`sys.stderr` or `sys.stdout`. Only the pre-uWSGI shim prints (from
+`cage_dynasty_web/simulation/__init__.py` and
+`cage_dynasty_web/systems/__init__.py`) reach `error.log` — those fire at
+interpreter startup, before uWSGI has taken over the process's stderr. So:
+- `[SIMULATION-SHIM]`, `[SYSTEMS-SHIM]` → `error.log`
+- `[IMPORT-PATH-PROOF]`, `✅ ... loaded`, `⚠️ SECURITY WARNING`, everything
+  else the app prints during module-load → `server.log`
+- Runtime errors (unhandled exceptions during requests) → `error.log`
+
+Files-API paths:
+- `/var/log/vandopegaming.pythonanywhere.com.server.log`
+- `/var/log/vandopegaming.pythonanywhere.com.error.log`
+- `/var/log/vandopegaming.pythonanywhere.com.access.log`
+
 ## Top-of-backlog
 
 **Gameplan dial state (live as of 2026-07-05):**

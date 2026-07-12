@@ -219,14 +219,21 @@ try:
     FIGHT_ENGINE_AVAILABLE      = True
     print("✅ fight engine loaded from fight_integration")
     # IMPORT-PATH-PROOF (permanent, C1-CLOSE 2026-07-12):
-    # PA has 5 fight_engine.py copies (root, cage_dynasty_web, interface,
-    # simulation, systems) and 2 fight_integration.py copies. This diagnostic
-    # names which ones the running app actually imported, observed AFTER the
-    # sys.path insert + force-delete above so it reads the outcome of that
-    # hack rather than racing it. Permanent because the project's two worst
-    # bugs (pre-gen coin-flip fallback, silent injury_import_fail) were both
-    # import-path phantoms — one standing line of output is cheap standing
-    # protection against the same failure mode.
+    # This diagnostic names which fight_engine.py and fight_integration.py the
+    # running app actually imported, observed AFTER the sys.path insert +
+    # force-delete above so it reads the outcome of that hack rather than
+    # racing it. Permanent because the project's two worst bugs (pre-gen
+    # coin-flip fallback, silent injury_import_fail) were both import-path
+    # phantoms — one standing line of output is cheap standing protection
+    # against the same failure mode.
+    #
+    # Where to find the output: this print lands in PA's SERVER.LOG (not
+    # error.log), verified 2026-07-12. Under uWSGI, stdout+stderr from
+    # module-load-time prints are both captured to server.log; only the
+    # pre-uWSGI shim prints (`[SIMULATION-SHIM]`, `[SYSTEMS-SHIM]`) reach
+    # error.log because they fire at interpreter startup, before uWSGI has
+    # taken over the process's file descriptors. If you're grepping for
+    # `[IMPORT-PATH-PROOF]` and getting no hits, look in server.log.
     try:
         # Read what FI's import chain actually resolved, don't re-import
         # (a fresh `import fight_engine` here could theoretically resolve
