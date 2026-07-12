@@ -470,6 +470,18 @@ class NarratedFightSimulator:
     
     def _init_fight(self):
         """Initialize fight state"""
+        # COMMENTARY-RNG-DECOUPLE (2026-07-12): seed self.commentary.rng
+        # from ONE unconditional draw off the shared `random` sim stream.
+        # This must land BEFORE any commentary method fires
+        # (self.commentary.emit_fight_open() below is the first) and MUST
+        # execute regardless of whether commentary generation is enabled.
+        # The unconditional draw is the whole trick — the sim stream
+        # advances by exactly 1 per fight, always, so commentary-on vs
+        # commentary-off produce byte-identical fight outcomes under the
+        # same top-level seed. If this draw ever becomes conditional,
+        # the coupling this ship removed comes back silently.
+        self.commentary.rng.seed(random.getrandbits(64))
+
         # Create fighter states
         self.fighter1_state = FighterState(
             fighter_id=self.fighter1.fighter_id,
@@ -522,7 +534,7 @@ class NarratedFightSimulator:
                     f"{_fa.name} looks to force the fight from the opening bell.",
                     f"{_fa.name} is here to cut the cage off and make him work.",
                 ]
-                self.commentary.commentary_log.append(random.choice(_forward_lines))
+                self.commentary.commentary_log.append(self.commentary.rng.choice(_forward_lines))
             elif _agg < 0:
                 # Patient framing — dial is aggression only, no counter
                 # mechanic in the engine, so language stays on
@@ -532,7 +544,7 @@ class NarratedFightSimulator:
                     f"{_fa.name} plans to stay patient and make him lead.",
                     f"{_fa.name} keeps it sharp, waiting for the opening.",
                 ]
-                self.commentary.commentary_log.append(random.choice(_patient_lines))
+                self.commentary.commentary_log.append(self.commentary.rng.choice(_patient_lines))
 
         # COMMENTARY-GAMEPLAN-CONTRAST1: detect style-vs-plan contrast
         # per side and roll Mode A/Mode B. Mode B appends a pre-fight
@@ -1564,7 +1576,7 @@ class NarratedFightSimulator:
                 f"{loser.name} is caught! This could be it!",
                 f"{winner.name} cranks the hold! TAP OR SNAP!",
             ]
-            self.commentary.commentary_log.append(random.choice(sub_buildup))
+            self.commentary.commentary_log.append(self.commentary.rng.choice(sub_buildup))
         
         # Now log the actual finish event
         self.commentary.log_event(

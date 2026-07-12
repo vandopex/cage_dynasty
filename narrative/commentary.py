@@ -16,7 +16,15 @@ This module provides:
 - Integration with fight engine
 """
 
-import random
+# COMMENTARY-RNG-DECOUPLE (2026-07-12): `import random` was dropped
+# deliberately. All draws in this module now go through `self.rng`
+# (a per-fight Random() seeded from a single unconditional sim-stream
+# draw at fight init). A leftover bare `random.X` here would silently
+# keep drawing from the sim stream — the exact coupling this ship
+# exists to remove — so we drop the module reference entirely and
+# rely on NameError as the loud gate. If you find yourself wanting a
+# bare `random.X` here, you're wrong: use `self.rng.X`.
+from random import Random
 from typing import Dict, List, Optional, Tuple, Any, Set
 from dataclasses import dataclass, field
 from enum import Enum, auto
@@ -2574,6 +2582,15 @@ class FightCommentarySystem:
         self.events: List[FightEvent] = []
         self.round_summaries: List[RoundSummary] = []
         self.commentary_log: List[str] = []
+        # COMMENTARY-RNG-DECOUPLE (2026-07-12): dedicated Random() instance
+        # so commentary generation no longer advances the sim RNG stream.
+        # Reseeded per-fight at NarratedFightSimulator._init_fight from a
+        # single unconditional sim-stream draw — see D2 of the ship prompt.
+        # Default seed (system-time) is a placeholder that will be replaced
+        # BEFORE any commentary method fires. If any commentary method draws
+        # before _init_fight seeds it, the output is non-reproducible under
+        # the sim seed — G1 (A3 harness) catches that.
+        self.rng: Random = Random()
         
         # Repetition avoidance
         self.recent_templates: Set[str] = set()
@@ -2636,9 +2653,9 @@ class FightCommentarySystem:
                 # All used recently, clear oldest
                 self.recent_templates.clear()
                 available = templates
-            selected = random.choice(available)
+            selected = self.rng.choice(available)
         else:
-            selected = random.choice(templates)
+            selected = self.rng.choice(templates)
         
         # Track for cooldown
         self.recent_queue.append(selected)
@@ -3159,7 +3176,7 @@ class FightCommentarySystem:
         sequence.append(self.generate_finish_sequence(actor, target, "swarming"))
         
         # Phase 3: Referee watching
-        if random.random() < 0.5:  # 50% chance for ref commentary
+        if self.rng.random() < 0.5:  # 50% chance for ref commentary
             sequence.append(self.generate_finish_sequence(actor, target, "referee_watching"))
         
         # Phase 4: Final blow
@@ -3262,7 +3279,7 @@ class FightCommentarySystem:
         
         # Default: Use standard fresh templates with style flavor
         # Randomly choose between state-based and style-based for variety
-        if random.random() < 0.4:  # 40% chance for style commentary
+        if self.rng.random() < 0.4:  # 40% chance for style commentary
             return self.generate_style_strike(
                 actor, target, actor_style, strike_type, damage, is_ko=False
             )
@@ -3788,7 +3805,7 @@ class FightCommentarySystem:
             # Generic position change
             return ""
         
-        return random.choice(templates) if templates else ""
+        return self.rng.choice(templates) if templates else ""
     
     def _generate_hurt_buildup(
         self,
@@ -3798,7 +3815,7 @@ class FightCommentarySystem:
     ) -> str:
         """Generate pre-finish buildup commentary when fighter is badly hurt"""
         # Only generate buildup commentary sometimes to avoid spam
-        if random.random() > 0.4:  # 40% chance
+        if self.rng.random() > 0.4:  # 40% chance
             return ""
         
         if target_health < 10:
@@ -3828,7 +3845,7 @@ class FightCommentarySystem:
                 f"The damage is accumulating on {target}!",
             ]
         
-        return random.choice(templates)
+        return self.rng.choice(templates)
     
     def _generate_commentary_for_action(
         self,
@@ -3936,15 +3953,15 @@ class FightCommentarySystem:
 
         # 1. Card-position line
         if slot == "main_event":
-            self.commentary_log.append(random.choice(CARD_POSITION_MAIN_EVENT))
+            self.commentary_log.append(self.rng.choice(CARD_POSITION_MAIN_EVENT))
         elif slot == "co_main":
-            self.commentary_log.append(random.choice(CARD_POSITION_CO_MAIN))
+            self.commentary_log.append(self.rng.choice(CARD_POSITION_CO_MAIN))
         elif slot == "main_card":
-            self.commentary_log.append(random.choice(CARD_POSITION_MAIN_CARD))
+            self.commentary_log.append(self.rng.choice(CARD_POSITION_MAIN_CARD))
         elif slot == "early_prelim":
-            self.commentary_log.append(random.choice(CARD_POSITION_EARLY_PRELIM))
+            self.commentary_log.append(self.rng.choice(CARD_POSITION_EARLY_PRELIM))
         else:
-            self.commentary_log.append(random.choice(CARD_POSITION_PRELIM))
+            self.commentary_log.append(self.rng.choice(CARD_POSITION_PRELIM))
 
         # 2. Optional champion line — main_event / co_main only
         if slot in ("main_event", "co_main"):
@@ -3957,20 +3974,20 @@ class FightCommentarySystem:
                 champ_div = f2_data["division"]
             if champ_name:
                 self.commentary_log.append(
-                    random.choice(FIGHTER_ENTRANCE_CHAMPION_LINE).format(
+                    self.rng.choice(FIGHTER_ENTRANCE_CHAMPION_LINE).format(
                         name=champ_name, division=champ_div))
 
         # 3. Entrance lines — scaled by slot
         if slot == "main_event":
             self.commentary_log.append(
-                random.choice(FIGHTER_ENTRANCE_MAIN_EVENT_RED).format(
+                self.rng.choice(FIGHTER_ENTRANCE_MAIN_EVENT_RED).format(
                     name=f1_name,
                     nick_clause=self._nick_clause(f1_data),
                     record=f1_data.get("record") or "0-0",
                     descriptor=self._entrance_descriptor(f1_data),
                 ))
             self.commentary_log.append(
-                random.choice(FIGHTER_ENTRANCE_MAIN_EVENT_BLUE).format(
+                self.rng.choice(FIGHTER_ENTRANCE_MAIN_EVENT_BLUE).format(
                     name=f2_name,
                     nick_clause=self._nick_clause(f2_data),
                     record=f2_data.get("record") or "0-0",
@@ -3978,7 +3995,7 @@ class FightCommentarySystem:
                 ))
         elif slot == "co_main":
             self.commentary_log.append(
-                random.choice(FIGHTER_ENTRANCE_CO_MAIN).format(
+                self.rng.choice(FIGHTER_ENTRANCE_CO_MAIN).format(
                     f1_name=f1_name,
                     f1_nick=self._nick_clause(f1_data),
                     f1_rec=f1_data.get("record") or "0-0",
@@ -3988,12 +4005,12 @@ class FightCommentarySystem:
                 ))
         elif slot == "main_card":
             self.commentary_log.append(
-                random.choice(FIGHTER_ENTRANCE_MAIN_CARD).format(
+                self.rng.choice(FIGHTER_ENTRANCE_MAIN_CARD).format(
                     f1_name=f1_name, f2_name=f2_name,
                 ))
         else:  # prelim, early_prelim, or unknown → terse
             self.commentary_log.append(
-                random.choice(FIGHTER_ENTRANCE_PRELIM).format(
+                self.rng.choice(FIGHTER_ENTRANCE_PRELIM).format(
                     f1_name=f1_name, f2_name=f2_name,
                 ))
 
@@ -4077,14 +4094,14 @@ class FightCommentarySystem:
                 continue
             self._contrast_armed[key] = tag
             # Roll Mode A / Mode B. Mode B → emit a setup line now.
-            if random.random() < 0.5:
+            if self.rng.random() < 0.5:
                 setup_pool = {
                     "grappler_not_grappling":     CONTRAST_SETUP_GRAPPLER,
                     "aggressor_going_patient":    CONTRAST_SETUP_PATIENT,
                     "counter_becoming_aggressor": CONTRAST_SETUP_COUNTER,
                 }[tag]
                 self.commentary_log.append(
-                    random.choice(setup_pool).format(
+                    self.rng.choice(setup_pool).format(
                         name=name,
                         label=_CONTRAST_STYLE_LABEL.get(style, "fighter"),
                     ))
@@ -4151,7 +4168,7 @@ class FightCommentarySystem:
             "aggressor_going_patient":    CONTRAST_AGGRESSOR_GOING_PATIENT,
             "counter_becoming_aggressor": CONTRAST_COUNTER_BECOMING_AGGRESSOR,
         }[tag]
-        self.commentary_log.append(random.choice(pool).format(name=name, label=label))
+        self.commentary_log.append(self.rng.choice(pool).format(name=name, label=label))
         self._contrast_fired[key] = True
 
     # ========================================================================
@@ -4175,9 +4192,9 @@ class FightCommentarySystem:
         # already carry that voice.
         total = self.context.total_rounds if self.context else 3
         if round_num == total:
-            template = random.choice(ROUND_START_FINAL)
+            template = self.rng.choice(ROUND_START_FINAL)
         elif total == 5 and round_num >= 4:
-            template = random.choice(ROUND_START_CHAMPIONSHIP)
+            template = self.rng.choice(ROUND_START_CHAMPIONSHIP)
         else:
             template = self._select_template(ROUND_START_TEMPLATES)
         commentary = template.format(round_num=round_num)
@@ -4236,7 +4253,7 @@ class FightCommentarySystem:
         
         # Add transition commentary
         if self.current_round < (self.context.total_rounds if self.context else 3):
-            self.commentary_log.append(random.choice(ROUND_TRANSITIONS))
+            self.commentary_log.append(self.rng.choice(ROUND_TRANSITIONS))
         
         return summary
     
@@ -4330,9 +4347,9 @@ class FightCommentarySystem:
         
         # Opening
         if self.context and self.context.is_title_fight:
-            lines.append(random.choice(FIGHT_INTRO_TITLE_OPENING))
+            lines.append(self.rng.choice(FIGHT_INTRO_TITLE_OPENING))
         elif is_main_event:
-            lines.append(random.choice(FIGHT_INTRO_OPENING))
+            lines.append(self.rng.choice(FIGHT_INTRO_OPENING))
         else:
             lines.append("Ladies and gentlemen, the following contest is scheduled for "
                         f"{self.context.total_rounds if self.context else 3} rounds!")
@@ -4341,33 +4358,33 @@ class FightCommentarySystem:
         
         # Add heat commentary if there's significant heat
         if heat_level > 80:
-            lines.append(random.choice(HEAT_PREFIGHT_WAR))
+            lines.append(self.rng.choice(HEAT_PREFIGHT_WAR))
             lines.append("")
         elif heat_level > 60:
-            lines.append(random.choice(HEAT_PREFIGHT_HEATED))
+            lines.append(self.rng.choice(HEAT_PREFIGHT_HEATED))
             lines.append("")
         elif heat_level > 40:
-            lines.append(random.choice(HEAT_PREFIGHT_BAD_BLOOD))
+            lines.append(self.rng.choice(HEAT_PREFIGHT_BAD_BLOOD))
             lines.append("")
         elif heat_level > 20:
-            lines.append(random.choice(HEAT_PREFIGHT_TENSION))
+            lines.append(self.rng.choice(HEAT_PREFIGHT_TENSION))
             lines.append("")
         
         # Fighter 1 (Red corner)
-        lines.append(random.choice(FIGHTER_INTRO_RED_CORNER))
+        lines.append(self.rng.choice(FIGHTER_INTRO_RED_CORNER))
         lines.extend(self._generate_fighter_intro(fighter1_data, division, is_champion=False))
         lines.append("")
         
         # Fighter 2 (Blue corner) - often the favorite/champion
-        lines.append(random.choice(FIGHTER_INTRO_BLUE_CORNER))
+        lines.append(self.rng.choice(FIGHTER_INTRO_BLUE_CORNER))
         is_champ = fighter2_data.get('is_champion', False) if fighter2_data else False
         if is_champ and self.context and self.context.is_title_fight:
-            lines.append(random.choice(FIGHTER_INTRO_CHAMPION).format(division=division))
+            lines.append(self.rng.choice(FIGHTER_INTRO_CHAMPION).format(division=division))
         lines.extend(self._generate_fighter_intro(fighter2_data, division, is_champion=is_champ))
         lines.append("")
         
         # Closing
-        lines.append(random.choice(FIGHT_INTRO_CLOSING))
+        lines.append(self.rng.choice(FIGHT_INTRO_CLOSING))
         
         # Add to commentary log
         for line in lines:
@@ -4397,18 +4414,18 @@ class FightCommentarySystem:
         # Style-based intro
         style_key = style.replace("_", " ").title()
         if style_key in FIGHTER_INTRO_STYLE_TAGS:
-            lines.append(random.choice(FIGHTER_INTRO_STYLE_TAGS[style_key]))
+            lines.append(self.rng.choice(FIGHTER_INTRO_STYLE_TAGS[style_key]))
         
         # Record
-        lines.append(random.choice(FIGHTER_INTRO_RECORD).format(wins=wins, losses=losses))
+        lines.append(self.rng.choice(FIGHTER_INTRO_RECORD).format(wins=wins, losses=losses))
         
         # Location (if available)
         if location:
-            lines.append(random.choice(FIGHTER_INTRO_LOCATION).format(location=location))
+            lines.append(self.rng.choice(FIGHTER_INTRO_LOCATION).format(location=location))
         
         # Name with nickname
         if nickname:
-            nick_line = random.choice(FIGHTER_INTRO_NICKNAME_STYLE).format(nickname=nickname)
+            nick_line = self.rng.choice(FIGHTER_INTRO_NICKNAME_STYLE).format(nickname=nickname)
             lines.append(f"{name} {nick_line}!")
         else:
             lines.append(f"{name.upper()}!")
@@ -4433,31 +4450,31 @@ class FightCommentarySystem:
         """
         if heat_level > 80:
             # WAR - High chance of refusing
-            if random.random() < 0.85:
-                template = random.choice(TOUCH_GLOVES_REFUSED_HEAT)
+            if self.rng.random() < 0.85:
+                template = self.rng.choice(TOUCH_GLOVES_REFUSED_HEAT)
                 return template.format(fighter1=fighter1_name, fighter2=fighter2_name)
             else:
-                return random.choice(TOUCH_GLOVES_RELUCTANT)
+                return self.rng.choice(TOUCH_GLOVES_RELUCTANT)
         elif heat_level > 60:
             # HEATED - Moderate chance of refusing
-            if random.random() < 0.60:
-                template = random.choice(TOUCH_GLOVES_REFUSED_HEAT)
+            if self.rng.random() < 0.60:
+                template = self.rng.choice(TOUCH_GLOVES_REFUSED_HEAT)
                 return template.format(fighter1=fighter1_name, fighter2=fighter2_name)
             else:
-                return random.choice(TOUCH_GLOVES_RELUCTANT)
+                return self.rng.choice(TOUCH_GLOVES_RELUCTANT)
         elif heat_level > 40:
             # BAD BLOOD - Small chance of refusing
-            if random.random() < 0.30:
-                template = random.choice(TOUCH_GLOVES_REFUSED_HEAT)
+            if self.rng.random() < 0.30:
+                template = self.rng.choice(TOUCH_GLOVES_REFUSED_HEAT)
                 return template.format(fighter1=fighter1_name, fighter2=fighter2_name)
             else:
-                return random.choice(TOUCH_GLOVES_RELUCTANT)
+                return self.rng.choice(TOUCH_GLOVES_RELUCTANT)
         elif heat_level > 20:
             # TENSION - Reluctant touch
-            return random.choice(TOUCH_GLOVES_RELUCTANT)
+            return self.rng.choice(TOUCH_GLOVES_RELUCTANT)
         else:
             # NEUTRAL - Normal touch
-            return random.choice(TOUCH_GLOVES_NORMAL)
+            return self.rng.choice(TOUCH_GLOVES_NORMAL)
     
     def generate_postfight_respect_moment(
         self,
@@ -4481,24 +4498,24 @@ class FightCommentarySystem:
         
         if heat_level > 80:
             # WAR - Usually no respect shown
-            if random.random() < 0.85:
-                template = random.choice(HEAT_POSTFIGHT_NO_TOUCH)
+            if self.rng.random() < 0.85:
+                template = self.rng.choice(HEAT_POSTFIGHT_NO_TOUCH)
                 return template.format(winner=winner_name, loser=loser_name)
             else:
                 # Rare touching moment after war
-                template = random.choice(HEAT_POSTFIGHT_RESPECT)
+                template = self.rng.choice(HEAT_POSTFIGHT_RESPECT)
                 return template.format(winner=winner_name, loser=loser_name)
         elif heat_level > 60:
             # HEATED - 50/50
-            if random.random() < 0.50:
-                template = random.choice(HEAT_POSTFIGHT_NO_TOUCH)
+            if self.rng.random() < 0.50:
+                template = self.rng.choice(HEAT_POSTFIGHT_NO_TOUCH)
             else:
-                template = random.choice(HEAT_POSTFIGHT_RESPECT)
+                template = self.rng.choice(HEAT_POSTFIGHT_RESPECT)
             return template.format(winner=winner_name, loser=loser_name)
         else:
             # BAD BLOOD - Usually show respect after
-            if random.random() < 0.70:
-                template = random.choice(HEAT_POSTFIGHT_RESPECT)
+            if self.rng.random() < 0.70:
+                template = self.rng.choice(HEAT_POSTFIGHT_RESPECT)
                 return template.format(winner=winner_name, loser=loser_name)
             return None
     
@@ -4535,35 +4552,35 @@ class FightCommentarySystem:
         
         # Method-specific outro
         if method_lower == 'ko':
-            lines.append(random.choice(FIGHT_OUTRO_KO).format(winner=winner, loser=loser))
+            lines.append(self.rng.choice(FIGHT_OUTRO_KO).format(winner=winner, loser=loser))
         elif method_lower == 'tko':
-            lines.append(random.choice(FIGHT_OUTRO_TKO).format(winner=winner, loser=loser))
+            lines.append(self.rng.choice(FIGHT_OUTRO_TKO).format(winner=winner, loser=loser))
         elif 'submission' in method_lower or 'sub' in method_lower:
-            outro = random.choice(FIGHT_OUTRO_SUBMISSION)
+            outro = self.rng.choice(FIGHT_OUTRO_SUBMISSION)
             lines.append(outro.format(winner=winner, loser=loser, method=submission_type or "submission"))
         else:  # Decision
-            lines.append(random.choice(FIGHT_OUTRO_DECISION).format(rounds=rounds))
+            lines.append(self.rng.choice(FIGHT_OUTRO_DECISION).format(rounds=rounds))
         
         lines.append("")
         
         # Title fight specific
         if is_title_fight:
             if title_changed:
-                lines.append(random.choice(FIGHT_OUTRO_TITLE_WIN).format(
+                lines.append(self.rng.choice(FIGHT_OUTRO_TITLE_WIN).format(
                     winner=winner, loser=loser, division=division
                 ))
             else:
-                lines.append(random.choice(FIGHT_OUTRO_TITLE_DEFENSE).format(
+                lines.append(self.rng.choice(FIGHT_OUTRO_TITLE_DEFENSE).format(
                     winner=winner, division=division
                 ))
             lines.append("")
         
         # Winner celebration
-        lines.append(random.choice(FIGHT_OUTRO_WINNER_CELEBRATION).format(winner=winner))
+        lines.append(self.rng.choice(FIGHT_OUTRO_WINNER_CELEBRATION).format(winner=winner))
         
         # Respect for loser (sometimes)
-        if random.random() < 0.6:
-            lines.append(random.choice(FIGHT_OUTRO_LOSER_RESPECT).format(loser=loser))
+        if self.rng.random() < 0.6:
+            lines.append(self.rng.choice(FIGHT_OUTRO_LOSER_RESPECT).format(loser=loser))
         
         # Add to log
         for line in lines:
@@ -4587,11 +4604,11 @@ class FightCommentarySystem:
         """Generate corner advice between rounds."""
         
         if is_hurt:
-            advice = random.choice(CORNER_ADVICE_HURT)
+            advice = self.rng.choice(CORNER_ADVICE_HURT)
         elif is_winning:
-            advice = random.choice(CORNER_ADVICE_WINNING)
+            advice = self.rng.choice(CORNER_ADVICE_WINNING)
         else:
-            advice = random.choice(CORNER_ADVICE_LOSING)
+            advice = self.rng.choice(CORNER_ADVICE_LOSING)
         
         # Style-specific advice
         style_advice = ""
@@ -4600,17 +4617,17 @@ class FightCommentarySystem:
         
         if any(s in fighter_style_lower for s in ['striker', 'boxing', 'muay']):
             if any(s in opponent_style_lower for s in ['wrestler', 'grappl', 'bjj']):
-                style_advice = random.choice(CORNER_ADVICE_STRIKER_VS_GRAPPLER)
+                style_advice = self.rng.choice(CORNER_ADVICE_STRIKER_VS_GRAPPLER)
         elif any(s in fighter_style_lower for s in ['wrestler', 'grappl', 'bjj']):
             if any(s in opponent_style_lower for s in ['striker', 'boxing', 'muay']):
-                style_advice = random.choice(CORNER_ADVICE_GRAPPLER_VS_STRIKER)
+                style_advice = self.rng.choice(CORNER_ADVICE_GRAPPLER_VS_STRIKER)
         
         # Build commentary
-        lines = [random.choice(CORNER_ADVICE_GENERAL)]
+        lines = [self.rng.choice(CORNER_ADVICE_GENERAL)]
         lines.append(advice)
         if style_advice:
             lines.append(style_advice)
-        lines.append(random.choice(CORNER_WATER_CUT))
+        lines.append(self.rng.choice(CORNER_WATER_CUT))
         
         commentary = " ".join(lines)
         self.commentary_log.append(f"[CORNER] {commentary}")
@@ -4637,18 +4654,18 @@ class FightCommentarySystem:
         if 'standing' in from_lower and 'guard' in to_lower:
             # Takedown or guard pull
             if 'pull_guard' in action_lower:
-                template = random.choice(POSITION_TRANSITION_GUARD_PULL)
+                template = self.rng.choice(POSITION_TRANSITION_GUARD_PULL)
                 commentary = template.format(actor=actor)
             else:
-                commentary = random.choice(POSITION_TRANSITION_TO_GROUND)
+                commentary = self.rng.choice(POSITION_TRANSITION_TO_GROUND)
         elif 'standing' in from_lower and 'clinch' in to_lower:
-            commentary = random.choice(POSITION_TRANSITION_TO_CLINCH)
+            commentary = self.rng.choice(POSITION_TRANSITION_TO_CLINCH)
         elif 'standing' in to_lower:
-            commentary = random.choice(POSITION_TRANSITION_TO_STANDING)
+            commentary = self.rng.choice(POSITION_TRANSITION_TO_STANDING)
         elif any(pos in to_lower for pos in ['mount', 'back', 'side_control', 'crucifix']):
-            commentary = random.choice(POSITION_TRANSITION_TO_DOMINANT)
+            commentary = self.rng.choice(POSITION_TRANSITION_TO_DOMINANT)
         elif 'scramble' in action_lower:
-            commentary = random.choice(POSITION_TRANSITION_SCRAMBLE)
+            commentary = self.rng.choice(POSITION_TRANSITION_SCRAMBLE)
         else:
             commentary = f"{actor} transitions to {to_position}."
         
@@ -4667,15 +4684,15 @@ class FightCommentarySystem:
     ) -> str:
         """Generate commentary for guard pull attempts."""
         if success:
-            main = random.choice(GUARD_PULL_TEMPLATES["success"]).format(actor=actor, target=target)
-            extra = random.choice(GUARD_PULL_TEMPLATES["success_commentary"]).format(actor=actor, target=target)
-            consequence = random.choice(GUARD_PULL_TEMPLATES["consequence"]).format(
+            main = self.rng.choice(GUARD_PULL_TEMPLATES["success"]).format(actor=actor, target=target)
+            extra = self.rng.choice(GUARD_PULL_TEMPLATES["success_commentary"]).format(actor=actor, target=target)
+            consequence = self.rng.choice(GUARD_PULL_TEMPLATES["consequence"]).format(
                 actor=actor, target=target, 
                 bottom=actor, top=target
             )
             commentary = f"{main} {extra} {consequence}"
         else:
-            commentary = random.choice(GUARD_PULL_TEMPLATES["fail"]).format(actor=actor, target=target)
+            commentary = self.rng.choice(GUARD_PULL_TEMPLATES["fail"]).format(actor=actor, target=target)
         
         self.commentary_log.append(commentary)
         return commentary
@@ -4691,7 +4708,7 @@ class FightCommentarySystem:
         
         templates = GROUND_POSITION_COMMENTARY.get(position_lower)
         if templates:
-            template = random.choice(templates)
+            template = self.rng.choice(templates)
             commentary = template.format(top=top_fighter, bottom=bottom_fighter)
         else:
             commentary = f"{top_fighter} in {position} over {bottom_fighter}."
@@ -4705,34 +4722,34 @@ class FightCommentarySystem:
     
     def generate_momentum_shift(self, gaining_fighter: str) -> str:
         """Generate dramatic momentum shift commentary."""
-        commentary = random.choice(MOMENTUM_SHIFT_DRAMATIC)
+        commentary = self.rng.choice(MOMENTUM_SHIFT_DRAMATIC)
         self.commentary_log.append(commentary)
         return commentary
     
     def generate_hurt_commentary(self, hurt_fighter: str) -> str:
         """Generate commentary when a fighter is badly hurt."""
-        template = random.choice(FIGHTER_HURT_BADLY)
+        template = self.rng.choice(FIGHTER_HURT_BADLY)
         commentary = template.format(target=hurt_fighter)
         self.commentary_log.append(commentary)
         return commentary
     
     def generate_recovery_commentary(self, recovering_fighter: str) -> str:
         """Generate commentary when a fighter recovers from being hurt."""
-        template = random.choice(FIGHTER_RECOVERS)
+        template = self.rng.choice(FIGHTER_RECOVERS)
         commentary = template.format(actor=recovering_fighter)
         self.commentary_log.append(commentary)
         return commentary
     
     def generate_exhaustion_commentary(self, tired_fighter: str) -> str:
         """Generate commentary for exhausted fighter."""
-        template = random.choice(FIGHTER_EXHAUSTED)
+        template = self.rng.choice(FIGHTER_EXHAUSTED)
         commentary = template.format(actor=tired_fighter)
         self.commentary_log.append(commentary)
         return commentary
     
     def generate_crowd_reaction(self) -> str:
         """Generate crowd reaction commentary."""
-        commentary = random.choice(CROWD_REACTIONS)
+        commentary = self.rng.choice(CROWD_REACTIONS)
         self.commentary_log.append(commentary)
         return commentary
     
@@ -4755,13 +4772,13 @@ class FightCommentarySystem:
         
         # Select appropriate template based on round
         if round_num == 1:
-            template = random.choice(ROUND_START_ROUND_1)
+            template = self.rng.choice(ROUND_START_ROUND_1)
             commentary = template
         elif round_num == total_rounds:
-            template = random.choice(ROUND_START_FINAL)
+            template = self.rng.choice(ROUND_START_FINAL)
             commentary = template.format(round_num=round_num)
         elif round_num >= 4:  # Championship rounds
-            template = random.choice(ROUND_START_CHAMPIONSHIP)
+            template = self.rng.choice(ROUND_START_CHAMPIONSHIP)
             commentary = template.format(round_num=round_num)
         else:
             template = self._select_template(ROUND_START_TEMPLATES)
@@ -4769,13 +4786,13 @@ class FightCommentarySystem:
         
         # Add context
         if is_close_fight and round_num > 1:
-            commentary += " " + random.choice(ROUND_START_CLOSE_FIGHT).format(round_num=round_num)
+            commentary += " " + self.rng.choice(ROUND_START_CLOSE_FIGHT).format(round_num=round_num)
         
         # Title fight context
         if self.context and self.context.is_title_fight and round_num >= 4:
-            commentary += " " + random.choice(TITLE_FIGHT_CONTEXT)
+            commentary += " " + self.rng.choice(TITLE_FIGHT_CONTEXT)
         elif round_num >= 3:
-            commentary += " " + random.choice(LATE_ROUND_CONTEXT)
+            commentary += " " + self.rng.choice(LATE_ROUND_CONTEXT)
         
         self.commentary_log.append(commentary)
         return commentary
@@ -4798,9 +4815,9 @@ class FightCommentarySystem:
         """
         # Select end template
         if was_action_packed:
-            end_template = random.choice(ROUND_END_ACTION_PACKED)
+            end_template = self.rng.choice(ROUND_END_ACTION_PACKED)
         elif was_dominant:
-            end_template = random.choice(ROUND_END_DOMINANT)
+            end_template = self.rng.choice(ROUND_END_DOMINANT)
         else:
             end_template = self._select_template(ROUND_END_TEMPLATES)
         
@@ -4814,13 +4831,13 @@ class FightCommentarySystem:
             score_diff = abs(score1 - score2)
             
             if hurt_fighter:
-                transition = random.choice(ROUND_TRANSITION_HURT).format(hurt_fighter=hurt_fighter)
+                transition = self.rng.choice(ROUND_TRANSITION_HURT).format(hurt_fighter=hurt_fighter)
             elif score_diff >= 3:  # One-sided fight
-                transition = random.choice(ROUND_TRANSITION_ONE_SIDED)
+                transition = self.rng.choice(ROUND_TRANSITION_ONE_SIDED)
             elif score_diff == 0:  # Close fight
-                transition = random.choice(ROUND_TRANSITION_CLOSE)
+                transition = self.rng.choice(ROUND_TRANSITION_CLOSE)
             else:
-                transition = random.choice(ROUND_TRANSITIONS)
+                transition = self.rng.choice(ROUND_TRANSITIONS)
             
             self.commentary_log.append(transition)
         
