@@ -287,6 +287,58 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
   4. Local: single-purpose commit + `./deploy.sh`
   5. Confirm IMPORT-PATH-PROOF still names the `cage_dynasty_web/`
      copies (regression test, unchanged in this ship)
+- **World-gen books EVERY event's main_event as a title fight
+  (surfaced by Stage 0c golden-master fixture 2026-07-12).**
+  Verified on seed=1000 world (60 events): 60 main_events, all
+  60 title fights, **zero non-title main events in the entire
+  simulated history**. `card_slot` is not broken — all five slot
+  values (`main_event`, `co_main`, `main_card`, `prelims`,
+  `early_prelims`) present in the harvest. This is genuine
+  matchmaking behavior in `world_init.HistorySimulator`, not a
+  generator bug.
+
+  **Three separate concerns, one root cause:**
+
+  1. *Probably a real matchmaking bug.* Real MMA promotions run
+     ~4-6 title fights a year across ~40 events. Pre-gen giving
+     the player a history where every event since Cage Dynasty 1
+     was headlined by a championship bout makes the belt worth
+     nothing — no scarcity, no build, no meaning. For a game
+     whose north star is "the simulation made them care,"
+     inheriting a world where title fights are the *default*
+     is a world where the title does not mean anything. Fix
+     candidate lives in `world_init.HistorySimulator._build_event_card`
+     or its callees — title-fight booking discipline should be
+     rank-gated + spacing-gated, not defaulted.
+
+  2. *Real oracle gap for the consolidation arc.* Stage 0c
+     fixture correctly reflects pre-gen population (that was
+     the right call — synthetic populations produced the
+     99% striker-vs-striker artifact this arc has been
+     defending against). But the fixture has 800 modal + 15
+     coverage 5R title fights and **zero 5R non-title mains**.
+     If live-play's matchmaking booker produces non-title
+     main events, that live code path is invisible to the
+     oracle. Stage 2b could break it and every gate would
+     stay green. **Check needed before Stage 2a**: does
+     `card_builder` / `matchmaking` in live-play produce 5R
+     non-title mains? If yes, add a small synthetic coverage
+     cell (~3-4 entries, structurally constructed) to the
+     fixture and regenerate. If no, close 0c as-is.
+
+  3. *Independent gameplay finding.* The pre-gen belt-story
+     work already filed as PRE-GEN WORLD COHERENCE epic
+     (2026-07-11) intersects with this — belt-state consistency
+     bugs surfaced on strawweight (fighter defending a belt
+     he'd already lost, ladder disagreeing with reign records)
+     probably compound with 60-events-of-title-fights driving
+     lineage churn much higher than intended. Bundle both
+     under the epic when it picks up.
+
+  Do NOT fix any of these mid-arc. Consolidation is import-path
+  and behavior stability first; pre-gen matchmaking is a
+  substantive design touch and its own multi-session ship. File
+  and hold.
 - **TWO-ENGINE CONSOLIDATION arc (HIGH, filed 2026-07-11).**
   `fight_engine.simulate_fight` (pre-gen path) and
   `fight_integration.simulate_narrated_fight` (live-play path) are two
