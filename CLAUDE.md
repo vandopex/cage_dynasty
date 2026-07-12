@@ -485,6 +485,18 @@ accident.
   Do NOT use it as a template for future "let admin log in as user X" flows —
   it's a spent mechanism. Better patterns for admin work: signed magic links,
   short-lived JWTs, or a proper login route.
+- **Saves persist across deploys; a save generated before a ship does not
+  reflect that ship.** `_fighter_data` and `fight_history` are frozen at
+  world-init time and survive every subsequent deploy through save/load.
+  Before drawing conclusions from a save — especially when verifying an
+  engine-touching ship — check generation provenance. Concrete signal:
+  fight_history entry count. A 130-week world produces ~3,700 entries
+  across all fighters; a 60-week world produces ~1,600. Filed after
+  PREGEN-FULL-ENGINE-FIX1 (2026-07-12): the "engine is running but style-
+  mismatch dampens the OVR signal at high gaps" interpretation was built
+  on stale 130-week save data that predated the fix, and a plausible-
+  sounding theory got repeated as if established. The truly-fresh
+  post-fix save showed a 97.7% favorite win rate at 21+ OVR gap, not 72%.
 
 ## Recurring architectural pattern: "data exists but doesn't reach the surface"
 
