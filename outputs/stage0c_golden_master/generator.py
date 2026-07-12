@@ -74,7 +74,13 @@ TIER_MODAL_N = 800
 TIER_COVERAGE_SPEC = {
     # cell_name → target n. Unreachable cells report n=0 with a note.
     "5R_title": 15,
-    "5R_main_nontitle": 15,
+    "5R_main_nontitle": 15,             # naturally: pool short (world_init
+                                        # books every main_event as title)
+    "5R_main_nontitle_synth": 4,        # synthesized: real fighters, is_main=True,
+                                        # is_title=False, rounds=5. Covers the live
+                                        # branch at game_bridge:18004 that grants
+                                        # 5R to non-title mains.
+    "5R_co_main_nontitle_synth": 4,     # same but card_slot=co_main
     "extreme_ovr_gap_up": 15,       # favorite by >=15 pts, striker side up
     "extreme_ovr_gap_down": 15,     # underdog by >=15 pts
     "r1_finish": 20,
@@ -381,6 +387,24 @@ def select_coverage(matchups: List[Dict[str, Any]], spec: Dict[str, int],
     picked.extend(("high_heat_synth", m) for m in got)
     counts["high_heat_synth"] = len(got)
 
+    # 5R_main_nontitle_synth — take a NON-TITLE prelim/main_card matchup and
+    # synthesize is_main_event=True at capture time. Covers the live-play
+    # branch at game_bridge:18004 that grants 5R to non-title mains — a
+    # branch world_init never naturally exercises (all mains are title
+    # fights, see the matchmaking finding in CLAUDE.md filed 2026-07-12).
+    pool = [m for m in remaining if not m["was_title_fight"]
+            and m["card_slot"] not in ("main_event", "co_main")]
+    got = _sample_from(pool, spec["5R_main_nontitle_synth"])
+    picked.extend(("5R_main_nontitle_synth", m) for m in got)
+    counts["5R_main_nontitle_synth"] = len(got)
+
+    # 5R_co_main_nontitle_synth — same shape, capture with card_slot=co_main
+    pool = [m for m in remaining if not m["was_title_fight"]
+            and m["card_slot"] not in ("main_event", "co_main")]
+    got = _sample_from(pool, spec["5R_co_main_nontitle_synth"])
+    picked.extend(("5R_co_main_nontitle_synth", m) for m in got)
+    counts["5R_co_main_nontitle_synth"] = len(got)
+
     return picked, counts
 
 
@@ -484,6 +508,21 @@ def main():
             is_main = m["card_slot"] == "main_event"
             rounds = 5 if (is_title or is_main) else 3
             heat = 60 if cell == "high_heat_synth" else 0
+            # Synth overrides — force is_main=True, rounds=5 for the
+            # 5R non-title main/co-main cells that world_init never
+            # produces naturally.
+            if cell == "5R_main_nontitle_synth":
+                is_main = True
+                is_title = False
+                rounds = 5
+            elif cell == "5R_co_main_nontitle_synth":
+                is_main = True   # simulate_narrated_fight flag
+                is_title = False
+                rounds = 5
+                # (card_slot="co_main" isn't a separate config-affecting
+                # field beyond is_main_event; the bridge's :18004 rounds
+                # rule reduces to "is_main OR is_title" in terms of what
+                # simulate_narrated_fight sees.)
             f1, f2 = m["fighter1"], m["fighter2"]
 
             # Seed search

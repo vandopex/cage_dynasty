@@ -32,7 +32,9 @@ print("═" * 76)
 print("O3 — coverage-tier reachability")
 print("═" * 76)
 
-for cell in ["5R_title", "5R_main_nontitle", "extreme_ovr_gap_up",
+for cell in ["5R_title", "5R_main_nontitle",
+             "5R_main_nontitle_synth", "5R_co_main_nontitle_synth",
+             "extreme_ovr_gap_up",
              "extreme_ovr_gap_down", "r1_finish", "goes_the_distance",
              "style_diversity_sampler", "high_heat_synth"]:
     entries = by_cell.get(cell, [])
@@ -109,6 +111,15 @@ for cell in ["5R_title", "5R_main_nontitle", "extreme_ovr_gap_up",
         met = sum(1 for h in heats if h > 40)
         print(f"    heat_level values: {sorted(set(heats))}")
         print(f"    entries with heat > 40: {met}/{n}")
+
+    elif cell in ("5R_main_nontitle_synth", "5R_co_main_nontitle_synth"):
+        # Structural: is_main_event=True, is_title=False, scheduled_rounds=5
+        met_main = sum(1 for e in entries if e["is_main_event"])
+        met_ntitle = sum(1 for e in entries if not e["is_title"])
+        met_rounds = sum(1 for e in entries if e["scheduled_rounds"] == 5)
+        print(f"    is_main_event=True: {met_main}/{n}")
+        print(f"    is_title=False:     {met_ntitle}/{n}")
+        print(f"    scheduled_rounds=5: {met_rounds}/{n}")
 
 print("\n" + "═" * 76)
 print("Summary: which cells effectively test what they aimed at?")
