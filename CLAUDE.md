@@ -356,12 +356,47 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
     p99:   32        max:   45     gaps<4: 0  (floor enforced)
   ```
 
+  **Measurement caveat — read before citing any of these numbers.**
+  The 60-week window RIGHT-CENSORS the gap distribution. A fighter
+  with a genuine 30-week layoff only registers a gap if BOTH fights
+  fall inside the 60-week window; a fighter who fights at week 40
+  and would have fought at week 70 shows NO gap at all (the second
+  fight is outside the window). Long gaps are SYSTEMATICALLY
+  UNDERREPRESENTED. The bias hits different stats in DIFFERENT
+  DIRECTIONS:
+
+  **SURVIVES the window (trustworthy):**
+  - `mode = 4` — robust. Long gaps were never the mode; removing
+    them can't change the modal value.
+  - `301 gaps on the floor` — a raw COUNT, not a share. Censoring
+    can only ADD unobserved gaps, never remove observed ones. So
+    301 is a hard LOWER BOUND on the true count.
+
+  **BIASED HIGH by the window:**
+  - `22.7% (share of gaps on the floor)` — inflated, because
+    censoring shrinks the DENOMINATOR (the long gaps that would
+    dilute this share never get observed). True share is lower.
+    Do NOT tune against 22.7%, and do NOT read a future drop in
+    this share as improvement — it may be censoring arithmetic,
+    not a better scheduler.
+
+  **BIASED LOW by the window:**
+  - `mean = 9.22`, `p90 = 20` — the missing long-tail gaps would
+    pull both stats up. True distribution has a heavier right tail
+    than these numbers show. Do NOT tune against 9.22 as if it
+    were a clean measurement.
+
+  The FINDING is unchanged: the scheduler is pressed flat against
+  its minimum. But the numbers that PROVE it are the mode and the
+  raw count, not the percentage. When 301 fights land on the
+  earliest legal date, the scheduler isn't choosing — it's taking
+  the first legal option every time. Same bug as 60/60 title-fight
+  bookings: the "default" won.
+
   Real UFC cadence is typically 12-26 weeks between fights for
-  active competitors. Pre-gen averages 9.22 with the mode at the
-  4-week floor. Roughly 2× compressed vs real MMA. Same shape of
-  finding as the 60/60 title-fight bug above — both are the
-  simulator running a hyperactive fight calendar. Bundle under the
-  same epic. Do NOT fix mid-arc.
+  active competitors. Pre-gen mode is 4 and 301 fights land on
+  the floor. Bundle under the same PRE-GEN WORLD COHERENCE epic
+  as the 60/60 bug. Do NOT fix mid-arc.
 - **TWO-ENGINE CONSOLIDATION arc (HIGH, filed 2026-07-11).**
   `fight_engine.simulate_fight` (pre-gen path) and
   `fight_integration.simulate_narrated_fight` (live-play path) are two
