@@ -504,10 +504,27 @@ accident.
   `styles.py`, `world_init.py`, `name_database.py`)
 - Stub packages: `cage_dynasty_web/core/`, `entities/`, `systems/` — small
   re-exporters that point back to the flat files above
-- Top-level `cage_dynasty/simulation/` and `cage_dynasty/narrative/` —
-  reached by accident: the symlinks `cage_dynasty_web/simulation` and
-  `cage_dynasty_web/narrative` are BROKEN (relative target wrong), Python
-  silently falls through to top-level via sys.path
+- Top-level `cage_dynasty/narrative/` — reached because wsgi.py adds
+  `/home/vandopegaming/cage_dynasty/narrative` to sys.path, so bare
+  `import commentary` / `import rivalry` / `import media` in the web tree
+  find the `.py` files inside it directly. (Repo root itself is NOT on
+  sys.path — see the CRITICAL block at the top.)
+- `cage_dynasty_web/simulation/` — real shim package (`__init__.py`
+  registers bare `fight_engine` into `sys.modules` under the
+  `simulation.fight_engine` name so `from simulation.fight_engine import
+  ...` resolves to the web engine). Was a broken symlink at one point;
+  became a real dir with PREGEN-FULL-ENGINE-FIX1.
+- `cage_dynasty_web/narrative` — **still a broken symlink** to
+  `../cage_dynasty/narrative` (the relative target resolves to
+  `cage_dynasty/cage_dynasty/narrative`, which doesn't exist). Confirmed
+  inert on PA 2026-07-12 via Files API. Every web-tree consumer of
+  `narrative.X` (rivalry, media, commentary) is inside a
+  `try/except ImportError` block that falls back to the BARE-name import
+  which resolves via wsgi.py's `narrative_path` on sys.path. If anyone
+  writes `from narrative.X import Y` WITHOUT a try/except, they get
+  ImportError on PA and hit the exact silent-failure trap the
+  coin-flip fallback + injury-system-dark bugs came from. Ship 1
+  (post-arc `git rm`) sweeps this dead symlink.
 
 **Dead from the web app's view:**
 - Top-level `cage_dynasty/core/`, `entities/`, `systems/` — never imported
@@ -530,8 +547,11 @@ accident.
 ### Known hazards
 
 - Two parallel `game_state.py` files. Editing one does not update the other.
-- Broken symlinks load top-level packages by accident. Don't "fix" them
-  without verifying behavior first.
+- One broken symlink remains at `cage_dynasty_web/narrative` — inert on
+  PA (Files API confirms) and every consumer is guarded by
+  `try/except ImportError`. See the architecture note above. The
+  companion `cage_dynasty_web/simulation` is NO LONGER a symlink — it's
+  a real shim package now.
 - Flat-first import loop: `from foo import x` finds `cage_dynasty_web/foo.py`
   before `cage_dynasty_web/foo/__init__.py`, before top-level. Adding a flat
   file with a name that collides with a package shadows the package.
@@ -597,12 +617,6 @@ accident.
   dirty root copy first — restore it to repo state via console `git
   checkout HEAD -- fight_engine.py` on PA — or the pull will error
   mid-deploy and require manual intervention on a live box.
-- **PA `wsgi.py` VERIFIED byte-clean for tracked repo state 2026-07-12.**
-  Same full-tree audit that surfaced the root-fight_engine drift shows
-  every other tracked file on PA matches repo byte-for-byte. The `wsgi.py`
-  cosmetic drift documented at 2026-07-07 is a separate story — `wsgi.py`
-  at `/var/www/...` is not in the git repo, so the tree compare didn't
-  cover it. It remains cosmetic-only as previously noted.
 - **PA `wsgi.py` VERIFIED match** as of 2026-07-07 (via Files API fetch of
   `/var/www/vandopegaming_pythonanywhere_com_wsgi.py`, 479 bytes). Byte-
   equivalent to repo's `cage_dynasty_web/wsgi.py` modulo comments. sys.path
