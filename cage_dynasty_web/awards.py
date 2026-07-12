@@ -29,6 +29,7 @@ class YearlyAwardsFight:
     method:         str
     round_finished: Optional[int]  # canonical; pre-gen 'round' normalized here
     is_fotn:        bool = False   # pre-gen adapter always emits False
+    is_title_fight: bool = False   # AWARDS-KOTY-SOTY-RESELECT: title-bonus input
     fight_id:       str = ''       # pre-gen adapter emits '' (no fight_id in sim records)
 
 
@@ -63,6 +64,7 @@ def _adapt_completed_events(
                 method=fight.get('method', 'DEC'),
                 round_finished=fight.get('round_finished'),
                 is_fotn=bool(fight.get('is_fotn', False)),
+                is_title_fight=bool(fight.get('is_title_fight', False)),
                 fight_id=fight.get('fight_id', ''),
             )
             all_year_fights.append(yaf)
@@ -115,6 +117,10 @@ def _adapt_pregen_history(
                 method=entry.get('method', 'DEC'),
                 round_finished=entry.get('round'),  # drift normalize
                 is_fotn=False,
+                # AWARDS-KOTY-SOTY-RESELECT: pre-gen writes 'was_title_fight',
+                # live-play writes 'is_title_fight'. Same shape difference the
+                # awards adapter already handles for round vs round_finished.
+                is_title_fight=bool(entry.get('was_title_fight', False)),
                 fight_id='',
             )
             all_year_fights.append(yaf)
@@ -130,6 +136,7 @@ def compute_yearly_awards(
     year:        int,
     camps=None,                                                # Dict[str, Camp|GeneratedCamp] or None
     rand_pick: Optional[Callable[[List], Any]] = None,
+    resolve_opponent_rank: Optional[Callable[[str], Optional[int]]] = None,
 ) -> Tuple[List[str], Dict[str, Any]]:
     """Pure yearly-awards compute.
 
@@ -206,16 +213,48 @@ def compute_yearly_awards(
                 "age":        getattr(yoty, 'age', 0),
             }
 
-    # ── KO of Year ───────────────────────────────────────────────
-    # Order-sensitive: KO/Sub of Year use rand_pick over a filtered pool,
-    # so equivalence-with-seed depends on all_year_fights preserving the
-    # same iteration order the pre-extraction inline compute produced
-    # (event-order, fight-within-event). Any adapter change must preserve
-    # that ordering or the seeded equivalence gate silently breaks.
-    ko_fights = [f for f in all_year_fights
-                 if f.method in ('KO', 'TKO') and f.is_fotn]
+    # ── KO of Year — AWARDS-KOTY-SOTY-RESELECT ──────────────────────
+    # Was: random.choice over pool gated on is_fotn — an arbitrary KO
+    # from an arbitrary subset. Now: deterministic scoring across ALL
+    # KO/TKO finishes in the year. FOTN gate dropped entirely — a
+    # round-1 walk-off is exactly the KO that should win, and exactly
+    # the fight that never wins FOTN. Scoring inputs use only fields
+    # both stores carry (round, opponent rank via injected callback,
+    # method, title flag). fight_id / time / etc. are display-only.
+    def _opponent_rank_bonus(loser_id: str) -> int:
+        if resolve_opponent_rank is None:
+            return 0
+        r = resolve_opponent_rank(loser_id)
+        if r is None:
+            return 0
+        if r == 0:      return 10  # champion
+        if r <= 5:      return 5   # top contender
+        if r <= 15:     return 2   # ranked
+        return 0
+
+    def _score_ko(f: YearlyAwardsFight) -> Tuple[int, int, str]:
+        rf = f.round_finished if f.round_finished is not None else 5
+        round_bonus  = max(0, 5 - rf)
+        method_bonus = 1 if f.method == 'KO' else 0    # KO > TKO
+        title_bonus  = 3 if f.is_title_fight else 0
+        opp_bonus    = _opponent_rank_bonus(f.loser_id)
+        total        = round_bonus + opp_bonus + method_bonus + title_bonus
+        # Deterministic tiebreaker: same save → same award. Higher score
+        # wins; tie → earlier week (rewards decisive early-year finishes);
+        # tie → lex winner_id (total ordering guarantee).
+        return (total, -f.week, f.winner_id)
+
+    def _score_sub(f: YearlyAwardsFight) -> Tuple[int, int, str]:
+        rf = f.round_finished if f.round_finished is not None else 5
+        round_bonus  = max(0, 5 - rf)
+        title_bonus  = 3 if f.is_title_fight else 0
+        opp_bonus    = _opponent_rank_bonus(f.loser_id)
+        total        = round_bonus + opp_bonus + title_bonus  # no method_bonus for SOTY
+        return (total, -f.week, f.winner_id)
+
+    ko_fights = [f for f in all_year_fights if f.method in ('KO', 'TKO')]
     if ko_fights:
-        ko = rand_pick(ko_fights)
+        ko = max(ko_fights, key=_score_ko)
         _rnd = ko.round_finished if ko.round_finished is not None else '?'
         awards.append(f"💥 KO OF THE YEAR (Year {year}): "
                       f"{ko.winner_name} def. {ko.loser_name} "
@@ -229,11 +268,10 @@ def compute_yearly_awards(
             "fight_id":    ko.fight_id,
         }
 
-    # ── Sub of Year ──────────────────────────────────────────────
-    sub_fights = [f for f in all_year_fights
-                  if f.method == 'SUB' and f.is_fotn]
+    # ── Sub of Year — AWARDS-KOTY-SOTY-RESELECT ─────────────────────
+    sub_fights = [f for f in all_year_fights if f.method == 'SUB']
     if sub_fights:
-        sub = rand_pick(sub_fights)
+        sub = max(sub_fights, key=_score_sub)
         _rnd = sub.round_finished if sub.round_finished is not None else '?'
         awards.append(f"🥋 SUBMISSION OF THE YEAR (Year {year}): "
                       f"{sub.winner_name} def. {sub.loser_name} "

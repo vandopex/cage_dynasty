@@ -4050,12 +4050,22 @@ class GameBridge:
         )
         if not year_fights:
             return
+
+        # AWARDS-KOTY-SOTY-RESELECT: rank lookup for opponent-quality bonus.
+        # Uses CURRENT rank (rankings-at-compute-time), not rank-at-fight-time.
+        # Small imprecision vs pre-fight rank but avoids per-fight rank
+        # persistence; the alternative is an instrumentation ship.
+        def _lookup_rank(fid: str):
+            ftr = self._game_state.get_fighter(fid) if self._game_state else None
+            return self._get_fighter_rank(ftr) if ftr else None
+
         awards, structured = compute_yearly_awards(
             fighters=self._game_state.fighters,
             year_fights=year_fights,
             all_year_fights=all_year_fights,
             year=year,
             camps=self._game_state.camps,
+            resolve_opponent_rank=_lookup_rank,
         )
 
         # ── Fire all awards as news ──────────────────────────────────

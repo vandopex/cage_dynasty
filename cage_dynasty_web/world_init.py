@@ -2213,12 +2213,28 @@ class HistorySimulator:
         )
         if not year_fights:
             return
+
+        # AWARDS-KOTY-SOTY-RESELECT: pre-gen has real rank data — division_rankings
+        # is updated every 4 weeks during sim (:2107-2108) and title_holders is
+        # the current-week snapshot. Use them so pre-gen KOTY/SOTY score by
+        # opponent quality, not just round+method+title.
+        def _lookup_rank(fid: str):
+            for wc, champ_id in self.title_holders.items():
+                if champ_id == fid:
+                    return 0
+            for wc, ranked_list in self.division_rankings.items():
+                for i, (fid_r, _) in enumerate(ranked_list):
+                    if fid_r == fid:
+                        return i + 1
+            return None
+
         awards, structured = compute_yearly_awards(
             fighters=self.fighters,
             year_fights=year_fights,
             all_year_fights=all_year_fights,
             year=year,
             camps=self.camps,
+            resolve_opponent_rank=_lookup_rank,
         )
         self.yearly_awards.append({"year": year, "week": week,
                                    "awards": awards, "structured": structured})
