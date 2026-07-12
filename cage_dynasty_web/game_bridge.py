@@ -242,9 +242,22 @@ try:
         _fe_mod = _sys.modules.get("fight_engine")
         _fe_path = getattr(_fe_mod, "__file__", "?unknown?")
         _fi_path = getattr(_fem, "__file__", "?unknown?")
+        # `commentary` is imported bare by fight_integration.py:161 and has
+        # NO try/except fallback (unlike every other narrative.X consumer).
+        # It resolves via wsgi.py's narrative_path on sys.path — but that's
+        # an inference until we print __file__ from the running app.
+        # PART 2 of the consolidation arc is about to edit this file 101
+        # times, so which commentary.py the app actually loaded matters.
+        # Flat-first shadowing hazard: if a cage_dynasty_web/commentary.py
+        # ever appears, it silently wins over narrative/commentary.py — the
+        # exact class of bug this diagnostic exists to catch early.
+        _cm_mod = _sys.modules.get("commentary")
+        _cm_path = getattr(_cm_mod, "__file__", "?unknown?")
         print(f"✅ [IMPORT-PATH-PROOF] fight_engine.__file__={_fe_path}",
               file=_sys.stderr)
         print(f"✅ [IMPORT-PATH-PROOF] fight_integration.__file__={_fi_path}",
+              file=_sys.stderr)
+        print(f"✅ [IMPORT-PATH-PROOF] commentary.__file__={_cm_path}",
               file=_sys.stderr)
     except Exception as _ip_e:
         print(f"🚨 [IMPORT-PATH-PROOF] FAILED to resolve module paths: "
