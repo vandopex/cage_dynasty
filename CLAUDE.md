@@ -717,6 +717,62 @@ every code path that writes to that dict.
 | A (9709f16)   | State + UI  | Training data → new persistence layer + dashboard |
 | C2 (0139e11)  | State + economy | Coach salary → wired to economy + new contract layer |
 
+## Fossils — comments that outlived the code they describe
+
+Historical preservation of documentation that was measurably wrong at
+the moment it was deleted. Kept here to remind future readers that
+comment blocks age worse than code — the code gets tuned, the comment
+does not — and to make the shape of that decay visible.
+
+### `FI_DAMAGE_MULTIPLIER` justification block (deleted 2026-07-12 by Stage 0d)
+
+Sat above `fight_integration.py:83` for ~8 weeks. Verbatim:
+
+```
+# fight_integration runs a longer commentary exchange loop than fight_engine.simulate_fight
+# so the effective damage per fight is higher — this multiplier is tuned separately
+# to produce realistic finish rates (50-55% target) for the narrated fight path.
+# Ship A two-iteration tune (2026-05-09):
+#   0.32 (Saturday play: 11% finish rate, broken)
+#   → 0.38 (Tier 2 verified: 70% across DFC 16-18, over-corrected)
+#   → 0.36 (final, lands in 50-55% target)
+# Synthetic-vs-production gap: synthetic n=300 batches predicted finish rates
+# ~20-30 points below production reality at the same multiplier. Production
+# may have damage-amplifying factors (gameplan, condition, fighter attrs from
+# real game_state) that the random-Gaussian synthetic doesn't capture. Future
+# tuning should weight production observations over synthetic.
+FI_DAMAGE_MULTIPLIER = 0.48
+```
+
+**Two things were false at the time it was deleted, both load-bearing
+for the arc that consumed it:**
+
+1. **The value it justifies is not the value in the code.** Comment
+   documents an "Ship A two-iteration tune" landing at `0.36`. The
+   code below it says `0.48`. The delta was tuned later by `d666e24`
+   (2026-06-15, "Tune: raise FI_DAMAGE_MULTIPLIER — restore finish
+   rates after stamina tuning") and the justification block was never
+   updated. For eight weeks the file read as if 0.36 were the tuned
+   answer.
+
+2. **The premise it argues from was measured false.** *"runs a
+   longer commentary exchange loop than fight_engine.simulate_fight"*
+   was the entire justification for a separate multiplier. Stage 0b
+   check C2 measured both engines at exactly 55 exchanges per round
+   × 3 rounds = 165 total. Same loop length. The 0.48-vs-0.42 gap
+   was naked drift, not compensation for a real loop-length
+   difference — measured at `outputs/two_engine_0b_close.md` §C2.
+
+**Why it survived**: nobody looked at it as the tuning arc landed the
+next value. Comment blocks describing "why we tuned to X" become
+invisible the moment the code says Y — they read as historical
+context, and historical context doesn't get audited during a tune.
+
+**Lesson for future comments justifying constants**: if the number in
+the code moves, the comment moves with it or the comment gets
+deleted. A justification block that outlives its value is not a
+docstring, it's a fossil.
+
 ## Workflow
 
 Before editing any unfamiliar file:
