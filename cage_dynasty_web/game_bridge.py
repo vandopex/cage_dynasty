@@ -218,6 +218,30 @@ try:
         _Gameplan = None
     FIGHT_ENGINE_AVAILABLE      = True
     print("✅ fight engine loaded from fight_integration")
+    # IMPORT-PATH-PROOF (permanent, C1-CLOSE 2026-07-12):
+    # PA has 5 fight_engine.py copies (root, cage_dynasty_web, interface,
+    # simulation, systems) and 2 fight_integration.py copies. This diagnostic
+    # names which ones the running app actually imported, observed AFTER the
+    # sys.path insert + force-delete above so it reads the outcome of that
+    # hack rather than racing it. Permanent because the project's two worst
+    # bugs (pre-gen coin-flip fallback, silent injury_import_fail) were both
+    # import-path phantoms — one standing line of output is cheap standing
+    # protection against the same failure mode.
+    try:
+        # Read what FI's import chain actually resolved, don't re-import
+        # (a fresh `import fight_engine` here could theoretically resolve
+        # differently from what FI consumed — the whole point of this
+        # diagnostic is to observe what loaded, not to relitigate it).
+        _fe_mod = _sys.modules.get("fight_engine")
+        _fe_path = getattr(_fe_mod, "__file__", "?unknown?")
+        _fi_path = getattr(_fem, "__file__", "?unknown?")
+        print(f"✅ [IMPORT-PATH-PROOF] fight_engine.__file__={_fe_path}",
+              file=_sys.stderr)
+        print(f"✅ [IMPORT-PATH-PROOF] fight_integration.__file__={_fi_path}",
+              file=_sys.stderr)
+    except Exception as _ip_e:
+        print(f"🚨 [IMPORT-PATH-PROOF] FAILED to resolve module paths: "
+              f"{type(_ip_e).__name__}: {_ip_e}", file=_sys.stderr)
 except Exception as _fe_e:
     print(f"⚠️ fight_integration not available: {_fe_e}")
     _FightConfig = None
