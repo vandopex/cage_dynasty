@@ -1,0 +1,292 @@
+"""PREGEN-YEARLY-AWARDS1: shared yearly-awards compute.
+
+Consumed by live-play (advance_week → _run_yearly_awards) and world-init
+(history sim → _compute_yearly_awards_for_year). Both callers adapt into
+YearlyAwardsFight, delegate to compute_yearly_awards.
+
+Behavior contract vs the pre-extraction inline _run_yearly_awards compute:
+byte-identical (awards, structured) for identical inputs. Verified by a
+mechanical-equivalence gate at ship time.
+"""
+from dataclasses import dataclass
+from typing import Any, Callable, Dict, List, Optional, Tuple
+
+
+@dataclass
+class YearlyAwardsFight:
+    """Normalized fight shape consumed by compute_yearly_awards.
+
+    Live-play adapter reads _completed_events fight dicts (has 'winner_id',
+    'is_fotn', 'round_finished'). Pre-gen adapter reads per-fighter
+    fight_history entries (has 'result', 'opponent_id', 'round') plus the
+    fighter's own name. Both adapt into this shape at the module boundary.
+    """
+    week:           int
+    winner_id:      str
+    loser_id:       str
+    winner_name:    str
+    loser_name:     str
+    method:         str
+    round_finished: Optional[int]  # canonical; pre-gen 'round' normalized here
+    is_fotn:        bool = False   # pre-gen adapter always emits False
+    fight_id:       str = ''       # pre-gen adapter emits '' (no fight_id in sim records)
+
+
+def _adapt_completed_events(
+    completed_events: List[Dict[str, Any]],
+    year_start:       int,
+) -> Tuple[Dict[str, List[YearlyAwardsFight]], List[YearlyAwardsFight]]:
+    """Live-play adapter: _completed_events → (year_fights, all_year_fights).
+
+    year_fights maps fighter_id → list of that fighter's fights this year
+    (each fight appears in BOTH sides' lists — matches original iteration
+    at game_bridge.py:4033-4036).
+    all_year_fights is the flat list of unique fights in event order
+    (matches original KO/Sub/Camp-of-Year event iteration at :4114-4200).
+    """
+    all_year_fights: List[YearlyAwardsFight] = []
+    year_fights: Dict[str, List[YearlyAwardsFight]] = {}
+    for ev in completed_events:
+        if ev.get('week', 0) < year_start:
+            continue
+        for fight in ev.get('fights', []):
+            wid = fight.get('winner_id')
+            lid = fight.get('loser_id')
+            if not (wid and lid):
+                continue
+            yaf = YearlyAwardsFight(
+                week=ev.get('week', 0),
+                winner_id=wid,
+                loser_id=lid,
+                winner_name=fight.get('winner_name', ''),
+                loser_name=fight.get('loser_name', ''),
+                method=fight.get('method', 'DEC'),
+                round_finished=fight.get('round_finished'),
+                is_fotn=bool(fight.get('is_fotn', False)),
+                fight_id=fight.get('fight_id', ''),
+            )
+            all_year_fights.append(yaf)
+            year_fights.setdefault(wid, []).append(yaf)
+            year_fights.setdefault(lid, []).append(yaf)
+    return year_fights, all_year_fights
+
+
+def _adapt_pregen_history(
+    fighters,               # Dict[str, GeneratedFighter]
+    year_start: int,
+    week:       int,
+) -> Tuple[Dict[str, List[YearlyAwardsFight]], List[YearlyAwardsFight]]:
+    """Pre-gen adapter: per-fighter fight_history → (year_fights, all_year_fights).
+
+    Canonicalizes on the winner-side entry (result=='W'); the loser-side
+    entry is skipped since the winner side already emitted the fight.
+    'round' key drift normalized to round_finished HERE — no template hedge.
+    Draws (result != 'W'/'L') defensively skipped with a warning; current
+    pre-gen doesn't write draws to fight_history, but this future-proofs.
+    Inaugural Crown tombstones (opponent_id=None) skip naturally via the
+    empty-opponent guard.
+    """
+    all_year_fights: List[YearlyAwardsFight] = []
+    year_fights: Dict[str, List[YearlyAwardsFight]] = {}
+    for fid, f in fighters.items():
+        for entry in getattr(f, 'fight_history', []) or []:
+            if not isinstance(entry, dict):
+                continue
+            ew = entry.get('week', 0)
+            if not (year_start <= ew < week):
+                continue
+            res = entry.get('result')
+            if res == 'L':
+                continue  # winner side will emit
+            if res != 'W':
+                print(f"  ⚠️  [PREGEN-YEARLY-AWARDS1] skipped fight_history "
+                      f"entry for {fid}: result='{res}' (expected W or L)")
+                continue
+            opp_id = entry.get('opponent_id')
+            if not opp_id:
+                # Inaugural Crown tombstone (opponent_id=None) or corrupt entry
+                continue
+            yaf = YearlyAwardsFight(
+                week=ew,
+                winner_id=fid,
+                loser_id=opp_id,
+                winner_name=getattr(f, 'name', ''),
+                loser_name=entry.get('opponent_name', ''),
+                method=entry.get('method', 'DEC'),
+                round_finished=entry.get('round'),  # drift normalize
+                is_fotn=False,
+                fight_id='',
+            )
+            all_year_fights.append(yaf)
+            year_fights.setdefault(fid, []).append(yaf)
+            year_fights.setdefault(opp_id, []).append(yaf)
+    return year_fights, all_year_fights
+
+
+def compute_yearly_awards(
+    fighters,                                                  # Dict[str, FighterRecord|GeneratedFighter]
+    year_fights: Dict[str, List[YearlyAwardsFight]],
+    all_year_fights: List[YearlyAwardsFight],
+    year:        int,
+    camps=None,                                                # Dict[str, Camp|GeneratedCamp] or None
+    rand_pick: Optional[Callable[[List], Any]] = None,
+) -> Tuple[List[str], Dict[str, Any]]:
+    """Pure yearly-awards compute.
+
+    Categories: FOTY, YFOTY (<25), KO of Year, Sub of Year, Comeback,
+    Camp of Year (skipped if camps is None).
+
+    Behavior byte-identical to the pre-extraction inline compute at
+    game_bridge.py:4023-4201 for identical inputs, verified by the
+    equivalence gate. rand_pick defaults to random.choice; equivalence
+    tests inject a seeded picker.
+    """
+    if rand_pick is None:
+        import random
+        rand_pick = random.choice
+
+    active_fids = set(year_fights.keys())
+    if not active_fids:
+        return [], {}
+
+    def wins_this_year(fid: str) -> int:
+        return sum(1 for f in year_fights.get(fid, []) if f.winner_id == fid)
+
+    def year_points(fid: str) -> int:
+        pts = 0
+        for f in year_fights.get(fid, []):
+            if f.winner_id == fid:
+                pts += 10
+                if f.method in ('KO', 'TKO'):
+                    pts += 5
+                elif f.method == 'SUB':
+                    pts += 3
+            else:
+                pts -= 2
+        return pts
+
+    awards: List[str] = []
+    structured: Dict[str, Any] = {}
+
+    # ── FOTY ─────────────────────────────────────────────────────
+    candidates = [(fid, year_points(fid))
+                  for fid in active_fids if year_points(fid) > 0]
+    if candidates:
+        foty_id, foty_pts = max(candidates, key=lambda x: x[1])
+        foty = fighters.get(foty_id)
+        if foty:
+            wins = wins_this_year(foty_id)
+            awards.append(f"🏆 FIGHTER OF THE YEAR (Year {year}): {foty.name} "
+                          f"({foty_pts} pts · {wins} wins · {foty.wins}-{foty.losses})")
+            structured["fighter_of_year"] = {
+                "fighter_id": foty_id,
+                "name":       foty.name,
+                "pts":        foty_pts,
+                "wins":       wins,
+                "record":     f"{foty.wins}-{foty.losses}-{foty.draws}",
+            }
+
+    # ── YFOTY (age < 25) ─────────────────────────────────────────
+    young = [(fid, year_points(fid))
+             for fid in active_fids
+             if year_points(fid) > 0 and
+                getattr(fighters.get(fid), 'age', 30) < 25]
+    if young:
+        yoty_id, yoty_pts = max(young, key=lambda x: x[1])
+        yoty = fighters.get(yoty_id)
+        if yoty:
+            wins = wins_this_year(yoty_id)
+            awards.append(f"⭐ YOUNG FIGHTER OF THE YEAR (Year {year}): {yoty.name} "
+                          f"(Age {yoty.age} · {yoty_pts} pts · {wins} wins)")
+            structured["young_foty"] = {
+                "fighter_id": yoty_id,
+                "name":       yoty.name,
+                "pts":        yoty_pts,
+                "wins":       wins,
+                "age":        getattr(yoty, 'age', 0),
+            }
+
+    # ── KO of Year ───────────────────────────────────────────────
+    # Order-sensitive: KO/Sub of Year use rand_pick over a filtered pool,
+    # so equivalence-with-seed depends on all_year_fights preserving the
+    # same iteration order the pre-extraction inline compute produced
+    # (event-order, fight-within-event). Any adapter change must preserve
+    # that ordering or the seeded equivalence gate silently breaks.
+    ko_fights = [f for f in all_year_fights
+                 if f.method in ('KO', 'TKO') and f.is_fotn]
+    if ko_fights:
+        ko = rand_pick(ko_fights)
+        _rnd = ko.round_finished if ko.round_finished is not None else '?'
+        awards.append(f"💥 KO OF THE YEAR (Year {year}): "
+                      f"{ko.winner_name} def. {ko.loser_name} "
+                      f"via {ko.method} R{_rnd}")
+        structured["ko_of_year"] = {
+            "winner_id":   ko.winner_id,
+            "winner_name": ko.winner_name,
+            "loser_name":  ko.loser_name,
+            "method":      ko.method,
+            "round":       ko.round_finished if ko.round_finished is not None else 0,
+            "fight_id":    ko.fight_id,
+        }
+
+    # ── Sub of Year ──────────────────────────────────────────────
+    sub_fights = [f for f in all_year_fights
+                  if f.method == 'SUB' and f.is_fotn]
+    if sub_fights:
+        sub = rand_pick(sub_fights)
+        _rnd = sub.round_finished if sub.round_finished is not None else '?'
+        awards.append(f"🥋 SUBMISSION OF THE YEAR (Year {year}): "
+                      f"{sub.winner_name} def. {sub.loser_name} "
+                      f"by SUB R{_rnd}")
+        structured["sub_of_year"] = {
+            "winner_id":   sub.winner_id,
+            "winner_name": sub.winner_name,
+            "loser_name":  sub.loser_name,
+            "round":       sub.round_finished if sub.round_finished is not None else 0,
+            "fight_id":    sub.fight_id,
+        }
+
+    # ── Comeback ─────────────────────────────────────────────────
+    comeback = None
+    best_comeback_wins = 0
+    for fid in active_fids:
+        f = fighters.get(fid)
+        if not f:
+            continue
+        w = wins_this_year(fid)
+        history = getattr(f, 'fight_history', [])
+        if len(history) >= 4 and w >= 3:
+            recent = history[-6:]
+            had_loss = any(h.get('result') == 'L' for h in recent[:3])
+            if had_loss and w > best_comeback_wins:
+                best_comeback_wins = w
+                comeback = f
+    if comeback:
+        awards.append(f"💪 COMEBACK FIGHTER OF THE YEAR (Year {year}): "
+                      f"{comeback.name} ({wins_this_year(comeback.fighter_id)} wins this year)")
+        structured["comeback"] = {
+            "fighter_id": comeback.fighter_id,
+            "name":       comeback.name,
+            "wins":       best_comeback_wins,
+        }
+
+    # ── Camp of Year ─────────────────────────────────────────────
+    if camps is not None:
+        camp_wins: Dict[str, int] = {}
+        for f in all_year_fights:
+            wf = fighters.get(f.winner_id)
+            if wf and getattr(wf, 'camp_id', None):
+                camp_wins[wf.camp_id] = camp_wins.get(wf.camp_id, 0) + 1
+        if camp_wins:
+            best_camp_id = max(camp_wins, key=camp_wins.get)
+            best_camp    = camps.get(best_camp_id)
+            if best_camp:
+                awards.append(f"🏟️ CAMP OF THE YEAR (Year {year}): "
+                              f"{best_camp.name} ({camp_wins[best_camp_id]} wins)")
+                structured["camp_of_year"] = {
+                    "camp_id": best_camp_id,
+                    "name":    best_camp.name,
+                    "wins":    camp_wins[best_camp_id],
+                }
+
+    return awards, structured

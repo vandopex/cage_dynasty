@@ -2157,6 +2157,19 @@ class GameBridge:
                 _captured_bh = _initializer.get_belt_history()
                 if _captured_bh is not None:
                     self._belt_history = _captured_bh
+                # PREGEN-YEARLY-AWARDS1: capture pre-gen yearly awards off
+                # the initializer, mirroring the belt_history handoff. Lazy
+                # init to match the existing _run_yearly_awards pattern
+                # (game_bridge.py:4214). Extend rather than assign so any
+                # awards already hydrated from a prior load are preserved.
+                try:
+                    _captured_ya = _initializer.get_yearly_awards()
+                    if _captured_ya:
+                        if not hasattr(self, '_yearly_awards'):
+                            self._yearly_awards = []
+                        self._yearly_awards.extend(_captured_ya)
+                except Exception as _yae:
+                    print(f"⚠️  Yearly-awards capture failed: {_yae}")
                 try:
                     _captured_cs = _initializer.get_coach_system()
                     if _captured_cs is not None:
@@ -4015,190 +4028,30 @@ class GameBridge:
         Categories: Fighter of the Year, Young Fighter of the Year (<25),
         KO of Year, Sub of Year, Comeback Fighter, Camp of Year.
         Results stored as news items and in _yearly_awards.
+
+        PREGEN-YEARLY-AWARDS1: compute delegated to awards.compute_yearly_awards
+        so pre-gen years (in world_init) and live-play years (here) use one
+        shared implementation. Behavior byte-identical to the pre-extraction
+        inline compute — verified by the mechanical-equivalence gate.
         """
-        import random
         if not self._game_state:
             return
 
         year = week // 52
-        fighters = [f for f in self._game_state.fighters.values() if f.is_active]
-        # Only fighters with fights this year (in completed events last 52 weeks)
         year_start = week - 52
-        active_fids = set()
-        year_fights: Dict[str, List[Dict]] = {}  # fighter_id → fights this year
-        for ev in self._completed_events:
-            if ev.get('week', 0) < year_start:
-                continue
-            for fight in ev.get('fights', []):
-                for fid in [fight.get('winner_id'), fight.get('loser_id')]:
-                    if fid:
-                        active_fids.add(fid)
-                        year_fights.setdefault(fid, []).append(fight)
-
-        if not active_fids:
+        from awards import compute_yearly_awards, _adapt_completed_events
+        year_fights, all_year_fights = _adapt_completed_events(
+            self._completed_events, year_start
+        )
+        if not year_fights:
             return
-
-        def wins_this_year(fid):
-            return sum(1 for f in year_fights.get(fid, []) if f.get('winner_id') == fid)
-
-        def best_win_rank(fid):
-            best = 99
-            for f in year_fights.get(fid, []):
-                if f.get('winner_id') == fid:
-                    opp_id = f.get('loser_id')
-                    if opp_id:
-                        opp = self._game_state.get_fighter(opp_id)
-                        if opp:
-                            r = self._get_fighter_rank(opp) or 99
-                            best = min(best, r)
-            return best
-
-        awards = []
-        structured: Dict[str, Any] = {}   # Ship YS1: structured per-award capture
-
-        # ── GOAT formula applied to this year's fights only ────────
-        # Points = (wins × 10) + (KO/TKO wins × 5) + (SUB wins × 3) − (losses × 2)
-        # Same formula as the all-time GOAT rankings, scoped to year window.
-        def year_points(fid):
-            pts = 0
-            for f in year_fights.get(fid, []):
-                if f.get('winner_id') == fid:
-                    method = f.get('method', 'DEC')
-                    pts += 10
-                    if method in ('KO', 'TKO'):
-                        pts += 5
-                    elif method == 'SUB':
-                        pts += 3
-                else:
-                    pts -= 2
-            return pts
-
-        # ── Fighter of the Year ─────────────────────────────────────
-        candidates = [(fid, year_points(fid))
-                      for fid in active_fids if year_points(fid) > 0]
-        if candidates:
-            foty_id, foty_pts = max(candidates, key=lambda x: x[1])
-            foty = self._game_state.get_fighter(foty_id)
-            if foty:
-                wins = wins_this_year(foty_id)
-                awards.append(f"🏆 FIGHTER OF THE YEAR (Year {year}): {foty.name} "
-                              f"({foty_pts} pts · {wins} wins · {foty.wins}-{foty.losses})")
-                structured["fighter_of_year"] = {
-                    "fighter_id": foty_id,
-                    "name":       foty.name,
-                    "pts":        foty_pts,
-                    "wins":       wins,
-                    "record":     f"{foty.wins}-{foty.losses}-{foty.draws}",
-                }
-
-        # ── Young Fighter of the Year (under 25) ────────────────────
-        young = [(fid, year_points(fid))
-                 for fid in active_fids
-                 if year_points(fid) > 0 and
-                    getattr(self._game_state.get_fighter(fid), 'age', 30) < 25]
-        if young:
-            yoty_id, yoty_pts = max(young, key=lambda x: x[1])
-            yoty = self._game_state.get_fighter(yoty_id)
-            if yoty:
-                wins = wins_this_year(yoty_id)
-                awards.append(f"⭐ YOUNG FIGHTER OF THE YEAR (Year {year}): {yoty.name} "
-                              f"(Age {yoty.age} · {yoty_pts} pts · {wins} wins)")
-                structured["young_foty"] = {
-                    "fighter_id": yoty_id,
-                    "name":       yoty.name,
-                    "pts":        yoty_pts,
-                    "wins":       wins,
-                    "age":        getattr(yoty, 'age', 0),
-                }
-
-        # ── KO of the Year ──────────────────────────────────────────
-        ko_fights = [
-            f for ev in self._completed_events
-            if ev.get('week', 0) >= year_start
-            for f in ev.get('fights', [])
-            if f.get('method') in ('KO', 'TKO') and f.get('is_fotn')
-        ]
-        if ko_fights:
-            ko = random.choice(ko_fights)
-            awards.append(f"💥 KO OF THE YEAR (Year {year}): "
-                          f"{ko.get('winner_name')} def. {ko.get('loser_name')} "
-                          f"via {ko.get('method')} R{ko.get('round_finished', '?')}")
-            structured["ko_of_year"] = {
-                "winner_id":   ko.get("winner_id", ""),
-                "winner_name": ko.get("winner_name", ""),
-                "loser_name":  ko.get("loser_name", ""),
-                "method":      ko.get("method", "KO"),
-                "round":       ko.get("round_finished", 0),
-                "fight_id":    ko.get("fight_id", ""),
-            }
-
-        # ── Submission of the Year ──────────────────────────────────
-        sub_fights = [
-            f for ev in self._completed_events
-            if ev.get('week', 0) >= year_start
-            for f in ev.get('fights', [])
-            if f.get('method') == 'SUB' and f.get('is_fotn')
-        ]
-        if sub_fights:
-            sub = random.choice(sub_fights)
-            awards.append(f"🥋 SUBMISSION OF THE YEAR (Year {year}): "
-                          f"{sub.get('winner_name')} def. {sub.get('loser_name')} "
-                          f"by SUB R{sub.get('round_finished', '?')}")
-            structured["sub_of_year"] = {
-                "winner_id":   sub.get("winner_id", ""),
-                "winner_name": sub.get("winner_name", ""),
-                "loser_name":  sub.get("loser_name", ""),
-                "round":       sub.get("round_finished", 0),
-                "fight_id":    sub.get("fight_id", ""),
-            }
-
-        # ── Comeback Fighter of the Year ────────────────────────────
-        comeback = None
-        best_comeback_wins = 0
-        for fid in active_fids:
-            f = self._game_state.get_fighter(fid)
-            if not f:
-                continue
-            w = wins_this_year(fid)
-            history = getattr(f, 'fight_history', [])
-            if len(history) >= 4 and w >= 3:
-                # Check if they had a losing streak before this year's wins
-                recent = history[-6:]
-                had_loss = any(h.get('result') == 'L' for h in recent[:3])
-                if had_loss and w > best_comeback_wins:
-                    best_comeback_wins = w
-                    comeback = f
-        if comeback:
-            awards.append(f"💪 COMEBACK FIGHTER OF THE YEAR (Year {year}): "
-                          f"{comeback.name} ({wins_this_year(comeback.fighter_id)} wins this year)")
-            structured["comeback"] = {
-                "fighter_id": comeback.fighter_id,
-                "name":       comeback.name,
-                "wins":       best_comeback_wins,
-            }
-
-        # ── Camp of the Year ────────────────────────────────────────
-        camp_wins: Dict[str, int] = {}
-        for ev in self._completed_events:
-            if ev.get('week', 0) < year_start:
-                continue
-            for fight in ev.get('fights', []):
-                wid = fight.get('winner_id')
-                if wid:
-                    wf = self._game_state.get_fighter(wid)
-                    if wf and wf.camp_id:
-                        camp_wins[wf.camp_id] = camp_wins.get(wf.camp_id, 0) + 1
-        if camp_wins:
-            best_camp_id = max(camp_wins, key=camp_wins.get)
-            best_camp    = self._game_state.camps.get(best_camp_id)
-            if best_camp:
-                awards.append(f"🏟️ CAMP OF THE YEAR (Year {year}): "
-                              f"{best_camp.name} ({camp_wins[best_camp_id]} wins)")
-                structured["camp_of_year"] = {
-                    "camp_id": best_camp_id,
-                    "name":    best_camp.name,
-                    "wins":    camp_wins[best_camp_id],
-                }
+        awards, structured = compute_yearly_awards(
+            fighters=self._game_state.fighters,
+            year_fights=year_fights,
+            all_year_fights=all_year_fights,
+            year=year,
+            camps=self._game_state.camps,
+        )
 
         # ── Fire all awards as news ──────────────────────────────────
         for award_text in awards:

@@ -1226,7 +1226,12 @@ class HistorySimulator:
         # Rivalry-during-sim (Ship #25)
         self.rivalry_seeded_count: int = 0
         self.rivalry_failed_count: int = 0
-    
+
+        # PREGEN-YEARLY-AWARDS1: yearly awards emitted at week % 52 == 0
+        # during history sim. Same shape as bridge._yearly_awards; captured
+        # off _history_sim at end of world-init and extended onto the bridge.
+        self.yearly_awards: List[Dict[str, Any]] = []
+
     def crown_initial_champions(self) -> None:
         """
         Crown inaugural champions for each division.
@@ -2102,6 +2107,11 @@ class HistorySimulator:
             # apply attribute decline, roll annual retirement, spawn replacements.
             if week % 52 == 0:
                 self._process_annual_aging(year=week // 52, current_week=week)
+                # PREGEN-YEARLY-AWARDS1: emit yearly awards for the year that
+                # just ended, using the same shared compute_yearly_awards as
+                # live-play advance_week. Aging runs first so the year's
+                # retirees still appear as candidates for their final year.
+                self._compute_yearly_awards_for_year(week=week)
 
             # Update rankings periodically (every 4 weeks)
             if week % 4 == 0:
@@ -2135,6 +2145,34 @@ class HistorySimulator:
         print(f"  Rivalries seeded: {self.rivalry_seeded_count}" +
               (f" ({self.rivalry_failed_count} failed)" if self.rivalry_failed_count else ""))
     
+    def _compute_yearly_awards_for_year(self, week: int) -> None:
+        """PREGEN-YEARLY-AWARDS1: emit yearly awards at the annual boundary.
+
+        Adapts per-fighter fight_history → normalized YearlyAwardsFight,
+        delegates to the shared compute_yearly_awards helper (same function
+        live-play advance_week uses). Skips KO/Sub of Year naturally since
+        pre-gen fights adapt with is_fotn=False.
+        """
+        from awards import compute_yearly_awards, _adapt_pregen_history
+        year = week // 52
+        year_start = week - 52
+        year_fights, all_year_fights = _adapt_pregen_history(
+            self.fighters, year_start, week
+        )
+        if not year_fights:
+            return
+        awards, structured = compute_yearly_awards(
+            fighters=self.fighters,
+            year_fights=year_fights,
+            all_year_fights=all_year_fights,
+            year=year,
+            camps=self.camps,
+        )
+        self.yearly_awards.append({"year": year, "week": week,
+                                   "awards": awards, "structured": structured})
+        for award_text in awards:
+            print(f"  🏆 [PRE-GEN AWARDS Year {year}] {award_text}")
+
     # ========================================================================
     # AGING-DURING-SIM
     # ========================================================================
@@ -2690,6 +2728,8 @@ class WorldInitializer:
         self._title_holders = self._history_sim.title_holders
         self._events = self._history_sim.events
         self._belt_history = self._history_sim.belt_history
+        # PREGEN-YEARLY-AWARDS1: capture yearly awards emitted during sim
+        self._yearly_awards = self._history_sim.yearly_awards
         
         print(f"Simulated {len(self._history_sim.fight_history)} fights across {len(self._events)} events")
     
@@ -2706,6 +2746,10 @@ class WorldInitializer:
     def get_belt_history(self) -> Optional[BeltHistory]:
         """Return belt history for archives/tracking"""
         return getattr(self, '_belt_history', None)
+
+    def get_yearly_awards(self) -> List[Dict[str, Any]]:
+        """PREGEN-YEARLY-AWARDS1: return yearly awards emitted during history sim"""
+        return getattr(self, '_yearly_awards', [])
     
     def populate_game_state(self) -> None:
         """Add all generated content to the game state"""
