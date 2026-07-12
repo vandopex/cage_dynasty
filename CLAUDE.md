@@ -244,6 +244,49 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
 `_GAMEPLAN_DEBUG = False`) on the next `game_bridge.py` touch.
 
 **Queued, not scheduled:**
+- **Ship 1 — `git rm` the three orphaned CLI-era `fight_engine.py`
+  copies (post-arc, filed 2026-07-12).** Full-tree hash compare on
+  2026-07-12 proved 4 of the 5 stale `.py` copies are byte-identical
+  PA-to-repo (no drift), and grep proved 3 of the 5 are genuinely
+  unreachable — no code imports from them, in either the web tree or
+  the CLI tree:
+  - `/cage_dynasty/fight_engine.py` (root)
+  - `/cage_dynasty/interface/fight_engine.py`
+  - `/cage_dynasty/systems/fight_engine.py`
+
+  The other 2 (`simulation/fight_engine.py` and
+  `simulation/fight_integration.py`) are load-bearing for the CLI
+  (`interface/cli.py`, `core/release_diagnostic.py`, four test files)
+  and STAY. Whether to retire the CLI itself is a separate design call
+  not part of this arc.
+
+  **Deferred to post-arc for a specific reason**: the consolidation
+  arc's premise is import-path stability. The `sys.path.insert` +
+  force-delete hack in `game_bridge.py:190-199` exists specifically to
+  beat root `/cage_dynasty/fight_engine.py`. Deleting that file
+  mid-arc changes what the hack is defending against right before the
+  file it protects gets relocated into. IMPORT-PATH-PROOF (`db15e3a`)
+  has disarmed the concrete guard we need; the shadow file itself can
+  wait five minutes post-arc.
+
+  **PREREQUISITE** — reconcile PA's dirty root `fight_engine.py`
+  before shipping this `git rm`. Root PA carries 11 manually-appended
+  constants (see Known-hazards section "Root `fight_engine.py` on PA
+  has 11 manually-appended constants — CONFIRMED REAL"). `git pull`
+  has been tolerating this for months only because the repo copy
+  hasn't changed. This `git rm` would be the change that makes git
+  refuse — deploy would error mid-pull with "would overwrite locally
+  modified file." Order of operations must be:
+  1. PA console: `cd ~/cage_dynasty && git checkout HEAD -- fight_engine.py`
+     (restores PA's copy to match repo state; the appended constants
+     go into the diff we're about to make anyway)
+  2. Local: `git rm fight_engine.py interface/fight_engine.py systems/fight_engine.py`
+  3. Also clean the orphaned `.pyc`: after step 1, run
+     `cd ~/cage_dynasty/__pycache__ && rm fight_engine.cpython-313.pyc`
+     on PA console (pyc without matching source is inert but tidy)
+  4. Local: single-purpose commit + `./deploy.sh`
+  5. Confirm IMPORT-PATH-PROOF still names the `cage_dynasty_web/`
+     copies (regression test, unchanged in this ship)
 - **TWO-ENGINE CONSOLIDATION arc (HIGH, filed 2026-07-11).**
   `fight_engine.simulate_fight` (pre-gen path) and
   `fight_integration.simulate_narrated_fight` (live-play path) are two
@@ -496,11 +539,70 @@ accident.
   never `Dict`, `List`, `Set` type hints.
 - WebFighter dataclass crashed once because fields with defaults were placed
   before fields without. Always read the whole class before adding fields.
-- **CLI `fight_engine.py` manual constants on PA** (unverified). The PA copy
-  reportedly has manually-appended engine constants not in the repo. Working
-  tree matches HEAD as of 2026-07-01 audit; PA-side has not been re-audited
-  since. Anything that changes fight_engine constants should be checked against
-  PA's copy before deploy.
+- **Root `fight_engine.py` on PA has 11 manually-appended constants —
+  CONFIRMED REAL 2026-07-12 (not the myth it was suspected of being).**
+  Full-tree hash compare of every one of the 227 tracked files, PA vs repo:
+  225 byte-match, 1 diff. The diff is root `/home/vandopegaming/cage_dynasty/fight_engine.py`
+  — PA is 133782 bytes, repo is 133480 (Δ +302). PA carries 11 lines
+  appended after the last function that git doesn't know about:
+  ```
+  DAMAGE_MULTIPLIER = 0.42
+  # Web app compatibility constants
+  FLASH_KO_DAMAGE_THRESHOLD = 25.0
+  FLASH_KO_BASE_CHANCE = 0.05
+  FLASH_KO_MAX_CHANCE = 0.25
+  TKO_GNP_HEALTH_THRESHOLD = 30.0
+  TKO_GNP_BASE_CHANCE = 0.08
+  TKO_GNP_MAX_CHANCE = 0.35
+  TKO_STANDING_HEALTH_THRESHOLD = 25.0
+  TKO_STANDING_BASE_CHANCE = 0.06
+  ```
+  **Provenance** (Van, 2026-07-12): fossil of the pre-`sys.path`-hack
+  ImportError fix era. Before wsgi.py explicitly excluded repo root
+  from `sys.path` and before `game_bridge`'s force-delete-then-reimport
+  block landed, bare `import fight_engine` sometimes resolved to root
+  `/cage_dynasty/fight_engine.py`. That file didn't have the FLASH_KO /
+  TKO_GNP / TKO_STANDING constants FI needed, so `from fight_engine
+  import (...)` raised ImportError, `FIGHT_ENGINE_AVAILABLE` fell to
+  False, and pre-gen quietly ran on the score-based coin-flip fallback —
+  the two-month bug PREGEN-FULL-ENGINE-FIX1 (`efaf7f6`, 2026-07-11)
+  finally closed. Someone (probably Van, in a firefight) diagnosed the
+  ImportError correctly but fixed it at the wrong end: hand-appended
+  the missing constants to root fight_engine.py on the live box instead
+  of fixing which file got imported. The proper fix — the `sys.path`
+  insert + force-delete in `game_bridge.py:190-199` — came later and
+  made this workaround inert. But the appended lines never got cleaned
+  up, and they've sat on PA in a modified-but-tracked state ever since.
+  **Values are meaningfully different from what live-play uses today.**
+  Root-PA's `TKO_GNP_HEALTH_THRESHOLD = 30.0` vs live web's `18.0`
+  post-GROUND-STOPPAGE-FIX1. Root-PA's `FLASH_KO_DAMAGE_THRESHOLD =
+  25.0` vs live web's `70.0`. If any code path ever accidentally
+  resolves `import fight_engine` to root, these old constants silently
+  override the tuned live values and produce different fight outcomes.
+  **NOT affecting live behavior today** — IMPORT-PATH-PROOF (`db15e3a`,
+  2026-07-12) directly measures `fight_engine.__file__` in the running
+  app; it names `/home/vandopegaming/cage_dynasty/cage_dynasty_web/fight_engine.py`,
+  not root. That guard is now the standing regression test for this
+  specific ghost.
+  **Why `git pull` has silently tolerated this for months (the
+  deploy-breaker warning):** `git pull` only refuses to overwrite a
+  locally-modified tracked file when the incoming merge would touch
+  that file. Root `fight_engine.py` hasn't been modified in the repo
+  since commit `56bf807` (2026-04-27, initial commit) — nothing to
+  overwrite, nothing to complain about. Every deploy has been
+  fast-forwarding around it happily. **The trap springs the instant
+  that file changes upstream.** Ship 1 (the `git rm` of the three
+  orphaned CLI-era fight_engine.py copies, filed for post-arc) IS
+  exactly that upstream change. Before shipping it, reconcile PA's
+  dirty root copy first — restore it to repo state via console `git
+  checkout HEAD -- fight_engine.py` on PA — or the pull will error
+  mid-deploy and require manual intervention on a live box.
+- **PA `wsgi.py` VERIFIED byte-clean for tracked repo state 2026-07-12.**
+  Same full-tree audit that surfaced the root-fight_engine drift shows
+  every other tracked file on PA matches repo byte-for-byte. The `wsgi.py`
+  cosmetic drift documented at 2026-07-07 is a separate story — `wsgi.py`
+  at `/var/www/...` is not in the git repo, so the tree compare didn't
+  cover it. It remains cosmetic-only as previously noted.
 - **PA `wsgi.py` VERIFIED match** as of 2026-07-07 (via Files API fetch of
   `/var/www/vandopegaming_pythonanywhere_com_wsgi.py`, 479 bytes). Byte-
   equivalent to repo's `cage_dynasty_web/wsgi.py` modulo comments. sys.path
