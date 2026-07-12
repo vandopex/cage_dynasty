@@ -12,6 +12,54 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 
+def canonical_specialty_method(engine_method: str, sub_type: str = '') -> str:
+    """FINISH-DETAIL-PERSIST: canonical form for the specialty_method field.
+
+    Consumed by both live-play (game_bridge._simulate_fight / _run_real_engine /
+    _simulate_card_fights / _simulate_ai_fights_week) and pre-gen (world_init.
+    simulate_fight_full_engine / simulate_fight_simple). Kept here so both
+    stores emit the SAME string shape — the recurring divergence trap
+    (round vs round_finished, is_title_fight vs was_title_fight, flat-avg vs
+    style-weighted OVR) has bitten us three times; the specialty label
+    format joins that same class and gets normalized once, here.
+
+    Canonical shape:
+      "KO (Head Kick)"            — engine's specialty KO label (kept as-is)
+      "TKO (Body Shot)"           — engine's specialty TKO label (kept as-is)
+      "SUB (armbar)"              — normalized from engine's "Submission (armbar)"
+                                     (raw fight_engine) or synthesized from
+                                     ("Submission", "armbar") (fight_integration)
+      "KO"                        — bare label (boxing-punch KO, no specialty)
+      "TKO"                       — bare label (accumulated-damage stoppage)
+      "SUB"                       — defensive default; should not occur since
+                                     the engine always names a submission
+      "DEC" / "UNY DEC" / "SPLIT DEC" / "MAJ DEC" — decisions (no specialty)
+      "DRAW"                      — draws (no specialty)
+
+    Args:
+      engine_method: The engine's method string. From raw fight_engine.simulate_fight
+        this may be "Submission (armbar)" / "KO (Head Kick)" / "KO" / "Decision"-
+        style. From fight_integration.NarratedFightResult this may be bare
+        "Submission" (with sub_type in a separate field) or "KO (Head Kick)".
+      sub_type: Optional bare sub_type name (from NarratedFightResult.sub_type).
+        Only used when engine_method is bare "Submission" and sub_type is set.
+
+    Returns:
+      The canonical specialty_method string.
+    """
+    if engine_method.startswith('Submission ('):
+        # Raw engine format: "Submission (armbar)" → "SUB (armbar)"
+        return 'SUB' + engine_method[len('Submission'):]
+    if engine_method == 'Submission' and sub_type:
+        # NarratedFightResult format: bare "Submission" + separate sub_type
+        return f'SUB ({sub_type})'
+    if engine_method == 'Submission':
+        return 'SUB'
+    # KO/TKO specialty labels ("KO (Head Kick)", "TKO (Body Shot)"), bare
+    # "KO"/"TKO", "Decision" variants, "Draw" — kept as-is (already canonical).
+    return engine_method
+
+
 @dataclass
 class YearlyAwardsFight:
     """Normalized fight shape consumed by compute_yearly_awards.

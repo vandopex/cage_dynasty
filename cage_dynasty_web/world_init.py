@@ -385,12 +385,12 @@ class GeneratedCamp:
     dominant_coach_type: str = ""
 
 
-@dataclass 
+@dataclass
 class SimulatedFight:
     """Record of a simulated historical fight"""
     winner_id: str
     loser_id: str
-    method: str  # KO, TKO, SUB, DEC
+    method: str  # KO, TKO, SUB, DEC — collapsed for existing consumers
     round_ended: int
     was_title_fight: bool = False
     event_name: str = ""           # e.g., "Cage Dynasty 47"
@@ -399,6 +399,14 @@ class SimulatedFight:
     weight_class: str = ""
     winner_name: str = ""
     loser_name: str = ""
+    # FINISH-DETAIL-PERSIST: engine already names finishes ("KO (Head Kick)",
+    # "SUB (armbar)"). Preserve here so consumers (KOTY/SOTY, profile, future
+    # signature detector) don't need to re-derive. Canonical form via
+    # awards.canonical_specialty_method(); see docstring there.
+    specialty_method: str = ""
+    # Loser's rank at fight time (0 = champion, 1-15 = ranked, None = unranked).
+    # Bundled here per Van's ship spec — same write path as specialty_method.
+    opponent_rank_at_fight: Optional[int] = None
 
 
 @dataclass
@@ -475,6 +483,9 @@ class SimulatedEvent:
             "was_title_fight": fight.was_title_fight,
             "card_slot": fight.card_slot,
             "weight_class": fight.weight_class,
+            # FINISH-DETAIL-PERSIST
+            "specialty_method": fight.specialty_method,
+            "opponent_rank_at_fight": fight.opponent_rank_at_fight,
         }
 
 
@@ -1377,36 +1388,50 @@ class HistorySimulator:
             return None
     
     def simulate_fight_full_engine(
-        self, 
-        fighter1_id: str, 
-        fighter2_id: str, 
+        self,
+        fighter1_id: str,
+        fighter2_id: str,
         is_title_fight: bool = False
-    ) -> Tuple[Optional[str], Optional[str], str, int]:
+    ) -> Tuple[Optional[str], Optional[str], str, int, str]:
         """
         Simulate fight using full engine (no commentary generation).
-        
-        Returns: (winner_id, loser_id, method, round_ended) or (None, None, "", 0) on error
+
+        Returns: (winner_id, loser_id, method, round_ended, specialty_method)
+        or (None, None, "", 0, "") on error.
+
+        FINISH-DETAIL-PERSIST: added specialty_method (5th tuple element).
+        result.method from the raw engine already carries the specialty label
+        ("Submission (armbar)" / "KO (Head Kick)"). Preserve it via
+        canonical_specialty_method (normalizes "Submission" prefix → "SUB")
+        BEFORE the substring collapse below discards it.
         """
         if not FULL_ENGINE_AVAILABLE:
-            return None, None, "", 0
-        
+            return None, None, "", 0, ""
+
         f1 = self.fighters[fighter1_id]
         f2 = self.fighters[fighter2_id]
-        
+
         f1_attrs = self._fighter_to_attributes(f1)
         f2_attrs = self._fighter_to_attributes(f2)
-        
+
         if not f1_attrs or not f2_attrs:
-            return None, None, "", 0
-        
+            return None, None, "", 0, ""
+
         try:
             # Configure fight (no commentary needed for history)
             config = FightConfig.championship_fight() if is_title_fight else FightConfig.standard_fight()
-            
+
             # Run simulation
             result = engine_simulate_fight(f1_attrs, f2_attrs, config)
-            
-            # Extract method
+
+            # FINISH-DETAIL-PERSIST: capture the specialty label BEFORE collapse.
+            # Raw engine's result.method is e.g. "KO (Head Kick)" or
+            # "Submission (armbar)" ~52% of KOs / 100% of subs, per the
+            # 500-fight direct measurement in the ship's diagnostic.
+            from awards import canonical_specialty_method
+            specialty = canonical_specialty_method(result.method or "")
+
+            # Extract collapsed method for existing consumers
             method = result.method
             if "KO" in method and "TKO" not in method:
                 method = "KO"
@@ -1423,26 +1448,32 @@ class HistorySimulator:
                 method = "DRAW"
             else:
                 method = "DEC"
-            
+
             # Determine winner/loser
             if result.winner_id == fighter1_id:
                 winner_id, loser_id = fighter1_id, fighter2_id
             else:
                 winner_id, loser_id = fighter2_id, fighter1_id
-            
+
             round_ended = result.finish_round if result.finish_round else 3
-            
-            return winner_id, loser_id, method, round_ended
-            
+
+            return winner_id, loser_id, method, round_ended, specialty
+
         except Exception:
-            return None, None, "", 0
+            return None, None, "", 0, ""
     
     def simulate_fight_simple(
-        self, 
-        fighter1_id: str, 
+        self,
+        fighter1_id: str,
         fighter2_id: str
-    ) -> Tuple[str, str, str, int]:
-        """Simple probability-based fight simulation (fast fallback)"""
+    ) -> Tuple[str, str, str, int, str]:
+        """Simple probability-based fight simulation (fast fallback).
+
+        FINISH-DETAIL-PERSIST: returns 5-tuple to match simulate_fight_full_engine.
+        The simple engine has no specialty vocabulary, so specialty_method equals
+        the bare method — a downgrade from full-engine specialty but honest about
+        what data is available on this fallback path.
+        """
         
         f1 = self.fighters[fighter1_id]
         f2 = self.fighters[fighter2_id]
@@ -1472,8 +1503,9 @@ class HistorySimulator:
             round_ended = random.choices([1, 2, 3], weights=[30, 40, 30], k=1)[0]
         else:
             round_ended = 3
-        
-        return winner_id, loser_id, method, round_ended
+
+        # FINISH-DETAIL-PERSIST: no specialty vocab on this fallback path
+        return winner_id, loser_id, method, round_ended, method
     
     def _simulate_single_fight(
         self, 
@@ -1494,17 +1526,18 @@ class HistorySimulator:
         f2 = self.fighters[fighter2_id]
         
         # Try full engine first
-        winner_id, loser_id, method, round_ended = None, None, "", 0
+        # FINISH-DETAIL-PERSIST: 5-tuple now (adds specialty_method)
+        winner_id, loser_id, method, round_ended, specialty_method = (
+            None, None, "", 0, "")
         if self.use_full_engine:
-            winner_id, loser_id, method, round_ended = self.simulate_fight_full_engine(
-                fighter1_id, fighter2_id, is_title_fight
-            )
-        
+            winner_id, loser_id, method, round_ended, specialty_method = (
+                self.simulate_fight_full_engine(
+                    fighter1_id, fighter2_id, is_title_fight))
+
         # Fall back to simple if needed
         if not winner_id:
-            winner_id, loser_id, method, round_ended = self.simulate_fight_simple(
-                fighter1_id, fighter2_id
-            )
+            winner_id, loser_id, method, round_ended, specialty_method = (
+                self.simulate_fight_simple(fighter1_id, fighter2_id))
         
         winner = self.fighters[winner_id]
         loser = self.fighters[loser_id]
@@ -1627,6 +1660,14 @@ class HistorySimulator:
             except Exception:
                 self.rivalry_failed_count += 1
 
+        # FINISH-DETAIL-PERSIST: rank-at-fight-time snapshots.
+        # Both fighters need their rank captured NOW, before this fight's
+        # result feeds into _update_rankings_after_fight elsewhere and shifts
+        # positions. From each fighter's history-entry perspective,
+        # opponent_rank_at_fight = the OTHER fighter's rank at fight time.
+        _winner_rank_now = self._get_fighter_rank(winner_id, winner.weight_class)
+        _loser_rank_now  = self._get_fighter_rank(loser_id, loser.weight_class)
+
         # Create fight record
         fight = SimulatedFight(
             winner_id=winner_id,
@@ -1640,11 +1681,14 @@ class HistorySimulator:
             event_number=event_number,
             card_slot=card_slot,
             weight_class=winner.weight_class,
+            # FINISH-DETAIL-PERSIST
+            specialty_method=specialty_method,
+            opponent_rank_at_fight=_loser_rank_now,  # canonical: loser's rank
         )
-        
+
         # Add to fight history
         self.fight_history.append(fight)
-        
+
         # Add to fighter's personal history
         fight_record_winner = {
             "event_name": event_name,
@@ -1657,6 +1701,9 @@ class HistorySimulator:
             "was_title_fight": is_title_fight,
             "weight_class": winner.weight_class,
             "week": current_week,
+            # FINISH-DETAIL-PERSIST — opponent is loser here
+            "specialty_method": specialty_method,
+            "opponent_rank_at_fight": _loser_rank_now,
         }
         fight_record_loser = {
             "event_name": event_name,
@@ -1669,8 +1716,11 @@ class HistorySimulator:
             "was_title_fight": is_title_fight,
             "weight_class": loser.weight_class,
             "week": current_week,
+            # FINISH-DETAIL-PERSIST — opponent is winner here
+            "specialty_method": specialty_method,
+            "opponent_rank_at_fight": _winner_rank_now,
         }
-        
+
         winner.fight_history.append(fight_record_winner)
         loser.fight_history.append(fight_record_loser)
         

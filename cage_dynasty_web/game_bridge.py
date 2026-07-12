@@ -5185,6 +5185,14 @@ class GameBridge:
                 print(f"⚠️ Scorecard generation failed: {exc}")
 
         # ── Build result dict ────────────────────────────────────
+        # FINISH-DETAIL-PERSIST: score-sim fallback path has no engine
+        # specialty vocabulary — specialty_method equals the collapsed method.
+        # Rank snapshots taken now, before this fight's outcome shifts them.
+        from awards import canonical_specialty_method
+        _specialty = canonical_specialty_method(method, "")
+        _loser_rank_now  = self._get_fighter_rank(loser)  if loser  else None
+        _winner_rank_now = self._get_fighter_rank(winner) if winner else None
+
         result = {
             "fight_id":       fight.get("fight_id"),
             "fighter1_id":    fighter1.fighter_id,
@@ -5207,6 +5215,9 @@ class GameBridge:
             "purse":          fight.get("purse", 0),
             "scorecard":      scorecard_data,
             "rivalry":        None,
+            # FINISH-DETAIL-PERSIST — canonical semantics: loser's rank
+            "specialty_method":       _specialty,
+            "opponent_rank_at_fight": _loser_rank_now,
         }
 
         # ── Rivalry detection ────────────────────────────────────
@@ -5444,6 +5455,8 @@ class GameBridge:
 
         # ── Fight history ─────────────────────────────────────────
         # Write to both fighters' records so profiles/streaks stay current
+        # FINISH-DETAIL-PERSIST: _specialty / _loser_rank_now / _winner_rank_now
+        # captured earlier in this method (before the result dict).
         winner_history_entry = {
             "opponent_name":  loser.name,
             "opponent_id":    loser.fighter_id,
@@ -5453,6 +5466,8 @@ class GameBridge:
             "event_name":     fight.get("event_name", ""),
             "fight_id":       fight.get("fight_id", ""),
             "week":           self._game_state.week_number if self._game_state else 1,
+            "specialty_method":       _specialty,
+            "opponent_rank_at_fight": _loser_rank_now,   # opponent is loser
         }
         loser_history_entry = {
             "opponent_name":  winner.name,
@@ -5463,6 +5478,8 @@ class GameBridge:
             "event_name":     fight.get("event_name", ""),
             "fight_id":       fight.get("fight_id", ""),
             "week":           self._game_state.week_number if self._game_state else 1,
+            "specialty_method":       _specialty,
+            "opponent_rank_at_fight": _winner_rank_now,  # opponent is winner
         }
         if not hasattr(winner, "fight_history"):
             winner.fight_history = []
@@ -13724,6 +13741,9 @@ class GameBridge:
                     "loser_new_rank":    None,
                     "winner_rank_delta": 0,
                     "loser_rank_delta":  0,
+                    # FINISH-DETAIL-PERSIST — draws carry no specialty/opponent semantics
+                    "specialty_method":       "DRAW",
+                    "opponent_rank_at_fight": None,
                 }
                 event["fights"].append(result)
                 print(f"   [DRAW] {f1.name} vs {f2.name} — Draw (R{rnd})")
@@ -13731,6 +13751,13 @@ class GameBridge:
 
             pre_w = pre_rank_snapshot.get(winner.fighter_id)
             pre_l = pre_rank_snapshot.get(loser.fighter_id)
+            # FINISH-DETAIL-PERSIST: derive specialty from the engine result
+            # captured upstream. _eng is the NarratedFightResult (or falsy on
+            # score-sim fallback branches). _eng_sub_type populated at :13609.
+            from awards import canonical_specialty_method
+            _specialty = canonical_specialty_method(
+                getattr(_eng, 'method', '') or method,
+                _eng_sub_type)
 
             winner.wins += 1; loser.losses += 1
             if method in ("KO","TKO"):
@@ -13832,7 +13859,10 @@ class GameBridge:
                                 })
                         self._maybe_queue_champion_injury_decision(_ftr, _inj)
 
-            for ftr, res, opp in [(winner,"W",loser),(loser,"L",winner)]:
+            for ftr, res, opp, _opp_rank in [
+                (winner, "W", loser,  pre_l),   # winner's perspective: opp = loser
+                (loser,  "L", winner, pre_w),   # loser's perspective: opp = winner
+            ]:
                 if not hasattr(ftr,"fight_history"): ftr.fight_history = []
                 ftr.fight_history.append({
                     "opponent_name": opp.name,
@@ -13840,6 +13870,9 @@ class GameBridge:
                     "result": res,
                     "method": method, "round_finished": rnd,
                     "event_name": event_name, "week": week,
+                    # FINISH-DETAIL-PERSIST
+                    "specialty_method":       _specialty,
+                    "opponent_rank_at_fight": _opp_rank,
                 })
 
             self._update_rankings_after_fight(fight["weight_class"])
@@ -13868,6 +13901,9 @@ class GameBridge:
                 "loser_new_rank":   new_l,
                 "winner_rank_delta": self._rank_delta(pre_w, new_w),
                 "loser_rank_delta":  self._rank_delta(pre_l, new_l),
+                # FINISH-DETAIL-PERSIST — canonical semantics: loser's rank
+                "specialty_method":       _specialty,
+                "opponent_rank_at_fight": pre_l,
             }
             event["fights"].append(result)
             # event["main_event"] is set only when the actual main_event-
@@ -14239,6 +14275,9 @@ class GameBridge:
                     "loser_new_rank":    None,
                     "winner_rank_delta": 0,
                     "loser_rank_delta":  0,
+                    # FINISH-DETAIL-PERSIST — draws carry no specialty/opponent
+                    "specialty_method":       "DRAW",
+                    "opponent_rank_at_fight": None,
                 }
                 event["fights"].append(fight_result)
                 continue
@@ -14246,6 +14285,11 @@ class GameBridge:
             # Snapshot ranks BEFORE record update
             pre_w_rank = self._get_fighter_rank(winner)
             pre_l_rank = self._get_fighter_rank(loser)
+            # FINISH-DETAIL-PERSIST: derive specialty from _eng captured at :14117
+            from awards import canonical_specialty_method
+            _specialty = canonical_specialty_method(
+                getattr(_eng, 'method', '') or method,
+                _eng_sub_type)
 
             # Update records
             winner.wins   += 1
@@ -14263,7 +14307,10 @@ class GameBridge:
             )
 
             # Fight history
-            for ftr, res, opp in [(winner, "W", loser), (loser, "L", winner)]:
+            for ftr, res, opp, _opp_rank in [
+                (winner, "W", loser,  pre_l_rank),
+                (loser,  "L", winner, pre_w_rank),
+            ]:
                 if not hasattr(ftr, "fight_history"):
                     ftr.fight_history = []
                 ftr.fight_history.append({
@@ -14274,6 +14321,9 @@ class GameBridge:
                     "round_finished": rnd,
                     "event_name":    event_name,
                     "week":          week,
+                    # FINISH-DETAIL-PERSIST
+                    "specialty_method":       _specialty,
+                    "opponent_rank_at_fight": _opp_rank,
                 })
 
             self._update_rankings_after_fight(wc)
@@ -14311,6 +14361,9 @@ class GameBridge:
                 "loser_new_rank":   new_l_rank,
                 "winner_rank_delta": self._rank_delta(pre_w_rank, new_w_rank),
                 "loser_rank_delta":  self._rank_delta(pre_l_rank, new_l_rank),
+                # FINISH-DETAIL-PERSIST — canonical semantics: loser's rank
+                "specialty_method":       _specialty,
+                "opponent_rank_at_fight": pre_l_rank,
             }
             event["fights"].append(fight_result)
 
@@ -18146,9 +18199,25 @@ class GameBridge:
                         self._game_state.active_contracts.pop(_ftr_c2.fighter_id, None)
                         self._ai_bid_for_free_agent(_ftr_c2.fighter_id, _ftr_c2)
 
+        # FINISH-DETAIL-PERSIST: capture rich fields once, used at both writes.
+        # specialty comes from eng_result.method (rich when the finish is a
+        # named strike/sub) synthesized with the captured _eng_sub_type when
+        # the wrapper split it into bare "Submission" + sub_type. Rank
+        # snapshots taken now — BEFORE this fight's result feeds rankings —
+        # so opponent_rank_at_fight = rank at fight time, not post-fight.
+        from awards import canonical_specialty_method
+        _specialty = canonical_specialty_method(
+            getattr(eng_result, 'method', '') or method,
+            _eng_sub_type)
+        _winner_rank_now = self._get_fighter_rank(winner) if winner else None
+        _loser_rank_now  = self._get_fighter_rank(loser) if loser else None
+
         # Fight history — write BEFORE return so cooldown loop in advance_week
         # can read lose_streak correctly (Bug S).
-        for ftr, res, opp in [(winner, "W", loser), (loser, "L", winner)]:
+        for ftr, res, opp, _opp_rank in [
+            (winner, "W", loser,  _loser_rank_now),
+            (loser,  "L", winner, _winner_rank_now),
+        ]:
             if not hasattr(ftr, "fight_history"):
                 ftr.fight_history = []
             ftr.fight_history.append({
@@ -18159,6 +18228,9 @@ class GameBridge:
                 "round_finished": round_finished,
                 "event_name":     fight.get("event_name", ""),
                 "week":           self._game_state.week_number if self._game_state else 1,
+                # FINISH-DETAIL-PERSIST
+                "specialty_method":       _specialty,
+                "opponent_rank_at_fight": _opp_rank,
             })
 
         # Scorecard from engine if decision
@@ -18225,6 +18297,9 @@ class GameBridge:
             "is_player_fight":fight.get("is_player_fight", False),
             "purse":          fight.get("purse", 0),
             "scorecard":      scorecard_data,
+            # FINISH-DETAIL-PERSIST — canonical semantics: loser's rank
+            "specialty_method":       _specialty,
+            "opponent_rank_at_fight": _loser_rank_now,
             "rivalry":        None,
             # Store raw engine result for lazy commentary generation
             "_engine_result": eng_result,
