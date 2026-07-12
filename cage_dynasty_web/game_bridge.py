@@ -2148,7 +2148,12 @@ class GameBridge:
             print("Populating world with AI camps and fighters...")
             try:
                 from world_init import initialize_world as _world_init_func
-                _initializer = _world_init_func(self._game_state, history_years=2.5, bridge=self)
+                # PREGEN-HISTORY-SHORTEN1: was history_years=2.5 (130 weeks).
+                # Full engine ~19ms/fight; 130 weeks → ~1700 pre-gen fights → 45-60s
+                # world-gen on PA free tier, close to the request-timeout risk zone.
+                # 60 weeks halves the wall time (~23-30s on PA) with fewer coin-flip
+                # erosion cycles, and still generates ~800 pre-gen fights of history.
+                _initializer = _world_init_func(self._game_state, history_weeks=60, bridge=self)
                 # Ship #29: capture BeltHistory off the initializer before it
                 # goes out of scope. Holds the sim'd champion lineages (reigns,
                 # defenses, won_from / lost_to / vacate events) for later

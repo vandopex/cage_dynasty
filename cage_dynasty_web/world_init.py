@@ -3179,20 +3179,26 @@ class WorldInitializer:
 # CONVENIENCE FUNCTION
 # ============================================================================
 
-def initialize_world(game_state, history_years: float = 2.5, bridge=None) -> WorldInitializer:
+def initialize_world(game_state, history_years: float = 2.5,
+                     history_weeks: Optional[int] = None,
+                     bridge=None) -> WorldInitializer:
     """
     Convenience function to initialize the game world.
 
     Args:
         game_state: The GameState to populate
         history_years: Years of history to simulate (default 2.5)
+        history_weeks: Explicit weeks-of-history override. When passed,
+            takes precedence over history_years — avoids float→int
+            precision loss (60/52 * 52 truncates to 59, etc.).
         bridge: Optional GameBridge handle (threaded into WorldInitializer
             so sim-time state like AI camp equipment can be surfaced back).
 
     Returns:
         The WorldInitializer instance (for inspection if needed)
     """
-    history_weeks = int(history_years * 52)
+    if history_weeks is None:
+        history_weeks = int(history_years * 52)
 
     initializer = WorldInitializer(
         game_state=game_state,
