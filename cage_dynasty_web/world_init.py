@@ -76,8 +76,24 @@ try:
         FightConfig,
     )
     FULL_ENGINE_AVAILABLE = True
-except ImportError:
-    pass
+    print("✅ world_init: FULL fight engine loaded — pre-gen will use "
+          "simulation.fight_engine (shimmed to web fight_engine)")
+except Exception as _fe_e:
+    # PREGEN-FULL-ENGINE-FIX1: was silent (`except ImportError: pass`).
+    # That silence hid the fact that pre-gen has been running the crude
+    # simulate_fight_simple fallback since project launch — see fingerprint
+    # analysis in the ship notes (74.9% at 21+ OVR gap = simple-engine
+    # saturation math). Widened to Exception so syntax errors or module-
+    # level raises also surface. Any hit here means every fresh save's
+    # champion timeline is decided by coin flip, not ability.
+    import sys as _sys
+    print(f"🚨 world_init: FULL_ENGINE_AVAILABLE=False — "
+          f"{type(_fe_e).__name__}: {_fe_e}", file=_sys.stderr)
+    print("🚨 world_init: Pre-gen history sim will fall back to "
+          "simulate_fight_simple (clamps favorite win rate at 74% "
+          "regardless of OVR gap). Every fresh save's champions and belt "
+          "lineages will be near-random. Check the SIMULATION-SHIM at "
+          "cage_dynasty_web/simulation/__init__.py.", file=_sys.stderr)
 
 # Popularity System (shared module)
 POPULARITY_MODULE_AVAILABLE = False
@@ -1294,34 +1310,70 @@ class HistorySimulator:
             champion.popularity = min(100, champion.popularity + random.randint(15, 25))
     
     def _fighter_to_attributes(self, fighter: GeneratedFighter) -> Optional[Any]:
-        """Convert GeneratedFighter to FighterAttributes for full engine"""
+        """Convert GeneratedFighter to FighterAttributes for the full engine.
+
+        PREGEN-FULL-ENGINE-FIX1: kwargs mapped to the web engine's canonical
+        field names. The prior version was written against the CLI's older
+        17-attribute API (wrestling / bjj / clinch / submission_defense) and
+        would silently throw TypeError under the web engine — every
+        construction returning None and pre-gen falling back to
+        simulate_fight_simple. Even with FULL_ENGINE_AVAILABLE=True after the
+        shim, without this mapping pre-gen would still be coin-flipping.
+
+        Canonical remap (world_init.generate_attributes → web FighterAttributes):
+          wrestling         → takedowns
+          bjj               → guard  (submissions passed separately)
+          clinch            → clinch_striking  (clinch_control passed separately)
+          submission_defense → dropped (no such field on web engine)
+        Plus new pass-throughs: submissions, top_control, clinch_control, heart.
+        """
         if not FULL_ENGINE_AVAILABLE:
             return None
-        
+
+        _rating = fighter.skill_rating
         try:
-            # Create FighterAttributes from generated fighter stats
             attrs = FighterAttributes(
                 fighter_id=fighter.fighter_id,
                 name=fighter.name,
-                # Use skill_rating to derive attributes
-                boxing=fighter.attributes.get("boxing", fighter.skill_rating),
-                kicks=fighter.attributes.get("kicks", fighter.skill_rating - 5),
-                wrestling=fighter.attributes.get("wrestling", fighter.skill_rating),
-                bjj=fighter.attributes.get("bjj", fighter.skill_rating - 5),
-                clinch=fighter.attributes.get("clinch", fighter.skill_rating - 5),
-                cardio=fighter.attributes.get("cardio", 70),
+                # Physical (5)
                 strength=fighter.attributes.get("strength", 65),
                 speed=fighter.attributes.get("speed", 65),
+                cardio=fighter.attributes.get("cardio", 70),
                 chin=fighter.attributes.get("chin", 70),
                 recovery=fighter.attributes.get("recovery", 65),
-                striking_defense=fighter.attributes.get("striking_defense", fighter.skill_rating - 5),
-                takedown_defense=fighter.attributes.get("takedown_defense", fighter.skill_rating - 5),
-                submission_defense=fighter.attributes.get("submission_defense", fighter.skill_rating - 10),
-                fight_iq=fighter.attributes.get("fight_iq", 60),
+                # Striking (4)
+                boxing=fighter.attributes.get("boxing", _rating),
+                kicks=fighter.attributes.get("kicks", _rating - 5),
+                clinch_striking=fighter.attributes.get("clinch", _rating - 5),
+                striking_defense=fighter.attributes.get("striking_defense", _rating - 5),
+                # Grappling (5)
+                takedowns=fighter.attributes.get("wrestling", _rating),
+                takedown_defense=fighter.attributes.get("takedown_defense", _rating - 5),
+                top_control=fighter.attributes.get("top_control", _rating - 5),
+                submissions=fighter.attributes.get("submissions", _rating - 5),
+                guard=fighter.attributes.get("bjj", _rating - 5),
+                # Clinch (1)
+                clinch_control=fighter.attributes.get("clinch_control", _rating - 5),
+                # Mental (3)
+                heart=fighter.attributes.get("heart", 60),
+                # generate_attributes:1000 writes key "iq"; the iq→fight_iq
+                # remap happens only in the downstream fdata block (:2970).
+                fight_iq=fighter.attributes.get("iq", 60),
                 composure=fighter.attributes.get("composure", 60),
             )
             return attrs
-        except Exception:
+        except Exception as _fa_e:
+            # PREGEN-FULL-ENGINE-FIX1: was silent (`except Exception: return None`).
+            # That silence let a kwarg mismatch keep pre-gen in the coin-flip
+            # fallback engine invisibly. Any exception here means the engine
+            # would still be a placebo — surface it.
+            import sys as _sys
+            print(f"🚨 world_init._fighter_to_attributes FAILED for "
+                  f"{fighter.name} ({fighter.fighter_id}): "
+                  f"{type(_fa_e).__name__}: {_fa_e}", file=_sys.stderr)
+            print(f"🚨   → this fight will fall back to simulate_fight_simple; "
+                  f"if this fires repeatedly, PRE-GEN IS STILL COIN-FLIPPING "
+                  f"regardless of the shim's success line.", file=_sys.stderr)
             return None
     
     def simulate_fight_full_engine(
