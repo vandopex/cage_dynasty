@@ -754,22 +754,49 @@ class FightState:
 
 @dataclass
 class FightConfig:
-    """Configuration for a fight
+    """Configuration for a fight.
 
-    BALANCE TARGETS (real MMA):
-    - KO/TKO: 35-40%
-    - SUB: 15-20%
-    - DEC: 45-50%
-    - Finish rate: 50-55%
+    STAGE 0d (2026-07-12) — CONFIG INVARIANT CONTRACT.
 
-    Formula: (exchanges × damage_mult × 3 rounds) / health ≈ 0.55-0.65
-    At 55 exchanges × 0.42 × 3 = 69.3 / 120 = 0.578 ratio — on target.
+    Three fields — exchanges_per_round, damage_multiplier, standup_threshold —
+    are ONE atomic invariant. They were tuned together against live-play, and
+    changing one without the others is the bug the fight-start assertion
+    (_assert_sanctioned_config, below) exists to catch. Live-play's values
+    are the surviving contract; the defaults on this class ARE that contract.
+
+    Two OTHER triples are sanctioned by the assertion allowlist. Each carries
+    a death date:
+
+      LIVE_PLAY      = (55, 0.48, 10)  the surviving contract (this class's defaults)
+      PRE_GEN_LEGACY = (55, 0.42, 6)   KNOWN DRIFT. Deleted at Stage 3.
+                                       Do not tune.
+      FI_FALLBACK    = (55, 0.48, 6)   KNOWN CORNER. Not on production
+                                       live-play path. Deleted at Stage 3.
+                                       Do not tune.
+
+    At Stage 3 (pre-gen delegation to live-play engine + FI/FE split
+    retirement) the two lower entries are deleted from the allowlist and the
+    assertion collapses to the single invariant. Write those deletions as a
+    one-line diff with a measurement attached.
+
+    DISCIPLINE — NO SITE INHERITS THESE THREE FIELDS. Every construction
+    site in the tree passes them explicitly. If you find yourself calling
+    FightConfig() and only setting scheduled_rounds, you are creating the
+    exact class of drift this ship exists to prevent — either use one of
+    the pinned classmethods (standard_fight / championship_fight /
+    main_event, all pinned to PRE_GEN_LEGACY) or pass all three fields
+    explicitly.
+
+    The assertion sits BEFORE the heat replace() at simulate_fight:~3922.
+    Heat scaling (up to ×1.20 on damage_multiplier) is sanctioned mutation
+    inside FE, NOT drift — filed for the Stage 1 parity map as an FI/FE
+    divergence (FI has no heat mechanism).
     """
     scheduled_rounds: int = 3
+    # LIVE_PLAY contract — see docstring. NO SITE INHERITS THESE.
     exchanges_per_round: int = 55
-
-    damage_multiplier: float = 0.42  # Tuned down from 0.70 — was producing 73% finish rate
-    standup_threshold: int = 6
+    damage_multiplier: float = 0.48
+    standup_threshold: int = 10
     # ENGINE-DEAD-KNOBS1 (2026-07-11): default was 2, but both engines
     # hardcoded the threshold at `>= 3`. Default lifted to 3 to match the
     # actual hardcoded behavior before the threshold check is unified with
@@ -782,18 +809,81 @@ class FightConfig:
 
     is_title_fight: bool = False
     is_main_event: bool = False
-    
+
+    # STAGE 0d — factories pin PRE_GEN_LEGACY (55, 0.42, 6) EXPLICITLY.
+    # Every classmethod below is a FE-fed pre-gen path. Byte-identical to
+    # pre-Stage-0d behavior (pre-gen ran at 0.42/6 by INHERITING the OLD
+    # defaults; now runs at 0.42/6 by explicit pin — same value, no
+    # inheritance). Deleted at Stage 3 when pre-gen delegates to
+    # live-play's engine and PRE_GEN_LEGACY dies.
     @classmethod
     def standard_fight(cls) -> 'FightConfig':
-        return cls(scheduled_rounds=3)
-    
+        return cls(
+            scheduled_rounds=3,
+            exchanges_per_round=55,
+            damage_multiplier=0.42,
+            standup_threshold=6,
+        )
+
     @classmethod
     def championship_fight(cls) -> 'FightConfig':
-        return cls(scheduled_rounds=5, is_title_fight=True, is_main_event=True)
-    
+        return cls(
+            scheduled_rounds=5,
+            exchanges_per_round=55,
+            damage_multiplier=0.42,
+            standup_threshold=6,
+            is_title_fight=True,
+            is_main_event=True,
+        )
+
     @classmethod
     def main_event(cls) -> 'FightConfig':
-        return cls(scheduled_rounds=5, is_main_event=True)
+        return cls(
+            scheduled_rounds=5,
+            exchanges_per_round=55,
+            damage_multiplier=0.42,
+            standup_threshold=6,
+            is_main_event=True,
+        )
+
+
+# STAGE 0d — SANCTIONED CONFIG TRIPLES.
+# The assertion at fight start allowlists exactly these. Anything else
+# raises. See FightConfig docstring for the full contract and death dates.
+_TRIPLE_LIVE_PLAY = (55, 0.48, 10)
+_TRIPLE_PRE_GEN_LEGACY = (55, 0.42, 6)
+_TRIPLE_FI_FALLBACK = (55, 0.48, 6)
+_SANCTIONED_TRIPLES = {
+    _TRIPLE_LIVE_PLAY,        # the surviving contract
+    _TRIPLE_PRE_GEN_LEGACY,   # KNOWN DRIFT. Deleted at Stage 3. Do not tune.
+    _TRIPLE_FI_FALLBACK,      # KNOWN CORNER. Deleted at Stage 3. Do not tune.
+}
+
+
+def _assert_sanctioned_config(config: 'FightConfig') -> None:
+    """Raise if config's (exchanges, damage, standup) triple is not in the
+    sanctioned allowlist. Called at fight-start on BOTH engine paths
+    (fight_engine.simulate_fight, fight_integration.NarratedFightSimulator).
+
+    Placed UPSTREAM of the heat replace() in simulate_fight: heat scaling
+    is a sanctioned mutation, not drift. See the comment at the mutation
+    site for the rationale.
+    """
+    triple = (
+        config.exchanges_per_round,
+        config.damage_multiplier,
+        config.standup_threshold,
+    )
+    if triple not in _SANCTIONED_TRIPLES:
+        raise AssertionError(
+            f"UNSANCTIONED CONFIG TRIPLE: (exchanges={triple[0]}, "
+            f"damage_multiplier={triple[1]}, standup_threshold={triple[2]}). "
+            f"Allowlist:\n"
+            f"  LIVE_PLAY      = {_TRIPLE_LIVE_PLAY}   the surviving contract\n"
+            f"  PRE_GEN_LEGACY = {_TRIPLE_PRE_GEN_LEGACY}    KNOWN DRIFT. Deleted at Stage 3.\n"
+            f"  FI_FALLBACK    = {_TRIPLE_FI_FALLBACK}    KNOWN CORNER. Deleted at Stage 3.\n"
+            f"See FightConfig docstring for the full contract."
+        )
 
 
 # ============================================================================
@@ -3833,7 +3923,13 @@ def simulate_fight(
     """
     if config is None:
         config = FightConfig.standard_fight()
-    
+
+    # STAGE 0d — assert the atomic config invariant BEFORE any heat scaling.
+    # Fires on every FE call site (world_init pre-gen, quick_simulate, direct
+    # callers). See FightConfig docstring + _assert_sanctioned_config for the
+    # full contract.
+    _assert_sanctioned_config(config)
+
     # Calculate heat modifiers
     # Heat stages: 0-20 neutral, 21-40 tension, 41-60 bad blood, 61-80 heated, 81-100 war
     heat_damage_mult = 1.0
@@ -3916,6 +4012,15 @@ def simulate_fight(
     
     # Apply heat damage multiplier to config (creates modified version)
     # Heat makes both fighters hit harder due to adrenaline/emotion
+    #
+    # STAGE 0d — SANCTIONED CONFIG MUTATION. The only legal one in the tree.
+    # Produces damage_multiplier outside the allowlist by design
+    # (0.42 × up to 1.20 = 0.42–0.504, or 0.48 × up to 1.20 = 0.48–0.576).
+    # The triple assertion sits UPSTREAM of this line ON PURPOSE — if you
+    # are here because you found a config carrying an unlisted
+    # damage_multiplier and grepped the allowlist, this is why. Heat scaling
+    # is an FE-only mechanism; FI has no equivalent. Filed for the Stage 1
+    # parity map (Stage 3 delegation must resolve which behavior survives).
     if heat_damage_mult > 1.0:
         # Create a copy with modified damage multiplier
         from dataclasses import replace
@@ -4330,7 +4435,16 @@ def quick_simulate(
         heart=f2_overall, fight_iq=f2_overall, composure=f2_overall
     )
     
-    config = FightConfig(scheduled_rounds=rounds)
+    # STAGE 0d — pinned to PRE_GEN_LEGACY explicitly. quick_simulate is a
+    # tests/CLI helper; pre-Stage-0d it inherited (55, 0.42, 6) via the OLD
+    # dataclass defaults. Explicit pin keeps that behavior when the default
+    # lifted to LIVE_PLAY. Deleted at Stage 3 with PRE_GEN_LEGACY.
+    config = FightConfig(
+        scheduled_rounds=rounds,
+        exchanges_per_round=55,
+        damage_multiplier=0.42,
+        standup_threshold=6,
+    )
     return simulate_fight(fighter1, fighter2, config)
 
 

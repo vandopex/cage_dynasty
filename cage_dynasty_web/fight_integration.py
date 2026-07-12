@@ -41,14 +41,18 @@ from fight_engine import (
     attempt_submission, process_submission_progress,
     score_round,
     # V7 Balance Constants (centralized in fight_engine)
-    # ENGINE-DEAD-KNOBS1 (2026-07-11): DAMAGE_MULTIPLIER import removed —
-    # never read. FI uses FI_DAMAGE_MULTIPLIER (module const, line 82).
+    # ENGINE-DEAD-KNOBS1 (2026-07-11): DAMAGE_MULTIPLIER import removed.
+    # STAGE 0d (2026-07-12): FI_DAMAGE_MULTIPLIER module const also deleted.
+    # FI reads config.damage_multiplier via the atomic config invariant
+    # contract (see fight_engine.FightConfig docstring).
     FLASH_KO_DAMAGE_THRESHOLD, FLASH_KO_BASE_CHANCE, FLASH_KO_MAX_CHANCE,
     TKO_GNP_HEALTH_THRESHOLD, TKO_GNP_BASE_CHANCE, TKO_GNP_MAX_CHANCE,
     TKO_STANDING_HEALTH_THRESHOLD, TKO_STANDING_BASE_CHANCE,
     # GROUND-STOPPAGE-FIX1 durability multiplier constants
     TKO_DURABILITY_FLOOR, TKO_DURABILITY_CHIN_DIVISOR,
     TKO_DURABILITY_HEART_DIVISOR, TKO_DURABILITY_COMPOSURE_DIVISOR,
+    # STAGE 0d — atomic config invariant assertion
+    _assert_sanctioned_config,
 )
 
 
@@ -68,19 +72,14 @@ def _tko_durability_mult(defender):
         - getattr(defender, 'composure', 70) / TKO_DURABILITY_COMPOSURE_DIVISOR,
     )
 
-# fight_integration runs a longer commentary exchange loop than fight_engine.simulate_fight
-# so the effective damage per fight is higher — this multiplier is tuned separately
-# to produce realistic finish rates (50-55% target) for the narrated fight path.
-# Ship A two-iteration tune (2026-05-09):
-#   0.32 (Saturday play: 11% finish rate, broken)
-#   → 0.38 (Tier 2 verified: 70% across DFC 16-18, over-corrected)
-#   → 0.36 (final, lands in 50-55% target)
-# Synthetic-vs-production gap: synthetic n=300 batches predicted finish rates
-# ~20-30 points below production reality at the same multiplier. Production
-# may have damage-amplifying factors (gameplan, condition, fighter attrs from
-# real game_state) that the random-Gaussian synthetic doesn't capture. Future
-# tuning should weight production observations over synthetic.
-FI_DAMAGE_MULTIPLIER = 0.48
+# STAGE 0d (2026-07-12) — FI_DAMAGE_MULTIPLIER module const DELETED.
+# Damage now reads from config.damage_multiplier via the atomic config
+# invariant contract (see fight_engine.FightConfig docstring). The
+# ~8-week justification block that used to sit here was preserved
+# verbatim in CLAUDE.md under "Fossils" before deletion — it argued
+# from a loop-length premise measured false at Stage 0b C2 (both
+# engines run 55 × 3 = 165 exchanges) and justified value 0.36 that
+# was never the value in the code. Do NOT add it back.
 
 # Define missing position sets locally
 GROUND_TOP_POSITIONS = {
@@ -360,7 +359,19 @@ class NarratedFightSimulator:
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
-        self.config = config or FightConfig.standard_fight()
+        # STAGE 0d — FI's no-config fallback pins FI_FALLBACK explicitly.
+        # standard_fight() now returns PRE_GEN_LEGACY (55, 0.42, 6); FI's
+        # no-config path historically ran at (55, 0.48, 6) because FI
+        # ignored config.damage_multiplier. B3 makes FI READ that field, so
+        # if this fallback still called standard_fight() the FI-no-config
+        # path would silently drop 12.5% damage. Explicit FI_FALLBACK
+        # preserves today's behavior byte-identically. Deleted at Stage 3.
+        self.config = config or FightConfig(
+            scheduled_rounds=3,
+            exchanges_per_round=55,
+            damage_multiplier=0.48,
+            standup_threshold=6,
+        )
         self.verbose = verbose
 
         # COMMENTARY-ENTRANCES1: fight-open surface data. Stored and
@@ -481,6 +492,12 @@ class NarratedFightSimulator:
         # same top-level seed. If this draw ever becomes conditional,
         # the coupling this ship removed comes back silently.
         self.commentary.rng.seed(random.getrandbits(64))
+
+        # STAGE 0d — assert the atomic config invariant at fight-start.
+        # Fires on every FI call site (bridge live-play, FI-no-config
+        # fallback, direct callers). See fight_engine.FightConfig
+        # docstring + _assert_sanctioned_config for the full contract.
+        _assert_sanctioned_config(self.config)
 
         # Create fighter states
         self.fighter1_state = FighterState(
@@ -827,7 +844,7 @@ class NarratedFightSimulator:
             # the top fighter in a DOMINANT position — GnP from mount
             # / side-control / back-mount / etc. Passed to
             # calculate_strike_damage so the amplifier composes with
-            # every other damage modifier BEFORE FI_DAMAGE_MULTIPLIER.
+            # every other damage modifier BEFORE the config damage_multiplier.
             _is_dominant_top = (
                 self.fight_state.position in DOMINANT_POSITIONS
                 and self.fight_state.top_fighter_id == attacker.fighter_id
@@ -840,9 +857,14 @@ class NarratedFightSimulator:
                 is_dominant_position=_is_dominant_top,
             )
 
-            # Use fight_integration specific multiplier — tuned separately from
-            # fight_engine's config.damage_multiplier because the exchange loops differ
-            damage = damage * FI_DAMAGE_MULTIPLIER
+            # STAGE 0d — read damage_multiplier from config, not from a
+            # module const. The atomic config invariant governs this value
+            # (see fight_engine.FightConfig docstring). For live-play,
+            # config.damage_multiplier is 0.48 (LIVE_PLAY contract, passed
+            # explicitly by the bridge). For FI-no-config callers it's 0.48
+            # (FI_FALLBACK, passed explicitly by the fallback constructors
+            # below). Byte-identical to the pre-0d FI_DAMAGE_MULTIPLIER=0.48.
+            damage = damage * self.config.damage_multiplier
 
             # ── Strength KO amplification ─────────────────
             # Hard hitters punch through defense more.
@@ -2020,13 +2042,37 @@ def simulate_narrated_fight(
     simulator and on to select_action, but are not yet consumed
     (SHIP2 will activate the AGGRESSION dial). Defaults None → no-op.
     """
+    # STAGE 0d — FI's no-config fallback pins FI_FALLBACK explicitly.
+    # See NarratedFightSimulator.__init__ for the full rationale. classmethods
+    # standard_fight/championship_fight/main_event return PRE_GEN_LEGACY
+    # (55, 0.42, 6); FI's no-config path preserves today's FI-effective
+    # (55, 0.48, 6) triple byte-identically by constructing directly.
+    # Deleted at Stage 3.
     if config is None:
         if is_title_fight:
-            config = FightConfig.championship_fight()
+            config = FightConfig(
+                scheduled_rounds=5,
+                exchanges_per_round=55,
+                damage_multiplier=0.48,
+                standup_threshold=6,
+                is_title_fight=True,
+                is_main_event=True,
+            )
         elif is_main_event:
-            config = FightConfig.main_event()
+            config = FightConfig(
+                scheduled_rounds=5,
+                exchanges_per_round=55,
+                damage_multiplier=0.48,
+                standup_threshold=6,
+                is_main_event=True,
+            )
         else:
-            config = FightConfig.standard_fight()
+            config = FightConfig(
+                scheduled_rounds=3,
+                exchanges_per_round=55,
+                damage_multiplier=0.48,
+                standup_threshold=6,
+            )
 
     if rounds == 5:
         config.scheduled_rounds = 5

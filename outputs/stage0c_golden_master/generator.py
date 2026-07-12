@@ -221,12 +221,13 @@ def harvest_matchups(worlds: List[Any]) -> List[Dict[str, Any]]:
 # ══════════════════════════════════════════════════════════════════════
 def make_fi_config(scheduled_rounds: int, is_title: bool = False,
                    is_main_event: bool = False) -> fe.FightConfig:
-    """Match the live-play config the bridge builds at game_bridge.py:13540 etc.
-    (post-ENGINE-DEAD-KNOBS1: no damage_multiplier arg)."""
+    """Match the live-play config the bridge builds at game_bridge.py.
+    STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) explicitly, no inheritance."""
     return fe.FightConfig(
         scheduled_rounds=scheduled_rounds,
-        standup_threshold=10,
         exchanges_per_round=55,
+        damage_multiplier=0.48,
+        standup_threshold=10,
         submission_progress_to_finish=70.0,
         submission_escape_threshold=85.0,
         is_title_fight=is_title,

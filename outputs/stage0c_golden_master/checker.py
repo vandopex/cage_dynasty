@@ -70,9 +70,12 @@ def dict_to_fighter_attrs(d):
     return fe.FighterAttributes(**d, fighting_style=None)
 
 def make_fi_config(rounds, is_title, is_main):
+    # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) explicitly, no inheritance.
     return fe.FightConfig(
-        scheduled_rounds=rounds, standup_threshold=10,
+        scheduled_rounds=rounds,
         exchanges_per_round=55,
+        damage_multiplier=0.48,
+        standup_threshold=10,
         submission_progress_to_finish=70.0,
         submission_escape_threshold=85.0,
         is_title_fight=is_title, is_main_event=is_main,

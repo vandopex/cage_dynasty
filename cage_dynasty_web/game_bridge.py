@@ -13581,10 +13581,15 @@ class GameBridge:
                     fa2  = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
                     _slot = fight.get("card_slot", "prelim")
                     _rnds = 5 if (fight.get("is_title_fight") or _slot in ("main_event","co_main")) else 3
+                    # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
+                    # damage_multiplier was previously inherited from the
+                    # dataclass default (was 0.42, now 0.48). Explicit pin
+                    # holds the triple in place regardless of default.
                     _fight_cfg = _FightConfig(
                         scheduled_rounds=_rnds,
                         standup_threshold=10,
                         exchanges_per_round=55,
+                        damage_multiplier=0.48,
                         submission_progress_to_finish=70.0,
                         submission_escape_threshold=85.0,
                     ) if _FightConfig else None
@@ -14101,10 +14106,15 @@ class GameBridge:
                     fa1 = self._make_fighter_attrs(f1, f1.name, f1.fighter_id)
                     fa2 = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
                     _rnds = 5 if is_title else 3
+                    # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
+                    # damage_multiplier was previously inherited from the
+                    # dataclass default (was 0.42, now 0.48). Explicit pin
+                    # holds the triple in place regardless of default.
                     _fight_cfg = _FightConfig(
                         scheduled_rounds=_rnds,
                         standup_threshold=10,
                         exchanges_per_round=55,
+                        damage_multiplier=0.48,
                         submission_progress_to_finish=70.0,
                         submission_escape_threshold=85.0,
                     ) if _FightConfig else None
@@ -18040,10 +18050,14 @@ class GameBridge:
             except Exception:
                 pass
 
+        # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
+        # damage_multiplier was previously inherited from the dataclass
+        # default (was 0.42, now 0.48). Explicit pin holds the triple.
         _fight_cfg = _FightConfig(
             scheduled_rounds=total_rounds,
             standup_threshold=10,
             exchanges_per_round=55,
+            damage_multiplier=0.48,
             submission_progress_to_finish=70.0,
             submission_escape_threshold=85.0,
         ) if _FightConfig else None
