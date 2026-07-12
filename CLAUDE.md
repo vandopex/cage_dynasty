@@ -339,6 +339,29 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
   and behavior stability first; pre-gen matchmaking is a
   substantive design touch and its own multi-session ship. File
   and hold.
+
+  **Companion finding — pre-gen rest cadence is compressed** (measured
+  2026-07-12 by Stage 0d A7 diagnostic). `world_init.HistorySimulator`
+  DOES consult a cooldown gate: `_is_fighter_available` at
+  `world_init.py:1737-1751` enforces `current_week - fighter_last_fight
+  >= 4`. So "no cooldown at all" is false. But the floor is 4 weeks
+  and it pins the distribution hard:
+
+  ```
+  seed=1000, HISTORY_WEEKS=60, 293 fighters, 289 with >=2 fights,
+  1328 consecutive-fight gaps:
+
+    min:    4        p10:    4     mode:   4  (301 hits, 22.7% of gaps)
+    median: 7        mean:   9.22  p90:   20
+    p99:   32        max:   45     gaps<4: 0  (floor enforced)
+  ```
+
+  Real UFC cadence is typically 12-26 weeks between fights for
+  active competitors. Pre-gen averages 9.22 with the mode at the
+  4-week floor. Roughly 2× compressed vs real MMA. Same shape of
+  finding as the 60/60 title-fight bug above — both are the
+  simulator running a hyperactive fight calendar. Bundle under the
+  same epic. Do NOT fix mid-arc.
 - **TWO-ENGINE CONSOLIDATION arc (HIGH, filed 2026-07-11).**
   `fight_engine.simulate_fight` (pre-gen path) and
   `fight_integration.simulate_narrated_fight` (live-play path) are two
