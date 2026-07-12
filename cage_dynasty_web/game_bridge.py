@@ -15855,11 +15855,75 @@ class GameBridge:
                 "lost_to_name":        None,
                 "lost_method":         None,
             })
+
+            # BELT-STORE-UNIFY1: mirror the transfer into _belt_history
+            # (BeltHistory) so the profile page's belt-reign view stays in
+            # sync with _title_history + division.champion_id. Without this,
+            # a live-play title change updates division.champion_id but
+            # leaves _belt_history's prior reign marked active — the fork
+            # the 2026-07-11 belt diagnostic saw on Featherweight (1/9
+            # divisions divergent on the local save).
+            if self._belt_history is not None:
+                if old_champ_id:
+                    # Resolve old-champion name from the belt-holder pointer
+                    # (division.champion_id), not from `loser`. The pointer
+                    # is the source of truth for who held the belt. If
+                    # loser.fighter_id disagrees with old_champ_id, warn —
+                    # the reigning champion wasn't a participant in this
+                    # title fight, which is a data-integrity concern.
+                    _old_champ = self._game_state.fighters.get(old_champ_id)
+                    _old_name = getattr(_old_champ, 'name', None) or loser.name
+                    if loser.fighter_id != old_champ_id:
+                        print(f"  ⚠️  [BELT-STORE-UNIFY1] title-fight loser "
+                              f"{loser.fighter_id} ({loser.name}) is not the "
+                              f"reigning champion {old_champ_id} ({_old_name}) "
+                              f"for {weight_class} — using pointer's name for "
+                              f"old_champion_name; investigate stale pointer")
+                    self._belt_history.title_changes_hands(
+                        new_champion_id=winner.fighter_id,
+                        new_champion_name=winner.name,
+                        old_champion_id=old_champ_id,
+                        old_champion_name=_old_name,
+                        weight_class=weight_class,
+                        week=week,
+                        event_name=event_name,
+                        method=method,
+                    )
+                else:
+                    # Vacant-title claim (division had no reigning champion)
+                    self._belt_history.crown_initial_champion(
+                        fighter_id=winner.fighter_id,
+                        fighter_name=winner.name,
+                        weight_class=weight_class,
+                        week=week,
+                        event_name=event_name,
+                        won_method=f"Won Vacant Title ({method})",
+                    )
         else:
             # Successful defense — increment counter on active reign
             if history and history[-1].get("is_active"):
                 history[-1]["successful_defenses"] = \
                     history[-1].get("successful_defenses", 0) + 1
+
+            # BELT-STORE-UNIFY1: mirror the defense into _belt_history so
+            # the profile's reign card increments alongside _title_history.
+            # Identity guard: only tick the counter if _belt_history's active
+            # reign belongs to this winner. On a divergent save (the exact
+            # state this ship exists to prevent going forward), the active
+            # reign might still point at the pre-fork champion — writing to
+            # it would tick the wrong fighter's reign. Skip + warn instead.
+            if self._belt_history is not None:
+                _reigns = self._belt_history.reigns.get(weight_class, [])
+                _active = _reigns[-1] if _reigns and _reigns[-1].is_active else None
+                if _active is not None and _active.champion_id == winner.fighter_id:
+                    self._belt_history.record_title_defense(weight_class)
+                else:
+                    _who = _active.champion_id if _active is not None else '<none>'
+                    print(f"  ⚠️  [BELT-STORE-UNIFY1] skipped defense mirror for "
+                          f"{winner.name} ({weight_class}): _belt_history "
+                          f"active reign belongs to {_who}, not winner "
+                          f"{winner.fighter_id}. Divergent state — "
+                          f"reconciliation on load needed")
 
     def get_champions_history(self, weight_class: str) -> Dict[str, Any]:
         """Return belt lineage data for the champions page."""
