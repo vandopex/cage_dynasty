@@ -41,7 +41,8 @@ from fight_engine import (
     attempt_submission, process_submission_progress,
     score_round,
     # V7 Balance Constants (centralized in fight_engine)
-    DAMAGE_MULTIPLIER,
+    # ENGINE-DEAD-KNOBS1 (2026-07-11): DAMAGE_MULTIPLIER import removed —
+    # never read. FI uses FI_DAMAGE_MULTIPLIER (module const, line 82).
     FLASH_KO_DAMAGE_THRESHOLD, FLASH_KO_BASE_CHANCE, FLASH_KO_MAX_CHANCE,
     TKO_GNP_HEALTH_THRESHOLD, TKO_GNP_BASE_CHANCE, TKO_GNP_MAX_CHANCE,
     TKO_STANDING_HEALTH_THRESHOLD, TKO_STANDING_BASE_CHANCE,
@@ -828,7 +829,7 @@ class NarratedFightSimulator:
             )
 
             # Use fight_integration specific multiplier — tuned separately from
-            # fight_engine.DAMAGE_MULTIPLIER because the exchange loops differ
+            # fight_engine's config.damage_multiplier because the exchange loops differ
             damage = damage * FI_DAMAGE_MULTIPLIER
 
             # ── Strength KO amplification ─────────────────
@@ -1713,13 +1714,15 @@ class NarratedFightSimulator:
             ]:
                 _stop = None
 
-                # Cut stoppage
-                if _ftr_state.damage.cuts >= 3:
-                    _cc = min(0.35,
-                        (_ftr_state.damage.cuts - 2) * 0.08)
-                    _cc *= max(0.4, 1 - (_ftr.heart / 200))
-                    if random.random() < _cc:
-                        _stop = "TKO (Doctor Stoppage - Cuts)"
+                # ENGINE-DEAD-KNOBS1 (2026-07-11): the cut-stoppage branch that
+                # used to sit here was unreachable — fight_integration never
+                # writes damage.cuts. The elbow-to-head cut writer lives only
+                # in fight_engine.simulate_fight at :3234. Removing the dead
+                # check rather than adding a cut mechanic to live-play — the
+                # add belongs to the TWO-ENGINE CONSOLIDATION arc, where a
+                # working cut mechanism can be tuned against a real target
+                # (~5-10% of TKOs) instead of bolted on. See
+                # outputs/two_engine_consolidation_diag1.md.
 
                 # Doctor stoppage
                 if (not _stop

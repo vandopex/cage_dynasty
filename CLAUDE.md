@@ -227,6 +227,23 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
 `_GAMEPLAN_DEBUG = False`) on the next `game_bridge.py` touch.
 
 **Queued, not scheduled:**
+- **TWO-ENGINE CONSOLIDATION arc (HIGH, filed 2026-07-11).**
+  `fight_engine.simulate_fight` (pre-gen path) and
+  `fight_integration.simulate_narrated_fight` (live-play path) are two
+  simulators with parallel exchange loops that have drifted since
+  2026-06-14 (`d347de9` "all in fight_integration layer"). Same fighters,
+  same seeds: pre-gen 26% finish rate vs live-play 98% on striker-vs-
+  striker. FI has ~8 accumulator-TKO paths and ~6 style windows FE
+  lacks; FE has an elbow-cut writer FI lacks. All simulation primitives
+  (select_action, calculate_strike_damage, attempt_submission, etc.)
+  are imported from FE by FI, so consolidation onto one simulator is
+  feasible. Recommended direction: port FI-only mechanics into FE,
+  retire FI's exchange loop, keep `NarratedFightResult` +
+  `simulate_narrated_fight` as a decorator over
+  `FightResult.event_log`. Multi-session arc. Full audit +
+  step-by-step plan: `outputs/two_engine_consolidation_diag1.md`.
+  **Do not tune finish rates before this ship** — any number tuned
+  now has to be re-tuned twice.
 - **PRE-GEN WORLD COHERENCE epic (HIGH, filed 2026-07-11).** World-init generates
   self-contradicting title histories that no live-play code path can fix. Read-only
   diagnostic first, then scoped ships. Three known threads:
@@ -566,30 +583,57 @@ references. Historical ship recaps are in `CLAUDE_archive.md`.
 
 ## Key constants (don't change without telling me)
 
-**Damage multipliers — three live composing sites, one dead artifact.**
-DAMAGE-MULT-DIAG1 (2026-07-05, `outputs/damage_mult_diag1.md`) traced all
-four and confirmed PA=repo byte-parity via DAMAGE-MULT-PARITY1.
-Effective per-strike scale (no rivalry): **0.48 × 0.24 = 0.1152**.
+**Damage multipliers — CORRECTED 2026-07-11 by TWO-ENGINE-CONSOLIDATION-DIAG1.**
+Prior claim "0.48 × 0.24 = 0.1152 effective per-strike scale" was
+FICTION — `fight_integration` never reads `config.damage_multiplier`
+(grep confirmed: zero call sites). The 0.24 the bridge passes at three
+`_FightConfig(...)` sites is a **DEAD KNOB**.
 
-- `cage_dynasty_web/fight_integration.py:59` `FI_DAMAGE_MULTIPLIER = 0.48`
-  — LIVE wrapper-level dampener applied to every landed strike at `:658`.
-  (Previously docd here as 0.32 — that value was stale; live PA runs 0.48.)
-- `cage_dynasty_web/game_bridge.py:{13499, 13979, 17719}`
-  `damage_multiplier = 0.24` — LIVE per-fight FightConfig override, passed
-  to `_FightConfig(...)` at all three bridge instantiation sites; composes
-  multiplicatively with FI\_DAMAGE\_MULTIPLIER.
-- `cage_dynasty_web/fight_engine.py:735` `FightConfig.damage_multiplier`
-  default = 0.42 — dead in practice: bridge always overrides with 0.24,
-  and none of the classmethod constructors (`standard_fight()` etc.) are
-  called by the bridge. Kept for engine-side callers that build the
-  config without arguments.
-- `cage_dynasty_web/fight_engine.py:415` `DAMAGE_MULTIPLIER = 0.55` —
-  **DEAD.** Imported at `fight_integration.py:41`, never read anywhere.
-  Historical tuning artifact; do not tune, do not delete without a
-  paired PA-parity check.
-- Rivalry heat further compounds `config.damage_multiplier` at
-  `fight_engine.py:3690` via `replace(config, damage_multiplier=... *
-  heat_damage_mult)` — only in live rivalries.
+**Pre-gen and live-play are TWO DIFFERENT SIMULATORS**, not one engine
+with two configs. Each has its own damage scale:
+
+- **Live-play** (`fight_integration.simulate_narrated_fight`) — per-strike
+  scale = `FI_DAMAGE_MULTIPLIER = 0.48` (module const at
+  `fight_integration.py:82`, applied at `:832`). ONLY damage scale in this
+  path.
+- **Pre-gen** (`fight_engine.simulate_fight` called by `world_init`) —
+  per-strike scale = `config.damage_multiplier = 0.42` (default from
+  `FightConfig.standard_fight()`, applied at `fight_engine.py:3199`).
+  ONLY damage scale in this path.
+- Rivalry heat compounds ONLY on pre-gen path — `fight_engine.py:3915`
+  `replace(config, damage_multiplier=... * heat_damage_mult)`. Live-play
+  reads no heat multiplier (`fight_integration` never reads `heat_level`
+  either).
+
+**Dead knobs (do NOT tune these, they don't do anything):**
+- `game_bridge.py:{13540, 14061, 18001}` `damage_multiplier = 0.24`
+  passed to `_FightConfig(...)` — read by no live-play code path.
+- `fight_engine.py:415` `DAMAGE_MULTIPLIER = 0.55` — imported at
+  `fight_integration.py:44`, never read.
+- `FightConfig.doctor_check_cut_threshold = 2` at `fight_engine.py:771` —
+  neither engine reads it. Cut stoppage threshold is hardcoded at
+  `cuts >= 3` in both `fight_engine.py:4000` and `fight_integration.py:1717`.
+- `defender_state.damage.cuts` in `fight_integration`. The value is READ
+  at :1717 but no code path WRITES it (cut accumulation exists only at
+  `fight_engine.py:3234` inside `simulate_fight`). Live-play cut
+  stoppages are structurally impossible until this is either wired up
+  or the check is removed.
+
+**Correcting a prior claim**: earlier CLAUDE.md revisions and session
+notes asserted that PREGEN-FULL-ENGINE-FIX1 (`efaf7f6`, 2026-07-11)
+made pre-gen and live-play "share one engine." That is wrong. What
+that ship did was route pre-gen away from `simulate_fight_simple`
+(coin-flip fallback) into `fight_engine.simulate_fight`. Live-play was
+already running `fight_integration.simulate_narrated_fight` — a parallel
+implementation that shares only submission math and primitive helpers
+with `fight_engine`. See `outputs/two_engine_consolidation_diag1.md` for
+the full structural audit and consolidation direction.
+
+**Empirical divergence**: on the same fighters, same seeds, 400-fight
+probes (FINISH-DISTRIBUTION-DIAG1):
+- Striker-vs-striker: pre-gen 26% finish rate vs live-play **98%**
+- Balanced-vs-balanced: pre-gen 17% vs live-play 56%
+- Within-TKO cut share: pre-gen 68-100% vs live-play 0%
 
 - Submission threshold: 70.0
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`

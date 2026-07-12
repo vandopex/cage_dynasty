@@ -412,7 +412,9 @@ class GrapplingAction(Enum):
 # ============================================================================
 # BALANCE CONSTANTS — exported for fight_integration.py
 # ============================================================================
-DAMAGE_MULTIPLIER            = 0.55   # Tuned: was 0.70 (produced 73% finish rate)
+# ENGINE-DEAD-KNOBS1 (2026-07-11): DAMAGE_MULTIPLIER = 0.55 removed —
+# imported by fight_integration but never read (FI uses its own
+# FI_DAMAGE_MULTIPLIER=0.48 module const). See two_engine_consolidation_diag1.md.
 FLASH_KO_DAMAGE_THRESHOLD    = 70.0
 FLASH_KO_BASE_CHANCE         = 0.03
 FLASH_KO_MAX_CHANCE          = 0.12
@@ -768,7 +770,12 @@ class FightConfig:
 
     damage_multiplier: float = 0.42  # Tuned down from 0.70 — was producing 73% finish rate
     standup_threshold: int = 6
-    doctor_check_cut_threshold: int = 2
+    # ENGINE-DEAD-KNOBS1 (2026-07-11): default was 2, but both engines
+    # hardcoded the threshold at `>= 3`. Default lifted to 3 to match the
+    # actual hardcoded behavior before the threshold check is unified with
+    # the config field below. Do NOT tune this value at ship time —
+    # anything ≠ 3 is a behavior change deferred to consolidation.
+    doctor_check_cut_threshold: int = 3
 
     submission_progress_to_finish: float = 70.0  # Was 80.0, then 70.0 — keep
     submission_escape_threshold: float = 85.0
@@ -3997,9 +4004,14 @@ def simulate_fight(
                 _stop_method = None
 
                 # Cut stoppage — deep cuts from elbows
-                if _ftr_state.damage.cuts >= 3 and not _stopped:
+                # ENGINE-DEAD-KNOBS1 (2026-07-11): threshold now reads
+                # config.doctor_check_cut_threshold (default 3, was
+                # hardcoded 3 before this ship). At the default value
+                # the behavior is byte-identical.
+                _cut_thr = config.doctor_check_cut_threshold
+                if _ftr_state.damage.cuts >= _cut_thr and not _stopped:
                     _cut_stop_chance = min(0.35,
-                        (_ftr_state.damage.cuts - 2) * 0.08)
+                        (_ftr_state.damage.cuts - (_cut_thr - 1)) * 0.08)
                     _cut_stop_chance *= max(0.4, 1 - (_ftr.heart / 200))
                     if random.random() < _cut_stop_chance:
                         _stop_method = "TKO (Doctor Stoppage - Cuts)"

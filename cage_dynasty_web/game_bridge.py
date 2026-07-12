@@ -13543,7 +13543,6 @@ class GameBridge:
                         exchanges_per_round=55,
                         submission_progress_to_finish=70.0,
                         submission_escape_threshold=85.0,
-                        damage_multiplier=0.24,
                     ) if _FightConfig else None
                     # Wire fatigue → starting stamina for AI fights
                     # Mirrors the player fight path — fatigue now matters
@@ -14064,7 +14063,6 @@ class GameBridge:
                         exchanges_per_round=55,
                         submission_progress_to_finish=70.0,
                         submission_escape_threshold=85.0,
-                        damage_multiplier=0.24,
                     ) if _FightConfig else None
                     # Wire fatigue → starting stamina for AI fights
                     # Mirrors the player fight path — fatigue now matters
@@ -18004,7 +18002,6 @@ class GameBridge:
             exchanges_per_round=55,
             submission_progress_to_finish=70.0,
             submission_escape_threshold=85.0,
-            damage_multiplier=0.24,
         ) if _FightConfig else None
 
         # BRIDGE-WIRE-AGGR1 / GAMEPLAN-AI-SELECT1: resolve both sides'
