@@ -605,6 +605,36 @@ ship on the board.
   events, only 2 pairs met twice, only 1 pair met three times, max = 3.
   Yesterday's investigation predated these ships and is stale.
 
+  **⚠️ CORRECTION 2026-07-12 — this "substantively closed" verdict was WRONG
+  for Path B specifically. The 16w rematch minimum + intervening-fight guard
+  + per-fighter cadence discipline shipped in `07491d1` were added to Path A
+  (`_build_card_for_week` → matchmaking helpers) and to world-gen. They were
+  never wired into `_simulate_ai_fights_week` (Path B), which has its own
+  soft, opponent-specific `self._recently_fought(f1, f2, weeks=4)` and no
+  per-fighter cooldown of any kind.**
+
+  **Measured against actual save data (PATH-B INTEGRITY DIAG, Van's session
+  save `bridge_50e1bdaa-..._slot2.json`, wk3 Path B card):**
+  - **6/6 consecutive-fight gaps under 4 weeks** on Path B (including 2 gaps
+    of 0 weeks — same fighter booked twice on the same off-week card:
+    Dieselnoi Fairtex main_event KO + prelim TKO; Usman Ngannou two prelims).
+  - Path A on the same save: 0 sub-4w gap violations, matches the
+    2026-07-03 autosave finding.
+
+  The "4-week cadence gate exists and works" reading of MATCHMAKING-RECONCILE1
+  was TRUE for the 2026-07-03 autosave because that save's data was harvested
+  from a state where Path B hadn't yet fired an off-week card during the
+  measurement window. As soon as an off-week landed with a healthy pipeline,
+  Path B kicked in and produced the pattern documented above. The reconcile's
+  denominator was Path A only. **Documented as FALSE for Path B, not quietly
+  amended, because a wrong number sitting in the source of truth is worse
+  than an uncomfortable correction.**
+
+  PATH-B-BOOKING1 (LIVE-PLAY MATCHMAKING backlog above) closes this by
+  deleting Path B entirely — the wrong cadence gate stops firing because
+  the code that ignored the right one stops existing. Path A's cadence
+  discipline stays untouched.
+
 **Deferred low-priority cleanup:**
 - Sub-bug O.1 — asymmetric round override at `fight_integration.py:1228-1229`.
   Bundle with any future `fight_integration.py` touch.
