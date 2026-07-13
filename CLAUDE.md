@@ -63,6 +63,50 @@ Separate finding from the commentary issue but same class of cause
 reaching the CLI tree). File for later — do NOT fix in the same
 sitting as the commentary re-target.
 
+## 🚨 CRITICAL — GOLDEN MASTER IS A FIGHT-ENGINE ORACLE, NOT A LIVE-PLAY ORACLE
+
+**Measured empirically 2026-07-13** by the POISON-0.42 diagnostic. The
+Stage 0c golden master at `outputs/stage0c_golden_master/checker.py`
+imports `fight_engine` and `fight_integration` **directly** at
+`:35-36`. It **never** imports `game_bridge`. Verified by installing
+poison RuntimeErrors at three fallbacks in `game_bridge.py:210/212/269`
+that raise on live-app import: the fixture returned **928/928 PASS
+with the poison in place** because the fixture never loaded the module
+that would have fired it.
+
+**Consequence, load-bearing for the consolidation arc:**
+
+- `game_bridge.py` is ~21,400 lines and is the orchestration layer
+  through which every live fight actually runs. **The golden master
+  does not cover it.** Any bug living in `game_bridge`'s fight path —
+  a wrong config passed, a fallback captured, a knob dropped, a
+  matchmaker firing that shouldn't — is **invisible to the gate this
+  arc has been trusting**.
+- **PATH-B-BOOKING1 is the proof this already happened**: 548 lines
+  of broken booking, resolving ~53% of every fight for months, and
+  the golden master was byte-identical the entire time it ran AND
+  after we deleted it (`8ecec6f`). "928/928 unchanged" was recorded
+  as confirmation the scoping held. It was equally confirmation that
+  **the oracle can't see that layer at all**.
+- Everywhere the arc's language says "928/928 proves live-play
+  unchanged" is **overclaiming**. The correct claim is "928/928 proves
+  the fight-engine layer is unchanged for the inputs in the fixture."
+  Whether live-play behavior changed is a separate question the
+  fixture does not answer.
+
+**Prerequisite for Stage 2a:** Stage 2a physically relocates FI's
+loop body into `fight_engine`. If `game_bridge` sits between the caller
+and the code being moved (probable but unverified as of this notice),
+then the gate for that relocation is not observing the caller. **The
+oracle-coverage gap needs closing before Stage 2a, not after.** Filed
+as ORACLE-COVERAGE1 (diagnostic).
+
+**Fixture inputs and fixture module coverage are two different limits.**
+Section §2 of "PRE-GEN WORLD COHERENCE epic" below already noted a
+*fixture-input* gap (fixture lacks 5R non-title mains). This notice is
+about the *fixture-module* gap — a strictly larger blind spot. Both
+apply. Do not conflate.
+
 ## Ship History (compact)
 
 Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
