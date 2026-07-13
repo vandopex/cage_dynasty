@@ -540,6 +540,35 @@ ship on the board.
   see the per-round persistence reframe above — this diagnostic bought
   the reframe that stopped a phantom "foundation project" from being
   filed.
+- **"Do unranked fighters have a way to enter the ladder in live-play?" — YES,
+  confirmed 2026-07-12 (LIVE-PLAY UNRANKED PIPELINE VERIFY).** Question raised
+  during PATH-B-BOOKING1 scoping as a risk check against Option A (delete Path
+  B). Read-only grep + save inspection confirmed the mechanism is present in
+  Path A and fires in production:
+  - **Booking mechanism** — `_build_card_for_week` has explicit unranked
+    handling: `unranked_pool = [f for f in available if f.fighter_id not in
+    ranked_ids]` (game_bridge.py:~16649) in the "1 ranked left" branch, scored
+    via `_matchup_score` with a 75/25 competitive/step-up split (MATCHMAKING-
+    ENFORCE1 constants). Delegates to `matchmaking.find_unranked_matchup`
+    (unranked-vs-unranked, `matchmaking.py:1273`) and `find_ranked_matchup`
+    (ranked-vs-ranked, `:1233`). Multiple callers, 12 "unranked" hits in
+    `_build_card_for_week` alone.
+  - **Promotion mechanism is score-driven, not slot-gated** — `matchmaking.
+    calculate_ranking_score` at `:658` computes rank score from wins / losses
+    / opposition quality; `game_bridge._update_rankings_after_fight`
+    (`:13340`) fires after every fight regardless of ranked-vs-unranked pool.
+    Sort at `:13413` produces the top-15 purely from score. Any win — even
+    unranked-vs-unranked prelim — contributes to rank score, so an unranked
+    fighter can climb into the top-15 through the normal pipeline.
+  - **Verified live** — Van's session log wk1 shows 7 fighters emitting
+    `📈 [RANKINGS] {name} {wc}: entered top 5 at #N` (Timothy Lewis FLY,
+    Dennis Lee BAN, Kennedy Adesanya BAN, Scott Davis FEA, Wu Li LIG, +2).
+    Ladder promotion pipeline fires in production. Not a theoretical
+    mechanism — actively producing ranked fighters from the unranked pool.
+  - **Consequence for PATH-B-BOOKING1**: Path B's unranked handling is not
+    load-bearing. Deleting it leaves Path A's real unranked pipeline
+    untouched. The "how does the ladder have a bottom rung" fear is
+    unfounded — Path A has been the answer to that question all along.
 - **Judo/Sambo coach bucket routes to wrestling** — JUDO-SAMBO-BUCKET-DIAG1
   (2026-07-05, `outputs/judo_sambo_bucket_diag1.md`) traced the outlier: the
   `_SPECIALTY_ALIASES` table sent `judo`/`sambo` to `clinch_coach` while every
