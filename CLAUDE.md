@@ -437,6 +437,40 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
   - Discipline: forward-only (only affects fresh saves). Diagnostic first — do NOT
     scope fixes cold. When picked up, this is a multi-session arc, not a single
     ship.
+- **LIVE-PLAY MATCHMAKING backlog (HIGH, filed 2026-07-12).** Distinct from the
+  PRE-GEN epic above — this is the *live-play* card-building surface, which has
+  its own set of drift issues surfaced by CARD-PATH DIAG and PATH-B INTEGRITY
+  DIAG on Van's session save (`bridge_50e1bdaa-..._slot2.json`, 3 events, wk1-3).
+  Threads:
+  - **Path A over-issues title fights.** `_build_card_for_week` stamps title
+    fights on both `main_event` *and* `co_main` slots on every card the session
+    generated (4 title bouts across 18 fights on 3 cards). Same underlying
+    dysfunction as the pre-gen 60/60 title bug but through a different code
+    path — cannot be closed by fixing world_init. Rank-gating + spacing-gating
+    audit needed in `_build_card_for_week` and the card-slot title-flagging
+    logic. Filed but not scoped.
+  - **PATH-B-BOOKING1 (queued, scope locked).** Delete `_simulate_ai_fights_week`
+    entirely — 548 lines, one production caller at `game_bridge.py:3617`, zero
+    helpers reachable only from it (verified). Off week becomes honest: no
+    fights, no card, no event numbering advance. Closes the class of Path B
+    bugs (double-booking, per-fighter cooldown bypass, title over-issuance in
+    the fallback path, absent card-summary telemetry) as one deletion. This
+    supersedes the "Off-week semantics contradiction" note below.
+  - **`_dfc_label` off-week collision closes as a byproduct of PATH-B-BOOKING1.**
+    The function itself has 15 call sites (`_top_up_pipeline`, quarantine
+    messaging, `_run_real_engine`, `_book_title_fight`, pipeline pop-loop, etc.)
+    and **stays**. What dies is the specific collision instance: Path B minting
+    an off-week event name via `_dfc_label(week)` after Path A had already
+    named a card the same week. Prior in-conversation filing of this under
+    PRE-GEN WORLD COHERENCE was mis-scoped — the collision is live-play, not
+    world-gen. Any *other* `_dfc_label` collision (e.g. two pre-built cards
+    landing on the same week) is separate and not addressed by PATH-B-BOOKING1.
+  - **AVAILABILITY-DRIVEN CADENCE (multi-session, deferred).** Real successor
+    to both the 3-week off-week rule *and* the per-fighter cooldown floor.
+    Fighter availability (KO/injury pushes out, clean-decision win pulls in)
+    would govern card frequency emergently instead of by calendar constant.
+    Off weeks become weeks where too few fighters are available. Layoffs
+    become story. Downstream of PATH-B-BOOKING1.
 - **COACH-GRAPPLE-SPLIT1** — split the `grappling_coach` training bucket into
   distinct wrestling and BJJ archetypes. Sandman-grade fighter-identity work
   deferred from the 2026-07-03 coach arc.
@@ -547,8 +581,12 @@ ship on the board.
   Bundle with any future `fight_integration.py` touch.
 - Off-week semantics contradiction — surfaced in TITLE-TRANSFER-DIAG1. Off weeks
   discard the pipeline card but the fallback path (`_simulate_ai_fights_week`)
-  still generates fresh AI fights, contradicting the "no event" print. Not a
-  correctness bug — a design call on whether off weeks should truly skip AI sim.
+  still generates fresh AI fights, contradicting the "no event" print.
+  **Escalated 2026-07-12 from "design call" to real correctness bug** — the
+  fallback is now known to double-book fighters and bypass every cooldown gate
+  (see PATH-B INTEGRITY DIAG on Van's session save: 4 duplicate-fight-instances
+  on wk3, 6/6 gaps under 4w). Answer is PATH-B-BOOKING1 in the LIVE-PLAY
+  MATCHMAKING backlog above.
 - `card_builder.calculate_matchup_score(is_rivalry=False)` param is dead — no
   caller passes it (game_bridge's `_matchup_score` adds `_rivalry_heat_bonus`
   on the returned score instead). The 12.0 flat rivalry bonus at
