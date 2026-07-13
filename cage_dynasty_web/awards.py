@@ -16,7 +16,7 @@ def canonical_specialty_method(engine_method: str, sub_type: str = '') -> str:
     """FINISH-DETAIL-PERSIST: canonical form for the specialty_method field.
 
     Consumed by both live-play (game_bridge._simulate_fight / _run_real_engine /
-    _simulate_card_fights / _simulate_ai_fights_week) and pre-gen (world_init.
+    _simulate_card_fights) and pre-gen (world_init.
     simulate_fight_full_engine / simulate_fight_simple). Kept here so both
     stores emit the SAME string shape — the recurring divergence trap
     (round vs round_finished, is_title_fight vs was_title_fight, flat-avg vs
