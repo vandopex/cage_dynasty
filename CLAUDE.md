@@ -1281,6 +1281,75 @@ Single-seed matrix from `outputs/oracle_bridge/stage1_outcome_matrix.py`.
 N and a seed count.** Direction claims fine; exact percentages need
 provenance.
 
+### STAGE 1 addendum — random-coupling hazard (STAGE1-PARITY1, 2026-07-14)
+
+The follow-up first-divergence and parity traces produced a finding
+that changes how Stage 2a has to think about byte-equivalence.
+
+**Random-consumption divergence between FE and FI is bigger than one
+line.** `fight_integration.py:494` (`self.commentary.rng.seed(random.
+getrandbits(64))`) was the obvious candidate: FI burns one main-random
+draw at fight-init that FE does not. The comment above :494 says
+"advances by exactly 1 per fight, always, so commentary-on vs
+commentary-off produce byte-identical fight outcomes under the same
+top-level seed." That comment is **correct within FI** — it does not
+address FE-vs-FI compatibility, and reading it as covering the full
+coupling story would be a mistake.
+
+**Measured coupling as of 2026-07-14 [grep + measurement]:**
+- `:494` — `random.getrandbits(64)` for commentary rng seed (1 draw)
+- `:640` — `random.randint(-10, 10)` for fighter1 initiative
+- `:641` — `random.randint(-10, 10)` for fighter2 initiative
+- **At least three lines**, probably more. Alignment attempts (+1 draw,
+  +3 draw) both failed to align the primitive-call traces on 12/12
+  DEC-vs-DEC fights. Two of those fights show a **different fighter
+  selected first** — same seed, not just different action — which is
+  either structural (initial-actor logic differs) or evidence of
+  additional random-consumption divergence beyond the three grep-named
+  sites.
+
+**The offset-vs-mechanic decomposition of the 41pp gap is NOT
+obtainable before Stage 2a.** No amount of harness alignment can
+match the two engines' random-consumption orders while they remain
+two engines. **Only the structural relocation — one loop, one RNG-
+consumption order, by construction — makes the decomposition question
+answerable.** Do not scope Stage 2a's success criteria against any
+"residual after alignment" number; those numbers are all measured
+under alignment attempts that don't align.
+
+**What Stage 2a MUST resolve alongside the accumulator port:**
+1. Consolidate the RNG-consumption order. FI's :494/:640/:641 (and
+   whatever else surfaces during the port) become one deterministic
+   sequence when the loops merge, or byte-equivalence with pre-gen
+   remains structurally impossible even after every mechanic ports
+   cleanly.
+2. Reconcile the initial-actor selection. Whether it's random-order
+   coincidence or a real logic difference between engines needs to
+   be answered when the code is in one place.
+
+**What survives regardless of alignment attempt [measurement, offset-
+invariant across N=0/+1/+3 draws]:**
+- **TKO-strikes gap holds at 22-27pp.** Real mechanic, not phase noise.
+  The four FI-only accumulator paths at `fight_integration.py:974
+  (_clinch_body_acc), :1016 (_gnp_accumulation), :1033
+  (leg_kicks_absorbed), :1052 (_rocked_shots)` are the confirmed
+  source. FE has no equivalent accumulator fields on `DefenderState`
+  and no per-exchange threshold checks for these paths.
+- **Style windows FE lacks** (`_counter_window` at
+  `fight_integration.py:787-937`, `_movement_window` nearby) — flagged
+  but not individually quantified. Port scope includes these.
+
+**Do NOT run a deeper draw-by-draw coupling audit.** That's the rabbit
+hole — match three consumers, find a fourth, match four, find a fifth.
+The port itself resolves the coupling by unification. Filing the
+sizing here so the next diagnostic doesn't try to enumerate its way to
+byte-equivalence from outside.
+
+Full record: commits `c208041` (first-divergence trace + heat probe)
+and STAGE1-PARITY1 (parity trace). Data: `outputs/oracle_bridge/
+first_divergence_trace.py`, `random_parity_trace.py`,
+`heat_magnitude_probe.py`.
+
 - Submission threshold: 70.0
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
 - Contract: `HOLDOUT = 25`, `WALKOUT = 10`, `HOLDOUT_WINDOW = 4 weeks`
