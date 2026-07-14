@@ -154,6 +154,43 @@ Filed as a fact about all prior measurements, not as an action item.
 Trust distributions over single seed-runs when reading historical
 diagnostics.
 
+## 🚨 KNOWN DEFECTS — filed, not scheduled
+
+### `_create_player_fighter` fighter_id falls back to a memory address [filed 2026-07-13]
+
+`cage_dynasty_web/game_bridge.py:2418`:
+
+```python
+fighter_id = fighter_data.get('id', f"player_fighter_{id(fighter_data)}")
+```
+
+When `fighter_data` doesn't include an `id` key, the fallback embeds
+Python's `id(fighter_data)` — a **runtime memory address** — into the
+fighter_id string. That value:
+
+- Is **nondeterministic** across runs (address randomization).
+- Is **non-portable**: a save file containing `player_fighter_{addr}`
+  cannot round-trip meaningfully across Python processes.
+- **Landed in ORACLE-BRIDGE1's first fixture run** — the checker failed
+  on the PLAYER tier because run 1's `player_fighter_4528888384`
+  differed from run 2's `player_fighter_4310611776`. Fixed in the harness
+  by passing an explicit `id` field.
+
+**Why it hasn't bitten hard yet:** the two real callers (new-game route
++ setup wizards) always populate `id` via the prospect selection flow,
+so the fallback is dormant in normal play. But it's a live path — any
+future caller that skips `id` writes a nondeterministic ID into the
+save.
+
+**Fix candidate (not scheduled):** replace with a stable default —
+`fighter_id = fighter_data.get('id') or f"player_fighter_{uuid.uuid4().hex[:8]}"`
+— so the fallback still uniqueizes without embedding process state.
+Or hard-fail the missing-id case since it's a caller bug.
+
+**Ship discipline:** the ORACLE-BRIDGE1 harness works around this by
+requiring explicit `id`. That is a HARNESS workaround, not a fix. File
+as production defect. Do NOT fix inside ORACLE-BRIDGE1 — single-purpose.
+
 ## Ship History (compact)
 
 Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
