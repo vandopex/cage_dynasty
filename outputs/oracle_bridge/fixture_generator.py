@@ -113,6 +113,60 @@ def _snapshot_fighter(bridge, fid):
         "injury_active": injury_active,
     }
 
+def _finish_category(method_str):
+    """Parse method string into a canonical finish category.
+
+    Van's spec asked to capture `specialty_method` for proper doctor-
+    stoppage classification. That field doesn't exist on the engine's
+    FightResult / NarratedFightResult — the specialty info is embedded
+    INSIDE the method string (e.g. "TKO (Doctor Stoppage)", "KO (Head
+    Kick)", "TKO (Body Shot)"). This function centralizes the parse
+    so consumers don't string-match.
+
+    Also captures a structural fact worth knowing: `fight_integration.py`
+    (live-play) has NO cut mechanism (per ENGINE-DEAD-KNOBS1 comment at
+    fight_integration.py:~1770 — the cut-stoppage branch was unreachable
+    and was removed). Live-play doctor stoppages are severe-damage type
+    only; pre-gen fires both severe-damage AND cut-based. Doctor rates
+    across engines are apples-to-oranges.
+
+    Categories:
+      KO                — plain KO or "KO (Head Kick)" / "KO (Body Kick)" etc
+      TKO_DOCTOR_CUT    — "TKO (Doctor Stoppage - Cuts)" — pre-gen only
+      TKO_DOCTOR_DAMAGE — "TKO (Doctor Stoppage)" — both engines
+      TKO_CORNER        — "TKO (Corner Stoppage)"
+      TKO_SPECIALTY     — "TKO (Body Shot)" / "TKO (Ground and Pound)" / "TKO (Leg Kicks)"
+      TKO_STRIKES       — plain "TKO"
+      SUB               — "Submission" or "Submission (armbar)"
+      DEC               — "Unanimous Decision" / "Split Decision" / "Majority Decision"
+      DRAW              — "Draw"
+      OTHER             — anything else
+    """
+    if not method_str:
+        return "OTHER"
+    m = method_str.strip()
+    if m == "Draw":
+        return "DRAW"
+    if m.startswith("Submission") or m == "SUB":
+        return "SUB"
+    if "Decision" in m or m == "DEC":
+        return "DEC"
+    if m.startswith("TKO"):
+        # Order matters: check most-specific first
+        if "Cuts" in m or "Cut" in m:
+            return "TKO_DOCTOR_CUT"
+        if "Doctor" in m:
+            return "TKO_DOCTOR_DAMAGE"
+        if "Corner" in m:
+            return "TKO_CORNER"
+        # Parenthesised specialty (Body Shot / Leg Kicks / Ground and Pound / etc)
+        if "(" in m and ")" in m:
+            return "TKO_SPECIALTY"
+        return "TKO_STRIKES"
+    if m.startswith("KO"):
+        return "KO"
+    return "OTHER"
+
 def _dump_result(r):
     """NarratedFightResult → sorted-key dict."""
     if r is None:
@@ -121,6 +175,10 @@ def _dump_result(r):
     for k in ("winner_id", "loser_id", "method", "finish_round",
               "finish_time", "decision_type", "sub_type"):
         d[k] = getattr(r, k, None)
+    # Canonical finish category — parsed from method string.
+    # See _finish_category docstring for the reason (specialty_method
+    # isn't a real engine field; the info lives IN the method string).
+    d["finish_category"] = _finish_category(d.get("method"))
     # per-round stats
     for side, key in [("fighter1_stats", "fighter1_stats"), ("fighter2_stats", "fighter2_stats")]:
         stats = getattr(r, key, None) or []

@@ -1,0 +1,70 @@
+====================================================================================================
+STAGE 1 MULTI-SEED — 10 worlds, 12 weeks each
+Per uuid finding: each seed is a distinct WORLD, not resamples
+====================================================================================================
+
+
+====================================================================================================
+PER-SEED       live_agg pregen_agg   SxS_live     SxS_pg   GxG_live     GxG_pg   SxG_live     SxG_pg
+====================================================================================================
+seed=42        70.5%N78   34.6%N78   85.7%N14    50.0%N14    85.7%N21    19.0%N21    54.8%N31    35.5%N31  
+seed=100       81.6%N76   32.9%N76   83.3%N18    38.9%N18    50.0%N4  *  50.0%N4  *  79.3%N29    27.6%N29  
+seed=200       69.9%N73   37.0%N73   77.8%N18    50.0%N18    63.6%N11    27.3%N11    66.7%N27    29.6%N27  
+seed=300       77.9%N77   46.8%N77   78.6%N14    50.0%N14    66.7%N6     33.3%N6     82.6%N23    39.1%N23  
+seed=1000      73.8%N80   36.2%N80   66.7%N21    42.9%N21    55.6%N9     22.2%N9     72.4%N29    27.6%N29  
+seed=1001      85.4%N82   28.0%N82   85.7%N14    21.4%N14    75.0%N12    41.7%N12    83.3%N30    20.0%N30  
+seed=1002      74.4%N82   32.9%N82   54.5%N11    36.4%N11    92.3%N13    15.4%N13    66.7%N36    33.3%N36  
+seed=1003      69.7%N76   32.9%N76   90.9%N11    45.5%N11    57.1%N14    50.0%N14    74.1%N27    25.9%N27  
+seed=1004      79.3%N82   32.9%N82   88.9%N9     33.3%N9     80.0%N10    30.0%N10    78.8%N33    39.4%N33  
+seed=1005      85.5%N76   40.8%N76  100.0%N17    47.1%N17    78.6%N14    50.0%N14    86.4%N22    18.2%N22  
+
+(N<5 marked *; cell finish pct on N<5 is direction not target)
+
+====================================================================================================
+POOLED across 10 distinct worlds — this is 'combined N=~780 pool', NOT '78 resamples'
+====================================================================================================
+                    N   KO    TKO   DOC   SUB   DEC   DRW   FINISH
+  LIVE-PLAY      782   42.5%   26.1%    4.6%    3.7%   22.4%    0.8%   76.9%
+  PRE-GEN        782   17.5%    3.5%    8.7%    5.8%   63.2%    1.4%   35.4%
+  Δ (live - pregen finish): +41.4pp
+
+Pooled by matchup:
+  matchup                   live_N  live_fin%    pg_N    pg_fin%        Δ
+  striker-v-striker            147      81.0%     147      42.2%  +38.8pp
+  grappler-v-grappler          114      73.7%     114      32.5%  +41.2pp
+  striker-v-grappler           287      73.9%     287      30.0%  +43.9pp
+  striker-v-hybrid             102      82.4%     102      40.2%  +42.2pp
+  grappler-v-hybrid            107      77.6%     107      35.5%  +42.1pp
+  hybrid-v-hybrid               25      76.0%      25      52.0%  +24.0pp
+
+====================================================================================================
+VARIANCE across worlds (aggregate finish rate per seed)
+====================================================================================================
+  live-play: n=10 min=69.7% median=77.9% max=85.5% spread=15.8pp
+  pre-gen  : n=10 min=28.0% median=34.6% max=46.8% spread=18.7pp
+
+====================================================================================================
+SAME-FAMILY vs CROSS-FAMILY DIVERGENCE (Van's structural hypothesis)
+====================================================================================================
+
+Hypothesis: same-family matchups (SxS, GxG) show ~50pp live-vs-pregen gap
+while cross-family (SxG) shows only ~16pp. Test: does this hold across worlds?
+
+    seed       SxS_Δ       GxG_Δ       SxG_Δ     SxS+GxG_avg    diff_cross_vs_same
+      42   +35.7pp N14    +66.7pp N21    +19.4pp N31       +51.2pp                +31.8pp
+     100   +44.4pp N18     +0.0pp*N4     +51.7pp N29       +22.2pp                -29.5pp
+     200   +27.8pp N18    +36.4pp N11    +37.0pp N27       +32.1pp                 -5.0pp
+     300   +28.6pp N14    +33.3pp N6     +43.5pp N23       +31.0pp                -12.5pp
+    1000   +23.8pp N21    +33.3pp N9     +44.8pp N29       +28.6pp                -16.3pp
+    1001   +64.3pp N14    +33.3pp N12    +63.3pp N30       +48.8pp                -14.5pp
+    1002   +18.2pp N11    +76.9pp N13    +33.3pp N36       +47.6pp                +14.2pp
+    1003   +45.5pp N11     +7.1pp N14    +48.1pp N27       +26.3pp                -21.8pp
+    1004   +55.6pp N9     +50.0pp N10    +39.4pp N33       +52.8pp                +13.4pp
+    1005   +52.9pp N17    +28.6pp N14    +68.2pp N22       +40.8pp                -27.4pp
+
+  (* = cell N<5 — direction only)
+
+  same-family (SxS+GxG avg) gap: median +40.8pp, range [+22.2, +52.8], N=10
+  cross-family (SxG) gap:        median +44.8pp, range [+19.4, +68.2], N=10
+  worlds where same-family gap > cross-family gap: 3/10
+  (structural signature confirmed if ≥8/10)

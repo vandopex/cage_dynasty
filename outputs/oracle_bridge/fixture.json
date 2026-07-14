@@ -49,6 +49,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 1,
         "finish_time": "2:38",
         "judge_scores": [],
@@ -324,6 +325,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "2:32",
         "judge_scores": [],
@@ -599,6 +601,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -887,6 +890,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -1119,6 +1123,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_SPECIALTY",
         "finish_round": 1,
         "finish_time": "5:00",
         "judge_scores": [],
@@ -1394,6 +1399,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -1682,6 +1688,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DRAW",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -1970,6 +1977,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 3,
         "finish_time": "3:10",
         "judge_scores": [],
@@ -2245,6 +2253,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "0:32",
         "judge_scores": [],
@@ -2520,6 +2529,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "2:00",
         "judge_scores": [],
@@ -2795,6 +2805,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "3:00",
         "judge_scores": [],
@@ -3014,6 +3025,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 1,
         "finish_time": "0:54",
         "judge_scores": [],
@@ -3203,6 +3215,7 @@
         "decision_type": null,
         "fighter1_stats": [],
         "fighter2_stats": [],
+        "finish_category": "TKO_DOCTOR_DAMAGE",
         "finish_round": 1,
         "finish_time": "5:00",
         "judge_scores": [],
@@ -3422,6 +3435,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "TKO_SPECIALTY",
         "finish_round": 1,
         "finish_time": "4:27",
         "judge_scores": [],
@@ -3697,6 +3711,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 3,
         "finish_time": "2:00",
         "judge_scores": [],
@@ -3916,6 +3931,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 1,
         "finish_time": "4:21",
         "judge_scores": [],
@@ -4135,6 +4151,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "TKO_SPECIALTY",
         "finish_round": 1,
         "finish_time": "4:21",
         "judge_scores": [],
@@ -4382,6 +4399,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "1:43",
         "judge_scores": [],
@@ -4657,6 +4675,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "1:27",
         "judge_scores": [],
@@ -4932,6 +4951,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 3,
         "finish_time": "1:00",
         "judge_scores": [],
@@ -5207,6 +5227,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 3,
         "finish_time": "0:54",
         "judge_scores": [],
@@ -5538,6 +5559,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -5798,6 +5820,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "TKO_DOCTOR_DAMAGE",
         "finish_round": 3,
         "finish_time": "5:00",
         "judge_scores": [],
@@ -6045,6 +6068,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "3:10",
         "judge_scores": [],
@@ -6320,6 +6344,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "3:54",
         "judge_scores": [],
@@ -6567,6 +6592,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "3:49",
         "judge_scores": [],
@@ -6814,6 +6840,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "1:32",
         "judge_scores": [],
@@ -7061,6 +7088,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 2,
         "finish_time": "1:49",
         "judge_scores": [],
@@ -7336,6 +7364,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -7624,6 +7653,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -7912,6 +7942,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "4:43",
         "judge_scores": [],
@@ -8159,6 +8190,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 2,
         "finish_time": "1:05",
         "judge_scores": [],
@@ -8434,6 +8466,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "2:00",
         "judge_scores": [],
@@ -8709,6 +8742,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -8997,6 +9031,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -9257,6 +9292,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "4:05",
         "judge_scores": [],
@@ -9532,6 +9568,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -9792,6 +9829,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "2:27",
         "judge_scores": [],
@@ -10123,6 +10161,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 5,
         "finish_time": "2:21",
         "judge_scores": [],
@@ -10370,6 +10409,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "4:32",
         "judge_scores": [],
@@ -10645,6 +10685,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -10905,6 +10946,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_SPECIALTY",
         "finish_round": 2,
         "finish_time": "3:10",
         "judge_scores": [],
@@ -11180,6 +11222,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -11440,6 +11483,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "2:49",
         "judge_scores": [],
@@ -11687,6 +11731,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "3:54",
         "judge_scores": [],
@@ -11962,6 +12007,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -12250,6 +12296,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -12538,6 +12585,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -12826,6 +12874,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -13058,6 +13107,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "TKO_SPECIALTY",
         "finish_round": 1,
         "finish_time": "2:27",
         "judge_scores": [],
@@ -13333,6 +13383,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "0:54",
         "judge_scores": [],
@@ -13552,6 +13603,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 1,
         "finish_time": "2:54",
         "judge_scores": [],
@@ -13827,6 +13879,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -14115,6 +14168,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "3:05",
         "judge_scores": [],
@@ -14390,6 +14444,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -14678,6 +14733,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "2:05",
         "judge_scores": [],
@@ -14953,6 +15009,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -15241,6 +15298,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "4:27",
         "judge_scores": [],
@@ -15488,6 +15546,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 2,
         "finish_time": "0:43",
         "judge_scores": [],
@@ -15763,6 +15822,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DRAW",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -16051,6 +16111,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "4:21",
         "judge_scores": [],
@@ -16270,6 +16331,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 1,
         "finish_time": "1:00",
         "judge_scores": [],
@@ -16517,6 +16579,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "4:21",
         "judge_scores": [],
@@ -16764,6 +16827,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "3:21",
         "judge_scores": [],
@@ -17039,6 +17103,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -17327,6 +17392,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "2:21",
         "judge_scores": [],
@@ -17602,6 +17668,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -17862,6 +17929,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "1:21",
         "judge_scores": [],
@@ -18081,6 +18149,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 1,
         "finish_time": "4:49",
         "judge_scores": [],
@@ -18300,6 +18369,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "SUB",
         "finish_round": 1,
         "finish_time": "0:27",
         "judge_scores": [],
@@ -18575,6 +18645,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "4:32",
         "judge_scores": [],
@@ -18822,6 +18893,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "4:49",
         "judge_scores": [],
@@ -19097,6 +19169,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "DEC",
         "finish_round": null,
         "finish_time": null,
         "judge_scores": [
@@ -19357,6 +19430,7 @@
             "td_landed": 1
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "5:00",
         "judge_scores": [],
@@ -19632,6 +19706,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 3,
         "finish_time": "0:16",
         "judge_scores": [],
@@ -19884,6 +19959,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "KO",
         "finish_round": 2,
         "finish_time": "4:54",
         "judge_scores": [],
@@ -20103,6 +20179,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_DOCTOR_DAMAGE",
         "finish_round": 2,
         "finish_time": "5:00",
         "judge_scores": [],
@@ -20355,6 +20432,7 @@
             "td_landed": 0
           }
         ],
+        "finish_category": "TKO_STRIKES",
         "finish_round": 2,
         "finish_time": "3:10",
         "judge_scores": [],
