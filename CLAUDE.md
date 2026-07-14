@@ -107,6 +107,53 @@ Section §2 of "PRE-GEN WORLD COHERENCE epic" below already noted a
 about the *fixture-module* gap — a strictly larger blind spot. Both
 apply. Do not conflate.
 
+## 🚨 CRITICAL — "SAME SEED" MEASUREMENTS HAVE NEVER BEEN REPRODUCIBLE
+
+**Measured empirically 2026-07-13** by the ORACLE-BRIDGE1 determinism
+probe. `uuid.uuid4()` uses `os.urandom` and **ignores `random.seed()`
+entirely**. The game generates 30+ IDs per new_game via `uuid.uuid4()`
+(fighter_id, camp_id, fight_id, event_id, news_id, offer_id,
+contract_id, prospect_id, coach_id, reign_id, champion_id, game_id).
+Each new run reshuffles every ID, and downstream operations that read
+those IDs — matchmaking sorts, set iteration, dict-key lookups — see
+different pairs, different orders, different fights.
+
+**Direct measurement:** identical `random.seed(42)` + `PYTHONHASHSEED=0`
++ subprocess-fresh state, two runs = **29 bouts vs 26 bouts** and the
+first fight_id differed on the first pairing.
+
+**Consequence — every "same seed" measurement in this project's
+recorded history was measuring a *differently-shuffled world*:**
+
+- The `outputs/wr_bjj_drift_diag1.md` "Harness A 47.3% CI [43.3, 51.4]
+  N=577" and every certified-baseline number under `CLAUDE.md`'s
+  "Certified cell baselines" section.
+- The PIPELINE-DENSITY multi-seed "10/10 seeds landing on week 4"
+  finding.
+- The PATH-B-BOOKING1 before/after 5-run "distribution" measurement
+  that had to report a distribution instead of a single point.
+- Every synthetic probe under `outputs/` that fixed `random.seed(N)`
+  and re-ran.
+
+**The big findings survive** because they were measured across enough
+noise to hold up: "10/10 seeds on wk 4" is 10/10 across 10 truly
+distinct worlds, which is a *stronger* signal than 10 seeds on the
+same world. But **exact numbers are per-world**, not per-seed, and
+tuning a constant to hit a specific single-point number was always
+noisier than the arithmetic suggested.
+
+**Reproducibility is achievable** via monkey-patching `uuid.uuid4()`
+to draw from a seeded `random.Random` stream. Verified 2026-07-13:
+identical byte-equal `completed_events` across two subprocess-fresh
+runs. **But that patch lives in the harness, not in production.**
+Live saves keep genuine random UUIDs; making saves reproducible as a
+feature ("share this seed, get this exact world") is a real ship,
+not filed here.
+
+Filed as a fact about all prior measurements, not as an action item.
+Trust distributions over single seed-runs when reading historical
+diagnostics.
+
 ## Ship History (compact)
 
 Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
