@@ -619,7 +619,11 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
   simulators with parallel exchange loops that have drifted since
   2026-06-14 (`d347de9` "all in fight_integration layer"). Same fighters,
   same seeds: pre-gen 26% finish rate vs live-play 98% on striker-vs-
-  striker. FI has ~8 accumulator-TKO paths and ~6 style windows FE
+  striker ⚠ **the "26/98" figures are FALSE — see full correction in
+  "Key constants" section below.** Re-measured pooled 10-seed:
+  42% pre-gen / 81% live-play on SxS (Δ +38.8pp not +72pp). Direction
+  survives; magnitudes were pre-uuid-patch and unreproducible.
+  FI has ~8 accumulator-TKO paths and ~6 style windows FE
   lacks; FE has an elbow-cut writer FI lacks. All simulation primitives
   (select_action, calculate_strike_damage, attempt_submission, etc.)
   are imported from FE by FI, so consolidation onto one simulator is
@@ -1246,6 +1250,36 @@ probes (FINISH-DISTRIBUTION-DIAG1):
 - Striker-vs-striker: pre-gen 26% finish rate vs live-play **98%**
 - Balanced-vs-balanced: pre-gen 17% vs live-play 56%
 - Within-TKO cut share: pre-gen 68-100% vs live-play 0%
+
+**⚠️ CORRECTION 2026-07-14 — STAGE 1 OUTCOME MATRIX (10-seed pooled,
+N=782 per side, uuid-patched deterministic worlds).** The three
+FINISH-DISTRIBUTION-DIAG1 numbers above **predate the uuid finding**
+(DOCS-SEED-NONDETERMINISM1, 2026-07-13) and were measured on
+unreproducible worlds — every "same seed" was actually a differently-
+shuffled fighter population. Re-measured this arc's headlines on
+matched fighters, matched seeds:
+
+| Headline claim | STAGE 1 measurement (pooled 10 seeds) | Verdict |
+|---|---|---|
+| striker-v-striker 26% pre-gen / 98% live-play | **42.2% pre-gen / 81.0% live-play** (N=147) — Δ +38.8pp | **FALSE**. Real gap, magnitude exaggerated. |
+| within-TKO cut share pre-gen 68-100% vs live-play 0% | live-play 0% CONFIRMED (grep verified: `ENGINE-DEAD-KNOBS1` comment at `fight_integration.py:~1770` says cut-stoppage branch was unreachable and was REMOVED — live-play has **no cut mechanism at all**). Pre-gen cut share not re-measured (needs specialty_method break-out per-seed; queued). | **PARTIAL** — live side confirmed structurally. Pre-gen number not re-verified but base claim (asymmetry) survives. |
+| 82% of pre-gen TKOs are doctor stoppages (referenced elsewhere in arc scoping) | Denominator error on original: **6 total TKOs in seed=42 N=78** made the 82% meaningless. Pooled 10-seed pre-gen has TKO_DOCTOR+TKO_DOCTOR_CUT = 8.7% of all fights, TKO_STRIKES = 3.5% — but the two engines' doctor stoppages are apples-to-oranges (see above). | **FALSE as scoping input**. |
+| 2% submissions | live-play 3.7% pool / pre-gen 5.8% pool. Single-seed detail: 2.4% live / 3.0% pre-gen. Sub attempts 4-8× conversions. | **CONFIRMED direction**. |
+
+**What survives and matters:**
+
+- **Aggregate live vs pre-gen finish rate: 76.9% vs 35.4% pooled (Δ +41.4pp on N=782 per side).** The arc's core divergence is real and larger in aggregate than the individual headline cells suggested.
+- **The largest per-method divergence is TKO-strikes**: live 26.1% vs pre-gen 3.5% (Δ +22.6pp pool). Pre-gen essentially never produces a strike TKO. This is the specific mechanic gap the consolidation arc has to close.
+- **The same-family-vs-cross-family asymmetry hypothesis is DISPROVED across worlds**: seed=42 showed SxS/GxG ~50pp vs SxG ~19pp, but pooled 10-seed shows SxS +38.8pp / GxG +41.2pp / SxG +43.9pp — nearly uniform ~40pp across matchup types. The seed=42 pattern was a single-world artifact.
+- **Every specific number in the arc's scoping is now suspect** because they predate the uuid finding. Direction survives; magnitudes need re-measurement against the ORACLE-BRIDGE1 fixture and pooled multi-seed.
+
+Full multi-seed data: `outputs/oracle_bridge/stage1_multiseed_result.txt`. Per-seed
+matrix from `outputs/oracle_bridge/stage1_multiseed_matrix.py`.
+Single-seed matrix from `outputs/oracle_bridge/stage1_outcome_matrix.py`.
+
+**Rule going forward: no arc scoping number gets quoted without an
+N and a seed count.** Direction claims fine; exact percentages need
+provenance.
 
 - Submission threshold: 70.0
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
