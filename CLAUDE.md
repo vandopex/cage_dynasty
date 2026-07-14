@@ -156,6 +156,94 @@ diagnostics.
 
 ## 🚨 KNOWN DEFECTS — filed, not scheduled
 
+### `_eng` UnboundLocalError at `game_bridge.py:13816` — one bad fight cascades [filed 2026-07-13]
+
+`cage_dynasty_web/game_bridge.py:13633-13816` — the Path A fight loop:
+
+```python
+if FIGHT_ENGINE_AVAILABLE:
+    try:
+        # ... setup ...
+        _eng = _simulate_narrated_fight_fn(fa1, fa2, ...)     # :13633
+        # ... commentary storage, winner/loser derivation ...
+        winner = f1 if _eng.winner_id in (...) else f2         # :13725
+        # ...
+    except Exception:
+        # Fallback: set winner/loser/method/rnd via score-based path
+        winner = f1 if f1_s >= f2_s else f2                    # :13744
+        # ... but _eng is NEVER bound here
+# Later, OUTSIDE the try/except:
+_specialty = canonical_specialty_method(
+    getattr(_eng, 'method', '') or method,                     # :13816
+    _eng_sub_type,
+)                                                              # UnboundLocalError
+```
+
+When `_simulate_narrated_fight_fn` at `:13633` raises, the `except`
+at `:13741` catches it and builds a score-based fallback (sets
+`winner/loser/method/rnd`). **But `_eng` is never bound in the except
+path.** The downstream line at `:13816` reads `getattr(_eng, 'method', ...)`,
+which raises `UnboundLocalError` — **crashing not just the current
+fight but the whole card via the outer exception boundary in
+`_advance_week_impl:3589`.**
+
+**Surfaced by ORACLE-BRIDGE1 perturbation #1** during the initial
+damage-multiplier nudge test: any damage_multiplier ≠ 0.48 tripped
+Stage 0d's `_assert_sanctioned_config` inside `simulate_narrated_fight`,
+which raised, which unbound `_eng`, which crashed 74 of 78 fights
+in the fixture run. **Dormant in production today** because
+`simulate_narrated_fight` doesn't normally raise (Stage 0d assertion
+only fires on tampered configs, which never occur in prod). **Fragile
+if it ever does raise** — a single bad fight would cascade into
+killing the rest of the card.
+
+**Fix candidate (not scheduled):** add `_eng = None` at the top of the
+`try:` block (or in the `except:` handler) so `getattr(_eng, 'method', '')`
+returns `''` cleanly. One-line fix. Waiting on scope alignment because
+touching this file requires re-verifying against both Stage 0c and
+ORACLE-BRIDGE1.
+
+### Stage 0d `_assert_sanctioned_config` is a tripwire for ORACLE-BRIDGE1 too [filed 2026-07-13]
+
+Same pattern already documented for Stage 0c: `_assert_sanctioned_config`
+at `fight_engine.py:~863` raises `AssertionError` on any `(exchanges,
+damage, standup)` triple outside the three sanctioned allowlist entries
+(`LIVE_PLAY`, `PRE_GEN_LEGACY`, `FI_FALLBACK`). The assertion fires
+INSIDE `simulate_narrated_fight`, before the fight body runs.
+
+**Consequence for ORACLE-BRIDGE1 perturbation testing:** any nudge to
+`damage_multiplier`, `exchanges_per_round`, or `standup_threshold` in
+`game_bridge.py`'s `_FightConfig(...)` constructions
+(`:13597, :17518`) trips the assertion first. The fixture never sees
+outcome divergence because the fight never runs. Instead, the crash
+cascades via the `_eng` bug above and 74/78 fights die — the fixture
+"catches" on `meta.total_captured_fights: 78 != 4`, which is corpse
+count, not detection.
+
+**Two-step proof procedure for future config-triple perturbation
+tests** (same shape as Stage 0c's discrimination procedure):
+
+1. Prove the assertion fires: install perturbation, run fixture, observe
+   `AssertionError` in the checker stderr. Undo.
+2. Temporarily widen the allowlist in `fight_engine.py` — add the
+   perturbed triple to `_SANCTIONED_TRIPLES` so the assertion passes.
+   Re-run perturbation. Verify fixture catches on outcome fields.
+   Undo the widening.
+
+For discrimination proof at the config-triple axis, ORACLE-BRIDGE1's
+`perturbation_test.py` currently sidesteps this by targeting
+`submission_progress_to_finish` (a non-asserted `FightConfig` field).
+That's a real signal for "config is passed correctly" but does NOT
+prove the fixture catches the specific triple values. Extending to
+the full triple axis needs the two-step procedure above.
+
+**Third instance of this pattern.** Stage 0d assertion also blinded
+POISON-0.42 (see the poison test — checker returned 928/928 with
+poison in place). Stage 0d protects live-play behavior but shadows
+diagnostic tools that want to observe what fights do under out-of-band
+configs. Documenting the pattern here so the next diagnostic tool
+starts with awareness instead of hitting it fresh.
+
 ### `_create_player_fighter` fighter_id falls back to a memory address [filed 2026-07-13]
 
 `cage_dynasty_web/game_bridge.py:2418`:
