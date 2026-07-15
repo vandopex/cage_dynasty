@@ -1330,11 +1330,42 @@ under alignment attempts that don't align.
 **What survives regardless of alignment attempt [measurement, offset-
 invariant across N=0/+1/+3 draws]:**
 - **TKO-strikes gap holds at 22-27pp.** Real mechanic, not phase noise.
-  The four FI-only accumulator paths at `fight_integration.py:974
-  (_clinch_body_acc), :1016 (_gnp_accumulation), :1033
-  (leg_kicks_absorbed), :1052 (_rocked_shots)` are the confirmed
-  source. FE has no equivalent accumulator fields on `DefenderState`
-  and no per-exchange threshold checks for these paths.
+
+  **⚠️ PREVIOUSLY STATED: four FI-only accumulator paths at
+  `fight_integration.py:974/1016/1033/1052` are the confirmed source
+  and FE has no equivalent — FALSE.** Corrected 2026-07-14 by the
+  Stage 2a read-only diagnostic. Actual code-level split of those four
+  gates (grep-verified against HEAD, both files):
+
+  | gate | FI location | FE equivalent | FE numerical relation |
+  |---|---|---|---|
+  | `_clinch_body_acc` | `:958-980` | **none** (0 refs in fight_engine.py) | genuinely FI-only |
+  | `_gnp_accumulation` | `:1005-1022` | **none** (0 refs in fight_engine.py) | genuinely FI-only |
+  | leg-TKO on `leg_kicks_absorbed` | `:1024-1037` | `fight_engine.py:3303-3323` | **byte-identical** logic — field is FE-native at `:474`; both blocks share `min(0.15, (absorbed - 6) * 0.02)` + `*1.4` if stamina<50 |
+  | rocked-shots ref stoppage | `_rocked_shots` at `:1042-1055`, cap `min(0.22, N*0.05)`, mult `1 - iq/250 - heart/350 - composure/400` | `_rocked_shots_taken` at `fight_engine.py:3406-3413`, cap `min(0.35, N*0.08)`, mult `1 - iq/250 - heart/350` | **FE gate is STRONGER** on every axis: faster increment (0.08 vs 0.05), higher cap (0.35 vs 0.22), no composure protection |
+
+  **Two are genuinely FI-only. One is FE-native and byte-identical.
+  One is present in FE with different, stronger constants.**
+
+  **Counterintuitive consequence flagged explicitly:** FE's rocked-
+  shots gate, *if it fires*, is stronger than FI's — cap 0.35 vs
+  0.22, faster ramp, no composure discount. It therefore cannot be
+  a source of FE's finish-rate deficit relative to FI. Leg-TKO being
+  byte-identical explains none of the gap either. **The code-level
+  attribution of the TKO-strikes gap narrows to `_clinch_body_acc`
+  and `_gnp_accumulation` — pending a firing measurement.** Do NOT
+  read this as "clinch-body + gnp are the confirmed cause": whether
+  FE's leg-TKO and rocked-shots gates actually fire in pre-gen (or
+  are present-but-dormant) is unmeasured. Firing frequency is what
+  closes the attribution; a code presence check does not.
+
+  **Named trace item** (queued, requires the two-step allowlist
+  widening at `fight_engine.py:863`'s `_assert_sanctioned_config`):
+  do FE's `leg-TKO` and `_rocked_shots_taken` ref-stoppage gates
+  actually fire in pre-gen production, or are they dormant paths that
+  never trigger on the fighter/damage distributions world_init
+  produces? Answering this is what would confirm or deny the narrowed
+  attribution above.
 - **Style windows FE lacks** (`_counter_window` at
   `fight_integration.py:787-937`, `_movement_window` nearby) — flagged
   but not individually quantified. Port scope includes these.
