@@ -1435,6 +1435,103 @@ and STAGE1-PARITY1 (parity trace). Data: `outputs/oracle_bridge/
 first_divergence_trace.py`, `random_parity_trace.py`,
 `heat_magnitude_probe.py`.
 
+### STAGE 1 addendum — config-lever measurement [filed 2026-07-14]
+
+The two config dials that differ between pre-gen and live-play
+(`damage_multiplier` 0.42 vs 0.48, `standup_threshold` 6 vs 10) close
+**53% of the known finish-rate gap by themselves.** This measurement
+narrows the STAGE 1 addendum above — it does not falsify it. The
+mechanics it named (TKO-strikes gap, two genuinely-FI-only accumulators,
+style windows FE lacks) are still real. They are a smaller share of the
+41.4pp aggregate than the framing implies, and the surviving residual
+after both dials is a mix that includes at least one more config-shaped
+lever that has not yet been isolated.
+
+**Measurement — ORACLE-BRIDGE1 fixture, 78 matched fighter pairs, matched
+seeds (1000 + fight_index):**
+
+| config | triple | finish rate |
+|---|---|---:|
+| baseline (pre-gen) | (55, 0.42, 6) `_TRIPLE_PRE_GEN_LEGACY` | 37.2% |
+| damage-only matched | (55, 0.48, 6) `_TRIPLE_FI_FALLBACK` | 57.7% |
+| standup-only matched | (55, 0.42, 10) **widened in-memory, reverted post-run** | 46.2% |
+| both dials matched (LIVE_PLAY) | (55, 0.48, 10) `_TRIPLE_LIVE_PLAY` | 59.0% |
+
+- **Baseline → LIVE_PLAY = +21.8pp of finish rate.** Against the Stage 1
+  pooled 10-seed gap of **+41.4pp** (live 76.9% vs pre-gen 35.4%), this
+  is **53% of the arc's known aggregate gap, config drift alone.**
+
+**Interaction term, as measured fact:**
+
+- Damage-alone closed **+20.5pp** (37.2% → 57.7%).
+- Standup-alone Ledger A (finish-rate only) closed **+9.0pp** (37.2%
+  → 46.2%).
+- **Additive estimate: +29.5pp.** Measured combined: **+21.8pp.**
+- **Interaction term: −7.7pp.** The two dials interact negatively —
+  they overlap rather than add. Additive estimate overstates the
+  two-dial closure by ~35%. This is why the combined triple was
+  measured directly rather than estimated from single-lever runs.
+
+**Standup caveat — carried from the filed mechanism finding:** the
+standup contribution above is Ledger A only (net finish-rate movement),
+per `### standup_threshold observed effect is not referee-standup
+frequency [filed 2026-07-14]`. The Phase 1 discrimination probe surfaced
+24 winner-flip / method-change-within-class fights that the standup dial
+also moves — this churn is real observed behavior but does NOT count
+toward gap closure and is explicitly excluded from the +9.0pp above. Do
+not sum Ledger A and Ledger B when quoting standup's effect.
+
+**Surviving residual — unseparated mix, NOT "the size of the surgery":**
+
+- **+19.6pp** survives after both dials are matched (41.4pp known aggregate
+  − 21.8pp measured combined).
+- **This residual is a mix** of at least: (a) the two genuinely-FI-only
+  accumulators `_clinch_body_acc` (`fight_integration.py:958-980`) and
+  `_gnp_accumulation` (`:1005-1022`); (b) style windows FE lacks
+  (`_counter_window`, `_movement_window`, `_surge_exchanges`); (c)
+  input-distribution differences between `world_init` and the Path A
+  fixture population, which no engine change resolves; (d) the
+  rocked-shots numerical difference (FE cap 0.35 vs FI cap 0.22, per the
+  STAGE 1 addendum table); (e) **the divergent `ground_inactivity`
+  increment rate — FE `+1` per exchange at `fight_engine.py:3695-3697`
+  vs FI `+0.25` or `+2` depending on position dominance at `fight_
+  integration.py:1700-1739` — a config-shaped difference on a shared
+  mechanic, not a missing mechanic, and not yet isolated as a separate
+  lever.**
+- **The mechanic-surgery portion of the residual is therefore SMALLER
+  than +19.6pp by an unmeasured amount, pending isolation of the
+  increment-rate lever.** Do not read +19.6pp as the size of Stage 2a's
+  port. Stage 2a's true size is the residual AFTER the increment-rate
+  lever is measured, and is bounded above by 19.6pp — not equal to it.
+
+**Framing correction — proportion, not falsification.** The arc has
+been scoping the full ~41pp as substantially a mechanics problem.
+Measured, **~53% was config drift** (two dials that were already sanctioned
+in `_SANCTIONED_TRIPLES` at `fight_engine.py:853-860`, differing only in
+which triple each engine happens to construct), and **at least one
+additional config-shaped lever** (the `ground_inactivity` increment rate)
+remains unisolated in the residual. The mechanics the STAGE 1 addendum
+named — the TKO-strikes gap, the two FI-only accumulators, the style
+windows — are still real contributors to the residual. Their share of
+the 41.4pp aggregate is smaller than the earlier framing implied, not
+zero.
+
+**Data provenance:** two untracked probe scripts in `outputs/oracle_
+bridge/`:
+- `damage_lever_probe.py` — 37.2% → 57.7% at damage 0.42→0.48, standup
+  held at 6, both triples sanctioned, no widening.
+- `standup_lever_probe_phase2.py` — three configs at (55,0.42,6),
+  (55,0.42,10), (55,0.48,10). Middle triple required in-memory widening
+  of `_SANCTIONED_TRIPLES`; widening was reverted post-run and
+  fight_engine.py bytes verified unchanged. Stage 0c golden master
+  (928/928) and ORACLE-BRIDGE1 harness (78/78) both re-checked GREEN
+  after revert.
+
+The finding stands on the committed numbers in the table and interaction
+paragraph above. The probe scripts are named for reproducibility, not
+because they are the record. Untracked status is intentional — these are
+one-shot measurement instruments, not fixtures.
+
 - Submission threshold: 70.0
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
 - Contract: `HOLDOUT = 25`, `WALKOUT = 10`, `HOLDOUT_WINDOW = 4 weeks`
