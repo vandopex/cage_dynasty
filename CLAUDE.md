@@ -1444,8 +1444,8 @@ narrows the STAGE 1 addendum above — it does not falsify it. The
 mechanics it named (TKO-strikes gap, two genuinely-FI-only accumulators,
 style windows FE lacks) are still real. They are a smaller share of the
 41.4pp aggregate than the framing implies, and the surviving residual
-after both dials is a mix that includes at least one more config-shaped
-lever that has not yet been isolated.
+after both dials is a mix with no further pre-port lever available to
+narrow it (see (e) — the increment-rate candidate proved structural).
 
 **Measurement — ORACLE-BRIDGE1 fixture, 78 matched fighter pairs, matched
 seeds (1000 + fight_index):**
@@ -1492,25 +1492,40 @@ not sum Ledger A and Ledger B when quoting standup's effect.
   input-distribution differences between `world_init` and the Path A
   fixture population, which no engine change resolves; (d) the
   rocked-shots numerical difference (FE cap 0.35 vs FI cap 0.22, per the
-  STAGE 1 addendum table); (e) **the divergent `ground_inactivity`
-  increment rate — FE `+1` per exchange at `fight_engine.py:3695-3697`
-  vs FI `+0.25` or `+2` depending on position dominance at `fight_
-  integration.py:1700-1739` — a config-shaped difference on a shared
-  mechanic, not a missing mechanic, and not yet isolated as a separate
-  lever.**
-- **The mechanic-surgery portion of the residual is therefore SMALLER
-  than +19.6pp by an unmeasured amount, pending isolation of the
-  increment-rate lever.** Do not read +19.6pp as the size of Stage 2a's
-  port. Stage 2a's true size is the residual AFTER the increment-rate
-  lever is measured, and is bounded above by 19.6pp — not equal to it.
+  STAGE 1 addendum table); (e) **the divergent standup-gate counter —
+  a STRUCTURAL difference (the initial finding's "config lever"
+  classification was wrong): FE counts consecutive
+  ground exchanges (uniform +1, no activity check) at
+  `fight_engine.py:3693-3702`; FI counts exchanges since last meaningful
+  ground action (reset-on-activity, +0.25 dominant / +2 non-dominant
+  otherwise) at `fight_integration.py:1691-1739`. Two different
+  measurements feeding the same threshold, not a rate that can be
+  matched. Adopting FI's rule requires an activity signal FE does not
+  compute — multi-site signal wiring at ~5 mechanics FE has but does
+  not instrument (FI's set-sites at :685/:689/:748/:1181/:1320/:1430/
+  :1454). That is Stage 2a port surface, not a pre-port config override.
+  Verdict from the increment-rate scoping pass (read-only, session
+  2026-07-14): entangled with the mechanic port, resolvable only by
+  unification. The residual contribution is real; the classification
+  as a "possibly-cheap lever" was wrong.**
+- **The +19.6pp residual is the Stage 2a-relevant target with no
+  further pre-port narrowing available.** The scoping pass on (e)
+  proved no separable pre-port lever exists at this vein — the
+  increment-rate difference is structural and part of the port surface,
+  not a config match that could be measured first. Do not read +19.6pp
+  as the size of Stage 2a's port either: it is a MIX (components a-e
+  above), and (c) input-distribution differences cannot be resolved by
+  any engine change. The bound holds; further-narrowing before the
+  port does not.
 
 **Framing correction — proportion, not falsification.** The arc has
 been scoping the full ~41pp as substantially a mechanics problem.
 Measured, **~53% was config drift** (two dials that were already sanctioned
 in `_SANCTIONED_TRIPLES` at `fight_engine.py:853-860`, differing only in
-which triple each engine happens to construct), and **at least one
-additional config-shaped lever** (the `ground_inactivity` increment rate)
-remains unisolated in the residual. The mechanics the STAGE 1 addendum
+which triple each engine happens to construct). The increment-rate candidate
+initially treated as an additional pre-port lever proved structural on
+scoping (see (e)), so no further pre-port lever narrows the residual before
+Stage 2a. The mechanics the STAGE 1 addendum
 named — the TKO-strikes gap, the two FI-only accumulators, the style
 windows — are still real contributors to the residual. Their share of
 the 41.4pp aggregate is smaller than the earlier framing implied, not
