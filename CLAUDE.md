@@ -279,6 +279,60 @@ Or hard-fail the missing-id case since it's a caller bug.
 requiring explicit `id`. That is a HARNESS workaround, not a fix. File
 as production defect. Do NOT fix inside ORACLE-BRIDGE1 — single-purpose.
 
+### `standup_threshold` observed effect is not referee-standup frequency [filed 2026-07-14]
+
+`fight_engine.py:FightConfig.standup_threshold` is named for governing
+how often the referee stands grounded fighters up. The Phase 1
+standup-lever discrimination probe measured its actual observed
+effect and it isn't that.
+
+**The measurement:** the standup-lever probe (Phase 1 of the
+authored two-phase design, session dated 2026-07-14) ran all 78
+ORACLE-BRIDGE1 fixture fights through `fight_engine.simulate_fight`
+at both `standup_threshold=6` and `standup_threshold=10`, same
+fighters, same seeds, one variable moved. Required temporary
+in-memory widening of `_SANCTIONED_TRIPLES` to admit `(55, 0.42, 10)`;
+widening reverted post-measurement, `cage_dynasty_web/` working tree
+verified clean, Stage 0c 928/928 and ORACLE-BRIDGE1 78/78 re-verified
+GREEN after revert.
+
+**What changed between the two configs (Phase 1 aggregates):**
+- 73 of 78 fights had different outcomes at `standup=10` vs `standup=6`
+- 38 of the 73 had a different `method`
+- 16 of the 73 had a different `winner_id`
+- All 73 had different `control_time_per_round` distributions
+- **0 of the 78 had a change in `ref_standup_events` count** — the
+  dial moved 73 fights' outcomes without changing how many times
+  the referee stood fighters up on any of them
+
+**Observed mechanism:** the standup threshold governs how many
+exchanges of ground-inactivity accumulate before an implicit stand-up
+would fire. On this fixture, the value change affected outcomes by
+shifting how long ground state persists per exchange, which reroutes
+the downstream RNG-consumption cascade (see the "STAGE 1 addendum —
+random-coupling hazard" section elsewhere in this file for the
+RNG-coupling framing). The dial is wired; its effect on outcomes is
+real; its mechanism is not what the name describes.
+
+**Scope of this finding, stated explicitly:** single fixture (78
+ORACLE-BRIDGE1 fights), single comparison (`standup_threshold=6` vs
+`standup_threshold=10`, `damage_multiplier` held at 0.42,
+`exchanges_per_round` held at 55). "No change in `ref_standup_events`"
+was observed **on this measurement.** This finding does NOT establish
+that the standup mechanic is inert at other threshold values, on
+ground-heavier matchup distributions, or at other damage/exchange
+settings — those weren't tested. The claim is "named mechanism ≠
+observed mechanism, as measured on this fixture," not "the knob does
+nothing anywhere."
+
+**Trap for future work:** anyone modifying `standup_threshold` and
+reasoning from the name (governs referee standups) will be wrong
+about what it does on distributions like this one. Its observed
+outcome-changing effect runs through ground-state-persistence and
+RNG-coupling. Treat as a ground-state-cascade knob, not a referee-
+frequency knob, until measurement on other distributions says
+otherwise.
+
 ## Ship History (compact)
 
 Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
