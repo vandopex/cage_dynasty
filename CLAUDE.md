@@ -1066,7 +1066,8 @@ accident.
   TKO_GNP / TKO_STANDING constants FI needed, so `from fight_engine
   import (...)` raised ImportError, `FIGHT_ENGINE_AVAILABLE` fell to
   False, and pre-gen quietly ran on the score-based coin-flip fallback —
-  the two-month bug PREGEN-FULL-ENGINE-FIX1 (`efaf7f6`, 2026-07-11)
+  the two-month bug PREGEN-FULL-ENGINE-FIX1 (`e6e295e`, 2026-07-11;
+  previously cited `efaf7f6` (which is GAMEPLAN-AI-SELECT1) in error)
   finally closed. Someone (probably Van, in a firefight) diagnosed the
   ImportError correctly but fixed it at the wrong end: hand-appended
   the missing constants to root fight_engine.py on the live box instead
@@ -1290,7 +1291,8 @@ with two configs. Each has its own damage scale:
   or the check is removed.
 
 **Correcting a prior claim**: earlier CLAUDE.md revisions and session
-notes asserted that PREGEN-FULL-ENGINE-FIX1 (`efaf7f6`, 2026-07-11)
+notes asserted that PREGEN-FULL-ENGINE-FIX1 (`e6e295e`, 2026-07-11;
+previously cited `efaf7f6` (which is GAMEPLAN-AI-SELECT1) in error)
 made pre-gen and live-play "share one engine." That is wrong. What
 that ship did was route pre-gen away from `simulate_fight_simple`
 (coin-flip fallback) into `fight_engine.simulate_fight`. Live-play was
