@@ -25,11 +25,26 @@ loads it because repo root is not on sys.path.
 | `cf34aa9` | COMMENTARY-ENTRANCES1 | repo-root commentary.py (dead) — game_bridge/fight_integration edits DO reach PA, but the emit hooks call methods that don't exist on narrative/commentary.py |
 | `a46487c` | COMMENTARY-GAMEPLAN-CONTRAST1 | repo-root commentary.py (dead) — same story |
 
+`e1be619` (COMMENTARY-RETARGET-PORT, 2026-07-07) later retargeted all three
+ships onto `narrative/commentary.py`; they are no longer inert.
+
 These features will NOT appear in-game until either (A) the changes
 are ported to narrative/commentary.py, or (B) wsgi.py is amended to
 add repo root to sys.path (which reintroduces the CLI-fork shadowing
 that wsgi.py was specifically designed to prevent). **NOT YET
 FIXED — deferred to next session for a clear-headed A-vs-B decision.**
+
+The (A)/(B) framing above is documented-was-wrong: accurate at
+authoring time, superseded ~50 minutes later when Option (A) shipped
+as `e1be619` (COMMENTARY-RETARGET-PORT). The features now appear
+in-game.
+
+Present at HEAD (verified this session, 2026-07-19):
+`narrative/commentary.py` is committed and present in the live file at
+HEAD. The file's latest touch at HEAD is `b8c7136` (COMMENTARY-RNG-
+DECOUPLE), layered on `e1be619`'s retarget. PA deploy-verification was
+NOT re-run this pass; whether PA has pulled `e1be619` since 2026-07-07
+is not attested by git alone and is out of scope for this docs commit.
 
 The prior memory `architecture_commentary_live_file_2026-06-20.md`
 claiming root is live / narrative is the drifted dead fork is
