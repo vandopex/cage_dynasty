@@ -723,10 +723,11 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
     path — cannot be closed by fixing world_init. Rank-gating + spacing-gating
     audit needed in `_build_card_for_week` and the card-slot title-flagging
     logic. Filed but not scoped.
-  - **PATH-B-BOOKING1 (queued, scope locked).** Delete `_simulate_ai_fights_week`
-    entirely — 548 lines, one production caller at `game_bridge.py:3617`, zero
-    helpers reachable only from it (verified). Off week becomes honest: no
-    fights, no card, no event numbering advance. Closes the class of Path B
+  - **PATH-B-BOOKING1 (shipped as `8ecec6f`; previously framed
+    "queued, scope locked" in error).** Deleted `_simulate_ai_fights_week`
+    entirely — 548 lines, one production caller (pre-ship, `game_bridge.py:3617`), zero
+    helpers reachable only from it (verified). Off week is honest: no
+    fights, no card, no event numbering advance. Closed the class of Path B
     bugs (double-booking, per-fighter cooldown bypass, title over-issuance in
     the fallback path, absent card-summary telemetry) as one deletion. This
     supersedes the "Off-week semantics contradiction" note below.
@@ -904,7 +905,7 @@ ship on the board.
   amended, because a wrong number sitting in the source of truth is worse
   than an uncomfortable correction.**
 
-  PATH-B-BOOKING1 (LIVE-PLAY MATCHMAKING backlog above) closes this by
+  PATH-B-BOOKING1 (LIVE-PLAY MATCHMAKING backlog above) closed this by
   deleting Path B entirely — the wrong cadence gate stops firing because
   the code that ignored the right one stops existing. Path A's cadence
   discipline stays untouched.
@@ -918,7 +919,7 @@ ship on the board.
   **Escalated 2026-07-12 from "design call" to real correctness bug** — the
   fallback is now known to double-book fighters and bypass every cooldown gate
   (see PATH-B INTEGRITY DIAG on Van's session save: 4 duplicate-fight-instances
-  on wk3, 6/6 gaps under 4w). Answer is PATH-B-BOOKING1 in the LIVE-PLAY
+  on wk3, 6/6 gaps under 4w). Answered by PATH-B-BOOKING1 in the LIVE-PLAY
   MATCHMAKING backlog above.
 - `card_builder.calculate_matchup_score(is_rivalry=False)` param is dead — no
   caller passes it (game_bridge's `_matchup_score` adds `_rivalry_heat_bonus`
