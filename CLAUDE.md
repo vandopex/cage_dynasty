@@ -701,6 +701,14 @@ Demote to a debug-guarded print (e.g. behind an env flag or a module-level
     (`is_title_eligible` / `find_title_challenger` exist in `matchmaking.py` but
     are dead-in-runtime for the web app; AI title-booking has its own separate
     logic that hasn't been audited against them).
+
+    Partial fix landed 2026-07-11 (BELT-STORE-UNIFY1, `e6b8033`, forward-only):
+    (1) belt-history writes are now correct for transfer / vacant / defense;
+    (2) historical saves from before the ship still carry the fork — the
+    strawweight evidence above was observed on a pre-ship save and remains
+    representative of that state; (3) load-time reconciliation for existing
+    saves is filed separately and remains open, per e6b8033's own
+    commit-message deferral.
   - **Rematch rules parity.** Pre-gen opponent selection may not match post-gen's
     rematch discipline (16w hard minimum, 20w for title rematches, intervening-fight
     guard, contender-earned-title-shot guard — shipped `07491d1` 2026-06-22 for the
