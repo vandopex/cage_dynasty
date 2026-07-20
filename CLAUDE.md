@@ -1571,8 +1571,12 @@ because they lived only in chat. If you find yourself citing a balance
 figure that isn't in this section, verify it against a fresh probe
 before treating it as authoritative.
 
-All numbers below are at symmetric OVR=75, `damage_multiplier=0.24`,
-3-round non-title, gameplan=None (neutral). Probe harnesses were
+All numbers below are at symmetric OVR=75, 3-round non-title, gameplan=None
+(neutral). Harness config passes `damage_multiplier=0.24`
+(documented-was-misleading: per this file's KEY CONSTANTS,
+`fight_integration` ignores config damage and uses
+`FI_DAMAGE_MULTIPLIER=0.48`; numbers below at effective 0.48, not 0.24).
+Probe harnesses were
 committed inline in the referenced diag memos.
 
 ### Wr-BJJ (Wrestler vs BJJ Specialist)
@@ -1583,8 +1587,11 @@ committed inline in the referenced diag memos.
 - **BJJ submission path intact ~16.5%** (99/600 subs, all landed by
   the BJJ side).
 - Verified byte-identical across the 8e3f670→efaf7f6 boundary by
-  WR-BJJ-DRIFT-DIAG1 (2026-07-07) — this is the correct stable
-  baseline, **not a regression**.
+  WR-BJJ-DRIFT-DIAG1 (2026-07-07) — the "this is the correct stable
+  baseline, **not a regression**" framing was documented-was-overreach.
+  Certifies the LIVE-PLAY path only, across GAMEPLAN-AI-SELECT1; does
+  NOT cover the pre-gen engine (PREGEN-FULL-ENGINE-FIX1, `e6e295e`) —
+  see coverage gap subsection below.
 - **RETIRED**: the "60.2% CI [56.2, 64.0] N=600" figure never existed
   in any committed artifact — a mis-reference, likely conflated with
   Wr-Str's 60-70% band that GNP-BUFF certified. Do not treat 60.2%
@@ -1593,6 +1600,25 @@ committed inline in the referenced diag memos.
   no symmetric wrestler answer at OVR=75-vs-OVR=75. Moving wrestler%
   upward here is a deliberate new tuning decision, not a
   restoration.
+
+### Wr-BJJ — pre-gen coverage gap
+
+The pre-gen coverage gap is REASONED from a proven-empty transitive import
+graph, NOT measured by running fights across the e6e295e~1 → e6e295e
+boundary. **No fight was run.** The measurement was scoped in the
+reconciliation thread and then dropped because the import graph proved the
+harness structurally cannot observe the pre-gen path — running fights would
+have produced a null-by-construction diff, and reading that null as
+"baseline survives" would have been false reassurance (the golden-master
+coverage-gap pattern this file's own CRITICAL block at "GOLDEN MASTER IS A
+FIGHT-ENGINE ORACLE" already warns against).
+
+Reasoning voice, not measurement voice, is the honest attribution.
+
+**Consequence:** the certified Wr-BJJ numbers above measure LIVE-PLAY only.
+The pre-gen engine (PREGEN-FULL-ENGINE-FIX1, `e6e295e`) writes rival records
+during world_init history simulation and is not covered by any certified
+number in this section. No pre-gen Wr-BJJ baseline currently exists.
 
 ### Wr-Str (Wrestler vs Striker) — post-GNP-BUFF
 
