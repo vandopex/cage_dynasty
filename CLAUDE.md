@@ -1314,6 +1314,63 @@ with two configs. Each has its own damage scale:
   stoppages are structurally impossible until this is either wired up
   or the check is removed.
 
+**⚠️ SUPERSEDING CORRECTION — 2026-07-20, falsifying the 2026-07-11
+correction above.** Three specific claims in the block above were true
+at the time of writing but were FALSIFIED by STAGE 0d (`ba8cece`,
+2026-07-12). The block above is preserved as documented-was-false-
+as-of-STAGE-0d; new truth follows, sourced to code bytes at HEAD:
+
+- **:1283 FALSE at HEAD** — the claim "`fight_integration` never reads
+  `config.damage_multiplier` (grep confirmed: zero call sites)" is
+  falsified: `config.damage_multiplier` is read live in the
+  strike-damage multiplication inside `_execute_strike` (currently
+  `fight_integration.py:867`): `damage = damage * self.config.damage_multiplier`.
+  The comment block immediately above the read (currently
+  `fight_integration.py:860–866`) states literally "STAGE 0d — read
+  damage_multiplier from config, not from a module const" — the
+  source-of-value moved from a module const to the config field, per
+  that comment.
+- **:1291 FALSE at HEAD** — the claim "`FI_DAMAGE_MULTIPLIER = 0.48`
+  (module const at `fight_integration.py:82`, applied at `:832`)" is
+  falsified: the `FI_DAMAGE_MULTIPLIER` module const was DELETED. Fossil
+  comment marking the deletion (currently `fight_integration.py:75`)
+  reads literally "STAGE 0d (2026-07-12) — FI_DAMAGE_MULTIPLIER module
+  const DELETED." No live `FI_DAMAGE_MULTIPLIER = X` assignment exists
+  in `fight_integration.py` or `fight_engine.py` at HEAD (remaining
+  hits are historical comments). Only local-scope fallback assignments
+  remain, in `game_bridge.py` (currently `:210`, `:212`, `:269`).
+- **:1305 FALSE at HEAD** — the claim "`damage_multiplier = 0.24`
+  passed to `_FightConfig(...)` — read by no live-play code path" is
+  doubly falsified. (a) `self.config.damage_multiplier` IS read live in
+  the strike-damage path (currently `fight_integration.py:867`). (b)
+  The atomic-config-invariant contract is enforced at fight-start by
+  `_assert_sanctioned_config`, which checks the WHOLE
+  `(exchanges_per_round, damage_multiplier, standup_threshold)` triple
+  against `_SANCTIONED_TRIPLES` — the three sanctioned triples
+  (`_TRIPLE_LIVE_PLAY = (55, 0.48, 10)`, `_TRIPLE_PRE_GEN_LEGACY =
+  (55, 0.42, 6)`, `_TRIPLE_FI_FALLBACK = (55, 0.48, 6)`, currently
+  `fight_engine.py:853–855`) contain no `damage_multiplier` value of
+  0.24. Passing 0.24 in a `FightConfig` produces a triple not in
+  `_SANCTIONED_TRIPLES`; `_assert_sanctioned_config` (called at
+  fight-start, currently `fight_engine.py:3931`) raises
+  `AssertionError`. 0.24 is rejected, not silently ignored.
+
+**Truth at HEAD:** live-play per-strike damage scale is
+`self.config.damage_multiplier`, read live in the strike-damage path
+(currently `fight_integration.py:867`). The `FightConfig.damage_multiplier`
+dataclass field defaults to `0.48` (currently `fight_engine.py:798`).
+The value the config carries is pinned by the atomic-config-invariant
+contract via `_SANCTIONED_TRIPLES` (currently `fight_engine.py:853–859`)
+to one of `{0.42, 0.48}`. `_TRIPLE_LIVE_PLAY = (55, 0.48, 10)` is
+annotated as "the surviving contract" in the `_SANCTIONED_TRIPLES` set
+(currently `fight_engine.py:857`). The 0.48 value survives 0d by design
+— the read site's own comment (currently `fight_integration.py:866`)
+states "Byte-identical to the pre-0d FI_DAMAGE_MULTIPLIER=0.48." Every
+line reference above is tagged "currently" because line numbers drift;
+the identity of each fact is its symbol (`config.damage_multiplier`,
+`FI_DAMAGE_MULTIPLIER`, `_SANCTIONED_TRIPLES`, `_assert_sanctioned_config`,
+`_TRIPLE_LIVE_PLAY`, `FightConfig.damage_multiplier`).
+
 **Correcting a prior claim**: earlier CLAUDE.md revisions and session
 notes asserted that PREGEN-FULL-ENGINE-FIX1 (`e6e295e`, 2026-07-11;
 previously cited `efaf7f6` (which is GAMEPLAN-AI-SELECT1) in error)
@@ -1593,6 +1650,17 @@ All numbers below are at symmetric OVR=75, 3-round non-title, gameplan=None
 `FI_DAMAGE_MULTIPLIER=0.48`; numbers below at effective 0.48, not 0.24).
 Probe harnesses were
 committed inline in the referenced diag memos.
+
+**⚠️ SUPERSEDING NOTE — 2026-07-20:** the "per this file's KEY CONSTANTS"
+citation above was documented-was-inherited-false. KEY CONSTANTS itself
+was falsified by STAGE 0d (`ba8cece`, 2026-07-12) — see the superseding
+correction under `## Key constants` above. At HEAD, FI DOES read
+`self.config.damage_multiplier` in the strike-damage path (currently
+`fight_integration.py:867`), and no `FI_DAMAGE_MULTIPLIER` module const
+exists in the engine files. The consequent claim "numbers below at
+effective 0.48, not 0.24" still holds — what changed is the mechanism
+(`FightConfig.damage_multiplier` dataclass field now, `FI_DAMAGE_MULTIPLIER`
+module const before), not the effective value.
 
 ### Wr-BJJ (Wrestler vs BJJ Specialist)
 
