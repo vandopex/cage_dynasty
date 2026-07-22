@@ -122,6 +122,19 @@ Section §2 of "PRE-GEN WORLD COHERENCE epic" below already noted a
 about the *fixture-module* gap — a strictly larger blind spot. Both
 apply. Do not conflate.
 
+**Fixture `repo_sha` records "generation-time HEAD", not "write-commit".**
+The generator's `_repo_sha()` (`generator.py:415-417`) stamps
+`git rev-parse HEAD` at generation — a different question from which
+commit contains the fixture in git. For this fixture: `repo_sha` =
+`6fdc341` (HEAD when generator ran); write-commit = `a475a82` (child
+of `6fdc341`, adding the fixture and generator's synth-cell edits
+together). Both true, different questions; the recorded value is not
+a stale mistake to correct — it's accurate under the field's design.
+Secondary limit: `git rev-parse HEAD` captures committed HEAD, not
+working-tree, so a fixture generated from a dirty tree can't be fully
+identified by `repo_sha` alone. Filed so a future session doesn't
+re-investigate.
+
 ## 🚨 CRITICAL — "SAME SEED" MEASUREMENTS HAVE NEVER BEEN REPRODUCIBLE
 
 **Measured empirically 2026-07-13** by the ORACLE-BRIDGE1 determinism
