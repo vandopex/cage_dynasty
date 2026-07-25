@@ -135,6 +135,42 @@ working-tree, so a fixture generated from a dirty tree can't be fully
 identified by `repo_sha` alone. Filed so a future session doesn't
 re-investigate.
 
+**Fixture is style-blind; production live-play is style-aware. Third
+coverage limit on the 928/928 gate.**
+Bytes-confirmed at HEAD `1f98b5f`, both bridges + both fixture replay
+paths. Pre-gen's `world_init._fighter_to_attributes` constructs
+`FighterAttributes` **without** the `fighting_style` kwarg → the enum
+defaults to `None`. Live-play's `game_bridge._make_fighter_attrs`
+constructs **with** `fighting_style = FightingStyle[_STYLE_MAP.get(...)]`
+→ enum populated. Fixture's serialize path `fighter_attrs_to_dict` at
+`outputs/stage0c_golden_master/generator.py` explicitly excludes
+`fighting_style` (`if f.name != "fighting_style"`). Fixture's rehydrate
+path `dict_to_fighter_attrs` at both `checker.py` and `generator.py`
+is byte-identical: `return fe.FighterAttributes(**d, fighting_style=None)`.
+So `expected_fe` faithfully mirrors production pre-gen (both style-blind),
+but `expected_fi` diverges from production live-play (fixture blind,
+production aware). FI's style-gated branches (7 clusters, grep-locatable
+via the single-line fragment `.fighting_style, 'name', ''` in
+`fight_integration.py` — the getattr call is broken across two lines so
+the fuller pattern doesn't resolve as a one-line grep) fire the else
+path in the fixture and enum paths in production. Consequence for the
+arc: **928/928 certifies engine equivalence under style-blind conditions
+only.** Whether a merged engine post-Stage-2a preserves live-play
+behavior is not answerable from the fixture — the style-aware condition
+production actually runs was never sampled. Same "coverage limit, not
+coverage bug" framing as the two paragraphs above: FE-side is faithful,
+FI-side is a distinct gap. Third limit alongside fixture-inputs and
+fixture-modules; all three apply. Do not conflate.
+
+Corollary, filed so a future v2-fixture audit doesn't re-scope it:
+three FI style branches keyed on `'BRAWLER'` / `'SAMBO'` / `'JUDO'`
+substrings in `fight_integration.py` are structurally unreachable in
+production. `_STYLE_MAP` in `game_bridge.py` normalizes those strings to
+`PRESSURE_FIGHTER` / `WRESTLER` / `WRESTLER` before enum construction,
+and neither `FightingStyle` (11 members in `core/types.py`, none named
+BRAWLER/SAMBO/JUDO) nor `world_init` generation ever emits them. Dead
+in production under any fixture design.
+
 ## 🚨 CRITICAL — "SAME SEED" MEASUREMENTS HAVE NEVER BEEN REPRODUCIBLE
 
 **Measured empirically 2026-07-13** by the ORACLE-BRIDGE1 determinism
