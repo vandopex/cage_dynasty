@@ -397,6 +397,21 @@ RNG-coupling. Treat as a ground-state-cascade knob, not a referee-
 frequency knob, until measurement on other distributions says
 otherwise.
 
+### `game_bridge.py` "backfill" branch is metadata-only [filed 2026-07-24]
+
+**`game_bridge.py` "backfill" branch backfills metadata, not stats —
+latent.** The `elif` following the tier-1-present path in the fighter-
+data assembly, commented "backfill from world gen data," writes exactly
+4 keys: `style`, `age`, `country`, `potential`. It writes zero of the 18
+stat keys `_a` reads. A `FighterRecord` reaching this branch has all 18
+engine stats absent from `_fighter_data` and stays tier-2/tier-3
+eligible on every one — the "backfill" does not backfill what the engine
+consumes. Comment marked false-as-written rather than corrected in code
+(docs commit only). **Latent, not live:** per the tier-3 census this
+flow fired zero times across available saves; a shape that would inject
+default/offset stats *if* a record ever reached it, not an observed bug.
+Confirmed on fresh bytes at HEAD `8e721c9`, this session.
+
 ## Ship History (compact)
 
 Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
