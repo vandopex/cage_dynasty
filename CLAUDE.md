@@ -1698,6 +1698,143 @@ one-shot measurement instruments, not fixtures.
 - Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
 - Contract: `HOLDOUT = 25`, `WALKOUT = 10`, `HOLDOUT_WINDOW = 4 weeks`
 
+### STAGE 2a addendum — config vs engine, measured 2x2 [filed 2026-07-26]
+
+**What is new.** The `### STAGE 1 addendum — config-lever measurement
+[filed 2026-07-14]` table (currently ~L1600-L1605) varies config on FE
+only — four rows, all pre-gen engine, differing `damage_multiplier` and
+`standup_threshold`. FI had never been run at any config except LIVE_PLAY.
+The engine residual (~19.6pp) was therefore inferred by subtraction across
+two different populations (ORACLE-BRIDGE1 78-fight fixture for the FE
+table; Stage 1 pooled 10-seed world_init for the FI headline), never
+measured directly. **C4 (FI at `_TRIPLE_PRE_GEN_LEGACY`) is the
+never-before-measured cell** that closes the 2x2 on one population.
+
+**Method.** Harness copied from
+`outputs/stage2a_before_measurement_v2.py`, parameterized so `run_fe` and
+`run_fi` accept a `FightConfig` rather than calling `fe_config()` /
+`fi_config()` internally. The following elements preserved
+byte-identical:
+
+- Pair enumeration: `for a in STYLES: for d in STYLES` over 11
+  `FightingStyle` members = 121 pairs.
+- Seed formula: `seed = hash((a.name, d.name, i)) & 0xFFFFFFFF` per
+  `(a, d, i)`. Same seed feeds all five cells for each `(a, d, i)`, so
+  this is a paired comparison, not five independent samples.
+- Classification: `method_class` unchanged; finish = `KO | TKO | SUB`.
+- Fighter construction: `make_fighter` unchanged, symmetric OVR=75 across
+  all 18 attributes; FI blindness for C3/C4 achieved by passing
+  `a_style=None, d_style=None` which flows through the existing
+  `style_enum_or_none` handling.
+
+Reporting scaffolding (`main()`, `aggregate()`, the JSON per-pair dump,
+and the progress/ABORT instrumentation) was removed; the harness is a
+measurement fork of v2, not a drop-in replacement.
+
+Run parameters: `N_PER_PAIR = 10`, 121 pairs × 10 seeds = 1210 fights per
+cell, 5 cells × 1210 = 6050 total. `PYTHONHASHSEED=0` pinned at
+invocation (see SEED-NONDETERMINISM caveat below). Both triples
+sanctioned by construction — `_TRIPLE_PRE_GEN_LEGACY = (55, 0.42, 6)` at
+`fight_engine.py:854` and `_TRIPLE_LIVE_PLAY = (55, 0.48, 10)` at
+`fight_engine.py:853`, both present in `_SANCTIONED_TRIPLES` at
+`fight_engine.py:856-860`. **No widening.** Zero errors across all 6050
+fights, zero `_assert_sanctioned_config` fires, all cells n=1210 as
+required.
+
+**The five cells:**
+
+| Cell | Engine | Config | Style | Finish % | n |
+|---|---|---|---|---:|---:|
+| C1 | FE | `_TRIPLE_PRE_GEN_LEGACY` (55, 0.42, 6) | blind | 31.7% | 1210 |
+| C2 | FE | `_TRIPLE_LIVE_PLAY` (55, 0.48, 10)     | blind | 55.0% | 1210 |
+| C3 | FI | `_TRIPLE_LIVE_PLAY` (55, 0.48, 10)     | blind | 69.8% | 1210 |
+| C4 | FI | `_TRIPLE_PRE_GEN_LEGACY` (55, 0.42, 6) | blind | 45.3% | 1210 |
+| C5 | FI | `_TRIPLE_LIVE_PLAY` (55, 0.48, 10)     | aware | 69.1% | 1210 |
+
+**Population caveat, load-bearing.** C1-C4 strip style
+(`fighting_style=None`), so all 1210 fights per cell are the **same
+symmetric OVR=75 pair** with only the seed varying. `n=1210` measures
+seed diversity, not matchup diversity. Only C5 varies fighters via the
+`STYLES × STYLES` enumeration. Cross-fixture comparisons must treat
+n=1210 as one-pair seed noise, not 121 distinct matchups.
+
+**Decomposition (all four axes from the 2x2):**
+
+- **Config effect on FE** = C2 − C1 = 55.0 − 31.7 = **+23.3pp**
+- **Config effect on FI** = C3 − C4 = 69.8 − 45.3 = **+24.5pp**
+- **Engine effect at pre-gen config** = C4 − C1 = 45.3 − 31.7 = **+13.6pp**
+- **Engine effect at live config**    = C3 − C2 = 69.8 − 55.0 = **+14.8pp**
+- **Both decomposition paths sum to +38.1pp**: config(FE) + engine(live)
+  = 23.3 + 14.8 = 38.1; engine(pregen) + config(FI) = 13.6 + 24.5 = 38.1.
+  Aggregate C3 − C1 = 69.8 − 31.7 = **+38.1pp**.
+
+**Precision, stated as a limit not a decoration.** At n=1210 near
+p ∈ [0.3, 0.7], `sqrt(p(1-p)/n)` ≈ 1.3-1.4pp; 95% CI half-width ≈ 2.6-2.8pp.
+The ~1.2pp difference between the two engine-effect estimates (14.8 vs
+13.6) and the ~1.2pp difference between the two config-effect estimates
+(24.5 vs 23.3) are **not distinguishable from zero at this N**. Record
+this finding as **"config and engine are additive within measurement
+noise"** on this population. **Do NOT record 1.2pp as a measured
+interaction term.** A future re-measurement at N=100/pair or higher
+would tighten CI to ~1pp half-width and could resolve whether a real
+interaction exists at the 1-2pp level.
+
+**Contrast, explicitly.** This additivity is between the **config axis
+and the engine axis**. It does **not** contradict the dial-vs-dial
+sub-additivity flagged inside the same `### STAGE 1 addendum —
+config-lever measurement [filed 2026-07-14]` under **"Interaction
+term, as measured fact:"** (currently ~L1617) — interaction −7.7pp
+between `damage_multiplier` and `standup_threshold` inside the config
+axis. Different decomposition, different axes. Do not conflate.
+
+**Triangulation, corroboration not competition.** The +38.1pp aggregate
+(C3 − C1) here is measured on a 121-pair symmetric OVR=75 population
+with N=10/pair. CLAUDE.md's headline +41.4pp inside the same
+`### STAGE 1 addendum — config-lever measurement [filed 2026-07-14]`
+("live 76.9% vs pre-gen 35.4%", currently ~L1608) is measured on
+Stage 1 pooled 10-seed `world_init` populations. Two different
+fixtures, same direction, same magnitude
+class (~40pp). This is **independent-fixture triangulation on gap size,
+not a duplicate measurement and not a competing number.** A future
+session reading either number should treat the difference (~3pp) as
+fixture-variance corroborating the gap, not as noise on the other
+figure.
+
+**Consequence, without recommending anything.** Config drift accounts
+for roughly **62%** of the measured gap (23.3-24.5pp of 38.1pp); engine
+mechanics account for roughly **38%** (13.6-14.8pp of 38.1pp). The
+Two-Engine Consolidation relocation (`outputs/two_engine_consolidation_diag1.md`)
+addresses the engine share. Note that `fight_engine.py:858` carries the
+comment `_TRIPLE_PRE_GEN_LEGACY,   # KNOWN DRIFT. Deleted at Stage 3. Do
+not tune.` — the larger lever is scheduled after the smaller one. **Filed
+as an observation for sequencing review; no sequencing decision is made
+by this entry.**
+
+**Precision note on anchor cells.** C5 = 69.1% and C1 = 31.7% do not
+byte-match v2's baseline (~68% / ~29%). Deltas are ~1-3pp, within noise
+at N=10 versus v2's N=100. Additionally, `PYTHONHASHSEED=0` pins string
+hashing but does not pin the `uuid.uuid4()` / `os.urandom` sources
+that CLAUDE.md's `## 🚨 CRITICAL — "SAME SEED" MEASUREMENTS HAVE NEVER
+BEEN REPRODUCIBLE` block flags (heading currently L174, uuid/urandom
+mechanism at L177). Cross-run byte-identity was never on the
+table; C5 is an internal anchor to the shape of v2's number, not a
+byte-reproduction.
+
+**Artifacts (untracked, NOT part of this commit).**
+
+- `outputs/stage2a_config_engine_2x2.py` — 2x2 harness (169 lines).
+- `outputs/stage2a_config_engine_2x2_out.txt` — run output (7 lines
+  including HASHSEED and five CELL lines).
+
+Both preserved from `/tmp/` as reboot insurance. Whether either enters
+git is a separate decision downstream of an `outputs/` `.gitignore`
+sweep.
+
+**Provenance.** Measured this session at HEAD
+`7513bc9086e84f2dccb4d220a917d8ee816e7e10` (main). Does not mark any
+existing doc content false. Refines and extends the L1585 addendum on a
+different population; does not falsify it.
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
