@@ -821,8 +821,8 @@ class FightConfig:
         return cls(
             scheduled_rounds=3,
             exchanges_per_round=55,
-            damage_multiplier=0.42,
-            standup_threshold=6,
+            damage_multiplier=0.48,
+            standup_threshold=10,
         )
 
     @classmethod
@@ -830,8 +830,8 @@ class FightConfig:
         return cls(
             scheduled_rounds=5,
             exchanges_per_round=55,
-            damage_multiplier=0.42,
-            standup_threshold=6,
+            damage_multiplier=0.48,
+            standup_threshold=10,
             is_title_fight=True,
             is_main_event=True,
         )
