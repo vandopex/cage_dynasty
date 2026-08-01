@@ -1835,6 +1835,40 @@ sweep.
 existing doc content false. Refines and extends the L1585 addendum on a
 different population; does not falsify it.
 
+### STAGE 2a addendum — production-path measurement of the classmethod flip [filed 2026-08-01]
+
+**What shipped.** `eeb16b8` — `FightConfig.standard_fight()` and `.championship_fight()` flipped from `(55, 0.42, 6)` to `(55, 0.48, 10)`. Four literal values, two classmethods, no allowlist change: the target triple was already `_TRIPLE_LIVE_PLAY` at `fight_engine.py:853`, admitted at `:857`.
+
+**Caller audit, MEASURED (grep across cage_dynasty_web/ + stage0c_golden_master/, positive control run).** Exactly one production caller: `world_init.HistorySimulator.simulate_fight_full_engine` at `:1422`, passing the config unmodified to `fight_engine.simulate_fight` at `:1425`. Other call sites: `fight_engine.py:3925` (config=None fallback, dead — both production callers of `simulate_fight` pass explicit configs), `test_sub_sim.py:110` (print-only, zero asserts), and golden-master fixture code (below). `fight_integration.py:362-368` are comments documenting STAGE 0d's deliberate non-call.
+
+**What did NOT change, measured:** `game_bridge.py:13597` (`_simulate_card_fights`) and `:17518` (`_run_real_engine`) construct configs inline at `(55, 0.48, 10)` and were already there; both route to FI, not FE. FI's no-config fallback at `fight_integration.py:369-374` pins `(55, 0.48, 6)` as literals. In-play fights were at live-play numbers all along; only frozen pre-player history was stuck.
+
+**Measured through the production path** (`probe_worldinit_prod.py`, tier grading mirroring `world_init.py:2513-2522`, 38-fighter Lightweight pool, N=400, seed=1000, paired — identical POP line both runs; share of ALL fights including draws):
+
+| | pre-flip | post-flip |
+|---|---|---|
+| finish | 14.5% | 33.8% |
+| KO | 5.0% | 16.5% |
+| TKO | 4.5% | 10.75% |
+| SUB | 5.0% | 6.5% |
+| DEC | 80.75% | 61.25% |
+
+Direction MEASURED. **Magnitude NOT validated against production** — the probe pairs uniformly at random; production books rank-adjacent. Uniform pairing over-represents the large-mismatch fights that produce most finishes; a real save may show a materially smaller delta. Further divergences: single weight class, one pool draw, no cross-fight cardio/injury persistence, single seed at N=400 (±3-5pp).
+
+**FINDING — population composition dominates the config dial.** Three measurements of this same four-line change, differing only in who was fighting: symmetric OVR=75 harness pair **+23.6pp**; flat all-`average` pool **+6.8pp**; production tier grading **+19.3pp**. A 3.5× span from population alone. **Any finish-rate number in this project is a claim about a population before it is a claim about the engine.** The 2x2 at `L1701` measures a single symmetric OVR=75 pair — a decomposition instrument, not a production predictor. Do not carry its cells forward as predictions of what a change does to a real save.
+
+Mechanism, MEASURED: `world_init.generate_attributes` maps tiers to stat ranges — elite `(70,95)`, top `(60,85)`, good `(50,75)`, average `(40,65)`, developing `(30,55)`, novice `(20,45)`. Production's `generate_fighters()` uses elite through developing and **never novice**. Finishes concentrate in cross-tier mismatches; a flat pool suppresses them, an over-mismatched pool inflates them.
+
+**Submission rate is invariant to this dial.** +1.5pp on the production path; ~6-8% across all five 2x2 cells regardless of config or engine. This flip is a KO/TKO lever. No submission lever has been located; `L853`'s "SUB-rate undershoot tuning" entry should not be read as implying one exists.
+
+**Denominator, settled by measurement not enumeration.** The classifier's `OTHER` bucket was instrumented and run at N=2420: every key was literally `"Draw"`, zero other strings. `FightResult.method` and `NarratedFightResult.method` are required dataclass fields with no default; the empty-string path cannot fire. Finish percentages in this arc are not understated.
+
+**Golden master consequence, MEASURED this session.** FE half is RED by design, not a regression: `checker.py:85` (`make_fe_config`) calls the flipped classmethods directly — the fixture was recorded when they returned `(55, 0.42, 6)`. FI half stays GREEN: `checker.py:72-82` (`make_fi_config`) pins `(55, 0.48, 10)` as inline literals, with the L73 comment explicitly denying classmethod inheritance — STAGE 0d defending against this exact drift. The comparator (`checker.py:129-151`) is a recursive literal-`!=` walk; any leaf change reds an entry. Regeneration is a separate decision, and it is **safe by construction**: `generator.py:241/243` calls the same classmethods production does (docstring `:239` "matches world_init:1422"), so a regen inherits the flip through the production path. Lurking risk only if generator.py and the classmethods are ever edited in isolation.
+
+**Known drift left standing, deliberately.** `fight_engine.py:4448` (`quick_simulate`) hardcodes `(55, 0.42, 6)` inline and now disagrees with `standard_fight()`. Callers unaudited. Filed, not touched — single-purpose commit.
+
+**Provenance.** Measured this session at HEAD `eeb16b8`. Artifacts untracked in `outputs/`: `probe_worldinit_prod.py`, `probe_prod_before.txt`, `probe_prod_after.txt`, `probe_split_smoke.txt`, `probe_other_ids.txt`, `probe_E_a_callers.txt`. Does not mark existing doc content false; the `L1701` cells remain correct measurements of their population — this entry constrains how they may be used.
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
