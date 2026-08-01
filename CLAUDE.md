@@ -1518,6 +1518,8 @@ answerable.** Do not scope Stage 2a's success criteria against any
 "residual after alignment" number; those numbers are all measured
 under alignment attempts that don't align.
 
+[SUPERSEDED — true when filed; the decomposition was subsequently obtained. See ### STAGE 2a addendum — config vs engine, measured 2x2 [filed 2026-07-26] and ### Framing correction 2026-08-01.]
+
 **What Stage 2a MUST resolve alongside the accumulator port:**
 1. Consolidate the RNG-consumption order. FI's :494/:640/:641 (and
    whatever else surfaces during the port) become one deterministic
@@ -1594,6 +1596,8 @@ style windows FE lacks) are still real. They are a smaller share of the
 after both dials is a mix with no further pre-port lever available to
 narrow it (see (e) — the increment-rate candidate proved structural).
 
+[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The known finish-rate gap" = Stage 1 pooled 10-seed world_init (+41.4pp).]
+
 **Measurement — ORACLE-BRIDGE1 fixture, 78 matched fighter pairs, matched
 seeds (1000 + fight_index):**
 
@@ -1607,6 +1611,7 @@ seeds (1000 + fight_index):**
 - **Baseline → LIVE_PLAY = +21.8pp of finish rate.** Against the Stage 1
   pooled 10-seed gap of **+41.4pp** (live 76.9% vs pre-gen 35.4%), this
   is **53% of the arc's known aggregate gap, config drift alone.**
+  [POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The arc's known aggregate gap" = Stage 1 pooled 10-seed world_init.]
 
 **Interaction term, as measured fact:**
 
@@ -1632,6 +1637,7 @@ not sum Ledger A and Ledger B when quoting standup's effect.
 
 - **+19.6pp** survives after both dials are matched (41.4pp known aggregate
   − 21.8pp measured combined).
+  [POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "41.4pp known aggregate" = Stage 1 pooled 10-seed world_init.]
 - **This residual is a mix** of at least: (a) the two genuinely-FI-only
   accumulators `_clinch_body_acc` (`fight_integration.py:958-980`) and
   `_gnp_accumulation` (`:1005-1022`); (b) style windows FE lacks
@@ -1677,6 +1683,8 @@ named — the TKO-strikes gap, the two FI-only accumulators, the style
 windows — are still real contributors to the residual. Their share of
 the 41.4pp aggregate is smaller than the earlier framing implied, not
 zero.
+
+[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The full ~41pp" = Stage 1 pooled 10-seed world_init, not a production quantity.]
 
 **Data provenance:** two untracked probe scripts in `outputs/oracle_
 bridge/`:
@@ -1810,6 +1818,8 @@ not tune.` — the larger lever is scheduled after the smaller one. **Filed
 as an observation for sequencing review; no sequencing decision is made
 by this entry.**
 
+[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The measured gap" here = the 2x2 symmetric OVR=75 harness aggregate (38.1pp), not a production quantity.]
+
 **Precision note on anchor cells.** C5 = 69.1% and C1 = 31.7% do not
 byte-match v2's baseline (~68% / ~29%). Deltas are ~1-3pp, within noise
 at N=10 versus v2's N=100. Additionally, `PYTHONHASHSEED=0` pins string
@@ -1868,6 +1878,14 @@ Mechanism, MEASURED: `world_init.generate_attributes` maps tiers to stat ranges 
 **Known drift left standing, deliberately.** `fight_engine.py:4448` (`quick_simulate`) hardcodes `(55, 0.42, 6)` inline and now disagrees with `standard_fight()`. Callers unaudited. Filed, not touched — single-purpose commit.
 
 **Provenance.** Measured this session at HEAD `eeb16b8`. Artifacts untracked in `outputs/`: `probe_worldinit_prod.py`, `probe_prod_before.txt`, `probe_prod_after.txt`, `probe_split_smoke.txt`, `probe_other_ids.txt`, `probe_E_a_callers.txt`. Does not mark existing doc content false; the `L1701` cells remain correct measurements of their population — this entry constrains how they may be used.
+
+### Framing correction — "the aggregate gap" is population-specific [filed 2026-08-01]
+
+**The correction.** Several entries in the STAGE 1 and STAGE 2a addenda above refer to "the 41pp gap," "the arc's known aggregate gap," "the known finish-rate gap," or "the measured gap" with a definite article, as if a single project-level quantity existed. It does not. Per the production-path addendum at `### STAGE 2a addendum — production-path measurement of the classmethod flip [filed 2026-08-01]`: finish-rate aggregates are population-specific, with a 3.5× span (+6.8pp to +23.6pp) measured for the same four-line change across three populations. The +41.4pp (Stage 1 pooled 10-seed world_init) and +38.1pp (2x2 symmetric OVR=75 harness) are correct measurements of their populations. Neither is "the" gap, and shares computed against them (53%, 62%) are shares of those denominators only — not of any production-observed quantity. The production-path probe measured +19.3pp aggregate on production tier grading, magnitude itself unvalidated against production matchmaking.
+
+**Per-site disposition.** Marked inline with `[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01]`: the "53% of the known finish-rate gap" claim (STAGE 1 addendum), the "53% of the arc's known aggregate gap" claim, the "+19.6pp survives (41.4pp known aggregate − 21.8pp)" claim, the "full ~41pp" framing-correction paragraph, and the "62% of the measured gap" consequence paragraph (2x2 addendum). The "offset-vs-mechanic decomposition NOT obtainable before Stage 2a" claim carries a supersession note instead — it was true when filed and was subsequently obtained by the 2x2. The aggregate-rate bullet ("76.9% vs 35.4% pooled") is left unmarked: its first sentence is a correct population-named measurement; this block governs its "arc's core divergence" phrasing.
+
+**None of the marked numbers is arithmetically false.** 62% of 38.1pp is correct. What is corrected is the definite article — the promotion of one population's denominator to a project-level quantity. Original wording is preserved at every site; markers annotate, they do not reword.
 
 ## Certified cell baselines (symmetric skill)
 
