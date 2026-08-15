@@ -1959,6 +1959,63 @@ The lever is column `line 3293 during pre-gen`. Every other column is constant a
 
 **Contract for future constants.** Until measured otherwise, any constant defined in `fight_engine.py` is a pre-gen consumer. Any sweep of such a constant must either (a) source-edit the value and rebuild the world under the swept value, or (b) rebind before pool build AND source-hoist any literal consumers in the same file. Runtime rebind alone measures a stale world (see the five-row world table in `### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14]`).
 
+### Architecture correction — top-level `systems/` imports [filed 2026-08-15, FOTN full-fidelity wire, 8fd4573]
+
+**The claim at CLAUDE.md `:1099-1100`** — *"Top-level `cage_dynasty/core/`, `entities/`, `systems/` — never imported by the web app. CLI tools use them. Web app does not."* — is **FALSE-AS-WRITTEN for `systems/fotn.py`.**
+
+**Correction (bytes-verified).** PA's `wsgi.py` inserts `/home/vandopegaming/cage_dynasty/systems` onto `sys.path`. `game_bridge.py:62-78` uses `importlib.import_module` to dynamically load bare `"fotn"` before falling through to `"systems.fotn"`. The bare-name import resolves to `systems/fotn.py` via that sys.path entry. **MEASURED on PA:** `server.log` shows `✅ fotn loaded from fotn` on every reload in log retention; console `__file__` probe under the replicated sys.path confirms resolution.
+
+**Scoped correction (both facts hold):**
+- `from systems.X import ...` continues to FAIL on PA (the shadow via `cage_dynasty_web/systems/` intercepts package-form imports — the injury/coaches note remains correct as-written).
+- Bare-name imports via `importlib.import_module` against paths on wsgi's `sys.path` DO succeed. `systems/fotn.py` is live in production via this mechanism.
+
+**Grep hazard filed for future censuses.** Static import censuses (`^from`, `^import`) are structurally blind to `importlib.import_module(<string>)` and `__import__(<string>)`. Section 4b of the FOTN scoping (`outputs/fotn_scope.txt`) missed the fotn import for exactly this reason. Any future consumer-census claim must ALSO grep for `import_module(` and `__import__(` before asserting "no consumers."
+
+The `## Architecture` block's package-form claim is left intact as the correct diagnosis for `from systems.X import Y` patterns; this entry annotates the exception rather than editing the block.
+
+### Backlog re-scope — FOTN full-fidelity scoring [filed 2026-08-15, FOTN full-fidelity wire, 8fd4573]
+
+**The backlog entry at CLAUDE.md `:845-853`** — *"FOTN full-fidelity scoring (unblocked, small). Upgrading FOTN scoring to consume the full-fidelity slice is a small consumer change, not a plumbing project."* — was **right about the size, wrong about the address.**
+
+**MEASURED before fix:**
+- The scorer needed no upgrade — `calculate_fotn_score` at `systems/fotn.py:57-136` has always contained the full-fidelity branch (damage × 0.4, damage-diff × 0.2 penalty, knockdowns × 150, sub_attempts × 25).
+- The scorer's gate at `systems/fotn.py:77-82` was falling to `_calculate_basic_score` on every fight in production. **Gate keys `"fighter1_stats"` and `"fighter2_stats"` were absent from all 3 fight-dict construction sites** (Path A `_run_real_engine` at `:17797-17823`, Path B normal at `:13940-13964`, Path B draw at `:13779-13804`). Bytes-verified in Section 12 of `outputs/fotn_scope.txt`.
+- Both scorer branches (full-fidelity `:121`, basic `:145`) read `fight_result.get("finish_round")`. Fight dicts carry `"round_finished"` (27 hits in `game_bridge.py`; positive control) — the bridge deliberately renames the engine attribute `finish_round` → dict key `round_finished` at construction (see the rename site at `game_bridge.py:17638`). **The round bonus was dead in ALL FOTN scoring on PA**, not just the fallback branch.
+
+**Live scorer that had picked every FOTN award ever shipped on PA:** `_calculate_basic_score` weighing ONLY `method` (SUB=45, TKO=50, KO=60, SPLIT=80, DEC=20) and `is_title_fight` (×1.2). Score ceiling: 156 (title split decision). Tiers "Fight of the Year Candidate" (≥200) and "INSTANT CLASSIC" (≥300) were structurally unreachable.
+
+**Fixed in `8fd4573`:** 3 attach sites (2 keys each) + 2 scorer-alias edits + 1 except-log edit = 6 edits, +22/-3 across 2 files (`cage_dynasty_web/game_bridge.py`, `systems/fotn.py`).
+
+### Builtin scorer status — never-fired fallback [filed 2026-08-15, FOTN full-fidelity wire, 8fd4573]
+
+**`game_bridge._select_fotn_builtin` (currently `:18071-18096`) has never fired in production**, MEASURED via PA's `server.log` retention: no `⚠️ fotn not available — using builtin` entries; the primary `import fotn` path succeeds on every reload (see `### Architecture correction — top-level systems/ imports [filed 2026-08-15]` above).
+
+**Status: documented fallback only.** Fires on either:
+- `import fotn` failure (has not occurred in retention).
+- `select_fotn` exception (previously silent; now logged as `⚠️ FOTN select_fotn failed, builtin fallback: {err}` per `8fd4573`'s Edit F — see the try/except at `game_bridge.py:~3985-3990`).
+
+**Do not upgrade or extend the builtin.** `systems/fotn.py` is the live scorer. If the builtin ever needs to evolve, first confirm from PA `server.log` that it's actually firing — otherwise the work is inert.
+
+### Follow-up filed — tier threshold recalibration [filed 2026-08-15, FOTN full-fidelity wire, 8fd4573]
+
+**Tier thresholds oversaturate under full-fidelity scoring.** Harness `outputs/fotn_harness.py` at N=400 fights, seed=1000, measured post-fix:
+
+| tier | threshold | share of fights | share of card winners (N=40) |
+|---|---:|---:|---:|
+| INSTANT CLASSIC | ≥300 | **32.25%** | **97.5%** |
+| Fight of the Year Candidate | ≥200 | 29.25% | 2.5% |
+| Excellent | ≥150 | 17.50% | — |
+| Great | ≥100 | 8.25% | — |
+| Good | ≥50 | 12.75% | — |
+| Standard | <50 | 0.00% | — |
+
+- NEW score range 72-620, mean 244.6, vs OLD 70-132, mean 91.9. The tier ladder (50/100/150/200/300 at `systems/fotn.py:310-330`) was calibrated to a scoring range fights in this world don't actually inhabit — real scores are ~5× wider than the tier spacing accommodates.
+- **Recalibration is a scoped follow-up, not done here.** Ship discipline: fix the wire first (`8fd4573`), tune the ladder second.
+
+**Two harness caveats, filed for the record:**
+1. **3/400 fights carried empty per-round stats** (99.25% fire rate, not 100%). Cause **INFERRED not measured** — plausibly R1 stoppages where the round-stats append didn't fire before the engine returned. The scorer's gate at `systems/fotn.py:80` degrades gracefully (falls to `_calculate_basic_score`), so this is not a correctness bug even if the mechanism is unconfirmed. Worth a targeted probe if the 0.75% edge becomes interesting.
+2. **Harness scored harness-built dicts, not bridge-built dicts.** The harness constructed fight dicts locally mirroring the post-patch Path B shape rather than exercising `bridge._simulate_card_fights` / `bridge.advance_week`. Wiring correctness is inferred from the diff (game_bridge.py edits attach the same `eng_result.fighter1_stats` reference the harness uses) but not measured end-to-end through the bridge. **Production-path confirmation owed at deploy:** `server.log` clean of `⚠️ FOTN select_fotn failed` entries (would surface any shape mismatch via the new logging from `8fd4573`), and templates rendering `event.fotn.excitement_tier` values above `"Excellent"` (which were structurally unreachable pre-fix).
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
