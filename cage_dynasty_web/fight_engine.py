@@ -456,7 +456,7 @@ TKO_DURABILITY_COMPOSURE_DIVISOR = 450.0
 # sim historically ran GnP at ~0.6× standing (CONTROL-CONVERSION-DIAG1
 # §2b: Wr-Str wrestler ground damage 52 ≈ striker ground damage 48
 # despite 64% control). Value chosen by GNP-DAMAGE-BUFF1 sweep.
-GNP_DOMINANT_DAMAGE_MULT     = 1.6
+GNP_DOMINANT_DAMAGE_MULT     = 1.25
 
 
 # ============================================================================
@@ -3290,7 +3290,7 @@ def simulate_exchange(
                 Position.NORTH_SOUTH_TOP,
             }
             if fight_state.position in _DOMINANT_GNP:
-                damage *= 1.35
+                damage *= GNP_DOMINANT_DAMAGE_MULT
 
             # Apply config damage multiplier (compensates for increased exchanges)
             damage *= config.damage_multiplier
