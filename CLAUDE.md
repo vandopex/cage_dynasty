@@ -1887,6 +1887,78 @@ Mechanism, MEASURED: `world_init.generate_attributes` maps tiers to stat ranges 
 
 **None of the marked numbers is arithmetically false.** 62% of 38.1pp is correct. What is corrected is the definite article — the promotion of one population's denominator to a project-level quantity. Original wording is preserved at every site; markers annotate, they do not reword.
 
+### Graveyard hypothesis — DENIED, world-scoped [filed 2026-08-14, AMP-RECONCILIATION arc, dec968b]
+
+**Claim being closed.** Weakening the dominance amp frees SUBs — i.e., lower amp → less dominant-GnP damage → longer bottom-position dwell → more sub attempts converting.
+
+**Measurement, within the 1.35-built world of the sweep** (`outputs/amp_sweep_out.txt`, N=400 seed=1000 per arm, arms AMP ∈ {1.0, 1.15, 1.25, 1.35, 1.5}, per-arm SUB counts extracted verbatim):
+- FI SUB counts across arms: 6, 7, 6, 6, 6 — flat in the **5–7** range.
+- FE SUB counts across arms: 33, 33, 32, 33, 35 — flat in the **32–35** range.
+- Neither FI nor FE SUB count moves with the amp within a fixed world.
+
+**Measurement in production's 1.25-built world** (`outputs/amp_verify_out.txt`, source-edited, N=400 seed=1000): **FI SUB=13.**
+
+**Consequence.** Sub-count flatness across the sweep is a within-world observation, not a cross-world one. The sweep drew all its samples from a single 1.35-built world (see `### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14]` for why). Verify's SUB=13 is a different world's draw, not evidence of a mechanism change under the amp.
+
+**Denial stands as measured.** Weakening the amp does not free subs within a world — the SUB gate is amp-invariant along the axis the sweep measured. The 35–40% sub-share target requires a separate lever (attempt rate / sub-gate / maturation path); filed, not amp-reachable. The `L853` `SUB-rate undershoot tuning` entry pointer should not be read as implying the amp is that lever.
+
+### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14, AMP-RECONCILIATION arc, dec968b]
+
+**Rule.** Runtime-rebind sweeps cannot reach source literals. Pre-gen world construction consumes `fight_engine.py`'s dominance amp site at `:3293` (measured `simulate_exchange` call count during `world_init` pool build = **231,601** at 120-week history; the amp fires on the dominant-GnP position subset). Any swept constant must have EVERY consumer site — including world build — bound to the swept knob, or the sweep measures fights in a stale world.
+
+**Five-world measurement table** (all FI leg, N=400, seed=1000; artifacts referenced by name, untracked in `outputs/`):
+
+| environment | line 459 (constant) | line 3293 during pre-gen | GNP const at FI fight-time | pool | FI finish% | FI SUB | FI DOM_TOP N | FI R1 hp |
+|---|---|---|---|---:|---:|---:|---:|---:|
+| verify (source edit) | 1.25 | 1.25 (hoisted) | 1.25 | 297 | 54.25% | 13 | 28373/54864 | 51.45 |
+| literal-3293 (this probe) | 1.6 base | 1.25 (probe literal) | 1.25 (runtime rebind) | 297 | 54.25% | 13 | 28373/54864 | 51.45 |
+| rebind_only | 1.6 base | 1.35 (base literal) | 1.25 (runtime rebind) | 298 | 55.50% | 6 | 28633/55429 | 49.84 |
+| rebind_early | 1.6 base | 1.35 (base literal) | 1.25 (rebind pre-build) | 298 | 55.50% | 6 | 28633/55429 | 49.84 |
+| sweep AMP=1.25 (fe_pat) | 1.6 base | 1.35 (base literal; FI uses fe_mod) | 1.25 (runtime rebind) | 298 | 55.50% | 6 | 28633/55429 | 49.84 |
+
+The lever is column `line 3293 during pre-gen`. Every other column is constant across the four "stuck" rows. Pool size flips 297↔298 alongside outcome — one fighter's world-life differs when pre-gen fires 1.25 vs 1.35.
+
+**Discriminating chain (six links, in order — each link denies a distinct hypothesis with a distinct artifact):**
+
+1. **uuid-drift as a floor beneath measurement — DENIED.** Control run (verify harness against unedited production source, no source edit, no fe_pat, no rebind: `outputs/amp_verify_control_out.txt`) byte-matched the sweep BASELINE arm (FI 72.00% / FE 41.00%, both method mixes exact). No drift floor exists to hide cross-arm differences behind — running the same code in different processes produces byte-identical results.
+
+2. **from-import of the constant `GNP_DOMINANT_DAMAGE_MULT` capturing a stale binding at pre-fe_pat load — DENIED** (`outputs/amp_consumers.txt`, `outputs/amp_consumers_full.txt`: 3 hits with the hoist in place (1 definition at `:459` + 2 consumer sites at `:2420` and `:3293`) / 2 at base (`:3293` still a literal) — either way, zero outside `fight_engine.py`). No cross-module `from … import` exists that could capture a stale binding.
+
+3. **Second knob at `:3293` on FI's live leg — DENIED** (`outputs/site_3293_census_out.txt`: FI `total_calls=0` for `fight_engine.simulate_exchange`; FI's narrated fight body never invokes the module-level function containing `:3293`). Scope-corrected in `### Site-3293 census — scope correction [filed 2026-08-14]`: the census answered the live-leg question correctly but did NOT answer the world-construction question — link 6 below is the one that did.
+
+4. **fe_pat co-load as environmental perturbation — DENIED** (`outputs/rebind_only_out.txt` byte-matches sweep AMP=1.25 arm without fe_pat loaded in the process at all — same FI 55.50% / SUB=6 / mix / DOM_TOP N / R1 hp / pool 298).
+
+5. **rebind timing (before vs after pool build) — DENIED** (`outputs/rebind_early_out.txt` byte-matches sweep AMP=1.25 arm even with rebind moved pre-build; the harness's counter on `fe_mod.simulate_exchange` proved **231,601** calls during pool build, so pre-gen fired extensively — but not on the rebound constant).
+
+6. **`:3293` literal consumption during pre-gen world construction — PROVEN** (`outputs/literal3293_out.txt` byte-matches verify at 54.25% / SUB=13 / pool 297, with `line 459` unchanged at 1.6 and only the literal at `:3293` flipped 1.35→1.25 — every non-mechanism variable held identical to the rebind_only environment).
+
+**Artifacts (untracked in `outputs/`):** `rebind_only_harness.py`, `rebind_only_out.txt`, `rebind_early_harness.py`, `rebind_early_out.txt`, `literal3293_harness.py`, `literal3293_out.txt`, and prior `amp_sweep_harness.py`, `amp_sweep_out.txt`, `amp_verify_harness.py`, `amp_verify_out.txt`, `amp_verify_control_out.txt`, `amp_consumers.txt`, `amp_consumers_full.txt`, `site_3293_census_harness.py`, `site_3293_census_out.txt`.
+
+### Site-3293 census — scope correction [filed 2026-08-14, AMP-RECONCILIATION arc, dec968b]
+
+**Original claim** (in-conversation reviewer reading of `outputs/site_3293_census_out.txt`):
+> "FI `total_calls=0` → `fight_engine.py:3293` cannot affect FI's numbers."
+
+**Struck as over-read. Correction below; original is preserved above per the wrong-numbers rule — false-as-generalized, not deleted.**
+
+**Correction.** The measurement was correct: FI's live leg never executes `fight_engine.simulate_exchange`, so the amp at `:3293` never fires during FI-narrated fight bodies. The generalization was false. `:3293` fires extensively during pre-gen world construction (via `world_init.HistorySimulator` → `fight_engine.simulate_fight` → `simulate_exchange`; measured 231,601 total `simulate_exchange` calls per 120-week pool build), and the resulting fighter records / world composition are the inputs FI later fights on. `:3293` therefore *does* affect FI's numbers — through the world it built, not through FI's own exchange loop.
+
+**Attribution.** The measurement is what it is; the over-read is the reviewer's, filed here as a scope correction rather than as an instrument flaw. Future census verdicts of the form "site X has zero calls from consumer Y" must be qualified: "at live-play time, on the measured code path"; the same site's world-construction consumption is a separate question requiring its own probe (see `### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14]`).
+
+**Corollary hazard, general form.** Any constant defined in `fight_engine.py` is a pre-gen consumer by default until measured otherwise. Live-leg call counts do not answer the pre-gen consumption question.
+
+### STAGE 2a addendum — amp placement + FE-defined/FI-consumed constants [filed 2026-08-14, AMP-RECONCILIATION arc, dec968b]
+
+**Prior placement finding** (in-conversation, drafted during the arc). Same amp value ≠ same amp placement. FI applies the amp in-primitive via `calculate_strike_damage` when `is_dominant_position=True` (`fight_engine.py:~2420`, reads `GNP_DOMINANT_DAMAGE_MULT` at call time); FE applies it post-primitive at `:3293` after damage is computed. FI's placement compounds against the un-scaled damage before subsequent multipliers (config `damage_multiplier`, etc.) apply; FE's does not. Measured effect (`outputs/amp_sweep_out.txt`, arms AMP=1.0 → AMP=1.5, symmetric FI=FE=amp): FI finish% moves 39.50 → 68.00 (Δ +28.5pp over 0.5 amp = **+5.7pp per 0.1**); FE finish% moves 35.00 → 45.75 (Δ +10.75pp over 0.5 amp = **+2.15pp per 0.1**). Ratio = **FI is ~2.65× more amp-responsive than FE** on the same fixture, same seeds. The two engines respond to the same constant with different sensitivities because the constant enters their damage equations at different points.
+
+**Consequence for Stage 2a.** Unifying to a single engine requires unifying the placement, not just the value. Two changes are load-bearing and must ship together:
+
+1. Amp application site is unified (either both in-primitive at `:2420` or both post-primitive at `:3293`) so future amp tuning has one location and one measured effect. Choice of site is a Stage 2a design call; both options were unmeasured pre-arc.
+
+2. FE-defined constants consumed by FI (currently: `GNP_DOMINANT_DAMAGE_MULT` at `fight_engine.py:459`, and any others surfaced during Stage 2a's structural pass) are relocated out of `fight_engine.py`. Living in `fight_engine.py` makes them pre-gen consumers by default (see `### Site-3293 census — scope correction [filed 2026-08-14]`); relocation lets each constant declare its consumers explicitly rather than by module residency.
+
+**Contract for future constants.** Until measured otherwise, any constant defined in `fight_engine.py` is a pre-gen consumer. Any sweep of such a constant must either (a) source-edit the value and rebuild the world under the swept value, or (b) rebind before pool build AND source-hoist any literal consumers in the same file. Runtime rebind alone measures a stale world (see the five-row world table in `### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14]`).
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
