@@ -3985,7 +3985,8 @@ class GameBridge:
                         fotn_result, fotn_score = select_fotn(all_card_fights)
                     else:
                         fotn_result = self._select_fotn_builtin(all_card_fights)
-                except Exception:
+                except Exception as _fotn_err:
+                    print(f"⚠️ FOTN select_fotn failed, builtin fallback: {_fotn_err}")
                     fotn_result = self._select_fotn_builtin(all_card_fights)
 
             if fotn_result:
@@ -13769,6 +13770,15 @@ class GameBridge:
             if not _finish_time:
                 _finish_time = "5:00" if method == "DEC" else f"{random.randint(0,4)}:{random.randint(0,59):02d}"
 
+            # FOTN-FIDELITY: per-round stats extract (safe re: _eng unbound in fallback paths)
+            _f1_ps = []
+            _f2_ps = []
+            try:
+                _f1_ps = getattr(_eng, 'fighter1_stats', []) or []
+                _f2_ps = getattr(_eng, 'fighter2_stats', []) or []
+            except NameError:
+                pass
+
             # Ship DR2: draw short-circuit. Increment draws on both fighters,
             # build a draw-shape result dict, append, and skip the rest of the
             # per-fight loop body (record mutations, fight history, rankings,
@@ -13801,6 +13811,9 @@ class GameBridge:
                     # FINISH-DETAIL-PERSIST — draws carry no specialty/opponent semantics
                     "specialty_method":       "DRAW",
                     "opponent_rank_at_fight": None,
+                    # FOTN-FIDELITY: per-round stats for scorer
+                    "fighter1_stats":         _f1_ps,
+                    "fighter2_stats":         _f2_ps,
                 }
                 event["fights"].append(result)
                 print(f"   [DRAW] {f1.name} vs {f2.name} — Draw (R{rnd})")
@@ -13961,6 +13974,9 @@ class GameBridge:
                 # FINISH-DETAIL-PERSIST — canonical semantics: loser's rank
                 "specialty_method":       _specialty,
                 "opponent_rank_at_fight": pre_l,
+                # FOTN-FIDELITY: per-round stats for scorer
+                "fighter1_stats":         _f1_ps,
+                "fighter2_stats":         _f2_ps,
             }
             event["fights"].append(result)
             # event["main_event"] is set only when the actual main_event-
@@ -17820,6 +17836,9 @@ class GameBridge:
             "rivalry":        None,
             # Store raw engine result for lazy commentary generation
             "_engine_result": eng_result,
+            # FOTN-FIDELITY: per-round stats for scorer full-fidelity branch
+            "fighter1_stats": eng_result.fighter1_stats,
+            "fighter2_stats": eng_result.fighter2_stats,
         }
 
         # ── Fight injury rolls for player fights ─────────────────────

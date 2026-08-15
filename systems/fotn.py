@@ -118,7 +118,7 @@ def calculate_fotn_score(fight_result: Dict[str, Any]) -> float:
         score += 50  # Submissions are exciting
     
     # Late finish bonus (drama)
-    finish_round = fight_result.get("finish_round")
+    finish_round = fight_result.get("finish_round") or fight_result.get("round_finished")
     if finish_round and finish_round >= 3:
         score += 100  # Late finishes are dramatic
     elif not finish_round:
@@ -142,7 +142,7 @@ def _calculate_basic_score(fight_result: Dict[str, Any]) -> float:
     score = 50.0  # Base score
     
     method = fight_result.get("method", "")
-    finish_round = fight_result.get("finish_round")
+    finish_round = fight_result.get("finish_round") or fight_result.get("round_finished")
     
     # Method scoring
     if "Split" in method or "SPLIT" in method:
