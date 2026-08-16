@@ -17619,6 +17619,12 @@ class GameBridge:
         is_main      = _slot_re in ("main_event", "co_main")
         style_mod    = _bundle["style_mod"]
 
+        # Recomputed post-assembly for post-sim consumers (:18000 block) —
+        # do not remove as "duplicate" of assembly-internal set.
+        _player_ids_k1 = {f.fighter_id for f in self.get_player_fighters()}
+        _player_is_f1  = f1_id in _player_ids_k1
+        _player_is_f2  = f2_id in _player_ids_k1
+
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
             rounds        = total_rounds,
