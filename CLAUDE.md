@@ -135,6 +135,22 @@ working-tree, so a fixture generated from a dirty tree can't be fully
 identified by `repo_sha` alone. Filed so a future session doesn't
 re-investigate.
 
+[STRIKE-AND-PRESERVE, 2026-08-15 post-`68dbd52` — see
+`### STYLE-DEAD1 [MEASURED, bytes at HEAD 68dbd52]` in the Key
+constants section below. The "production live-play is style-aware"
+framing is MEASURED-FALSE at the OUTCOME layer: `_STYLE_STR_MAP`
+in `game_bridge.py` emits enum NAMES; the `_FightingStyleEnum(...)`
+construction two lines below is VALUE lookup; ValueError swallowed
+by `except Exception: pass` → `style_mod = 0.0` every fight since
+the map was written. The `fighting_style` enum IS populated on
+`FighterAttributes` at construction (that part of the block below
+remains correct), but the branch that would make style
+outcome-affecting has never fired in production. Retroactive
+re-reading also owed for any upset-probe / outcome-attribution
+memo under `outputs/odds_*` that inherited this framing. Text
+preserved for provenance; corrected reading is under the
+STYLE-DEAD1 section.]
+
 **Fixture is style-blind; production live-play is style-aware. Third
 coverage limit on the 928/928 gate.**
 Bytes-confirmed at HEAD `1f98b5f`, both bridges + both fixture replay
@@ -1195,6 +1211,16 @@ accident.
   **explicitly NOT** on sys.path — this is what makes bare `import
   commentary` resolve to `narrative/commentary.py` on PA (see the CRITICAL
   block at the top of this file).
+  **[STRIKE-AND-PRESERVE, 2026-08-15 post-`68dbd52` — the "VERIFIED match
+  ... 479 bytes" and "Byte-equivalent to repo's `cage_dynasty_web/wsgi.py`
+  modulo comments" claims are FALSE-AS-WRITTEN AT HEAD. PA `wsgi.py`
+  measured 610 bytes this pass (+131 vs the recorded 479). See
+  `### wsgi-610 [MEASURED, filed 2026-08-15]` in the Key constants section
+  below. The sys.path insertion order and bare-import resolution behavior
+  paragraph remains UNCHANGED-IN-EFFECT (verified independently across
+  narrative/commentary + systems/fotn resolutions this pass). Text
+  preserved for provenance; the byte-equivalence claim is retired, the
+  behavior claim survives.]
 - **Multi-user env-var dependencies (post-2026-07-03).** `SECRET_KEY` unset →
   cookies forgeable, session identity broken. `LEGACY_CLAIM_TOKEN` unset →
   `/api/claim-legacy` becomes a 404 (safe default). Any new PA deployment or
@@ -2015,6 +2041,288 @@ The `## Architecture` block's package-form claim is left intact as the correct d
 **Two harness caveats, filed for the record:**
 1. **3/400 fights carried empty per-round stats** (99.25% fire rate, not 100%). Cause **INFERRED not measured** — plausibly R1 stoppages where the round-stats append didn't fire before the engine returned. The scorer's gate at `systems/fotn.py:80` degrades gracefully (falls to `_calculate_basic_score`), so this is not a correctness bug even if the mechanism is unconfirmed. Worth a targeted probe if the 0.75% edge becomes interesting.
 2. **Harness scored harness-built dicts, not bridge-built dicts.** The harness constructed fight dicts locally mirroring the post-patch Path B shape rather than exercising `bridge._simulate_card_fights` / `bridge.advance_week`. Wiring correctness is inferred from the diff (game_bridge.py edits attach the same `eng_result.fighter1_stats` reference the harness uses) but not measured end-to-end through the bridge. **Production-path confirmation owed at deploy:** `server.log` clean of `⚠️ FOTN select_fotn failed` entries (would surface any shape mismatch via the new logging from `8fd4573`), and templates rendering `event.fotn.excitement_tier` values above `"Excellent"` (which were structurally unreachable pre-fix).
+
+### Regression + doc-hygiene sweep — post-`68dbd52` [filed 2026-08-15]
+
+Docs sweep after the `_player_is_f1`/`_player_is_f2` NameError hotfix
+at `68dbd5258341266f0abed38089d2cf1108af3e34`. Each subsection dated
+2026-08-15, bytes-anchored at HEAD `68dbd52`. Two strike-and-preserve
+edits applied elsewhere in this file (`## Architecture / Known hazards`
+on wsgi.py; the `**Fixture is style-blind ...**` block above under the
+928/928 gate coverage-limit discussion) — cross-referenced here.
+
+#### STYLE-DEAD1 [MEASURED, bytes at HEAD `68dbd52`]
+
+**`style_mod` is 0.0 on every live-play fight; the style-matchup
+branch is dead in production.** Anchors: `_STYLE_STR_MAP` (dict
+literal inside the `if STYLES_AVAILABLE:` guard block near
+`_assemble_prefight`'s style-mod computation in `game_bridge.py`)
+and the `_FightingStyleEnum(_STYLE_STR_MAP.get(...))` call two lines
+below it. Enum def: `class FightingStyle(Enum)` in `core/types.py`.
+
+Bytes:
+- `_STYLE_STR_MAP` values are uppercase enum NAMES (`"STRIKER"`,
+  `"COUNTER_STRIKER"`, `"BJJ_SPECIALIST"`, `"BALANCED"`,
+  `"WRESTLER"`, ...).
+- `FightingStyle` members have display-string VALUES:
+  `STRIKER = "Striker"`, `WRESTLER = "Wrestler"`,
+  `BJJ_SPECIALIST = "BJJ Specialist"`, `BALANCED = "Balanced"`,
+  etc. Names are uppercase; values are the human-readable strings.
+- `_FightingStyleEnum(_STYLE_STR_MAP.get(s1, 'BALANCED'))` is
+  CONSTRUCTOR-form, i.e. **VALUE lookup**. `FightingStyle("STRIKER")`
+  raises `ValueError` because no member has value `"STRIKER"` (only
+  member `STRIKER` with value `"Striker"`).
+- Enclosing `try:` / `except Exception: pass` swallows the
+  ValueError silently.
+- Consequence: `style_mod = get_style_matchup_modifier(fs1, fs2)`
+  never executes; `style_mod` retains its pre-try value (`0.0`) on
+  every fight.
+
+**Corollaries:**
+
+**(a)** Path A post-sim style-flip has never fired in production
+— byte-verified via the flip's own guard. Anchor in `_run_real_engine`:
+`if style_mod != 0.0 and abs(style_mod) >= 0.02:` (the flip body reads
+`flip_chance = abs(style_mod) * 0.4` and inverts `raw_winner_f1` on
+RNG hit). At `style_mod = 0.0`, `0.0 != 0.0` is `False` → the whole
+condition is False → the flip body is unreachable, byte-verified at
+the guard site. Any consumer downstream of `style_mod` in
+`_run_real_engine` / `_assemble_prefight` sees `0.0` on every fight
+since the map was written.
+
+**(b)** The upset-probe artifacts under `outputs/odds_upset_curve*`
+inherit their "production is style-aware" framing from the
+`**Fixture is style-blind ...**` block earlier in this file. That
+framing is FALSE AS WRITTEN at the outcome layer. Strike-and-preserve
+applied to that block this pass — corrected reading points to this
+STYLE-DEAD1 section. The construction-layer claim ("fighting_style
+enum populated on `FighterAttributes`") remains correct — the enum
+IS populated by `_make_fighter_attrs`. The outcome-layer claim
+("production is style-aware in the fight outcome") is what's
+falsified: the enum flows into a branch that value-lookups its own
+name, ValueErrors, and gets caught.
+
+**Fix has two behavior changes:**
+1. Fix the map/constructor mismatch (either `_FightingStyleEnum[name]`
+   bracket-form for name lookup, or change map values to display
+   strings). This activates matchup modifiers — every fight with a
+   non-BALANCED style pair starts producing a non-zero `style_mod`.
+2. The Path A post-sim style-flip that reads `style_mod` starts
+   firing — outcome behavior changes for fights with non-neutral
+   matchups.
+
+**Flip decision required first.** The dead branch has been dead for
+the entire life of the map. Turning it on is a substantive
+live-play tuning change, not a bugfix — the magnitude of
+`get_style_matchup_modifier`'s output against the current tuned
+finish rate is unmeasured. **NOT scheduled.**
+
+#### COMMENTARY-STALE1 [MEASURED, bytes at HEAD `68dbd52`]
+
+**`get_fight_commentary`'s fuzzy-match fallback poisons the cache
+under the requested `fight_id`, and the write-path guard makes the
+poisoning permanent.** Anchors: `def get_fight_commentary` in
+`game_bridge.py` and the `if fight_id_key and fight_id_key not in
+self._fight_commentary:` guard in the commentary-storage block
+inside `_run_real_engine` (fires immediately after the sim call
+returns).
+
+Bytes:
+- **Fuzzy match**: for each stored `(stored_id, lines)` in
+  `self._fight_commentary.items()`, split the REQUESTED `fight_id`
+  on `_`, keep parts `len > 6`, match if `any(p in stored_id for p
+  in parts)`. Any 7+ char token collision returns another fight's
+  commentary lines.
+- **Cached under requested key**: `self._fight_commentary[fight_id]
+  = lines` before return. Subsequent lookups on the same `fight_id`
+  hit exact-match (poisoned) forever.
+- **Synthetic fallback** (built from `winner_name` / `loser_name` /
+  `method` / `round_finished` scanned out of `self._completed_events`)
+  ALSO caches under the requested key at the end of its block.
+- **Write-path guard** at the commentary-storage block inside
+  `_run_real_engine`: `if fight_id_key and fight_id_key not in
+  self._fight_commentary:` — the entire store block is SKIPPED if
+  the key already has anything. Once poisoned by fuzzy or synthetic
+  fallback, real commentary from a subsequent successful sim can
+  never overwrite it.
+
+**Origin — git log -S MEASURED**: `git log -S 'if parts and any(p
+in stored_id for p in parts)' -- cage_dynasty_web/game_bridge.py`
+returns exactly one commit: `56bf807 End of 2026-04-27 session — OVR
+Phase 1, Bug D/F, is_title fix shipped` (initial commit,
+2026-04-27). The fuzzy fallback is original code, ~4 months older
+than the regression at `9adfeba`. **It did NOT paper over the
+write-side failure — the write-side failure did not exist when it
+was written.** The two bugs are unrelated in origin but compound in
+effect: `9adfeba` broke the write side (fixed at `68dbd52`);
+`56bf807`'s fuzzy match then made the resulting stale-content
+behavior sticky under any `fight_id` whose split produced a
+colliding token.
+
+**Approved-in-principle fix scope (not scheduled, filed here):**
+1. Delete the fuzzy-match block entirely.
+2. Keyed miss → return `[]` with a loud log: `⚠️ commentary miss:
+   {fight_id}`.
+3. Narrow the Path B whole-block `except Exception: pass` around
+   commentary extraction to specific exceptions and log on catch.
+4. Dead unreachable block after the `return []` at the end of the
+   eng_result-path branch (~40 lines duplicating the earlier
+   extraction logic): filed as separate tech-debt commit, not part
+   of the fuzzy-match fix.
+
+#### Regression post-mortem — `9adfeba` → `68dbd52` [filed 2026-08-15]
+
+**Extraction equivalence gates must run the ENCLOSING FUNCTION
+end-to-end.** The v3 gate exercised `_assemble_prefight` in
+isolation, then invoked `_simulate_narrated_fight_fn` directly.
+It never ran `_run_real_engine`'s post-sim commentary-storage
+block, which is where the lost locals (`_player_is_f1`,
+`_player_is_f2`) were consumed. **Blast radius of an extraction
+refactor = the scope of the enclosing function that was edited, not
+just the byte-count of the moved lines.** A gate that scopes tighter
+than the edit cannot certify the edit.
+
+**Diff attribution requires locals analysis, not keyword greps.**
+`outputs/stale_commentary_diag1.md` §5's "refactor NEGATIVE" verdict
+was based on `git diff | grep -c 'commentary keywords'` returning 0.
+That check measured the WRONG property: it looked for
+commentary-related identifiers in the diff, when the actual failure
+mode was locals-defined-by-the-removed-block still referenced by
+unmoved code below. The correct attribution required: (i) enumerate
+locals defined by the removed hunk; (ii) grep the post-sim range for
+references to each; (iii) find the intersection.
+`outputs/regression_attr1.md` did this and identified
+`_player_is_f1` / `_player_is_f2` immediately. **A measurement of
+the wrong property is worse than an inference from the right
+property — because a measurement closes inquiry, and an inference
+invites verification.**
+
+**Deploy grep set update.** Add `"Real fight engine failed"` to the
+standard PA `server.log` grep sweep alongside existing markers.
+Any hit at production is a Path A crash under the enclosing
+`try/except` in `_simulate_fight`, which fell back to score-based
+sim and dropped commentary. First-line signal.
+
+**Reviewer miss recorded.** The v3 gate was endorsed without an
+enclosing-function requirement. Next extraction gate must either
+(a) call the enclosing function end-to-end with a
+live-representative fixture, or (b) explicitly prove the extracted
+region contains no locals referenced downstream in the enclosing
+function. Reviewer-side rule: **an assembly-isolation gate cannot
+certify enclosing-function equivalence, ever.** Do not accept one
+on that promise.
+
+#### save/restore-required-for-presim [MEASURED, filed 2026-08-15]
+
+**9 of 20 seeds flip live outcomes if pre-sim setup advances the
+global RNG without save/restore around it.** Measurement from the
+FOTN arc harness: `random.getstate()` before pre-sim +
+`random.setstate()` after, vs. no bracketing, on 20 fixture-seed
+pairs. 9/20 diverged (winner or method). Load-bearing for any code
+path that (a) calls a computation consuming the global `random`
+state before the fight, and (b) is expected to produce reproducible
+fight outcomes under a fixed `random.seed(N)`.
+
+**Gate-grade rule**, applies at least to:
+- MC odds precompute (`_run_real_engine` sibling or wrapping caller
+  — the arc's next scheduled work).
+- Scouting reports (any RNG-consuming pre-fight computation on a
+  fight the player will subsequently simulate).
+- Amateur pipeline (if pre-fight bracketing computations consume
+  RNG before advance).
+
+**Pattern:**
+```
+saved = random.getstate()
+try:
+    _pre_sim_computation()
+finally:
+    random.setstate(saved)
+```
+
+If the computation is inside a subprocess-isolated context or uses
+its own `random.Random(seed)` instance, save/restore is unnecessary.
+The rule applies to the global module-level `random` state only.
+
+#### SYSTEMS-on-sys.path harness rule [filed 2026-08-15]
+
+**Any harness that instantiates `GameBridge` or invokes
+`_run_real_engine` MUST include `sys.path.append(SYSTEMS)`.** The v1
+assembly gate omitted this and silently ran with
+`CONDITION_AVAILABLE = False` because `systems.condition` failed to
+import. The stamina branch in `_assemble_prefight` was inert; the
+gate reported PASS on an unexercised branch.
+
+**Correct anchor pattern (v3+, standard):**
+```
+sys.path.insert(0, NARR)     # for `import commentary`
+sys.path.insert(0, WEB)      # for `import game_bridge`
+sys.path.append(SYSTEMS)     # for `from systems.condition import ...`
+```
+(Append, not insert — production wsgi.py appends `systems/` too, and
+inserting would shadow flat-file resolution the web tree depends
+on.)
+
+**General rule:** unexercised branches do not equal PASS. Before
+endorsing a gate, grep the harness's captured stdout / imports for
+the `⚠️ ... not available` prints that the web tree emits at
+module-load when a systems import fails. Absence of those warnings
+is a necessary condition for the harness to have actually run
+production code.
+
+#### wsgi-610 [MEASURED, filed 2026-08-15]
+
+**PA `/var/www/vandopegaming_pythonanywhere_com_wsgi.py` is 610
+bytes at HEAD, contradicting CLAUDE.md's 2026-07-07 "VERIFIED match
+... 479 bytes" claim.** Measured this pass. The +131-byte delta is
+not audited yet; not blocking (module-load prints on PA still
+resolve to expected paths — bare `import commentary` still hits
+`narrative/commentary.py`, `importlib.import_module("fotn")` still
+hits `systems/fotn.py`, per verifications since 2026-07-07 that
+continue to hold). Hand-diff on PA when convenient.
+
+**Strike-and-preserve applied** to the `## Architecture / Known
+hazards` bullet claiming byte-equivalence — the byte-equivalence
+claim is retired for the current PA wsgi.py; the sys.path insertion
+order and bare-import resolution behavior claims following it
+remain UNCHANGED-IN-EFFECT. The file has grown; its role has not.
+
+#### PA `fight_engine.py` drift re-confirmed [filed 2026-08-15]
+
+Re-measured this pass. PA's `/home/vandopegaming/cage_dynasty/fight_engine.py`
+still carries the 11 appended constants (repo +302 bytes) documented
+under `## Known hazards`. Survived two `git pull` cycles since the
+last check. Still latent — IMPORT-PATH-PROOF at `db15e3a` still
+holds (running `fight_engine.__file__` in the live app resolves to
+`cage_dynasty_web/fight_engine.py`, not root). No change to the
+disposition or ordering of the reconcile-before-`git rm` prerequisite
+already documented under Ship 1.
+
+#### `cage_dynasty_web/.claude/` → `.gitignore` candidate [filed 2026-08-15]
+
+`git status --porcelain` at HEAD `68dbd52` shows `?? cage_dynasty_web/.claude/`
+as untracked. This is Claude Code's per-directory config, not a
+project artifact. Bundle with the next `.gitignore` sweep (co-candidate:
+the `outputs/` untracked entries that appear in every session's
+status).
+
+#### Caveat-#2 conversion — FOTN full-fidelity wire [filed 2026-08-15]
+
+`### Follow-up filed — tier threshold recalibration [filed
+2026-08-15, FOTN full-fidelity wire, 8fd4573]`'s caveat #2 ("**Harness
+scored harness-built dicts, not bridge-built dicts.** ... Wiring
+correctness is inferred from the diff ... but not measured end-to-end
+through the bridge. **Production-path confirmation owed at deploy**")
+remains **INFERRED** at HEAD `68dbd52`. The regression gate in this
+session exercised `_run_real_engine` end-to-end
+(`outputs/regression_gate_probe.py`, byte-identical 10/10 vs
+worktree at `f334d6f`), but its result-field whitelist did NOT
+include `fighter1_stats` / `fighter2_stats` — so it cannot certify
+the FOTN wire specifically, only the commentary-storage block.
+**Owed-at-deploy status unchanged.** PA `server.log` grep for
+`⚠️ FOTN select_fotn failed` post-8fd4573 pull + template-render
+check for `event.fotn.excitement_tier` values above `"Excellent"`
+remains the outstanding conversion evidence.
 
 ## Certified cell baselines (symmetric skill)
 
