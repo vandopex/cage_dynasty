@@ -13587,50 +13587,25 @@ class GameBridge:
             # Use real engine or fallback
             if FIGHT_ENGINE_AVAILABLE:
                 try:
-                    fa1  = self._make_fighter_attrs(f1, f1.name, f1.fighter_id)
-                    fa2  = self._make_fighter_attrs(f2, f2.name, f2.fighter_id)
-                    _slot = fight.get("card_slot", "prelim")
-                    _rnds = 5 if (fight.get("is_title_fight") or _slot in ("main_event","co_main")) else 3
-                    # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
-                    # damage_multiplier was previously inherited from the
-                    # dataclass default (was 0.42, now 0.48). Explicit pin
-                    # holds the triple in place regardless of default.
-                    _fight_cfg = _FightConfig(
-                        scheduled_rounds=_rnds,
-                        standup_threshold=10,
-                        exchanges_per_round=55,
-                        damage_multiplier=0.48,
-                        submission_progress_to_finish=70.0,
-                        submission_escape_threshold=85.0,
-                    ) if _FightConfig else None
-                    # Wire fatigue → starting stamina for AI fights
-                    # Mirrors the player fight path — fatigue now matters
-                    # universally, not just for the player.
-                    try:
-                        _f1_fat = int(self._game_state._fighter_data.get(
-                            f1.fighter_id, {}).get('fatigue', 0))
-                        _f2_fat = int(self._game_state._fighter_data.get(
-                            f2.fighter_id, {}).get('fatigue', 0))
-                        _f1_stam = get_starting_stamina(_f1_fat)
-                        _f2_stam = get_starting_stamina(_f2_fat)
-                    except Exception:
-                        _f1_stam = _f2_stam = 100.0
-                    # GAMEPLAN-AI-SELECT1: AI-vs-AI gameplan resolution.
-                    # Symmetric to _run_real_engine — same helper. If a
-                    # player fighter appears on this card (rare cross-camp
-                    # case), their fight['gameplan'] is honored; otherwise
-                    # both sides use ai_gameplan_for_style.
-                    _pfids_cf = (
-                        {p.fighter_id for p in self._game_state.get_player_fighters()}
-                        if (self._game_state and self._game_state.player_camp_id) else set()
+                    # Pre-fight assembly extracted to _assemble_prefight for
+                    # parity with Path A and future MC odds. Same sub-methods,
+                    # same order. Path B: no cut/buffs/sponsor/style, silent.
+                    _bundle = self._assemble_prefight(
+                        fight, f1, f2, f1.name, f2.name,
+                        f1.fighter_id, f2.fighter_id,
+                        fatigue_source="fdata",
                     )
-                    _gp_f1_cf = self._resolve_gameplan(fa1, fight, _pfids_cf)
-                    _gp_f2_cf = self._resolve_gameplan(fa2, fight, _pfids_cf)
-                    # COMMENTARY-ENTRANCES1: thread card_slot + intro
-                    # dicts so the commentary emit picks the right pool.
-                    _slot_cf = str(fight.get("card_slot", "prelim") or "prelim")
-                    _intro_f1_cf = _build_intro_dict(f1)
-                    _intro_f2_cf = _build_intro_dict(f2)
+                    fa1          = _bundle["fa1"]
+                    fa2          = _bundle["fa2"]
+                    _slot_cf     = _bundle["card_slot"]
+                    _rnds        = _bundle["total_rounds"]
+                    _fight_cfg   = _bundle["config"]
+                    _f1_stam     = _bundle["starting_stamina_f1"]
+                    _f2_stam     = _bundle["starting_stamina_f2"]
+                    _gp_f1_cf    = _bundle["gameplan_f1"]
+                    _gp_f2_cf    = _bundle["gameplan_f2"]
+                    _intro_f1_cf = _bundle["intro_f1"]
+                    _intro_f2_cf = _bundle["intro_f2"]
                     _eng = _simulate_narrated_fight_fn(
                         fa1, fa2, rounds=_rnds,
                         starting_stamina_f1=_f1_stam,
@@ -16975,6 +16950,206 @@ class GameBridge:
                 if cur is not None:
                     setattr(fa, attr, min(99, int(cur + amount)))
 
+    def _assemble_prefight(
+        self,
+        fight,
+        fighter1,
+        fighter2,
+        f1_name,
+        f2_name,
+        f1_id,
+        f2_id,
+        *,
+        fatigue_source="attr",
+        apply_cut_penalty=False,
+        apply_player_buffs=False,
+        apply_sponsor_boost=False,
+        compute_style_mod=False,
+        verbose=False,
+    ):
+        """Pre-sim assembly. Callable from Path A (_run_real_engine),
+        Path B (_simulate_card_fights), and (future) MC odds. Pure
+        extraction — sub-methods and their call order preserved
+        byte-for-byte against pre-refactor inline code. Returns dict of
+        all sim inputs; caller runs sim + post-sim work."""
+        fa1 = self._make_fighter_attrs(fighter1, f1_name, f1_id)
+        fa2 = self._make_fighter_attrs(fighter2, f2_name, f2_id)
+
+        # Read pre-fight fatigue and convert to starting stamina.
+        # Tired fighters start with less stamina — their taper
+        # discipline (or lack of it) now affects fight outcomes.
+        if fatigue_source == "attr":
+            _f1_fatigue = int(getattr(fighter1, 'fatigue', 0) or 0)
+            _f2_fatigue = int(getattr(fighter2, 'fatigue', 0) or 0)
+            _f1_stamina = get_starting_stamina(_f1_fatigue) if CONDITION_AVAILABLE else 100.0
+            _f2_stamina = get_starting_stamina(_f2_fatigue) if CONDITION_AVAILABLE else 100.0
+            if verbose:
+                print(f"  💪 [STAMINA] {fighter1.name}: fatigue={_f1_fatigue} "
+                      f"→ stamina={_f1_stamina:.0f} | "
+                      f"{fighter2.name}: fatigue={_f2_fatigue} "
+                      f"→ stamina={_f2_stamina:.0f}")
+        else:
+            # fatigue_source == "fdata" — Path B read pattern
+            try:
+                _f1_fat = int(self._game_state._fighter_data.get(
+                    f1_id, {}).get('fatigue', 0))
+                _f2_fat = int(self._game_state._fighter_data.get(
+                    f2_id, {}).get('fatigue', 0))
+                _f1_stamina = get_starting_stamina(_f1_fat)
+                _f2_stamina = get_starting_stamina(_f2_fat)
+            except Exception:
+                _f1_stamina = _f2_stamina = 100.0
+
+        # Weight-cut penalty — fighters cutting below natural class
+        # take stamina hits on fight night. Scaled by age (+3%/yr after 27)
+        # and softened by cardio (high cardio offsets some of the cut tax).
+        if apply_cut_penalty:
+            _cut1 = self._get_cut_severity(f1_id)
+            _cut2 = self._get_cut_severity(f2_id)
+            if _cut1 > 0:
+                _f1_record = self._game_state.get_fighter(f1_id) if self._game_state else None
+                _age1 = getattr(_f1_record, 'age', 25) or 25
+                _cardio1 = (self._game_state._fighter_data.get(f1_id, {}).get('cardio', 65)
+                            if self._game_state else 65)
+                _age_mult1 = 1.0 + max(0, (_age1 - 27) * 0.03)
+                _stamina_pen1 = _cut1 * 12 * _age_mult1
+                _cardio_offset1 = (_cardio1 - 50) / 200
+                _stamina_pen1 = max(0, _stamina_pen1 - _cardio_offset1 * 10)
+                _f1_stamina = max(60, _f1_stamina - _stamina_pen1)
+                if verbose:
+                    print(f"  ✂️  [CUT] {fighter1.name} cut penalty: "
+                          f"-{_stamina_pen1:.1f} stamina "
+                          f"(severity={_cut1}, age={_age1})")
+            if _cut2 > 0:
+                _f2_record = self._game_state.get_fighter(f2_id) if self._game_state else None
+                _age2 = getattr(_f2_record, 'age', 25) or 25
+                _cardio2 = (self._game_state._fighter_data.get(f2_id, {}).get('cardio', 65)
+                            if self._game_state else 65)
+                _age_mult2 = 1.0 + max(0, (_age2 - 27) * 0.03)
+                _stamina_pen2 = _cut2 * 12 * _age_mult2
+                _cardio_offset2 = (_cardio2 - 50) / 200
+                _stamina_pen2 = max(0, _stamina_pen2 - _cardio_offset2 * 10)
+                _f2_stamina = max(60, _f2_stamina - _stamina_pen2)
+                if verbose:
+                    print(f"  ✂️  [CUT] {fighter2.name} cut penalty: "
+                          f"-{_stamina_pen2:.1f} stamina "
+                          f"(severity={_cut2}, age={_age2})")
+
+        # Ship K1: pre-fight coach buff for player fighter (Path α)
+        if apply_player_buffs:
+            _player_ids_k1 = {f.fighter_id for f in self.get_player_fighters()}
+            _player_is_f1 = f1_id in _player_ids_k1
+            _player_is_f2 = f2_id in _player_ids_k1
+            if _player_is_f1:
+                self._apply_corner_prefight_buff(fa1)
+                # Ship Coach-3: stack the multi-coach IQ buff
+                _iq_buff = self._apply_coach_iq_prefight_buff(fa1)
+                if _iq_buff and verbose:
+                    print(f"  🧠 [COACH IQ] {fighter1.name} +{_iq_buff['amount']} fight_iq "
+                          f"(staff best={_iq_buff['best_iq']}, tier={_iq_buff['tier']})")
+            elif _player_is_f2:
+                self._apply_corner_prefight_buff(fa2)
+                _iq_buff = self._apply_coach_iq_prefight_buff(fa2)
+                if _iq_buff and verbose:
+                    print(f"  🧠 [COACH IQ] {fighter2.name} +{_iq_buff['amount']} fight_iq "
+                          f"(staff best={_iq_buff['best_iq']}, tier={_iq_buff['tier']})")
+
+        # Ship S1: sponsor fight-night attribute boost (both fighters)
+        if apply_sponsor_boost:
+            self._apply_sponsor_boost(fa1, fighter1)
+            self._apply_sponsor_boost(fa2, fighter2)
+
+        _card_slot = str(fight.get("card_slot", "prelim") or "prelim")
+        is_title = fight.get("is_title_fight", False)
+        total_rounds = 5 if (is_title or _card_slot in ("main_event", "co_main")) else 3
+
+        # Style matchup modifier (-0.05 to +0.05) — returned for caller's
+        # POST-SIM winner-flip use (Path A's inline flip site is unchanged).
+        style_mod = 0.0
+        if compute_style_mod:
+            if STYLES_AVAILABLE:
+                try:
+                    _STYLE_STR_MAP = {
+                        "Striker":          "STRIKER",
+                        "Counter Striker":  "COUNTER_STRIKER",
+                        "Counter-Striker":  "COUNTER_STRIKER",
+                        "Pressure Fighter": "PRESSURE_FIGHTER",
+                        "Point Fighter":    "POINT_FIGHTER",
+                        "Muay Thai":        "MUAY_THAI",
+                        "Wrestler":         "WRESTLER",
+                        "Ground & Pound":   "GROUND_AND_POUND",
+                        "BJJ Specialist":   "BJJ_SPECIALIST",
+                        "Clinch Fighter":   "CLINCH_FIGHTER",
+                        "Sprawl & Brawl":   "SPRAWL_AND_BRAWL",
+                        "Balanced":         "BALANCED",
+                        "Orthodox Boxer":   "STRIKER",
+                        "Kickboxer":        "STRIKER",
+                        "Submission Artist":"BJJ_SPECIALIST",
+                        "Sambo":            "WRESTLER",
+                        "Karate":           "POINT_FIGHTER",
+                        "Brawler":          "PRESSURE_FIGHTER",
+                        "MMA Hybrid":       "BALANCED",
+                        "Boxing":           "STRIKER",
+                        "Judo":             "WRESTLER",
+                        "Grappling":        "WRESTLER",
+                        "Submissions":      "BJJ_SPECIALIST",
+                    }
+                    s1 = self._game_state._fighter_data.get(f1_id, {}).get('style', 'Balanced') if self._game_state else 'Balanced'
+                    s2 = self._game_state._fighter_data.get(f2_id, {}).get('style', 'Balanced') if self._game_state else 'Balanced'
+                    fs1 = _FightingStyleEnum(_STYLE_STR_MAP.get(s1, 'BALANCED'))
+                    fs2 = _FightingStyleEnum(_STYLE_STR_MAP.get(s2, 'BALANCED'))
+                    style_mod = get_style_matchup_modifier(fs1, fs2)
+                except Exception:
+                    pass
+
+        # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
+        _fight_cfg = _FightConfig(
+            scheduled_rounds=total_rounds,
+            standup_threshold=10,
+            exchanges_per_round=55,
+            damage_multiplier=0.48,
+            submission_progress_to_finish=70.0,
+            submission_escape_threshold=85.0,
+        ) if _FightConfig else None
+
+        # BRIDGE-WIRE-AGGR1 / GAMEPLAN-AI-SELECT1: resolve both sides'
+        # gameplans. Player reads fight['gameplan']; AI reads its own
+        # fighting_style via ai_gameplan_for_style. BALANCED-style AI
+        # collapses to None → byte-identical pre-wire on that side.
+        _player_fids_gp = (
+            {f.fighter_id for f in self._game_state.get_player_fighters()}
+            if (self._game_state and self._game_state.player_camp_id) else set()
+        )
+        _gp_f1 = self._resolve_gameplan(fa1, fight, _player_fids_gp)
+        _gp_f2 = self._resolve_gameplan(fa2, fight, _player_fids_gp)
+        if verbose and (_gp_f1 is not None or _gp_f2 is not None):
+            print(f"  🎯 [GAMEPLAN WIRE] f1={getattr(_gp_f1, 'preset_name', None)} "
+                  f"aggr={getattr(_gp_f1, 'aggression', 0)} "
+                  f"range={getattr(_gp_f1, 'range_bias', 0)} | "
+                  f"f2={getattr(_gp_f2, 'preset_name', None)} "
+                  f"aggr={getattr(_gp_f2, 'aggression', 0)} "
+                  f"range={getattr(_gp_f2, 'range_bias', 0)}")
+
+        # COMMENTARY-ENTRANCES1: card_slot + intro dicts
+        _intro_f1 = _build_intro_dict(fighter1)
+        _intro_f2 = _build_intro_dict(fighter2)
+
+        return {
+            "fa1": fa1,
+            "fa2": fa2,
+            "config": _fight_cfg,
+            "total_rounds": total_rounds,
+            "is_title_fight": is_title,
+            "card_slot": _card_slot,
+            "starting_stamina_f1": _f1_stamina,
+            "starting_stamina_f2": _f2_stamina,
+            "gameplan_f1": _gp_f1,
+            "gameplan_f2": _gp_f2,
+            "intro_f1": _intro_f1,
+            "intro_f2": _intro_f2,
+            "style_mod": style_mod,
+        }
+
     def _inject_corner_advice(
         self,
         commentary_lines: List[str],
@@ -17418,151 +17593,31 @@ class GameBridge:
         f1_id = fighter1.fighter_id
         f2_id = fighter2.fighter_id
 
-        fa1 = self._make_fighter_attrs(fighter1, f1_name, f1_id)
-        fa2 = self._make_fighter_attrs(fighter2, f2_name, f2_id)
-
-        # Read pre-fight fatigue and convert to starting stamina.
-        # Tired fighters start with less stamina — their taper
-        # discipline (or lack of it) now affects fight outcomes.
-        _f1_fatigue = int(getattr(fighter1, 'fatigue', 0) or 0)
-        _f2_fatigue = int(getattr(fighter2, 'fatigue', 0) or 0)
-        _f1_stamina = get_starting_stamina(_f1_fatigue) if CONDITION_AVAILABLE else 100.0
-        _f2_stamina = get_starting_stamina(_f2_fatigue) if CONDITION_AVAILABLE else 100.0
-        print(f"  💪 [STAMINA] {fighter1.name}: fatigue={_f1_fatigue} "
-              f"→ stamina={_f1_stamina:.0f} | "
-              f"{fighter2.name}: fatigue={_f2_fatigue} "
-              f"→ stamina={_f2_stamina:.0f}")
-
-        # Weight-cut penalty — fighters cutting below natural class
-        # take stamina hits on fight night. Scaled by age (+3%/yr after 27)
-        # and softened by cardio (high cardio offsets some of the cut tax).
-        _cut1 = self._get_cut_severity(f1_id)
-        _cut2 = self._get_cut_severity(f2_id)
-        if _cut1 > 0:
-            _f1_record = self._game_state.get_fighter(f1_id) if self._game_state else None
-            _age1 = getattr(_f1_record, 'age', 25) or 25
-            _cardio1 = (self._game_state._fighter_data.get(f1_id, {}).get('cardio', 65)
-                        if self._game_state else 65)
-            _age_mult1 = 1.0 + max(0, (_age1 - 27) * 0.03)
-            _stamina_pen1 = _cut1 * 12 * _age_mult1
-            _cardio_offset1 = (_cardio1 - 50) / 200
-            _stamina_pen1 = max(0, _stamina_pen1 - _cardio_offset1 * 10)
-            _f1_stamina = max(60, _f1_stamina - _stamina_pen1)
-            print(f"  ✂️  [CUT] {fighter1.name} cut penalty: "
-                  f"-{_stamina_pen1:.1f} stamina "
-                  f"(severity={_cut1}, age={_age1})")
-        if _cut2 > 0:
-            _f2_record = self._game_state.get_fighter(f2_id) if self._game_state else None
-            _age2 = getattr(_f2_record, 'age', 25) or 25
-            _cardio2 = (self._game_state._fighter_data.get(f2_id, {}).get('cardio', 65)
-                        if self._game_state else 65)
-            _age_mult2 = 1.0 + max(0, (_age2 - 27) * 0.03)
-            _stamina_pen2 = _cut2 * 12 * _age_mult2
-            _cardio_offset2 = (_cardio2 - 50) / 200
-            _stamina_pen2 = max(0, _stamina_pen2 - _cardio_offset2 * 10)
-            _f2_stamina = max(60, _f2_stamina - _stamina_pen2)
-            print(f"  ✂️  [CUT] {fighter2.name} cut penalty: "
-                  f"-{_stamina_pen2:.1f} stamina "
-                  f"(severity={_cut2}, age={_age2})")
-
-        # Ship K1: pre-fight coach buff for player fighter (Path α)
-        _player_ids_k1 = {f.fighter_id for f in self.get_player_fighters()}
-        _player_is_f1 = f1_id in _player_ids_k1
-        _player_is_f2 = f2_id in _player_ids_k1
-        if _player_is_f1:
-            self._apply_corner_prefight_buff(fa1)
-            # Ship Coach-3: stack the multi-coach IQ buff
-            _iq_buff = self._apply_coach_iq_prefight_buff(fa1)
-            if _iq_buff:
-                print(f"  🧠 [COACH IQ] {fighter1.name} +{_iq_buff['amount']} fight_iq "
-                      f"(staff best={_iq_buff['best_iq']}, tier={_iq_buff['tier']})")
-        elif _player_is_f2:
-            self._apply_corner_prefight_buff(fa2)
-            _iq_buff = self._apply_coach_iq_prefight_buff(fa2)
-            if _iq_buff:
-                print(f"  🧠 [COACH IQ] {fighter2.name} +{_iq_buff['amount']} fight_iq "
-                      f"(staff best={_iq_buff['best_iq']}, tier={_iq_buff['tier']})")
-
-        # Ship S1: sponsor fight-night attribute boost (both fighters)
-        self._apply_sponsor_boost(fa1, fighter1)
-        self._apply_sponsor_boost(fa2, fighter2)
-
-        is_title = fight.get("is_title_fight", False)
-        is_main  = fight.get("card_slot") in ("main_event", "co_main")
-        total_rounds = 5 if (is_title or fight.get("card_slot") == "main_event" or fight.get("card_slot") == "co_main") else 3
-
-        # Style matchup modifier (-0.05 to +0.05)
-        style_mod = 0.0
-        if STYLES_AVAILABLE:
-            try:
-                _STYLE_STR_MAP = {
-                    "Striker":          "STRIKER",
-                    "Counter Striker":  "COUNTER_STRIKER",
-                    "Counter-Striker":  "COUNTER_STRIKER",
-                    "Pressure Fighter": "PRESSURE_FIGHTER",
-                    "Point Fighter":    "POINT_FIGHTER",
-                    "Muay Thai":        "MUAY_THAI",
-                    "Wrestler":         "WRESTLER",
-                    "Ground & Pound":   "GROUND_AND_POUND",
-                    "BJJ Specialist":   "BJJ_SPECIALIST",
-                    "Clinch Fighter":   "CLINCH_FIGHTER",
-                    "Sprawl & Brawl":   "SPRAWL_AND_BRAWL",
-                    "Balanced":         "BALANCED",
-                    "Orthodox Boxer":   "STRIKER",
-                    "Kickboxer":        "STRIKER",
-                    "Submission Artist":"BJJ_SPECIALIST",
-                    "Sambo":            "WRESTLER",
-                    "Karate":           "POINT_FIGHTER",
-                    "Brawler":          "PRESSURE_FIGHTER",
-                    "MMA Hybrid":       "BALANCED",
-                    "Boxing":           "STRIKER",
-                    "Judo":             "WRESTLER",
-                    "Grappling":        "WRESTLER",
-                    "Submissions":      "BJJ_SPECIALIST",
-                }
-                s1 = self._game_state._fighter_data.get(f1_id, {}).get('style', 'Balanced') if self._game_state else 'Balanced'
-                s2 = self._game_state._fighter_data.get(f2_id, {}).get('style', 'Balanced') if self._game_state else 'Balanced'
-                fs1 = _FightingStyleEnum(_STYLE_STR_MAP.get(s1, 'BALANCED'))
-                fs2 = _FightingStyleEnum(_STYLE_STR_MAP.get(s2, 'BALANCED'))
-                style_mod = get_style_matchup_modifier(fs1, fs2)
-            except Exception:
-                pass
-
-        # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
-        # damage_multiplier was previously inherited from the dataclass
-        # default (was 0.42, now 0.48). Explicit pin holds the triple.
-        _fight_cfg = _FightConfig(
-            scheduled_rounds=total_rounds,
-            standup_threshold=10,
-            exchanges_per_round=55,
-            damage_multiplier=0.48,
-            submission_progress_to_finish=70.0,
-            submission_escape_threshold=85.0,
-        ) if _FightConfig else None
-
-        # BRIDGE-WIRE-AGGR1 / GAMEPLAN-AI-SELECT1: resolve both sides'
-        # gameplans. Player reads fight['gameplan']; AI reads its own
-        # fighting_style via ai_gameplan_for_style. BALANCED-style AI
-        # collapses to None → byte-identical pre-wire on that side.
-        _player_fids_gp = (
-            {f.fighter_id for f in self._game_state.get_player_fighters()}
-            if (self._game_state and self._game_state.player_camp_id) else set()
+        # Pre-fight assembly extracted to _assemble_prefight for parity with
+        # Path B and future MC odds. Same sub-methods, same order.
+        _bundle = self._assemble_prefight(
+            fight, fighter1, fighter2, f1_name, f2_name, f1_id, f2_id,
+            fatigue_source="attr",
+            apply_cut_penalty=True,
+            apply_player_buffs=True,
+            apply_sponsor_boost=True,
+            compute_style_mod=True,
+            verbose=True,
         )
-        _gp_f1 = self._resolve_gameplan(fa1, fight, _player_fids_gp)
-        _gp_f2 = self._resolve_gameplan(fa2, fight, _player_fids_gp)
-        if _gp_f1 is not None or _gp_f2 is not None:
-            print(f"  🎯 [GAMEPLAN WIRE] f1={getattr(_gp_f1, 'preset_name', None)} "
-                  f"aggr={getattr(_gp_f1, 'aggression', 0)} "
-                  f"range={getattr(_gp_f1, 'range_bias', 0)} | "
-                  f"f2={getattr(_gp_f2, 'preset_name', None)} "
-                  f"aggr={getattr(_gp_f2, 'aggression', 0)} "
-                  f"range={getattr(_gp_f2, 'range_bias', 0)}")
-
-        # COMMENTARY-ENTRANCES1: card_slot + intro dicts for the
-        # watched fight — this is where the player sees the fight-open.
-        _slot_re = str(fight.get("card_slot", "prelim") or "prelim")
-        _intro_f1_re = _build_intro_dict(fighter1)
-        _intro_f2_re = _build_intro_dict(fighter2)
+        fa1          = _bundle["fa1"]
+        fa2          = _bundle["fa2"]
+        _f1_stamina  = _bundle["starting_stamina_f1"]
+        _f2_stamina  = _bundle["starting_stamina_f2"]
+        _gp_f1       = _bundle["gameplan_f1"]
+        _gp_f2       = _bundle["gameplan_f2"]
+        _slot_re     = _bundle["card_slot"]
+        _intro_f1_re = _bundle["intro_f1"]
+        _intro_f2_re = _bundle["intro_f2"]
+        _fight_cfg   = _bundle["config"]
+        total_rounds = _bundle["total_rounds"]
+        is_title     = _bundle["is_title_fight"]
+        is_main      = _slot_re in ("main_event", "co_main")
+        style_mod    = _bundle["style_mod"]
 
         eng_result: _NarratedFightResult = _simulate_narrated_fight_fn(
             fa1, fa2,
