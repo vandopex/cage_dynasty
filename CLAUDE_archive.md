@@ -245,3 +245,674 @@ Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron
 
 **Fixed in `8fd4573`:** 3 attach sites (2 keys each) + 2 scorer-alias edits + 1 except-log edit = 6 edits, +22/-3 across 2 files (`cage_dynasty_web/game_bridge.py`, `systems/fotn.py`).
 
+
+---
+
+# Archived from CLAUDE.md by ARCHIVE-SPLIT PHASE 2 (2026-08-15)
+
+Seven sections MOVE-EXTRACTED from CLAUDE.md at HEAD `86f5d30`. Each
+full section body appears below byte-identical; the live CLAUDE.md
+retains a per-section EXTRACT containing the load-bearing rules and
+gates.
+
+
+---
+
+## PHASE 2 SECTION 1 (2026-08-15) — ## Recurring architectural pattern: "data exists but doesn't reach the surface"
+
+Byte-identical relocation. Original content follows.
+
+## Recurring architectural pattern: "data exists but doesn't reach the surface"
+
+Seven project instances. Recurring lesson: data integrity is necessary
+but not sufficient — each rendering surface and persistence layer
+needs intentional reading. When a system iterates a dict, audit
+every code path that writes to that dict.
+
+| Ship | Layer | Pattern direction |
+|---|---|---|
+| #29 (5272ef4) | Persistence | Belt history → wired save/load |
+| C (bf448b1)   | Persistence | Event numbering → read from initializer |
+| #32 (bfe68e5) | Persistence | Fighter attributes → wired world-gen population |
+| #35 (e3eb35a) | UI          | Injury state → wired template read |
+| B (411b265)   | State       | Starter contract → wired the missing writer (inverse) |
+| A (9709f16)   | State + UI  | Training data → new persistence layer + dashboard |
+| C2 (0139e11)  | State + economy | Coach salary → wired to economy + new contract layer |
+
+
+---
+
+## PHASE 2 SECTION 2 (2026-08-15) — ## Fossils — comments that outlived the code they describe
+
+Byte-identical relocation. Original content follows.
+
+## Fossils — comments that outlived the code they describe
+
+Historical preservation of documentation that was measurably wrong at
+the moment it was deleted. Kept here to remind future readers that
+comment blocks age worse than code — the code gets tuned, the comment
+does not — and to make the shape of that decay visible.
+
+### `FI_DAMAGE_MULTIPLIER` justification block (deleted 2026-07-12 by Stage 0d)
+
+Sat above `fight_integration.py:83` for ~8 weeks. Verbatim:
+
+```
+# fight_integration runs a longer commentary exchange loop than fight_engine.simulate_fight
+# so the effective damage per fight is higher — this multiplier is tuned separately
+# to produce realistic finish rates (50-55% target) for the narrated fight path.
+# Ship A two-iteration tune (2026-05-09):
+#   0.32 (Saturday play: 11% finish rate, broken)
+#   → 0.38 (Tier 2 verified: 70% across DFC 16-18, over-corrected)
+#   → 0.36 (final, lands in 50-55% target)
+# Synthetic-vs-production gap: synthetic n=300 batches predicted finish rates
+# ~20-30 points below production reality at the same multiplier. Production
+# may have damage-amplifying factors (gameplan, condition, fighter attrs from
+# real game_state) that the random-Gaussian synthetic doesn't capture. Future
+# tuning should weight production observations over synthetic.
+FI_DAMAGE_MULTIPLIER = 0.48
+```
+
+**Two things were false at the time it was deleted, both load-bearing
+for the arc that consumed it:**
+
+1. **The value it justifies is not the value in the code.** Comment
+   documents an "Ship A two-iteration tune" landing at `0.36`. The
+   code below it says `0.48`. The delta was tuned later by `d666e24`
+   (2026-06-15, "Tune: raise FI_DAMAGE_MULTIPLIER — restore finish
+   rates after stamina tuning") and the justification block was never
+   updated. For eight weeks the file read as if 0.36 were the tuned
+   answer.
+
+2. **The premise it argues from was measured false.** *"runs a
+   longer commentary exchange loop than fight_engine.simulate_fight"*
+   was the entire justification for a separate multiplier. Stage 0b
+   check C2 measured both engines at exactly 55 exchanges per round
+   × 3 rounds = 165 total. Same loop length. The 0.48-vs-0.42 gap
+   was naked drift, not compensation for a real loop-length
+   difference — measured at `outputs/two_engine_0b_close.md` §C2.
+
+**Why it survived**: nobody looked at it as the tuning arc landed the
+next value. Comment blocks describing "why we tuned to X" become
+invisible the moment the code says Y — they read as historical
+context, and historical context doesn't get audited during a tune.
+
+**Lesson for future comments justifying constants**: if the number in
+the code moves, the comment moves with it or the comment gets
+deleted. A justification block that outlives its value is not a
+docstring, it's a fossil.
+
+
+---
+
+## PHASE 2 SECTION 3 (2026-08-15) — ## Key constants (don't change without telling me)
+
+Byte-identical relocation. Original content follows.
+
+## Key constants (don't change without telling me)
+
+**Damage multipliers — CORRECTED 2026-07-11 by TWO-ENGINE-CONSOLIDATION-DIAG1.**
+Prior claim "0.48 × 0.24 = 0.1152 effective per-strike scale" was
+FICTION — `fight_integration` never reads `config.damage_multiplier`
+(grep confirmed: zero call sites). The 0.24 the bridge passes at three
+`_FightConfig(...)` sites is a **DEAD KNOB**.
+
+**Pre-gen and live-play are TWO DIFFERENT SIMULATORS**, not one engine
+with two configs. Each has its own damage scale:
+
+- **Live-play** (`fight_integration.simulate_narrated_fight`) — per-strike
+  scale = `FI_DAMAGE_MULTIPLIER = 0.48` (module const at
+  `fight_integration.py:82`, applied at `:832`). ONLY damage scale in this
+  path.
+- **Pre-gen** (`fight_engine.simulate_fight` called by `world_init`) —
+  per-strike scale = `config.damage_multiplier = 0.42` (default from
+  `FightConfig.standard_fight()`, applied at `fight_engine.py:3199`).
+  ONLY damage scale in this path.
+- Rivalry heat compounds ONLY on pre-gen path — `fight_engine.py:3915`
+  `replace(config, damage_multiplier=... * heat_damage_mult)`. Live-play
+  reads no heat multiplier (`fight_integration` never reads `heat_level`
+  either).
+
+**Dead knobs (do NOT tune these, they don't do anything):**
+- `game_bridge.py:{13540, 14061, 18001}` `damage_multiplier = 0.24`
+  passed to `_FightConfig(...)` — read by no live-play code path.
+- `fight_engine.py:415` `DAMAGE_MULTIPLIER = 0.55` — imported at
+  `fight_integration.py:44`, never read.
+- `FightConfig.doctor_check_cut_threshold = 2` at `fight_engine.py:771` —
+  neither engine reads it. Cut stoppage threshold is hardcoded at
+  `cuts >= 3` in both `fight_engine.py:4000` and `fight_integration.py:1717`.
+- `defender_state.damage.cuts` in `fight_integration`. The value is READ
+  at :1717 but no code path WRITES it (cut accumulation exists only at
+  `fight_engine.py:3234` inside `simulate_fight`). Live-play cut
+  stoppages are structurally impossible until this is either wired up
+  or the check is removed.
+
+**⚠️ SUPERSEDING CORRECTION — 2026-07-20, falsifying the 2026-07-11
+correction above.** Three specific claims in the block above were true
+at the time of writing but were FALSIFIED by STAGE 0d (`ba8cece`,
+2026-07-12). The block above is preserved as documented-was-false-
+as-of-STAGE-0d; new truth follows, sourced to code bytes at HEAD:
+
+- **:1283 FALSE at HEAD** — the claim "`fight_integration` never reads
+  `config.damage_multiplier` (grep confirmed: zero call sites)" is
+  falsified: `config.damage_multiplier` is read live in the
+  strike-damage multiplication inside `_execute_strike` (currently
+  `fight_integration.py:867`): `damage = damage * self.config.damage_multiplier`.
+  The comment block immediately above the read (currently
+  `fight_integration.py:860–866`) states literally "STAGE 0d — read
+  damage_multiplier from config, not from a module const" — the
+  source-of-value moved from a module const to the config field, per
+  that comment.
+- **:1291 FALSE at HEAD** — the claim "`FI_DAMAGE_MULTIPLIER = 0.48`
+  (module const at `fight_integration.py:82`, applied at `:832`)" is
+  falsified: the `FI_DAMAGE_MULTIPLIER` module const was DELETED. Fossil
+  comment marking the deletion (currently `fight_integration.py:75`)
+  reads literally "STAGE 0d (2026-07-12) — FI_DAMAGE_MULTIPLIER module
+  const DELETED." No live `FI_DAMAGE_MULTIPLIER = X` assignment exists
+  in `fight_integration.py` or `fight_engine.py` at HEAD (remaining
+  hits are historical comments). Only local-scope fallback assignments
+  remain, in `game_bridge.py` (currently `:210`, `:212`, `:269`).
+- **:1305 FALSE at HEAD** — the claim "`damage_multiplier = 0.24`
+  passed to `_FightConfig(...)` — read by no live-play code path" is
+  doubly falsified. (a) `self.config.damage_multiplier` IS read live in
+  the strike-damage path (currently `fight_integration.py:867`). (b)
+  The atomic-config-invariant contract is enforced at fight-start by
+  `_assert_sanctioned_config`, which checks the WHOLE
+  `(exchanges_per_round, damage_multiplier, standup_threshold)` triple
+  against `_SANCTIONED_TRIPLES` — the three sanctioned triples
+  (`_TRIPLE_LIVE_PLAY = (55, 0.48, 10)`, `_TRIPLE_PRE_GEN_LEGACY =
+  (55, 0.42, 6)`, `_TRIPLE_FI_FALLBACK = (55, 0.48, 6)`, currently
+  `fight_engine.py:853–855`) contain no `damage_multiplier` value of
+  0.24. Passing 0.24 in a `FightConfig` produces a triple not in
+  `_SANCTIONED_TRIPLES`; `_assert_sanctioned_config` (called at
+  fight-start, currently `fight_engine.py:3931`) raises
+  `AssertionError`. 0.24 is rejected, not silently ignored.
+
+**Truth at HEAD:** live-play per-strike damage scale is
+`self.config.damage_multiplier`, read live in the strike-damage path
+(currently `fight_integration.py:867`). The `FightConfig.damage_multiplier`
+dataclass field defaults to `0.48` (currently `fight_engine.py:798`).
+The value the config carries is pinned by the atomic-config-invariant
+contract via `_SANCTIONED_TRIPLES` (currently `fight_engine.py:853–859`)
+to one of `{0.42, 0.48}`. `_TRIPLE_LIVE_PLAY = (55, 0.48, 10)` is
+annotated as "the surviving contract" in the `_SANCTIONED_TRIPLES` set
+(currently `fight_engine.py:857`). The 0.48 value survives 0d by design
+— the read site's own comment (currently `fight_integration.py:866`)
+states "Byte-identical to the pre-0d FI_DAMAGE_MULTIPLIER=0.48." Every
+line reference above is tagged "currently" because line numbers drift;
+the identity of each fact is its symbol (`config.damage_multiplier`,
+`FI_DAMAGE_MULTIPLIER`, `_SANCTIONED_TRIPLES`, `_assert_sanctioned_config`,
+`_TRIPLE_LIVE_PLAY`, `FightConfig.damage_multiplier`).
+
+**Correcting a prior claim**: earlier CLAUDE.md revisions and session
+notes asserted that PREGEN-FULL-ENGINE-FIX1 (`e6e295e`, 2026-07-11;
+previously cited `efaf7f6` (which is GAMEPLAN-AI-SELECT1) in error)
+made pre-gen and live-play "share one engine." That is wrong. What
+that ship did was route pre-gen away from `simulate_fight_simple`
+(coin-flip fallback) into `fight_engine.simulate_fight`. Live-play was
+already running `fight_integration.simulate_narrated_fight` — a parallel
+implementation that shares only submission math and primitive helpers
+with `fight_engine`. See `outputs/two_engine_consolidation_diag1.md` for
+the full structural audit and consolidation direction.
+
+**Empirical divergence**: on the same fighters, same seeds, 400-fight
+probes (FINISH-DISTRIBUTION-DIAG1):
+- Striker-vs-striker: pre-gen 26% finish rate vs live-play **98%**
+- Balanced-vs-balanced: pre-gen 17% vs live-play 56%
+- Within-TKO cut share: pre-gen 68-100% vs live-play 0%
+
+**⚠️ CORRECTION 2026-07-14 — STAGE 1 OUTCOME MATRIX (10-seed pooled,
+N=782 per side, uuid-patched deterministic worlds).** The three
+FINISH-DISTRIBUTION-DIAG1 numbers above **predate the uuid finding**
+(DOCS-SEED-NONDETERMINISM1, 2026-07-13) and were measured on
+unreproducible worlds — every "same seed" was actually a differently-
+shuffled fighter population. Re-measured this arc's headlines on
+matched fighters, matched seeds:
+
+| Headline claim | STAGE 1 measurement (pooled 10 seeds) | Verdict |
+|---|---|---|
+| striker-v-striker 26% pre-gen / 98% live-play | **42.2% pre-gen / 81.0% live-play** (N=147) — Δ +38.8pp | **FALSE**. Real gap, magnitude exaggerated. |
+| within-TKO cut share pre-gen 68-100% vs live-play 0% | live-play 0% CONFIRMED (grep verified: `ENGINE-DEAD-KNOBS1` comment at `fight_integration.py:~1770` says cut-stoppage branch was unreachable and was REMOVED — live-play has **no cut mechanism at all**). Pre-gen cut share not re-measured (needs specialty_method break-out per-seed; queued). | **PARTIAL** — live side confirmed structurally. Pre-gen number not re-verified but base claim (asymmetry) survives. |
+| 82% of pre-gen TKOs are doctor stoppages (referenced elsewhere in arc scoping) | Denominator error on original: **6 total TKOs in seed=42 N=78** made the 82% meaningless. Pooled 10-seed pre-gen has TKO_DOCTOR+TKO_DOCTOR_CUT = 8.7% of all fights, TKO_STRIKES = 3.5% — but the two engines' doctor stoppages are apples-to-oranges (see above). | **FALSE as scoping input**. |
+| 2% submissions | live-play 3.7% pool / pre-gen 5.8% pool. Single-seed detail: 2.4% live / 3.0% pre-gen. Sub attempts 4-8× conversions. | **CONFIRMED direction**. |
+
+**What survives and matters:**
+
+- **Aggregate live vs pre-gen finish rate: 76.9% vs 35.4% pooled (Δ +41.4pp on N=782 per side).** The arc's core divergence is real and larger in aggregate than the individual headline cells suggested.
+- **The largest per-method divergence is TKO-strikes**: live 26.1% vs pre-gen 3.5% (Δ +22.6pp pool). Pre-gen essentially never produces a strike TKO. This is the specific mechanic gap the consolidation arc has to close.
+- **The same-family-vs-cross-family asymmetry hypothesis is DISPROVED across worlds**: seed=42 showed SxS/GxG ~50pp vs SxG ~19pp, but pooled 10-seed shows SxS +38.8pp / GxG +41.2pp / SxG +43.9pp — nearly uniform ~40pp across matchup types. The seed=42 pattern was a single-world artifact.
+- **Every specific number in the arc's scoping is now suspect** because they predate the uuid finding. Direction survives; magnitudes need re-measurement against the ORACLE-BRIDGE1 fixture and pooled multi-seed.
+
+Full multi-seed data: `outputs/oracle_bridge/stage1_multiseed_result.txt`. Per-seed
+matrix from `outputs/oracle_bridge/stage1_multiseed_matrix.py`.
+Single-seed matrix from `outputs/oracle_bridge/stage1_outcome_matrix.py`.
+
+**Rule going forward: no arc scoping number gets quoted without an
+N and a seed count.** Direction claims fine; exact percentages need
+provenance.
+
+
+---
+
+## PHASE 2 SECTION 4 (2026-08-15) — ### STAGE 1 addendum — random-coupling hazard (STAGE1-PARITY1, 2026-07-14)
+
+Byte-identical relocation. Original content follows.
+
+### STAGE 1 addendum — random-coupling hazard (STAGE1-PARITY1, 2026-07-14)
+
+The follow-up first-divergence and parity traces produced a finding
+that changes how Stage 2a has to think about byte-equivalence.
+
+**Random-consumption divergence between FE and FI is bigger than one
+line.** `fight_integration.py:494` (`self.commentary.rng.seed(random.
+getrandbits(64))`) was the obvious candidate: FI burns one main-random
+draw at fight-init that FE does not. The comment above :494 says
+"advances by exactly 1 per fight, always, so commentary-on vs
+commentary-off produce byte-identical fight outcomes under the same
+top-level seed." That comment is **correct within FI** — it does not
+address FE-vs-FI compatibility, and reading it as covering the full
+coupling story would be a mistake.
+
+**Measured coupling as of 2026-07-14 [grep + measurement]:**
+- `:494` — `random.getrandbits(64)` for commentary rng seed (1 draw)
+- `:640` — `random.randint(-10, 10)` for fighter1 initiative
+- `:641` — `random.randint(-10, 10)` for fighter2 initiative
+- **At least three lines**, probably more. Alignment attempts (+1 draw,
+  +3 draw) both failed to align the primitive-call traces on 12/12
+  DEC-vs-DEC fights. Two of those fights show a **different fighter
+  selected first** — same seed, not just different action — which is
+  either structural (initial-actor logic differs) or evidence of
+  additional random-consumption divergence beyond the three grep-named
+  sites.
+
+**The offset-vs-mechanic decomposition of the 41pp gap is NOT
+obtainable before Stage 2a.** No amount of harness alignment can
+match the two engines' random-consumption orders while they remain
+two engines. **Only the structural relocation — one loop, one RNG-
+consumption order, by construction — makes the decomposition question
+answerable.** Do not scope Stage 2a's success criteria against any
+"residual after alignment" number; those numbers are all measured
+under alignment attempts that don't align.
+
+[SUPERSEDED — true when filed; the decomposition was subsequently obtained. See ### STAGE 2a addendum — config vs engine, measured 2x2 [filed 2026-07-26] and ### Framing correction 2026-08-01.]
+
+**What Stage 2a MUST resolve alongside the accumulator port:**
+1. Consolidate the RNG-consumption order. FI's :494/:640/:641 (and
+   whatever else surfaces during the port) become one deterministic
+   sequence when the loops merge, or byte-equivalence with pre-gen
+   remains structurally impossible even after every mechanic ports
+   cleanly.
+2. Reconcile the initial-actor selection. Whether it's random-order
+   coincidence or a real logic difference between engines needs to
+   be answered when the code is in one place.
+
+**What survives regardless of alignment attempt [measurement, offset-
+invariant across N=0/+1/+3 draws]:**
+- **TKO-strikes gap holds at 22-27pp.** Real mechanic, not phase noise.
+
+  **⚠️ PREVIOUSLY STATED: four FI-only accumulator paths at
+  `fight_integration.py:974/1016/1033/1052` are the confirmed source
+  and FE has no equivalent — FALSE.** Corrected 2026-07-14 by the
+  Stage 2a read-only diagnostic. Actual code-level split of those four
+  gates (grep-verified against HEAD, both files):
+
+  | gate | FI location | FE equivalent | FE numerical relation |
+  |---|---|---|---|
+  | `_clinch_body_acc` | `:958-980` | **none** (0 refs in fight_engine.py) | genuinely FI-only |
+  | `_gnp_accumulation` | `:1005-1022` | **none** (0 refs in fight_engine.py) | genuinely FI-only |
+  | leg-TKO on `leg_kicks_absorbed` | `:1024-1037` | `fight_engine.py:3303-3323` | **byte-identical** logic — field is FE-native at `:474`; both blocks share `min(0.15, (absorbed - 6) * 0.02)` + `*1.4` if stamina<50 |
+  | rocked-shots ref stoppage | `_rocked_shots` at `:1042-1055`, cap `min(0.22, N*0.05)`, mult `1 - iq/250 - heart/350 - composure/400` | `_rocked_shots_taken` at `fight_engine.py:3406-3413`, cap `min(0.35, N*0.08)`, mult `1 - iq/250 - heart/350` | **FE gate is STRONGER** on every axis: faster increment (0.08 vs 0.05), higher cap (0.35 vs 0.22), no composure protection |
+
+  **Two are genuinely FI-only. One is FE-native and byte-identical.
+  One is present in FE with different, stronger constants.**
+
+  **Counterintuitive consequence flagged explicitly:** FE's rocked-
+  shots gate, *if it fires*, is stronger than FI's — cap 0.35 vs
+  0.22, faster ramp, no composure discount. It therefore cannot be
+  a source of FE's finish-rate deficit relative to FI. Leg-TKO being
+  byte-identical explains none of the gap either. **The code-level
+  attribution of the TKO-strikes gap narrows to `_clinch_body_acc`
+  and `_gnp_accumulation` — pending a firing measurement.** Do NOT
+  read this as "clinch-body + gnp are the confirmed cause": whether
+  FE's leg-TKO and rocked-shots gates actually fire in pre-gen (or
+  are present-but-dormant) is unmeasured. Firing frequency is what
+  closes the attribution; a code presence check does not.
+
+  **Named trace item** (queued, requires the two-step allowlist
+  widening at `fight_engine.py:863`'s `_assert_sanctioned_config`):
+  do FE's `leg-TKO` and `_rocked_shots_taken` ref-stoppage gates
+  actually fire in pre-gen production, or are they dormant paths that
+  never trigger on the fighter/damage distributions world_init
+  produces? Answering this is what would confirm or deny the narrowed
+  attribution above.
+- **Style windows FE lacks** (`_counter_window` at
+  `fight_integration.py:787-937`, `_movement_window` nearby) — flagged
+  but not individually quantified. Port scope includes these.
+
+**Do NOT run a deeper draw-by-draw coupling audit.** That's the rabbit
+hole — match three consumers, find a fourth, match four, find a fifth.
+The port itself resolves the coupling by unification. Filing the
+sizing here so the next diagnostic doesn't try to enumerate its way to
+byte-equivalence from outside.
+
+Full record: commits `c208041` (first-divergence trace + heat probe)
+and STAGE1-PARITY1 (parity trace). Data: `outputs/oracle_bridge/
+first_divergence_trace.py`, `random_parity_trace.py`,
+`heat_magnitude_probe.py`.
+
+
+---
+
+## PHASE 2 SECTION 5 (2026-08-15) — ### STAGE 1 addendum — config-lever measurement [filed 2026-07-14]
+
+Byte-identical relocation. Original content follows.
+
+### STAGE 1 addendum — config-lever measurement [filed 2026-07-14]
+
+The two config dials that differ between pre-gen and live-play
+(`damage_multiplier` 0.42 vs 0.48, `standup_threshold` 6 vs 10) close
+**53% of the known finish-rate gap by themselves.** This measurement
+narrows the STAGE 1 addendum above — it does not falsify it. The
+mechanics it named (TKO-strikes gap, two genuinely-FI-only accumulators,
+style windows FE lacks) are still real. They are a smaller share of the
+41.4pp aggregate than the framing implies, and the surviving residual
+after both dials is a mix with no further pre-port lever available to
+narrow it (see (e) — the increment-rate candidate proved structural).
+
+[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The known finish-rate gap" = Stage 1 pooled 10-seed world_init (+41.4pp).]
+
+**Measurement — ORACLE-BRIDGE1 fixture, 78 matched fighter pairs, matched
+seeds (1000 + fight_index):**
+
+| config | triple | finish rate |
+|---|---|---:|
+| baseline (pre-gen) | (55, 0.42, 6) `_TRIPLE_PRE_GEN_LEGACY` | 37.2% |
+| damage-only matched | (55, 0.48, 6) `_TRIPLE_FI_FALLBACK` | 57.7% |
+| standup-only matched | (55, 0.42, 10) **widened in-memory, reverted post-run** | 46.2% |
+| both dials matched (LIVE_PLAY) | (55, 0.48, 10) `_TRIPLE_LIVE_PLAY` | 59.0% |
+
+- **Baseline → LIVE_PLAY = +21.8pp of finish rate.** Against the Stage 1
+  pooled 10-seed gap of **+41.4pp** (live 76.9% vs pre-gen 35.4%), this
+  is **53% of the arc's known aggregate gap, config drift alone.**
+  [POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The arc's known aggregate gap" = Stage 1 pooled 10-seed world_init.]
+
+**Interaction term, as measured fact:**
+
+- Damage-alone closed **+20.5pp** (37.2% → 57.7%).
+- Standup-alone Ledger A (finish-rate only) closed **+9.0pp** (37.2%
+  → 46.2%).
+- **Additive estimate: +29.5pp.** Measured combined: **+21.8pp.**
+- **Interaction term: −7.7pp.** The two dials interact negatively —
+  they overlap rather than add. Additive estimate overstates the
+  two-dial closure by ~35%. This is why the combined triple was
+  measured directly rather than estimated from single-lever runs.
+
+**Standup caveat — carried from the filed mechanism finding:** the
+standup contribution above is Ledger A only (net finish-rate movement),
+per `### standup_threshold observed effect is not referee-standup
+frequency [filed 2026-07-14]`. The Phase 1 discrimination probe surfaced
+24 winner-flip / method-change-within-class fights that the standup dial
+also moves — this churn is real observed behavior but does NOT count
+toward gap closure and is explicitly excluded from the +9.0pp above. Do
+not sum Ledger A and Ledger B when quoting standup's effect.
+
+**Surviving residual — unseparated mix, NOT "the size of the surgery":**
+
+- **+19.6pp** survives after both dials are matched (41.4pp known aggregate
+  − 21.8pp measured combined).
+  [POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "41.4pp known aggregate" = Stage 1 pooled 10-seed world_init.]
+- **This residual is a mix** of at least: (a) the two genuinely-FI-only
+  accumulators `_clinch_body_acc` (`fight_integration.py:958-980`) and
+  `_gnp_accumulation` (`:1005-1022`); (b) style windows FE lacks
+  (`_counter_window`, `_movement_window`, `_surge_exchanges`); (c)
+  input-distribution differences between `world_init` and the Path A
+  fixture population, which no engine change resolves; (d) the
+  rocked-shots numerical difference (FE cap 0.35 vs FI cap 0.22, per the
+  STAGE 1 addendum table); (e) **the divergent standup-gate counter —
+  a STRUCTURAL difference (the initial finding's "config lever"
+  classification was wrong): FE counts consecutive
+  ground exchanges (uniform +1, no activity check) at
+  `fight_engine.py:3693-3702`; FI counts exchanges since last meaningful
+  ground action (reset-on-activity, +0.25 dominant / +2 non-dominant
+  otherwise) at `fight_integration.py:1691-1739`. Two different
+  measurements feeding the same threshold, not a rate that can be
+  matched. Adopting FI's rule requires an activity signal FE does not
+  compute — multi-site signal wiring at ~5 mechanics FE has but does
+  not instrument (FI's set-sites at :685/:689/:748/:1181/:1320/:1430/
+  :1454). That is Stage 2a port surface, not a pre-port config override.
+  Verdict from the increment-rate scoping pass (read-only, session
+  2026-07-14): entangled with the mechanic port, resolvable only by
+  unification. The residual contribution is real; the classification
+  as a "possibly-cheap lever" was wrong.**
+- **The +19.6pp residual is the Stage 2a-relevant target with no
+  further pre-port narrowing available.** The scoping pass on (e)
+  proved no separable pre-port lever exists at this vein — the
+  increment-rate difference is structural and part of the port surface,
+  not a config match that could be measured first. Do not read +19.6pp
+  as the size of Stage 2a's port either: it is a MIX (components a-e
+  above), and (c) input-distribution differences cannot be resolved by
+  any engine change. The bound holds; further-narrowing before the
+  port does not.
+
+**Framing correction — proportion, not falsification.** The arc has
+been scoping the full ~41pp as substantially a mechanics problem.
+Measured, **~53% was config drift** (two dials that were already sanctioned
+in `_SANCTIONED_TRIPLES` at `fight_engine.py:853-860`, differing only in
+which triple each engine happens to construct). The increment-rate candidate
+initially treated as an additional pre-port lever proved structural on
+scoping (see (e)), so no further pre-port lever narrows the residual before
+Stage 2a. The mechanics the STAGE 1 addendum
+named — the TKO-strikes gap, the two FI-only accumulators, the style
+windows — are still real contributors to the residual. Their share of
+the 41.4pp aggregate is smaller than the earlier framing implied, not
+zero.
+
+[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The full ~41pp" = Stage 1 pooled 10-seed world_init, not a production quantity.]
+
+**Data provenance:** two untracked probe scripts in `outputs/oracle_
+bridge/`:
+- `damage_lever_probe.py` — 37.2% → 57.7% at damage 0.42→0.48, standup
+  held at 6, both triples sanctioned, no widening.
+- `standup_lever_probe_phase2.py` — three configs at (55,0.42,6),
+  (55,0.42,10), (55,0.48,10). Middle triple required in-memory widening
+  of `_SANCTIONED_TRIPLES`; widening was reverted post-run and
+  fight_engine.py bytes verified unchanged. Stage 0c golden master
+  (928/928) and ORACLE-BRIDGE1 harness (78/78) both re-checked GREEN
+  after revert.
+
+The finding stands on the committed numbers in the table and interaction
+paragraph above. The probe scripts are named for reproducibility, not
+because they are the record. Untracked status is intentional — these are
+one-shot measurement instruments, not fixtures.
+
+- Submission threshold: 70.0
+- Rankings: `MAX_MOVE = 3`, `NEW_ENTRY_CAP = 8`
+- Contract: `HOLDOUT = 25`, `WALKOUT = 10`, `HOLDOUT_WINDOW = 4 weeks`
+
+
+---
+
+## PHASE 2 SECTION 6 (2026-08-15) — ### STAGE 2a addendum — config vs engine, measured 2x2 [filed 2026-07-26]
+
+Byte-identical relocation. Original content follows.
+
+### STAGE 2a addendum — config vs engine, measured 2x2 [filed 2026-07-26]
+
+**What is new.** The `### STAGE 1 addendum — config-lever measurement
+[filed 2026-07-14]` table (currently ~L1600-L1605) varies config on FE
+only — four rows, all pre-gen engine, differing `damage_multiplier` and
+`standup_threshold`. FI had never been run at any config except LIVE_PLAY.
+The engine residual (~19.6pp) was therefore inferred by subtraction across
+two different populations (ORACLE-BRIDGE1 78-fight fixture for the FE
+table; Stage 1 pooled 10-seed world_init for the FI headline), never
+measured directly. **C4 (FI at `_TRIPLE_PRE_GEN_LEGACY`) is the
+never-before-measured cell** that closes the 2x2 on one population.
+
+**Method.** Harness copied from
+`outputs/stage2a_before_measurement_v2.py`, parameterized so `run_fe` and
+`run_fi` accept a `FightConfig` rather than calling `fe_config()` /
+`fi_config()` internally. The following elements preserved
+byte-identical:
+
+- Pair enumeration: `for a in STYLES: for d in STYLES` over 11
+  `FightingStyle` members = 121 pairs.
+- Seed formula: `seed = hash((a.name, d.name, i)) & 0xFFFFFFFF` per
+  `(a, d, i)`. Same seed feeds all five cells for each `(a, d, i)`, so
+  this is a paired comparison, not five independent samples.
+- Classification: `method_class` unchanged; finish = `KO | TKO | SUB`.
+- Fighter construction: `make_fighter` unchanged, symmetric OVR=75 across
+  all 18 attributes; FI blindness for C3/C4 achieved by passing
+  `a_style=None, d_style=None` which flows through the existing
+  `style_enum_or_none` handling.
+
+Reporting scaffolding (`main()`, `aggregate()`, the JSON per-pair dump,
+and the progress/ABORT instrumentation) was removed; the harness is a
+measurement fork of v2, not a drop-in replacement.
+
+Run parameters: `N_PER_PAIR = 10`, 121 pairs × 10 seeds = 1210 fights per
+cell, 5 cells × 1210 = 6050 total. `PYTHONHASHSEED=0` pinned at
+invocation (see SEED-NONDETERMINISM caveat below). Both triples
+sanctioned by construction — `_TRIPLE_PRE_GEN_LEGACY = (55, 0.42, 6)` at
+`fight_engine.py:854` and `_TRIPLE_LIVE_PLAY = (55, 0.48, 10)` at
+`fight_engine.py:853`, both present in `_SANCTIONED_TRIPLES` at
+`fight_engine.py:856-860`. **No widening.** Zero errors across all 6050
+fights, zero `_assert_sanctioned_config` fires, all cells n=1210 as
+required.
+
+**The five cells:**
+
+| Cell | Engine | Config | Style | Finish % | n |
+|---|---|---|---|---:|---:|
+| C1 | FE | `_TRIPLE_PRE_GEN_LEGACY` (55, 0.42, 6) | blind | 31.7% | 1210 |
+| C2 | FE | `_TRIPLE_LIVE_PLAY` (55, 0.48, 10)     | blind | 55.0% | 1210 |
+| C3 | FI | `_TRIPLE_LIVE_PLAY` (55, 0.48, 10)     | blind | 69.8% | 1210 |
+| C4 | FI | `_TRIPLE_PRE_GEN_LEGACY` (55, 0.42, 6) | blind | 45.3% | 1210 |
+| C5 | FI | `_TRIPLE_LIVE_PLAY` (55, 0.48, 10)     | aware | 69.1% | 1210 |
+
+**Population caveat, load-bearing.** C1-C4 strip style
+(`fighting_style=None`), so all 1210 fights per cell are the **same
+symmetric OVR=75 pair** with only the seed varying. `n=1210` measures
+seed diversity, not matchup diversity. Only C5 varies fighters via the
+`STYLES × STYLES` enumeration. Cross-fixture comparisons must treat
+n=1210 as one-pair seed noise, not 121 distinct matchups.
+
+**Decomposition (all four axes from the 2x2):**
+
+- **Config effect on FE** = C2 − C1 = 55.0 − 31.7 = **+23.3pp**
+- **Config effect on FI** = C3 − C4 = 69.8 − 45.3 = **+24.5pp**
+- **Engine effect at pre-gen config** = C4 − C1 = 45.3 − 31.7 = **+13.6pp**
+- **Engine effect at live config**    = C3 − C2 = 69.8 − 55.0 = **+14.8pp**
+- **Both decomposition paths sum to +38.1pp**: config(FE) + engine(live)
+  = 23.3 + 14.8 = 38.1; engine(pregen) + config(FI) = 13.6 + 24.5 = 38.1.
+  Aggregate C3 − C1 = 69.8 − 31.7 = **+38.1pp**.
+
+**Precision, stated as a limit not a decoration.** At n=1210 near
+p ∈ [0.3, 0.7], `sqrt(p(1-p)/n)` ≈ 1.3-1.4pp; 95% CI half-width ≈ 2.6-2.8pp.
+The ~1.2pp difference between the two engine-effect estimates (14.8 vs
+13.6) and the ~1.2pp difference between the two config-effect estimates
+(24.5 vs 23.3) are **not distinguishable from zero at this N**. Record
+this finding as **"config and engine are additive within measurement
+noise"** on this population. **Do NOT record 1.2pp as a measured
+interaction term.** A future re-measurement at N=100/pair or higher
+would tighten CI to ~1pp half-width and could resolve whether a real
+interaction exists at the 1-2pp level.
+
+**Contrast, explicitly.** This additivity is between the **config axis
+and the engine axis**. It does **not** contradict the dial-vs-dial
+sub-additivity flagged inside the same `### STAGE 1 addendum —
+config-lever measurement [filed 2026-07-14]` under **"Interaction
+term, as measured fact:"** (currently ~L1617) — interaction −7.7pp
+between `damage_multiplier` and `standup_threshold` inside the config
+axis. Different decomposition, different axes. Do not conflate.
+
+**Triangulation, corroboration not competition.** The +38.1pp aggregate
+(C3 − C1) here is measured on a 121-pair symmetric OVR=75 population
+with N=10/pair. CLAUDE.md's headline +41.4pp inside the same
+`### STAGE 1 addendum — config-lever measurement [filed 2026-07-14]`
+("live 76.9% vs pre-gen 35.4%", currently ~L1608) is measured on
+Stage 1 pooled 10-seed `world_init` populations. Two different
+fixtures, same direction, same magnitude
+class (~40pp). This is **independent-fixture triangulation on gap size,
+not a duplicate measurement and not a competing number.** A future
+session reading either number should treat the difference (~3pp) as
+fixture-variance corroborating the gap, not as noise on the other
+figure.
+
+**Consequence, without recommending anything.** Config drift accounts
+for roughly **62%** of the measured gap (23.3-24.5pp of 38.1pp); engine
+mechanics account for roughly **38%** (13.6-14.8pp of 38.1pp). The
+Two-Engine Consolidation relocation (`outputs/two_engine_consolidation_diag1.md`)
+addresses the engine share. Note that `fight_engine.py:858` carries the
+comment `_TRIPLE_PRE_GEN_LEGACY,   # KNOWN DRIFT. Deleted at Stage 3. Do
+not tune.` — the larger lever is scheduled after the smaller one. **Filed
+as an observation for sequencing review; no sequencing decision is made
+by this entry.**
+
+[POPULATION-SPECIFIC — see ### Framing correction 2026-08-01. "The measured gap" here = the 2x2 symmetric OVR=75 harness aggregate (38.1pp), not a production quantity.]
+
+**Precision note on anchor cells.** C5 = 69.1% and C1 = 31.7% do not
+byte-match v2's baseline (~68% / ~29%). Deltas are ~1-3pp, within noise
+at N=10 versus v2's N=100. Additionally, `PYTHONHASHSEED=0` pins string
+hashing but does not pin the `uuid.uuid4()` / `os.urandom` sources
+that CLAUDE.md's `## 🚨 CRITICAL — "SAME SEED" MEASUREMENTS HAVE NEVER
+BEEN REPRODUCIBLE` block flags (heading currently L174, uuid/urandom
+mechanism at L177). Cross-run byte-identity was never on the
+table; C5 is an internal anchor to the shape of v2's number, not a
+byte-reproduction.
+
+**Artifacts (untracked, NOT part of this commit).**
+
+- `outputs/stage2a_config_engine_2x2.py` — 2x2 harness (169 lines).
+- `outputs/stage2a_config_engine_2x2_out.txt` — run output (7 lines
+  including HASHSEED and five CELL lines).
+
+Both preserved from `/tmp/` as reboot insurance. Whether either enters
+git is a separate decision downstream of an `outputs/` `.gitignore`
+sweep.
+
+**Provenance.** Measured this session at HEAD
+`7513bc9086e84f2dccb4d220a917d8ee816e7e10` (main). Does not mark any
+existing doc content false. Refines and extends the L1585 addendum on a
+different population; does not falsify it.
+
+
+---
+
+## PHASE 2 SECTION 7 (2026-08-15) — ### STAGE 2a addendum — production-path measurement of the classmethod flip [filed 2026-08-01]
+
+Byte-identical relocation. Original content follows.
+
+### STAGE 2a addendum — production-path measurement of the classmethod flip [filed 2026-08-01]
+
+**What shipped.** `eeb16b8` — `FightConfig.standard_fight()` and `.championship_fight()` flipped from `(55, 0.42, 6)` to `(55, 0.48, 10)`. Four literal values, two classmethods, no allowlist change: the target triple was already `_TRIPLE_LIVE_PLAY` at `fight_engine.py:853`, admitted at `:857`.
+
+**Caller audit, MEASURED (grep across cage_dynasty_web/ + stage0c_golden_master/, positive control run).** Exactly one production caller: `world_init.HistorySimulator.simulate_fight_full_engine` at `:1422`, passing the config unmodified to `fight_engine.simulate_fight` at `:1425`. Other call sites: `fight_engine.py:3925` (config=None fallback, dead — both production callers of `simulate_fight` pass explicit configs), `test_sub_sim.py:110` (print-only, zero asserts), and golden-master fixture code (below). `fight_integration.py:362-368` are comments documenting STAGE 0d's deliberate non-call.
+
+**What did NOT change, measured:** `game_bridge.py:13597` (`_simulate_card_fights`) and `:17518` (`_run_real_engine`) construct configs inline at `(55, 0.48, 10)` and were already there; both route to FI, not FE. FI's no-config fallback at `fight_integration.py:369-374` pins `(55, 0.48, 6)` as literals. In-play fights were at live-play numbers all along; only frozen pre-player history was stuck.
+
+**Measured through the production path** (`probe_worldinit_prod.py`, tier grading mirroring `world_init.py:2513-2522`, 38-fighter Lightweight pool, N=400, seed=1000, paired — identical POP line both runs; share of ALL fights including draws):
+
+| | pre-flip | post-flip |
+|---|---|---|
+| finish | 14.5% | 33.8% |
+| KO | 5.0% | 16.5% |
+| TKO | 4.5% | 10.75% |
+| SUB | 5.0% | 6.5% |
+| DEC | 80.75% | 61.25% |
+
+Direction MEASURED. **Magnitude NOT validated against production** — the probe pairs uniformly at random; production books rank-adjacent. Uniform pairing over-represents the large-mismatch fights that produce most finishes; a real save may show a materially smaller delta. Further divergences: single weight class, one pool draw, no cross-fight cardio/injury persistence, single seed at N=400 (±3-5pp).
+
+**FINDING — population composition dominates the config dial.** Three measurements of this same four-line change, differing only in who was fighting: symmetric OVR=75 harness pair **+23.6pp**; flat all-`average` pool **+6.8pp**; production tier grading **+19.3pp**. A 3.5× span from population alone. **Any finish-rate number in this project is a claim about a population before it is a claim about the engine.** The 2x2 at `L1701` measures a single symmetric OVR=75 pair — a decomposition instrument, not a production predictor. Do not carry its cells forward as predictions of what a change does to a real save.
+
+Mechanism, MEASURED: `world_init.generate_attributes` maps tiers to stat ranges — elite `(70,95)`, top `(60,85)`, good `(50,75)`, average `(40,65)`, developing `(30,55)`, novice `(20,45)`. Production's `generate_fighters()` uses elite through developing and **never novice**. Finishes concentrate in cross-tier mismatches; a flat pool suppresses them, an over-mismatched pool inflates them.
+
+**Submission rate is invariant to this dial.** +1.5pp on the production path; ~6-8% across all five 2x2 cells regardless of config or engine. This flip is a KO/TKO lever. No submission lever has been located; `L853`'s "SUB-rate undershoot tuning" entry should not be read as implying one exists.
+
+**Denominator, settled by measurement not enumeration.** The classifier's `OTHER` bucket was instrumented and run at N=2420: every key was literally `"Draw"`, zero other strings. `FightResult.method` and `NarratedFightResult.method` are required dataclass fields with no default; the empty-string path cannot fire. Finish percentages in this arc are not understated.
+
+**Golden master consequence, MEASURED this session.** FE half is RED by design, not a regression: `checker.py:85` (`make_fe_config`) calls the flipped classmethods directly — the fixture was recorded when they returned `(55, 0.42, 6)`. FI half stays GREEN: `checker.py:72-82` (`make_fi_config`) pins `(55, 0.48, 10)` as inline literals, with the L73 comment explicitly denying classmethod inheritance — STAGE 0d defending against this exact drift. The comparator (`checker.py:129-151`) is a recursive literal-`!=` walk; any leaf change reds an entry. Regeneration is a separate decision, and it is **safe by construction**: `generator.py:241/243` calls the same classmethods production does (docstring `:239` "matches world_init:1422"), so a regen inherits the flip through the production path. Lurking risk only if generator.py and the classmethods are ever edited in isolation.
+
+**Known drift left standing, deliberately.** `fight_engine.py:4448` (`quick_simulate`) hardcodes `(55, 0.42, 6)` inline and now disagrees with `standard_fight()`. Callers unaudited. Filed, not touched — single-purpose commit.
+
+**Provenance.** Measured this session at HEAD `eeb16b8`. Artifacts untracked in `outputs/`: `probe_worldinit_prod.py`, `probe_prod_before.txt`, `probe_prod_after.txt`, `probe_split_smoke.txt`, `probe_other_ids.txt`, `probe_E_a_callers.txt`. Does not mark existing doc content false; the `L1701` cells remain correct measurements of their population — this entry constrains how they may be used.
+
