@@ -1,3 +1,13 @@
+> ARCHIVE SPLIT (2026-08-15, ARCHIVE-SPLIT commit). Closed-arc
+> narratives, superseded measurement logs, and pure-provenance content
+> live in `CLAUDE_archive.md` at repo root. This file (CLAUDE.md) holds
+> only load-bearing rules and open work. Future sessions: MOVE, don't
+> delete — if a section here becomes closed, relocate it byte-identical
+> to the archive with a pointer here ONLY if something live references
+> it by name. No merging, no rewording. If unsure whether to move:
+> leave it here and flag it. Existing `## Archive` section at end of
+> this file (older pre-existing scope) is unchanged.
+
 ## 🚨 CRITICAL — LIVE COMMENTARY FILE (read before any commentary work)
 
 **Verified empirically 2026-07-07.** Under PA's actual wsgi.py sys.path
@@ -427,90 +437,6 @@ consumes. Comment marked false-as-written rather than corrected in code
 flow fired zero times across available saves; a shape that would inject
 default/offset stats *if* a record ever reached it, not an observed bug.
 Confirmed on fresh bytes at HEAD `8e721c9`, this session.
-
-## Ship History (compact)
-
-Full recaps for older ships in `CLAUDE_archive.md`. Table below is reverse-chron; pre-Ship-C2 (2026-05-30) entries kept for architectural-pattern reference. `git log --oneline` is authoritative for anything between rows.
-
-| Date | Ship | Commit | What |
-|---|---|---|---|
-| 2026-07-11 | TITLE-SHOT-GATE1 | b069dad | Player challenges to the reigning champion had no eligibility gate and booked as non-title fights (hardcoded `is_title_fight=False`). Gated champion-challenges through `matchmaking.is_title_eligible` (top-5 + 3 pro fights, record fallbacks), derived `is_title_fight` from `division.champion_id` at booking (not rank proximity — anti-fire tested), hid Challenge button when ineligible with server-side gate as the real enforcement. Player-challenge path only; AI `_book_title_fight` untouched (filed for belt epic). Deployed. |
-| 2026-07-11 | EVENT-DETAIL-WC-LABEL1 | f00afcb | `event_detail.html` fight boxes omitted the weight-class pill that `week_results.html` renders. Mirrored the existing pill (3-letter uppercase, links to rankings), guarded for missing `weight_class`. Template-only; data was already populated on every fight record (zero data gap). Retroactive — all events, existing and new. Deployed. |
-| 2026-07-11 | STREAK-INAUGURAL-FILTER1 | 907ad19 | Win/best-win-streak loops counted the synthetic "Inaugural Crown" tombstone (`world_init.py:1275`) as a real win, inflating founding champions' streaks by 1 (the "14 on a 13-0 record" bug). Filtered `method=="Inaugural Crown"` from both loops at `game_bridge.py:7152`/`:7175`. Compute-time only — no `fight_history` mutation, no `wins`/record touch. Retroactive on existing saves. Deployed. |
-| 2026-07-11 | OVR-AT-SIGNING-CAPTURE1 | d4e16fb | `ovr_at_signing` was only captured at the two player-sign wrappers; world-gen and AI-signed fighters never got it, leaving the profile career-arc "At Signing / Growth" cells blank. Seeded world-creation baseline in `world_init.py` fdata block; added first-write-wins guard in `game_state._sign_fighter_to_camp` covering all AI + player sign callers. Existing player-sign wrappers still overwrite (intentional "OVR when signed to your camp" semantic). Forward-only. Deployed. |
-| 2026-07-11 | PROFILE-REDESIGN1 | 3e8d04f | `fighter_profile.html` restructure: stats-hero layout, four tier-colored attribute panels (Striking, Physical, Grappling with Wrestling/BJJ sub-groups, Intangibles), added previously-hidden `recovery` + `composure`, tier-colored bars+numbers with restored gold ≥90 elite band (6-tier scale), championship-reign arc, rivalries paired row, tier-driven scout report, career-arc row, mobile breakpoints. Fight history: round-key hedge (`fight.round_finished or fight.round` — pre-gen fights now show their round), decision-type display, Inaugural Crown pill. Template-only. Deployed. |
-| 2026-07-11 | FOTN-PERSIST-FIX1 | 2794aee | `career_fotn_awards` was incremented but not declared on `FighterRecord`, so it dropped every save round-trip; the profile FOTN badge never rendered persistently. Added field declaration + `to_dict`/`from_dict` serialization with backwards-compat default. Forward-only — new saves persist correctly; existing saves stay at whatever count they had at that boundary. Deployed. |
-| 2026-07-10 | MATCHMAKING-ENFORCE1 | 18a2438 | Score-driven opponent selection in `_build_card_for_week`'s "1 ranked left" branch, replaces `random.choice(unranked_pool)`. 75/25 competitive/step-up via 3 named module-level constants. Deployed. |
-| 2026-07-10 | NEWS-CHIN-FILTER1 | afa26f7 | Chin/durability news gate at `_apply_chin_erosion._news_items.insert` — emits only for player-owned OR current champion OR watchlisted fighters. Chin stat erosion still runs for every fighter; only the news emit is gated. Deployed. |
-| 2026-07-10 | GROUND-STOPPAGE-FIX1 | 40dd8d5 | Accumulated-damage TKO respects chin/heart/composure via `_tko_durability_mult`; TKO_GNP threshold 25.0→18.0, TKO_STANDING 20.0→15.0. Deployed non-regressive. **Founding premise (a ~22%→40% DEC gap) was false — the AI-vs-AI pool rate was already 44.6% pre-fix per the POOL-DEC-RATE1 extraction. Net live effect on the pool is unmeasured; treat as safe (in-band) but not as "closing a gap that didn't exist."** |
-| 2026-07-05 | AGGRESSION-NARRATION1 | b97e7bd | Fight-open intent line in watched-fight timeline for forward/patient sides |
-| 2026-07-05 | BRIDGE-WIRE-AGGR1 | 0f3154b | Player gameplan resolved → Gameplan and passed into real engine at `_run_real_engine` |
-| 2026-07-05 | GAMEPLAN-DIAL-AGGR1 | d1d927d | Aggression dial live in engine (config B — initiative ±2, pre-fight ±4, IQ-gated strike weights) |
-| 2026-07-05 | GAMEPLAN-WIRE1 | ec78b3b | Optional Gameplan threaded through `simulate_narrated_fight` → simulator → `select_action` (additive) |
-| 2026-07-05 | JUDO-SAMBO-BUCKET-FIX1 | bd38a2f | judo/sambo coach specialty routes to wrestling bucket (was clinch) — legacy-save training corrected |
-| 2026-07-03 | TRAINING-ADVANCED-TOGGLE1 | 586fc0a | Hide floor column by default; CSS-only, floor inputs stay in DOM |
-| 2026-07-03 | TITLE-TRANSFER-FIX1 | 5e4bbe1 | AI champions correctly lose belt in fallback-path fights |
-| 2026-07-03 | COACH-RATING-CURVE1 | d10003c | Compress training-gain rating curve 21× → 3.4× |
-| 2026-07-03 | COACH-COVERAGE1b | eaff397 | Coach cards advertise real bucket stats; single SPECIALTY_MAP source |
-| 2026-07-03 | COACH-COVERAGE1a | 208608a | 7 canonical coach types with coverage guarantee |
-| 2026-07-03 | LEGACY-CLAIM-FIX1 | ea595b0 | Secret-gated /api/claim-legacy replaces racy first-visitor claim |
-| 2026-07-03 | MULTIUSER-ISOLATION1 | 29b0b55 | Session-scoped GameBridge dict + per-bridge lock + save-file namespacing |
-| 2026-07-03 | OVR-FIX1 | 98d6c00 | Player-fighter 18-stat vector persists at creation |
-| 2026-07-03 | FREEAGENT-STYLE1 | e30a883 | Free-agent list uses bridge.get_fighter (real styles, not Balanced) |
-| 2026-07-03 | CARDSLOT-BACKFILL1 | 222a502 | Cosmetic Main Card backfill for weak-prelim weeks |
-| 2026-07-03 | CARDSLOT-FIX-PLAYERSLOT1 | bcf69bd | accept_fight_offer routes through assign_player_fight_to_card |
-| 2026-07-03 | COMPARE-LABEL1 | 2a0afed | Compare page: Wrestling → Takedowns label |
-| 2026-07-03 | COMPARE-GUARD1 | a1b7c67 | Compare page: guard_work → guard (silent-0 bug) |
-| 2026-07-03 | NEG-STATMIRROR1 | 256281c | Negotiation screen mirrors player style pill + stats |
-| 2026-07-02 | MOBILE-SINGLECOL1 | cb83170 | Dashboard + week_results collapse to single column on phones |
-| 2026-07-01 | COACH-TRAIT1 (Phase 2) | ac9a2a6 | Repair dead maintenance trait path; Taskmaster intensity-gated |
-| 2026-07-01 | DASH-FEUD-REMOVE1 | c69ff04 | Remove Active Feuds dashboard card (engine untouched) |
-| 2026-07-01 | DASH-CHAMP1 | 6cc9f29 | url_for('champions') → 'champions_history' — dashboard BuildError |
-| 2026-07-01 | Save slots + delete | 579a0ab | 5 slots (was 3) + delete button with confirmation |
-| 2026-07-01 | Fix setup_camp Jinja | dc3434e | loop.parent removed (Python 3.13 Jinja2 compat) |
-| 2026-05-30 | Ship C2 | 0139e11 | Coach contracts (dumber version) — see full recap below |
-| 2026-05-11 | Ship A | 9709f16 | Training report deepening — dashboard 4-week log |
-| 2026-05-11 | Ship B | 411b265 | Starter contracts + founding fighter loyalty |
-| 2026-05-11 | Ship #35 | e3eb35a | Player-fighter injury dashboard surface |
-| 2026-05-10 | Ship G1 | 46fdfa0 | Unified slot assignment across card-build paths |
-| 2026-05-10 | Ship #32 | bfe68e5 | Fighter attribute persistence (Path B) |
-| 2026-05-09 | Ship C | bf448b1 | Event numbering continuity from world-gen |
-| 2026-05-09 | Ship #29 | 5272ef4 | Belt history persistence |
-| 2026-05-09 | Ship A (engine) | d4d0b2c | Fight engine finish rate (FI_DAMAGE_MULTIPLIER 0.32→0.36) |
-| 2026-05-08 | Ship #28 | 14ec7f8 | Wire WorldInitializer into production new_game |
-| 2026-05-08 | Ship #26 | e2d90e7 | Card slot assignment state-staleness fix |
-| 2026-05-08 | Ship #25 | dbaab83 | Sim-seed rivalries during world-gen |
-| 2026-05-08 | Ship #24 | f5c21eb | Rivalry persistence wire-up |
-| 2026-05-07 | Ship #23 | 0fee7b6 | World-gen aging-during-sim |
-| 2026-05-05 | Ship #22 | 9670864 | Free-agent booking UX |
-| 2026-05-04 | Ship #21 | e3fa76a | Helper consolidation (_book_title_fight) |
-| 2026-05-04 | Ship #20 | 73d2cd2 | AI booker lead-time integration |
-| 2026-05-03 | Ship #19 | e373290 | /prospects route retired |
-| 2026-05-03 | Ship #18 | 3695980 | Amateur tab Slice C Part A (visual polish) |
-| 2026-05-03 | Ship #17 | fd41007 | News feed Free Agents tab |
-| 2026-05-03 | Ship #16 | 7700775 | Champion injury Slice 4 (hold-path consequences) |
-| 2026-05-03 | Ship #15 | e0fba25 | Signing + debut alerts |
-| 2026-05-03 | Ship #14 | af14904 | Amateur tab Slice A (unified amateur ID) |
-| 2026-05-02 | Champion injury Slice 3 | 2c13d0a | Player vacate-or-hold decision UX |
-| 2026-05-02 | Champion injury Slice 2.5 | 33c8225 | Player vacant-title invitation |
-| 2026-05-02 | Champion injury Slice 2 | b4ac430 | Auto-book vacant-title fight |
-| 2026-05-02 | Earned-nickname feature | (in nickname commit) | Performance-earned nicknames |
-| 2026-05-02 | Fighter profile polish | f9c2a07 | Style banner + tier-colored stats |
-| 2026-05-02 | Bug AB.1 | 7914647 | watch_fight FOTN banner spillover fix |
-| 2026-05-01 | Bug AB | 69ff422 | Per-fight FOTN badge spillover |
-| 2026-05-01 | Champion injury Slice 0.5 | e1b14fe | Pre-fight injury gate |
-| 2026-05-01 | Champion injury Slice 0.75 | c3dfd47 | Auto-vacate threshold |
-| 2026-05-01 | Champion injury Slice 1 | 804938b | Champion-aware injury news |
-| 2026-04-30 | Bug Z | 59193c5 | Auto-booking after player gets ranked |
-| 2026-04-30 | FOTN top banner | 4736de7 | event.fotn dict populated |
-| 2026-04-29 | Bug O | 7c3f8e1 | Prelim player fights running 5 rounds |
-| 2026-04-29 | Bug S | c203b51 | Cooldown not applied to player-fight opponents |
-| 2026-04-28 | Phase 0 | 2e169e7 | NameError fix in _simulate_ai_fights_week |
-| 2026-04-28 | Bug E + G | 2123ac7 | Option P (timing alignment) |
-| 2026-04-28 | Bug Q | 8c48417 | AI fight watch-link ID collision |
-| 2026-04-28 | Bug R | e2360fc | Player fight event-detail rendering |
-| 2026-04-27 | Multiple | (various) | OVR-out-of-rankings Phase 1, Bug F, Bug D, etc. |
-| 2026-04-26 | Multiple | (various) | Slot Bug A, dashboard digest, NameError patches |
 
 ## Current deployment state
 
@@ -1913,21 +1839,6 @@ Mechanism, MEASURED: `world_init.generate_attributes` maps tiers to stat ranges 
 
 **None of the marked numbers is arithmetically false.** 62% of 38.1pp is correct. What is corrected is the definite article — the promotion of one population's denominator to a project-level quantity. Original wording is preserved at every site; markers annotate, they do not reword.
 
-### Graveyard hypothesis — DENIED, world-scoped [filed 2026-08-14, AMP-RECONCILIATION arc, dec968b]
-
-**Claim being closed.** Weakening the dominance amp frees SUBs — i.e., lower amp → less dominant-GnP damage → longer bottom-position dwell → more sub attempts converting.
-
-**Measurement, within the 1.35-built world of the sweep** (`outputs/amp_sweep_out.txt`, N=400 seed=1000 per arm, arms AMP ∈ {1.0, 1.15, 1.25, 1.35, 1.5}, per-arm SUB counts extracted verbatim):
-- FI SUB counts across arms: 6, 7, 6, 6, 6 — flat in the **5–7** range.
-- FE SUB counts across arms: 33, 33, 32, 33, 35 — flat in the **32–35** range.
-- Neither FI nor FE SUB count moves with the amp within a fixed world.
-
-**Measurement in production's 1.25-built world** (`outputs/amp_verify_out.txt`, source-edited, N=400 seed=1000): **FI SUB=13.**
-
-**Consequence.** Sub-count flatness across the sweep is a within-world observation, not a cross-world one. The sweep drew all its samples from a single 1.35-built world (see `### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14]` for why). Verify's SUB=13 is a different world's draw, not evidence of a mechanism change under the amp.
-
-**Denial stands as measured.** Weakening the amp does not free subs within a world — the SUB gate is amp-invariant along the axis the sweep measured. The 35–40% sub-share target requires a separate lever (attempt rate / sub-gate / maturation path); filed, not amp-reachable. The `L853` `SUB-rate undershoot tuning` entry pointer should not be read as implying the amp is that lever.
-
 ### Measurement hazard — runtime-rebind sweeps vs source literals [filed 2026-08-14, AMP-RECONCILIATION arc, dec968b]
 
 **Rule.** Runtime-rebind sweeps cannot reach source literals. Pre-gen world construction consumes `fight_engine.py`'s dominance amp site at `:3293` (measured `simulate_exchange` call count during `world_init` pool build = **231,601** at 120-week history; the amp fires on the dominant-GnP position subset). Any swept constant must have EVERY consumer site — including world build — bound to the swept knob, or the sweep measures fights in a stale world.
@@ -1998,19 +1909,6 @@ The lever is column `line 3293 during pre-gen`. Every other column is constant a
 **Grep hazard filed for future censuses.** Static import censuses (`^from`, `^import`) are structurally blind to `importlib.import_module(<string>)` and `__import__(<string>)`. Section 4b of the FOTN scoping (`outputs/fotn_scope.txt`) missed the fotn import for exactly this reason. Any future consumer-census claim must ALSO grep for `import_module(` and `__import__(` before asserting "no consumers."
 
 The `## Architecture` block's package-form claim is left intact as the correct diagnosis for `from systems.X import Y` patterns; this entry annotates the exception rather than editing the block.
-
-### Backlog re-scope — FOTN full-fidelity scoring [filed 2026-08-15, FOTN full-fidelity wire, 8fd4573]
-
-**The backlog entry at CLAUDE.md `:845-853`** — *"FOTN full-fidelity scoring (unblocked, small). Upgrading FOTN scoring to consume the full-fidelity slice is a small consumer change, not a plumbing project."* — was **right about the size, wrong about the address.**
-
-**MEASURED before fix:**
-- The scorer needed no upgrade — `calculate_fotn_score` at `systems/fotn.py:57-136` has always contained the full-fidelity branch (damage × 0.4, damage-diff × 0.2 penalty, knockdowns × 150, sub_attempts × 25).
-- The scorer's gate at `systems/fotn.py:77-82` was falling to `_calculate_basic_score` on every fight in production. **Gate keys `"fighter1_stats"` and `"fighter2_stats"` were absent from all 3 fight-dict construction sites** (Path A `_run_real_engine` at `:17797-17823`, Path B normal at `:13940-13964`, Path B draw at `:13779-13804`). Bytes-verified in Section 12 of `outputs/fotn_scope.txt`.
-- Both scorer branches (full-fidelity `:121`, basic `:145`) read `fight_result.get("finish_round")`. Fight dicts carry `"round_finished"` (27 hits in `game_bridge.py`; positive control) — the bridge deliberately renames the engine attribute `finish_round` → dict key `round_finished` at construction (see the rename site at `game_bridge.py:17638`). **The round bonus was dead in ALL FOTN scoring on PA**, not just the fallback branch.
-
-**Live scorer that had picked every FOTN award ever shipped on PA:** `_calculate_basic_score` weighing ONLY `method` (SUB=45, TKO=50, KO=60, SPLIT=80, DEC=20) and `is_title_fight` (×1.2). Score ceiling: 156 (title split decision). Tiers "Fight of the Year Candidate" (≥200) and "INSTANT CLASSIC" (≥300) were structurally unreachable.
-
-**Fixed in `8fd4573`:** 3 attach sites (2 keys each) + 2 scorer-alias edits + 1 except-log edit = 6 edits, +22/-3 across 2 files (`cage_dynasty_web/game_bridge.py`, `systems/fotn.py`).
 
 ### Builtin scorer status — never-fired fallback [filed 2026-08-15, FOTN full-fidelity wire, 8fd4573]
 
