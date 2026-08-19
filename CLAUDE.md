@@ -1943,6 +1943,154 @@ visible next time a legacy-save Symptom A/B report comes in. Bug X
 and Bug Y are decoupled — Bug Y's shipping doesn't affect Bug X's
 disposition.
 
+### MC ODDS — SPEC (Phase 3 step 2, pre-implementation) [filed 2026-08-18]
+
+Pre-implementation spec for the MC odds loop — the arc's next scheduled
+work per the save/restore-required-for-presim rule's "MC odds
+precompute" bullet (currently `~L1716`). Source attribution per line:
+**(F)** = feasibility memo `outputs/odds_mc_feasibility1.md` (293 lines,
+untracked); **(S)** = signal inventory `outputs/odds_signal_inventory1.md`
+(455 lines, untracked); **(T)** = timing output
+`outputs/odds_mc_timing_out.txt` (120 lines, untracked);
+**(C)** = existing CLAUDE.md rule/entry; **(INFERRED)** = session-handoff
+decision, NOT on-disk in F/S/T. `outputs/odds_upset_curve*` explicitly
+EXCLUDED from spec inputs per STYLE-DEAD1 corollary (b) — falsified
+"production is style-aware" framing.
+
+**Decision — MC on the real engine; formula-predictor rejected.**
+- **(F, §Harness)** MC calls `fight_integration.simulate_narrated_fight`
+  directly with real `FighterAttributes` and the LIVE_PLAY config
+  triple `(55, 0.48, 10)`. Same engine live-play uses.
+- **(S, Candidate 4)** Zero pre-fight probability functions exist in
+  `fight_engine.py` / `fight_integration.py` (grep-verified on
+  `def predict`, `win_chance`, `win_probability`, `favored`,
+  `calculate_win`, `attribute_advantage`, `tale_of_the_tape` — six
+  patterns, zero hits; positive control: `def calculate_strike_damage`
+  present). No formula predictor to adopt.
+- **(S, Candidate 5)** The one native pre-fight probability formula in
+  the tree, `world_init.HistorySimulator.simulate_fight_simple`
+  (currently `world_init.py:1465-1512`), is DORMANT on PA (fallback
+  path only) and its input `skill_rating` "may not exist on live
+  fighters (INFERRED — not verified)."
+- **(INFERRED)** The "REJECTED" framing on the formula-predictor
+  option is a Van handoff decision. Bytes support rejection
+  (dormancy + input-ownership uncertainty + 0.2-0.8 clamp cap) but
+  don't state "rejected" as a decision.
+
+**Input consumption — same assembly path live fights use.**
+- **(F, §4)** Live fights consume `_make_fighter_attrs` output
+  (18 engine stats + fighting_style) + `_resolve_gameplan` output +
+  LIVE_PLAY config triple + `starting_stamina_f{1,2}` derived from
+  `_fighter_data['fatigue']` + player-side coach buffs
+  (`_apply_corner_prefight_buff`, `_apply_coach_iq_prefight_buff`;
+  neither fires on AI-vs-AI).
+- **(INFERRED)** MC odds SHOULD call the `_assemble_prefight` bundle
+  (the extraction that landed in `9adfeba` and was regression-fixed
+  at `68dbd52`) to reuse the exact assembly path live fights use.
+  F names `_make_fighter_attrs`, not `_assemble_prefight` — the
+  bundle-reuse choice is a Van handoff.
+
+**Save/restore around every MC batch — REQUIRED, gate-grade.**
+- **(C, save/restore-required-for-presim rule, currently `~L1716`)**
+  Already covers MC odds as its named consumer. Do NOT duplicate the
+  pattern here; reference the rule.
+- **(F, §2 recommended pattern)** Exact shape:
+  ```
+  _saved = random.getstate()
+  try:
+      for i in range(N):
+          random.seed(mc_seed_offset + i)
+          winner = fi.simulate_narrated_fight(fa1, fa2, config=cfg).winner_id
+          # tally
+  finally:
+      random.setstate(_saved)
+  ```
+- **(F, §2 caveat)** The feasibility harness's UNSAFE-vs-SAFE test
+  was INCONCLUSIVE on the tested pair (near-equal Strawweight,
+  N=100, seed=42) — both variants landed on the same winner.
+  Mathematics still guarantees state advancement; the CLAUDE.md rule
+  stands on that basis, not on the test's null result.
+
+**Adaptive N — 50 base, escalate toward ~400 in the uncertainty
+band.**
+- **(F, §3 stability table)** N=50 sufficient for one-sided pairs
+  (gap-12 and gap-25 both showed 100/100 across 200 sims — zero
+  variance to resolve).
+- **(F, §3 SE math)** N≈400 needed for ±3pp CI half-width at p≈0.1
+  (matches `4*0.09/0.0009 = 400`); N≈1111 at p=0.5 worst case.
+- **(INFERRED)** The specific escalation trigger band — "35-65%" —
+  is a Van handoff choice. F only says "adaptively increase N only
+  when early sims show uncertainty" without naming a percentage
+  threshold; 30-70% and 40-60% would equally satisfy the memo.
+
+**Compute point — EVENT START, not booking; no line movement in v1.**
+- **(F, §4 "Design implication")** Feasibility file frames BOTH
+  options explicitly as "not a recommendation, just observation" —
+  booking-time freezes the 6 fight-time-only inputs against stale
+  snapshots; event-start sees live values.
+- **(F, §4 enumeration 1-6)** The 6 fight-time-only inputs that
+  drift booking → event: (1) fatigue → starting_stamina; (2) player
+  gameplan choice; (3) AI gameplan (GAMEPLAN-AI-SELECT1); (4)
+  injury cancellation / clearance; (5) attribute drift from
+  weekly training; (6) coach staff for player. Config triple
+  (`_assert_sanctioned_config`-pinned) does NOT drift.
+- **(INFERRED)** EVENT-START decision is Van handoff. Rationale
+  supported by bytes (6-input drift surface) but not decided in F.
+- **(INFERRED)** "No line movement in v1" — single compute at
+  event start, no re-computation as week progresses — not stated
+  anywhere in F/S/T. Van handoff decision.
+
+**Timing — MEASURED on dev, UNMEASURED on PA.**
+- **(T, TIMING table)** Dev workstation: median **21.98-24.70 ms
+  per sim** across N ∈ {1, 50, 100, 200}; p95 ≈ 1.3× median (no
+  long-tail sim outliers); throughput **40.5-47.2 sims/sec**
+  sustained. Machine profile **(F, §1)**: darwin, Python 3.13,
+  no threads.
+- **(F, §1)** PA production is **UNMEASURED this session. Expect
+  2-5× slower (INFERRED, not measured)**. Recompute the timing on
+  PA before locking any N choice.
+- **(F, §1 per-card estimates on dev)** 10-fight card:
+  N=100/matchup → ~21 sec (tolerable at card-build, background-able);
+  N=400/matchup → ~92 sec ("uncomfortable during a UI request;
+  would need async / background job"); N=1000/matchup → ~230 sec
+  (not viable at card-build). PA multiplier stacks on top.
+
+**STYLE-DEAD1 interaction — odds inherit style-blindness by
+construction.**
+- **(C, `#### STYLE-DEAD1` block, currently `~L1471`)**
+  `_STYLE_STR_MAP` emits enum names; `_FightingStyleEnum(...)` does
+  value lookup; ValueError swallowed → `style_mod = 0.0` on every
+  live fight. Path A post-sim style-flip byte-verified unreachable
+  at its guard.
+- **(INFERRED)** MC odds run the real engine (see Decision above),
+  so they inherit whatever style behavior production runs.
+  Currently: style-blind at outcome layer. If STYLE-DEAD1 is ever
+  fixed, odds inherit the fix automatically — no odds-side change
+  needed.
+
+**Downstream — Step 3 (display + American odds mapping), Step 4
+(was_upset truth fix).**
+- **(INFERRED)** Step 3: display + American-odds mapping (e.g.,
+  prob 0.75 → −300, prob 0.25 → +300). Not addressed in F/S/T.
+  Van handoff.
+- **(S, Candidate 6 "The wire gap")** Step 4 target is
+  `game_bridge.py:10642` (currently) — the sole live call to
+  `generate_fight_reactions` hardcodes `was_upset=False`. The
+  bridge's own `is_upset` computation at `:5350-5365` (currently)
+  is never propagated into media reactions. Fix flows the computed
+  bool through the call site.
+- **(INFERRED)** Ordering rule: do NOT fix Step 4 (was_upset wire)
+  before odds exist. F/S/T do not specify this ordering; Van
+  handoff. Rationale (Van, confirmed 2026-08-18): once odds exist,
+  "upset" can be defined by odds threshold (loser's implied
+  probability > X%) rather than by the current rank-gap proxy at
+  `:5350`.
+
+**Not implemented, not scheduled by this entry.** Spec-first docs
+commit for future work. Every (INFERRED) tag above will be
+validated against the actual code path at implementation time —
+Van handoff choices need to survive first contact with bytes.
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
