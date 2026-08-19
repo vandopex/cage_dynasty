@@ -5520,6 +5520,7 @@ class GameBridge:
             "event_name":     fight.get("event_name", ""),
             "fight_id":       fight.get("fight_id", ""),
             "week":           self._game_state.week_number if self._game_state else 1,
+            "was_title_fight": is_title_fight,
             "specialty_method":       _specialty,
             "opponent_rank_at_fight": _loser_rank_now,   # opponent is loser
         }
@@ -5532,6 +5533,7 @@ class GameBridge:
             "event_name":     fight.get("event_name", ""),
             "fight_id":       fight.get("fight_id", ""),
             "week":           self._game_state.week_number if self._game_state else 1,
+            "was_title_fight": is_title_fight,
             "specialty_method":       _specialty,
             "opponent_rank_at_fight": _winner_rank_now,  # opponent is winner
         }
@@ -13916,6 +13918,7 @@ class GameBridge:
                     "result": res,
                     "method": method, "round_finished": rnd,
                     "event_name": event_name, "week": week,
+                    "was_title_fight": fight.get("is_title_fight", False),
                     # FINISH-DETAIL-PERSIST
                     "specialty_method":       _specialty,
                     "opponent_rank_at_fight": _opp_rank,
@@ -17823,6 +17826,7 @@ class GameBridge:
                 "round_finished": round_finished,
                 "event_name":     fight.get("event_name", ""),
                 "week":           self._game_state.week_number if self._game_state else 1,
+                "was_title_fight": is_title_fight,
                 # FINISH-DETAIL-PERSIST
                 "specialty_method":       _specialty,
                 "opponent_rank_at_fight": _opp_rank,
