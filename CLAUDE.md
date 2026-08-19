@@ -1814,6 +1814,135 @@ the FOTN wire specifically, only the commentary-storage block.
 check for `event.fotn.excitement_tier` values above `"Excellent"`
 remains the outstanding conversion evidence.
 
+### Belt-marker diagnostic — 3 sources + Bug X/Y split [filed 2026-08-19]
+
+**Symptom set (three exhibits from live play):**
+(A) 🏆 title-win marker on a fight PREDATING first recorded reign;
+(B) 🛡️ title-defense marker on a fight inside a beltless gap
+between reigns; (C) fight where fighter LOST their title carries no
+marker at all.
+
+**Working hypothesis at diagnostic entry:** "icons from per-fight
+flags at booking/sim time, reigns from separate ledger at
+title-change time, flags-vs-ledger can disagree." **FALSIFIED for
+the 🏆/🛡️ icons; reframed for the 'Belt lost' text** — see
+per-source breakdown.
+
+**Three sources drive belt-related rendering on `fighter_profile.html`,
+MEASURED bytes-anchored at HEAD `5c1477d` (pre-Bug-Y):**
+
+1. **🏆/🛡️ icons** — computed inside the Jinja `{% set bns =
+   namespace(won=false, defended=false) %}` block that iterates
+   `{% for r in (belt_history or []) %}` in `fighter_profile.html`
+   (currently `:1155-1194`). 🏆 fires when `r.won_week == fight.week`;
+   🛡️ fires when `r.won_week < fight.week AND (r.is_active OR
+   r.lost_week > fight.week) AND fight.result == 'W'`. **NO per-fight
+   title flag involved** — icons cross-reference the ledger against a
+   generic `fight.week` field. Ledger source: the
+   `bridge.get_fighter_reigns(fighter_id)` method (currently
+   `game_bridge.py:9328`) → serializes `self._belt_history` (a
+   `world_init.BeltHistory` instance).
+2. **"Belt lost" text** at the `{% if fight.was_title_fight and not
+   is_win and not is_draw %}` gate in `fighter_profile.html`
+   (currently `:1192`). Uses the per-fight `was_title_fight` flag.
+3. **Reign card** (separate display element on the profile) — reads
+   from the ledger, same source as source 1.
+
+**Hypothesis: FALSIFIED for icons.** The icons don't consult any
+per-fight `is_title_win`/`is_title_defense` flag; they compute from
+ledger × fight.week alignment. There is one source for the icons,
+not two. Symptoms A + B trace to **ledger data integrity** (see
+Bug X below), not to flags-vs-ledger disagreement.
+
+**Hypothesis: PARTIALLY CONFIRMED for source 2, with "disagreement"
+reframed as "missing writer"** — see Bug Y below.
+
+**Bug Y — SHIPPED at `2e4b328` (2026-08-19).** Live-play
+fight_history writers did not populate `was_title_fight`.
+
+- Three live-play writer sites: the `_simulate_fight` helper
+  (winner_history_entry + loser_history_entry — the score-based
+  fallback path; currently `game_bridge.py:5514/:5526`),
+  `_simulate_card_fights` (Path B AI-fight loop's
+  `ftr.fight_history.append({...})`; currently `:13913`), and
+  `_run_real_engine` (Path A player-fight
+  `ftr.fight_history.append({...})`; currently `:17818`). All three
+  wrote ~10 keys per fight_history entry; none included
+  `was_title_fight` pre-fix.
+- Positive control: grep for `was_title_fight` writes across web +
+  narrative + systems trees found writers ONLY in `world_init.py` —
+  the inaugural-crown tombstone (currently `:1315`), the two
+  `_simulate_single_fight` fight-record dicts (currently `:1701`,
+  `:1716`), and the `_record_fight_history` helper's parameter
+  passthrough (currently `:749`) — all pre-gen. Zero live-play
+  writers.
+- Consequence: every live-play fight_history entry had
+  `fight.was_title_fight = None` under `dict.get`. Template's
+  "Belt lost" gate short-circuited to falsy at operand 1.
+  Structurally impossible to render "Belt lost" on any live-play
+  title-loss fight.
+- Fix: +4 lines, one `"was_title_fight": <bool>` per entry-dict.
+  Bool semantics match pre-gen (`fight.get("is_title_fight", False)`
+  never returns None).
+- Forward-only: past saves' entries stay flagless as designed; no
+  backfill.
+- Gate: 8 entries (2 paths × 2 configs × 2 perspectives) OLD via
+  `5c1477d` worktree vs NEW. OLD absent everywhere, NEW present with
+  correct bool, all other keys byte-identical. Template consequence
+  MEASURED at operand level (Jinja `and` short-circuit flips from
+  `None`-falsy to `True`-passes).
+- Site 1 (score-based fallback) is dormant since the `68dbd52`
+  regression fix; bytes-verified via diff, not exercised at runtime
+  in the gate. Filed honestly rather than claimed as covered.
+- **UI proof of "Belt lost" text at HEAD `2e4b328`** lands
+  organically at the next live title change in a session.
+  Post-deploy verification is UI-side, not log-side; no new grep-set
+  line expected.
+
+**Bug X — OPEN, filed as design decision, not scoped ship.** Symptoms
+A + B trace to legacy-save ledger data integrity from the
+pre-BELT-STORE-UNIFY1 era (`e6b8033`, 2026-07-11). Two class-level
+mechanisms bytes-visible in the current ledger writers at the
+`world_init.BeltHistory` class (currently `world_init.py:551-650`):
+
+1. Reigns with fabricated `won_week` values matching earlier fight
+   weeks (Symptom A explanation).
+2. Reigns with stale `is_active=True` or missing `lost_week`
+   (Symptom B explanation) — pre-BELT-STORE-UNIFY1 title-transfer
+   paths that failed to close the previous reign.
+
+BELT-STORE-UNIFY1 closed the WRITE path forward-only. Reigns
+generated post-`e6b8033` are consistent. But existing saves carrying
+pre-fix drift were never reconciled — grep for `reconcile` in
+`game_bridge.py` returned zero hits, confirming the
+deferred-reconciliation-on-load noted in BELT-STORE-UNIFY1's own
+commit deferral.
+
+**Design fork, unscheduled:**
+- **Option A: live with it on legacy saves.** New games
+  post-`e6b8033` are clean by construction; legacy saves carry
+  their stale ledgers forever. Occasional Symptom A/B renders on
+  old saves are cosmetic.
+- **Option B: template-side sanity checks.** `fighter_profile.html`
+  could add defensive logic — e.g., if `r.won_week == fight.week`
+  match ALSO requires the corresponding `fight.was_title_fight` to
+  be truthy (post-Bug-Y, live-play entries have this field),
+  spurious 🏆 markers on non-title fights would be suppressed.
+  Doesn't fix Symptom B (stale `is_active` on the ledger side;
+  needs ledger-side logic). Half a fix.
+- **Option C: full ledger reconciliation on load.** Walk
+  `_belt_history` at load time, cross-check against
+  `_fighter_data` fight_history's `was_title_fight` entries, mark
+  reigns as inactive where the ledger disagrees with the fight
+  record. Substantive ship. Backfill-discipline concern: rewriting
+  historical reign data changes saved state — needs a safety pass
+  on what depends on `_belt_history` internals.
+
+**No decision made by this entry.** Filed so the trade-offs are
+visible next time a legacy-save Symptom A/B report comes in. Bug X
+and Bug Y are decoupled — Bug Y's shipping doesn't affect Bug X's
+disposition.
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
