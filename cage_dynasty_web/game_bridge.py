@@ -13654,8 +13654,9 @@ class GameBridge:
                                 ]
                             if _ai_fight_id:
                                 self._fight_commentary[_ai_fight_id] = _ai_lines
-                    except Exception as _ce:
-                        print(f"⚠️ AI commentary store failed: {_ce}")
+                    except (AttributeError, TypeError) as _ce:
+                        _log_fid = fight.get("fight_id", "?") if isinstance(fight, dict) else "?"
+                        print(f"⚠️ AI commentary store failed ({_log_fid}): {_ce}")
                     _eng_sub_type = getattr(_eng, 'sub_type', '') or ''
                     try:
                         if _eng and hasattr(_eng, 'fighter1_stats'):
@@ -18032,23 +18033,21 @@ class GameBridge:
 
     def get_fight_commentary(self, fight_id: str) -> List[str]:
         """
-        Return commentary for a fight. Always returns something — never empty.
-        Check order: exact match → fuzzy match → _engine_result → synthetic fallback.
+        Return commentary for a fight, or [] if no source found.
+        Check order:
+          1. Exact match — return stored commentary
+          2. _engine_result extraction — parse from _completed_events, cache under fight_id
+          3. Synthetic fallback — synthesize from fight metadata, NOT cached
+             (so real commentary can still overwrite via #1 on later calls)
+        Miss (all sources exhausted) → return [] + log ⚠️  commentary miss.
+        Fuzzy-match fallback DELETED 2026-08-15 (COMMENTARY-STALE1) —
+        caused cross-fight substitution + sticky cache poisoning.
         """
         # 1. Exact match
         if fight_id in self._fight_commentary:
             return self._fight_commentary[fight_id]
 
-        # 2. Fuzzy match — fight_id format may differ slightly between storage and lookup
-        for stored_id, lines in self._fight_commentary.items():
-            if stored_id and fight_id:
-                parts = [p for p in fight_id.split('_') if len(p) > 6]
-                if parts and any(p in stored_id for p in parts):
-                    # Cache under the requested ID too for future lookups
-                    self._fight_commentary[fight_id] = lines
-                    return lines
-
-        # 3. Try extracting from _engine_result stored in completed events
+        # 2. Try extracting from _engine_result stored in completed events
         fight_result = None
         eng_result   = None
         for ev in self._completed_events:
@@ -18076,10 +18075,12 @@ class GameBridge:
                     if commentary:
                         self._fight_commentary[fight_id] = commentary
                         return commentary
-            except Exception:
-                pass
+            except (AttributeError, TypeError) as _ce:
+                print(f"⚠️ commentary extract failed ({fight_id}): {_ce}")
 
-        # 4. Synthetic fallback — at least show the result
+        # 3. Synthetic fallback — synthesize from fight metadata; NOT cached
+        # (COMMENTARY-STALE1 2026-08-15: cache line removed so real commentary
+        # from a later successful sim can overwrite via branch #1's write path.)
         if fight_result:
             w_name = fight_result.get("winner_name", "The winner")
             l_name = fight_result.get("loser_name", "their opponent")
@@ -18096,9 +18097,9 @@ class GameBridge:
                 f"{w_name} seals it.",
                 f"[Result: {w_name} def. {l_name} · {method} R{rnd}]",
             ]
-            self._fight_commentary[fight_id] = lines
             return lines
 
+        print(f"⚠️  commentary miss: {fight_id}")
         return []
 
         # Look for raw engine result in completed events
