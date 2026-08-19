@@ -829,6 +829,28 @@ away. Finish-composition remains the only genuine per-round instrumentation
 ship on the board.
 
 **Recently reconciled (closed):**
+- **`get_fight_commentary` synthetic fallback is dead code — DEAD
+  (falsified by arm-3 live harness, 2026-08-19).** Reviewer-originated
+  inference from a folded read: the eng_result-extraction branch's loop
+  had a `fight_result = fight` assignment (`game_bridge.py`, currently
+  ~`:18057`) that was dropped in transcription, leading to the claim
+  that `if fight_result:` at the synthetic-fallback branch could never
+  fire and the synthetic fallback was never-executed dead code. Falsified live during COMMENTARY-STALE1
+  gate design: a two-line harness (bridge instance, `_completed_events`
+  populated with `fight_id` but no `_engine_result`, empty
+  `_fight_commentary`) returned 6 synthetic lines starting
+  `['=== ROUND 1 ===', '{Winner} and {Loser} touch gloves.', ...]`
+  with `cached_after_call: True` in OLD bytes — direct empirical
+  proof of reachability. Gate arm-3 then reproduced this in the full
+  4-arm pack (OLD via `6b873c4` worktree, NEW via current fix). The
+  synthetic block STAYS live under COMMENTARY-STALE1's shipped fix,
+  now uncached; it remains explicitly EXCLUDED from the dead-code
+  strip scope (see item 4 UPDATE in COMMENTARY-STALE1's SHIPPED block).
+  Filed under Cleared-suspects so the "synthetic branch is dead"
+  reading never gets re-proposed as a strip target. Two-line lesson:
+  folded reads can drop assignments as easily as they drop
+  references; verify branch reachability with a harness, not with
+  code-inspection alone.
 - **Record Book "No records yet" for granular stats — RESOLVED not-a-bug
   (2026-07-11).** Original symptom: sig-strikes / takedowns / sub-attempts
   categories showed the empty-branch placeholder despite the standard
@@ -1441,7 +1463,7 @@ The `## Architecture` block's package-form claim is left intact as the correct d
 
 **Two harness caveats, filed for the record:**
 1. **3/400 fights carried empty per-round stats** (99.25% fire rate, not 100%). Cause **INFERRED not measured** — plausibly R1 stoppages where the round-stats append didn't fire before the engine returned. The scorer's gate at `systems/fotn.py:80` degrades gracefully (falls to `_calculate_basic_score`), so this is not a correctness bug even if the mechanism is unconfirmed. Worth a targeted probe if the 0.75% edge becomes interesting.
-2. **Harness scored harness-built dicts, not bridge-built dicts.** The harness constructed fight dicts locally mirroring the post-patch Path B shape rather than exercising `bridge._simulate_card_fights` / `bridge.advance_week`. Wiring correctness is inferred from the diff (game_bridge.py edits attach the same `eng_result.fighter1_stats` reference the harness uses) but not measured end-to-end through the bridge. **Production-path confirmation owed at deploy:** `server.log` clean of `⚠️ FOTN select_fotn failed` entries (would surface any shape mismatch via the new logging from `8fd4573`), and templates rendering `event.fotn.excitement_tier` values above `"Excellent"` (which were structurally unreachable pre-fix).
+2. **Harness scored harness-built dicts, not bridge-built dicts.** The harness constructed fight dicts locally mirroring the post-patch Path B shape rather than exercising `bridge._simulate_card_fights` / `bridge.advance_week`. Wiring correctness is inferred from the diff (game_bridge.py edits attach the same `eng_result.fighter1_stats` reference the harness uses) but not measured end-to-end through the bridge. **Production-path confirmation owed at deploy:** `server.log` clean of `⚠️ FOTN select_fotn failed` entries (would surface any shape mismatch via the new logging from `8fd4573`), and templates rendering `event.fotn.excitement_tier` values above `"Excellent"` (which were structurally unreachable pre-fix). **→ MEASURED 2026-08-19 (post-`3e90dfe` PA deploy — same deploy verifying COMMENTARY-STALE1).** PA `server.log` grep `"FOTN select_fotn failed"` returned zero. Event **CD75** rendered `event.fotn.excitement_tier = "INSTANT CLASSIC"` (above `"Excellent"`) on the FOTN block in production. Owed-at-deploy status **CLOSED**; caveat #2 converts from INFERRED to MEASURED. Same-deploy piggyback: nothing in `3e90dfe`'s scope touches FOTN wiring — the caveat #2 owed evidence has been available on PA since `8fd4573` shipped, and 2026-08-19's watched-fight verification confirmed both.
 
 ### Regression + doc-hygiene sweep — post-`68dbd52` [filed 2026-08-15]
 
@@ -1571,6 +1593,62 @@ colliding token.
    extraction logic): filed as separate tech-debt commit, not part
    of the fuzzy-match fix.
 
+**SHIPPED — `3e90dfe`, deploy-verified 2026-08-19 on PA.**
+
+- Deploy: `git rev-parse HEAD` on PA matched local after manual
+  `git pull` + Reload on the Web tab (webhook not used per operator
+  choice).
+- Server.log after one watched fight, standard grep set:
+  `"Commentary stored"` present, `"Real fight engine failed"` **zero**,
+  `"commentary miss"` **zero on happy path** (line exists in shipped
+  bytes on PA, confirmed via the pull byte-match).
+- Fix-scope items 1-3 shipped as filed; item 4 scope UPDATED
+  (see below). Additional edit landed alongside: cache line at the
+  synthetic-fallback branch's tail DELETED (uncached synthetic —
+  same class of poisoning as fuzzy match via the write-path guard at
+  `_run_real_engine:17968`).
+- Item 2 filed-format-vs-shipped: filed spec at item 2 above shows
+  one space between `⚠️` and `commentary miss`; shipped code
+  (`game_bridge.py`, currently ~`:18102`) emits two spaces. Code is
+  truth (strike-and-preserve — filed text preserved above, this
+  line documents the alignment). Deploy grep substring
+  `"commentary miss"` catches both spacings; no operational impact.
+- Item 3 phrasing correction: spec's "Path B whole-block
+  `except Exception: pass`" was descriptive-was-imprecise. The
+  literal `: pass` pattern lived in `get_fight_commentary`'s
+  eng_result-extraction branch except; `_simulate_card_fights:13657`
+  (which the project
+  vocabulary actually calls "Path B") already logged via
+  `except Exception as _ce: print(...)`. BOTH excepts narrowed to
+  `(AttributeError, TypeError)` in the ship for scope hygiene;
+  both log with fight_id. Filed text preserved above; this line
+  documents the two-site landing.
+- **Item 4 scope UPDATE — dead-code strip is ONLY the unreachable
+  block after the final `return []`** inside `get_fight_commentary`
+  (content-anchor: begins with the comment
+  `# Look for raw engine result in completed events`; ~40 lines
+  duplicating the eng_result-extraction branch's logic). **The
+  synthetic-fallback branch (`if fight_result:` block) is NOT dead code**
+  — gate arm-3 falsified the session-inference to that effect; the
+  branch fires whenever `fight_id` is in `_completed_events` without
+  an `_engine_result` (a real production state), and the UI's
+  "always non-empty when possible" contract depends on it. See
+  cleared-suspect entry under `## Top-of-backlog` → "Recently
+  reconciled (closed)".
+
+**Gate at ship: 4 arms OLD (`6b873c4` via git worktree) vs NEW.**
+- Arm 1 poisoning-kill: OLD returns A's lines under B's key
+  + caches under B (poisoning); NEW returns `[]` + logs
+  `⚠️  commentary miss: {fid}` + does not cache. PASS.
+- Arm 2 regression exact-match: byte-identical. PASS.
+- Arm 3 synthetic reachability: same 6 synthetic lines returned
+  in both; OLD caches under fid, NEW does not. Also falsifies the
+  "synthetic branch is dead" reading.
+- Arm 4 re-poisoning under production write-path guard: OLD sticky
+  (r2 = synthetic; guard blocks the real store because synthetic
+  is already cached); NEW picks up real (r2 = REAL). Class-of-bug
+  kill validated end-to-end.
+
 #### Regression post-mortem — `9adfeba` → `68dbd52` [filed 2026-08-15]
 
 **Extraction equivalence gates must run the ENCLOSING FUNCTION
@@ -1603,6 +1681,17 @@ standard PA `server.log` grep sweep alongside existing markers.
 Any hit at production is a Path A crash under the enclosing
 `try/except` in `_simulate_fight`, which fell back to score-based
 sim and dropped commentary. First-line signal.
+
+**Deploy grep set update — 2026-08-19, COMMENTARY-STALE1 ship
+(`3e90dfe`).** Add `"commentary miss"` as a standing member of the
+grep sweep. Zero hits on the happy path (real commentary stored →
+hit at the exact-match branch). Any hit indicates a
+`get_fight_commentary` call for a `fight_id` that has neither
+stored commentary nor an entry in `_completed_events` — surfaces
+new callers, save-load boundary issues, or `fight_id` schema drift
+between store-side and read-side. Substring `"commentary miss"`
+catches the emitted `⚠️  commentary miss: {fight_id}` regardless
+of the ⚠️-vs-space count.
 
 **Reviewer miss recorded.** The v3 gate was endorsed without an
 enclosing-function requirement. Next extraction gate must either
