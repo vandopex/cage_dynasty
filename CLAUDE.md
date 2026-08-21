@@ -1760,22 +1760,35 @@ module-load when a systems import fails. Absence of those warnings
 is a necessary condition for the harness to have actually run
 production code.
 
-#### wsgi-610 [MEASURED, filed 2026-08-15]
+#### wsgi-610 [MEASURED 2026-08-15; re-measured 2026-08-20]
 
-**PA `/var/www/vandopegaming_pythonanywhere_com_wsgi.py` is 610
-bytes at HEAD, contradicting CLAUDE.md's 2026-07-07 "VERIFIED match
-... 479 bytes" claim.** Measured this pass. The +131-byte delta is
-not audited yet; not blocking (module-load prints on PA still
-resolve to expected paths — bare `import commentary` still hits
-`narrative/commentary.py`, `importlib.import_module("fotn")` still
-hits `systems/fotn.py`, per verifications since 2026-07-07 that
-continue to hold). Hand-diff on PA when convenient.
+**Correction, 2026-08-20 measurement.** PA
+`/var/www/vandopegaming_pythonanywhere_com_wsgi.py` measures
+**479 bytes** as of the MC ODDS post-deploy hand-diff. Repo
+`cage_dynasty_web/wsgi.py` is 610 bytes. The 131-byte delta is
+COMMENTS + WHITESPACE only: repo carries two extra explanatory
+comment lines (`# Add specific subdirs from game root — NOT the
+root itself` and `# (adding root would expose CLI fight_engine.py
+which shadows the web one)`) and one whitespace change on
+`project_home =` that PA does not have. Functional sys.path.insert
+lines (project_home / systems_path / narrative_path with the same
+target strings) are byte-identical between PA and repo. No sys.path
+behavior change.
+
+The prior 2026-08-15 measurement recorded PA at 610 bytes; today
+PA measures 479. **PA has shrunk since 2026-08-15**, presumably via
+a hand-edit on PA console that stripped the two comment lines.
+`git pull` on PA has tolerated this because the diff is in
+untracked bytes (whitespace/comments beneath tracked line
+identities). Drift is real but functional-equivalent;
+reconciliation direction (repo→PA or PA→repo) is Van's call.
 
 **Strike-and-preserve applied** to the `## Architecture / Known
 hazards` bullet claiming byte-equivalence — the byte-equivalence
 claim is retired for the current PA wsgi.py; the sys.path insertion
 order and bare-import resolution behavior claims following it
-remain UNCHANGED-IN-EFFECT. The file has grown; its role has not.
+remain UNCHANGED-IN-EFFECT. The file has grown in repo and shrunk
+on PA; its role has not.
 
 #### PA `fight_engine.py` drift re-confirmed [filed 2026-08-15]
 
@@ -2219,24 +2232,153 @@ regardless of any slot bias. Verdicts:
   ≈ ±14pp on a coin-flip pair. Escalated N=400 gives 2σ ≈ ±5pp.
   Step 3 display work must know this — near-even lines will
   read as 40-60% zone even when the true probability is 50%.
-- **ENGINE-STRIKE-SENS1 [HIGH diagnostic candidate, filed
-  2026-08-20].** +20 across all four striking stats (boxing,
-  kicks, clinch_striking, striking_defense) vs a symmetric-
-  elsewhere opponent moved P(win) by only +7pp at N=200 (2σ ≈
-  ±7pp — at the noise floor). Full-family attribute gaps produce
-  near-certain outcomes (M1: heavy fav 88 vs 55 across 10 stat
-  families → P(f1)=1.000). Hypotheses, none established:
-  (i) wiring defect muting striking stats in exchange resolution
-  (STYLE-DEAD1 precedent — a whole family of enum-comparison bugs
-  in this codebase has silently disabled features);
-  (ii) grappling / physical / mental legitimately dominate
-  outcomes and striking is secondary in this engine;
-  (iii) striking advantage expresses in METHOD (KO/TKO share)
-  rather than in win rate — M6/Step-4 counted wins only.
-  Pre-registered first check for the diagnostic: measure method
-  distribution and exchange-level strike outcomes under the same
-  buff; a method shift without a win shift resolves toward (iii).
-  Not scheduled; queued at Van's discretion.
+- **ENGINE-STRIKE-SENS1 [CLOSED 2026-08-21 — diagnostic complete,
+  design call outstanding].**
+
+  **ORIGINAL FINDING DOCUMENTED AS FALSE.** Filed 2026-08-20 as
+  "+20 across all four striking stats vs a symmetric-elsewhere
+  opponent moved P(win) by only +7pp at N=200 (2σ ≈ ±7pp)." N=2000
+  paired confirmation measured **+1.0pp ±2.8pp** (Step 1 arm B vs
+  A). Original +7pp was noise at 2σ; the "HIGH diagnostic
+  candidate" filing at ≤2σ without a confirmatory run at 4×N is
+  itself documented as a process defect (see PROCESS RULES below).
+  Original number preserved above, not deleted.
+
+  **ESTABLISHED RESULTS (MEASURED, N + CI in each):**
+  - Striking family 88 vs 55 across 4 attrs (Step 2 arm E, N=2000):
+    p_f1 = 0.5365 ±0.0223 (slot 1); arm E' = 0.5220 ±0.0223 (slot 2).
+  - Grappling family 88 vs 55 across 5 attrs (Step 2 arm F, N=2000):
+    p_f1 = 0.8035 ±0.0178; arm F' = 0.7980 ±0.0180. Same magnitude
+    gap in the grappling family produces ~7× the win-rate movement
+    of the striking family.
+  - Kicks-alone 74 vs 61 (Step 5 arm H3, N=500) — placed
+    deliberately below the fight_engine.py:2395 damage cliff
+    (att.kicks>=75 AND def.kicks<60) — **p_f1 = 0.4160 ±0.0441.
+    The better striker LOSES 58% of the time**, >3σ below chance.
+  - Boxing 88 vs 55 (Step 3 arm G1, N=2000): p_f1 = 0.4805 ±0.0223.
+    Point estimate on the wrong side of 0.500.
+  - P2 landing-rate curve (100k direct calls to
+    calculate_strike_success, grappler-pressure branches verified
+    cold, JAB/CROSS mix): atk_boxing 55→0.47845; 65→0.46907;
+    75→0.46551; 85→0.46276; 95→0.47508. Defender-side mirror:
+    def_sd 55→0.48162; 95→0.47466. Curve is flat with a mid-range
+    dip; 55-vs-75 out-lands 85-vs-75 by 1.6pp at ~7σ.
+  - Classifier-pinned arms (Step 7 P3, both fighters verified
+    `balanced`, all cliffs verified cold, N=2000 each):
+    J1 (all-75) = 0.4840 ±0.0223; J2 (boxing 80 vs 70) = 0.4770
+    ±0.0223; J3 (kicks 80 vs 70) = 0.4915 ±0.0224. All three
+    statistically indistinguishable from each other and from chance.
+
+  **FIVE MECHANISMS (all now anchored):**
+  1. **LANDING-FLAT/INVERT** — hit-chance formula
+     `success_chance = 0.20 + offense/(offense+defense+1) × 0.5`
+     at `fight_engine.py:2344` compresses a 33-point gap to ~2pp;
+     the upset branch at `:2346-2353` (offense < defense × 0.85 →
+     18% chance of 0.70 floor, 17% chance of +0.22 boost) can
+     invert the direction on close-boundary pairs. MEASURED (P2).
+  2. **DAMAGE-SKILL-ABSENT** — `calculate_strike_damage`
+     (`fight_engine.py:2364-2425`) reads `attacker.strength` for
+     base damage and power bonus. Boxing and clinch_striking appear
+     nowhere in this function. Kicks enters only as two binary
+     cliffs (`:2395` >=75/<60 → ×1.25; `:2397` >=65/<50 → ×1.15).
+     TRACED (Step 6 code); corroborated by P3 nulls.
+  3. **STYLE-CLIFF** — `detect_fighter_style`
+     (`fight_engine.py:1335-1467`): the balanced check requires
+     `skill_range <= 10 across [boxing, kicks, takedowns,
+     submissions, clinch_striking]` AND `avg_skill >= 68` (`:1354`).
+     Any single-family gap >10 breaks balanced and enters a
+     ladder whose first rung is sambo at wrestling_score>=72 AND
+     bjj_score>=68 (`:1385`). Sambo carries `_STYLE_WEIGHTS`
+     strike×0.9, grapple×1.3, sub×1.4 (`:1926`) plus +200 sub_weight
+     tiers under BJJ/sambo branches (`:1798, 1821, 1838, 1867`).
+     Labels eat stats. MEASURED (P1: H2 both sambo, H3 favored
+     balanced / unfavored sambo, Step 1 defaults → ground_and_pound).
+  4. **JUDGE-WEIGHTS** — `score_round` (`fight_engine.py:3762-3778`):
+     `damage_dealt × 1.5, significant_strikes_landed × 1.0,
+     takedowns_landed × 8.0, control_time × 1.5, knockdowns × 20.0,
+     submission_attempts × 4.0`. On H1 baseline means the sig-strikes
+     count channel is ~16 pts/round vs damage ~116 pts/round;
+     striking-skill's only scorecard voice is the count channel
+     (~7% of score) because its damage channel is empty (see #2).
+     TRACED; corroborated by decision-share splits.
+  5. **SD-AS-ANTI-CLINCH** — `striking_defense` at
+     `fight_engine.py:2560` (`defense = defender.striking_defense
+     + defender.speed // 3`) guards `CLINCH_ENTRY` grappling
+     resolution, and at `:2575, 2577` gates a distance-keeping
+     bonus for elite sd fighters against clinch closers. Effect on
+     G4 (Step 3): win-neutral (0.4905 ±0.0224) but violently
+     method-active — total finishes ~1088 vs ~850 in comparable
+     arms; both fighters' KO+TKO up; submissions collapsed
+     globally. Classifier ruled out for G4 (P1: both `balanced`).
+     TRACED + MEASURED.
+
+  **OBSERVATIONS FILED, NOT CHASED:**
+  - `final_round=None` on 26,500+ consecutive sims across five
+    Steps. NarratedFightResult carries the field; nothing populates
+    it. STYLE-DEAD1-shape. Not chased this arc.
+  - Draws scale with striking gap: 11 baseline → 68/82 in Step 2
+    striking arms → 28/15 in grappling arms. Unexplained scoring
+    interaction.
+  - Slot-lean in Step 5 per-fighter stat differentials that the
+    win column doesn't show: H1 symmetric fixture shows f1-leaning
+    sig-strikes/control/damage. Instrument-level lean; all
+    differentials should be read against H1, not against zero.
+  - Baseline 75/75 sits on multiple engine thresholds — takedowns
+    >=75 grants +10 striking defense to every fighter (`:2300`);
+    kicks damage cliff needs >=75; sub-weight ladders at 75. Our
+    "neutral" baseline was a loaded position.
+  - **M6a Step-1-fixture caveat.** Step 1's default-defaults
+    (strength/speed/cardio/chin=70; takedowns=65, td_def=70,
+    top_control=65, subs=60, guard=65, clinch_control=65) resolve
+    to style = `ground_and_pound` per P1 direct call. Step 2/3
+    all-75 fixtures resolve to `balanced`. M6a's 10-block sweep on
+    Step-1 defaults measured `ground_and_pound`-style behavior;
+    Step 2/3 aggregate readings measured `balanced`-style behavior.
+    The pairs are not equivalent baselines. Within-arm CRN
+    comparisons unaffected; cross-arm generalization needs the
+    caveat.
+  - Arm C GnP asymmetry: dominant grappler (X_gr_str) won by GnP
+    6 times; his outmatched opponent won by GnP 91 times. P1
+    classifier lines from `outputs/engine_strike_sens1_step7_out.txt`
+    (verbatim):
+    `Step1_C_slot1_XGRSTR                     sambo                True`
+    `Step1_C_slot2_YEQ                        ground_and_pound     False`
+    → labels split (X_gr_str reclassified to sambo by the +20
+    grappling family; opponent stayed ground_and_pound). Likely
+    **STYLE-CLIFF** (mechanism #3), not a new finding. Verify
+    before opening as a separate candidate.
+
+  **PROCESS RULES ADOPTED (this arc):**
+  (a) **No HIGH diagnostic filing at ≤2σ without a confirmatory
+      run at 4× N.** ENGINE-STRIKE-SENS1's original +7pp at N=200
+      with 2σ=±7pp burned two sessions before the N=2000
+      confirmation caught it. Rule applies to all future
+      diagnostic filings.
+  (b) **Reported statistics must be pasted from output files, never
+      transcribed.** Adopted after one fabricated-statistic incident
+      this arc: the Step 5 report typed "246/234/20" as an H1
+      win-count that has never appeared in any output file
+      (caught only when the architect demanded the source line;
+      the raw file always contained 250/230/20). Every reported
+      statistic must be a grep hit from a persisted output.
+  (c) **Primary evidence delivered inline, not as tool-output panes;
+      no summary in place of primary evidence.** Adopted after the
+      Step 4 report was delivered as collapsed sed panes that
+      failed to survive the paste to the architect; only cc's
+      summary reached them, and cc then self-scored its own
+      predictions against the un-delivered primary. Code bodies
+      and long pastes must be quoted as fenced blocks inline in
+      the report text; scoring predictions is the architect's job.
+  (d) **Redact tokens in pasted output.** Any output that contains
+      credentials, session tokens, or API keys must be redacted at
+      paste time. (Follows the general secret-handling rule.)
+
+  **Design call outstanding.** Fix candidates each reshape the
+  balance surface: skill-into-damage, gradient not cliff, retuned
+  upset branch, classifier hysteresis or continuous styles,
+  judge-weight rebalance. This arc's harness (`outputs/
+  engine_strike_sens1_*.py`, CSV dumps) is the before/after
+  instrument for whichever subset is chosen. Not scheduled.
 - **Live-inconsistency observation (MEASURED, docs-only).**
   Path A (`_run_real_engine`) and Path B (`_simulate_card_fights`)
   DIVERGE on the `is_main_event` sim kwarg for co_main slot
@@ -2262,8 +2404,9 @@ regardless of any slot bias. Verdicts:
   not measured). Recompute on PA before adjusting `MC_ODDS_N_BASE`
   or `MC_ODDS_N_MAX`. Needs a live card to measure meaningfully;
   Van starts fresh saves.
-- **ENGINE-STRIKE-SENS1 diagnostic** — queued at Van's
-  discretion (above).
+- **ENGINE-STRIKE-SENS1 design call** — diagnostic closed
+  2026-08-21 (see above); five defect mechanisms filed; design
+  choice among fix candidates outstanding.
 
 ### `5c1477d` resolution (ledger correction)
 
