@@ -9,6 +9,7 @@ a specific data format) and the real game engine classes.
 import sys
 import os
 import threading
+import zlib
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 
@@ -1228,6 +1229,28 @@ CORNER_BONUS_BASE              = 1.0   # base bonus magnitude when advice fires
 CORNER_BONUS_PER_RATING_POINT  = 0.04  # extra bonus per rating point above 60
 CORNER_SECONDARY_DOMAIN_MIN    = 80    # min rating to give secondary-domain reads
 CORNER_GENERALIST_DEPTH_MIN    = 75    # MMA head coach min rating for deeper reads
+
+# ── MC ODDS (Phase 3 step 2) ──────────────────────────────────────
+# Pre-fight win probability from Monte-Carlo simulation on the real
+# engine. Assembly-per-sim (Step 1c ratified): _assemble_prefight is
+# called fresh inside each MC sim to reproduce the live-fight
+# lifecycle exactly. Adaptive N: 50 base; if the base landed in the
+# uncertainty band, escalate to 400 total. Save/restore global RNG
+# state around each MC batch (CLAUDE.md save/restore-required-for-
+# presim rule — 9/20 seeds flip without it).
+#
+# Seeding: per-fight seed base = zlib.crc32(fight_id) + SEED_OFFSET;
+# each sim uses base + sim_index. Deterministic per fight across
+# processes (crc32 is stable, unlike Python's PYTHONHASHSEED-salted
+# str hash). Different fights draw different sequences → one unlucky
+# batch is a per-fight artifact, not a global sequence pinned onto
+# every matchup.
+MC_ODDS_N_BASE          = 50
+MC_ODDS_N_MAX           = 400
+MC_ODDS_BAND_LOW        = 0.35   # inside [BAND_LOW, BAND_HIGH] → escalate
+MC_ODDS_BAND_HIGH       = 0.65
+MC_ODDS_SEED_OFFSET     = 0      # global offset added to every fight's crc32 base;
+                                 # bumped only if a probe needs stream isolation
 
 # ── Training history ──────────────────────────────────────────────────────────
 # Ship A: rolling per-fighter training log surfaced on dashboard.
@@ -3431,6 +3454,9 @@ class GameBridge:
                         rec = self._game_state.get_fighter(fid) if self._game_state else None
                         pre_ranks[fid] = self._get_fighter_rank(rec) if rec else None
 
+            # ── MC ODDS — event-start compute for player-involved fights ──
+            self._precompute_odds_for_fights(fights_this_week)
+
             for fight in fights_this_week:
                 # Skip if either fighter isn't cleared to fight (injury)
                 if INJURY_AVAILABLE and self._injury_system:
@@ -3586,6 +3612,8 @@ class GameBridge:
                     if f.get("is_ai_fight") and not f.get("is_player_fight")
                 ]
                 if ai_fights_this_week:
+                    # MC ODDS — event-start compute for AI-vs-AI fights
+                    self._precompute_odds_for_fights(ai_fights_this_week)
                     ai_event = self._simulate_card_fights(card, ai_fights_this_week)
                     if ai_event:
                         # ── Merge player fights into this card if same event ──
@@ -5272,6 +5300,10 @@ class GameBridge:
             # FINISH-DETAIL-PERSIST — canonical semantics: loser's rank
             "specialty_method":       _specialty,
             "opponent_rank_at_fight": _loser_rank_now,
+            # MC ODDS — pre-fight win probabilities (Phase 3 step 2).
+            # Absent on legacy saves and on fights where odds compute
+            # was skipped/failed. Never default to displayed 50/50.
+            "mc_odds":                fight.get("mc_odds"),
         }
 
         # ── Rivalry detection ────────────────────────────────────
@@ -13792,6 +13824,8 @@ class GameBridge:
                     # FOTN-FIDELITY: per-round stats for scorer
                     "fighter1_stats":         _f1_ps,
                     "fighter2_stats":         _f2_ps,
+                    # MC ODDS — pre-fight win probabilities (Phase 3 step 2)
+                    "mc_odds":                fight.get("mc_odds"),
                 }
                 event["fights"].append(result)
                 print(f"   [DRAW] {f1.name} vs {f2.name} — Draw (R{rnd})")
@@ -13956,6 +13990,8 @@ class GameBridge:
                 # FOTN-FIDELITY: per-round stats for scorer
                 "fighter1_stats":         _f1_ps,
                 "fighter2_stats":         _f2_ps,
+                # MC ODDS — pre-fight win probabilities (Phase 3 step 2)
+                "mc_odds":                fight.get("mc_odds"),
             }
             event["fights"].append(result)
             # event["main_event"] is set only when the actual main_event-
@@ -17154,6 +17190,164 @@ class GameBridge:
             "style_mod": style_mod,
         }
 
+    # ── MC ODDS (Phase 3 step 2) ──────────────────────────────────────
+    def _compute_mc_odds_for_fight(
+        self, fight: Dict, fighter1, fighter2,
+        f1_name: str, f2_name: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Run adaptive-N Monte-Carlo odds on the real engine for one
+        fight. Bundle assembled fresh per sim (Step 1c ratified) so the
+        aggression buff at fight_integration.py:403-412 fires exactly
+        once per sim, byte-identical to one live fight's lifecycle.
+        Global RNG state save/restored around the whole batch per
+        CLAUDE.md rule (save/restore-required-for-presim). Returns None
+        on any failure — one bad fight cannot kill the card."""
+        import random as _mc_random
+
+        if not FIGHT_ENGINE_AVAILABLE or _simulate_narrated_fight_fn is None:
+            return None
+        f1_id = getattr(fighter1, 'fighter_id', None)
+        f2_id = getattr(fighter2, 'fighter_id', None)
+        if not f1_id or not f2_id:
+            return None
+
+        # Mirror the live path per fight (ratified kwarg policy).
+        # Player-involved → Path A kwargs; AI-vs-AI → Path B kwargs.
+        _player_fids = (
+            {f.fighter_id for f in self.get_player_fighters()}
+            if self._game_state else set()
+        )
+        _player_involved = (f1_id in _player_fids or f2_id in _player_fids)
+        if _player_involved:
+            _kw = dict(
+                fatigue_source="attr",
+                apply_cut_penalty=True,
+                apply_player_buffs=True,
+                apply_sponsor_boost=True,
+                compute_style_mod=True,
+                verbose=False,
+            )
+        else:
+            _kw = dict(fatigue_source="fdata")  # Path B defaults
+
+        # Per-fight seed base — crc32(fight_id) + global offset. crc32
+        # is stable across Python processes (unlike PYTHONHASHSEED-
+        # salted str hash), so odds are byte-reproducible per fight
+        # across restarts / deploys. Different fights → different
+        # sequences → the "one unlucky batch pinned globally" failure
+        # mode of a shared sequence is neutralized. Fallback to
+        # f1_id:f2_id if the fight dict lacks fight_id (defensive;
+        # every real card fight carries one).
+        _fight_id = str(fight.get("fight_id", "") or f"{f1_id}:{f2_id}")
+        _seed_base = zlib.crc32(_fight_id.encode("utf-8")) + MC_ODDS_SEED_OFFSET
+
+        _saved_rng = _mc_random.getstate()
+        _f1_wins = 0
+        _n_done = 0
+        _n_target = MC_ODDS_N_BASE
+        try:
+            while _n_done < _n_target:
+                _mc_random.seed(_seed_base + _n_done)
+                try:
+                    _bundle = self._assemble_prefight(
+                        fight, fighter1, fighter2,
+                        f1_name, f2_name, f1_id, f2_id,
+                        **_kw,
+                    )
+                    # is_main_event derivation MIRRORS THE LIVE PATH per
+                    # ratified rule (a): player-involved uses Path A
+                    # (main_event OR co_main → True); AI-vs-AI uses Path B
+                    # (main_event only → True). Path A/B disagree on
+                    # co_main; that is a filed live-inconsistency
+                    # observation, not introduced by this arc.
+                    if _player_involved:
+                        _mc_is_main = (_bundle["card_slot"]
+                                       in ("main_event", "co_main"))
+                    else:
+                        _mc_is_main = (_bundle["card_slot"] == "main_event")
+                    _eng = _simulate_narrated_fight_fn(
+                        _bundle["fa1"], _bundle["fa2"],
+                        rounds=_bundle["total_rounds"],
+                        # is_title_fight passed for defense-in-depth;
+                        # dead once config is passed (fi consumes it only
+                        # in the config-fallback branch).
+                        is_title_fight=_bundle["is_title_fight"],
+                        starting_stamina_f1=_bundle["starting_stamina_f1"],
+                        starting_stamina_f2=_bundle["starting_stamina_f2"],
+                        gameplan_f1=_bundle["gameplan_f1"],
+                        gameplan_f2=_bundle["gameplan_f2"],
+                        card_slot=_bundle["card_slot"],
+                        is_main_event=_mc_is_main,
+                        intro_f1=_bundle["intro_f1"],
+                        intro_f2=_bundle["intro_f2"],
+                        # Config threading — same conditional form the
+                        # live sites use (game_bridge.py:13645, 17796).
+                        # WITHOUT this, MC ran under _TRIPLE_FI_FALLBACK
+                        # (standup=6) instead of _TRIPLE_LIVE_PLAY
+                        # (standup=10) — pre-commit parity gate caught it.
+                        **({"config": _bundle["config"]}
+                           if _bundle["config"] else {}),
+                    )
+                except Exception:
+                    # Skip this sim, do not crash the batch.
+                    _n_done += 1
+                    continue
+                _wid = getattr(_eng, 'winner_id', None)
+                if _wid == f1_id:
+                    _f1_wins += 1
+                # Draws / f2 wins count against f1; that's fine — probability
+                # is P(f1 wins), draws are ~0% in MMA and land in P(f2 or draw).
+                _n_done += 1
+
+                # After base: decide whether to escalate.
+                if _n_done == MC_ODDS_N_BASE and _n_target == MC_ODDS_N_BASE:
+                    _p = _f1_wins / _n_done
+                    if MC_ODDS_BAND_LOW <= _p <= MC_ODDS_BAND_HIGH:
+                        _n_target = MC_ODDS_N_MAX
+        finally:
+            _mc_random.setstate(_saved_rng)
+
+        if _n_done == 0:
+            return None
+        _p_f1 = _f1_wins / _n_done
+        return {
+            "f1_id":   f1_id,
+            "f2_id":   f2_id,
+            "p_f1":    _p_f1,
+            "p_f2":    1.0 - _p_f1,
+            "n_sims":  _n_done,
+        }
+
+    def _precompute_odds_for_fights(self, fights: List[Dict]) -> None:
+        """Attach MC odds to each fight dict in-place under key
+        `mc_odds`. Skips fights that already carry odds (defensive).
+        Any per-fight failure is logged and swallowed — a bad fight
+        cannot block the rest of the card."""
+        if not fights:
+            return
+        for _fight in fights:
+            if _fight.get("mc_odds") is not None:
+                continue
+            _f1id = _fight.get("fighter1_id")
+            _f2id = _fight.get("fighter2_id")
+            if not _f1id or not _f2id or not self._game_state:
+                continue
+            _f1 = self._game_state.get_fighter(_f1id)
+            _f2 = self._game_state.get_fighter(_f2id)
+            if not _f1 or not _f2:
+                continue
+            _f1n = getattr(_f1, 'name', _fight.get("fighter1_name", "F1"))
+            _f2n = getattr(_f2, 'name', _fight.get("fighter2_name", "F2"))
+            try:
+                _odds = self._compute_mc_odds_for_fight(
+                    _fight, _f1, _f2, _f1n, _f2n,
+                )
+            except Exception as _oe:
+                print(f"⚠️  MC odds failed for {_fight.get('fight_id','?')}: {_oe}")
+                _odds = None
+            if _odds:
+                _fight["mc_odds"] = _odds
+
     def _inject_corner_advice(
         self,
         commentary_lines: List[str],
@@ -17905,6 +18099,8 @@ class GameBridge:
             # FOTN-FIDELITY: per-round stats for scorer full-fidelity branch
             "fighter1_stats": eng_result.fighter1_stats,
             "fighter2_stats": eng_result.fighter2_stats,
+            # MC ODDS — pre-fight win probabilities (Phase 3 step 2)
+            "mc_odds":        fight.get("mc_odds"),
         }
 
         # ── Fight injury rolls for player fights ─────────────────────
