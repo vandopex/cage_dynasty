@@ -2091,6 +2091,187 @@ commit for future work. Every (INFERRED) tag above will be
 validated against the actual code path at implementation time —
 Van handoff choices need to survive first contact with bytes.
 
+### MC ODDS — SHIPPED (Phase 3 step 2) [ratified 2026-08-19, code `4ef0bd4`]
+
+Decisions ratified at ship, sourced to the pre-implementation spec
+above (§MC ODDS — SPEC) and the Step 1b/1c/parity-gate/M6-audit
+iteration:
+
+- **(a) Kwarg policy MIRRORS THE LIVE PATH PER FIGHT.** Player-
+  involved → Path A: fatigue_source="attr", apply_cut_penalty=True,
+  apply_player_buffs=True, apply_sponsor_boost=True,
+  compute_style_mod=True. AI-vs-AI → Path B: fatigue_source="fdata",
+  all other kwargs default False. Player-involvement resolved via
+  the `get_player_fighters()`-derived predicate used inside
+  `_assemble_prefight` and at the Path A player-fids resolution.
+  `is_main_event` derivation also mirrors per fight — player-
+  involved: `slot in {main_event, co_main}` (Path A); AI-vs-AI:
+  `slot == main_event` (Path B).
+- **(b) Assembly PER-SIM.** `_assemble_prefight` is called fresh
+  inside each MC sim. Rationale (Step 1b mutation finding): the
+  aggression buff at `fight_integration.py:403-412` is an in-place
+  mutation on the caller's `FighterAttributes` and stacks under
+  bundle reuse. Assembly-per-sim reproduces the live-fight lifecycle
+  (fresh throwaway objects per fight) byte-identically; the buff
+  fires exactly once per sim. Cost is amortized (M4 timing).
+- **(c) Compute at EVENT START.** Odds fire once per fight at the
+  start of the event containing that fight — for player-involved
+  fights via a `_precompute_odds_for_fights` call before the
+  player fight-sim loop in `_advance_week_impl`, for AI-vs-AI
+  fights before `_simulate_card_fights`. Fatigue divergence from
+  fight-time state is INTENDED — see spec §Compute point for the
+  6 fight-time-only inputs. No re-computation as week progresses;
+  no line movement in v1.
+- **(d) Per-fight seed base.** Each fight's MC batch seeds RNG
+  with `zlib.crc32(fight_id) + MC_ODDS_SEED_OFFSET + sim_index`.
+  crc32 is stable across Python processes (unlike Python's str
+  hash, which is PYTHONHASHSEED-salted and would silently break
+  reproducibility across restarts). Deterministic per fight
+  across processes; different fights draw different sequences.
+  One unlucky N=50 batch is now a per-fight artifact, not a
+  global sequence pinned onto every matchup. No line movement is
+  possible by construction — recomputing identical inputs on the
+  same fight_id yields identical odds.
+  Ratified 2026-08-19; superseded the initial "identical sequence
+  for every fight" scheme after M6a's 10-block sweep showed
+  single-N=50 batch noise floor ~±14pp on symmetric matchups.
+- **(e) N_BASE/N_MAX stay at 50/400.** Adaptive: 50 base;
+  escalate to 400 if base landed in [0.35, 0.65] uncertainty band.
+  Pending PA timing measurement — no re-tuning until PA is
+  measured.
+- **Storage.** Per-fight `mc_odds` dict on both the fight dict
+  (pre-sim) and each result dict (post-sim, 4 propagation sites:
+  score-fallback `_simulate_fight`, Path B non-draw + draw, Path
+  A `_run_real_engine`). Shape:
+  ```
+  {"f1_id": str, "f2_id": str,
+   "p_f1": float, "p_f2": float, "n_sims": int}
+  ```
+  Forward-only: `fight.get("mc_odds")` returns None on legacy
+  saves and on fights where compute was skipped/failed. Never
+  default to a displayed 50/50 — absent means absent.
+
+**Pre-commit parity-gate finding (MEASURED).** First implementation
+omitted `config=` on the MC sim call, silently running under
+`_TRIPLE_FI_FALLBACK` (55, 0.48, standup=6) — a sanctioned triple
+that passes `_assert_sanctioned_config`'s allowlist but is NOT the
+`_TRIPLE_LIVE_PLAY` (55, 0.48, standup=10) live-play runs.
+`standup_threshold` is a known outcome-moving lever (73/78 fixture
+fights moved at 6 vs 10 per STAGE 1 addendum measurement above).
+Fix: thread `_bundle["config"]` via the same `**({"config": ...}
+if _fight_cfg else {})` form the live sites use. M5 config-
+threading harness proof (`outputs/mc_odds_harness_out.txt`)
+directly measures 3/3 MC sims receive standup_threshold=10,
+damage=0.48, exchanges=55, submission_progress_to_finish=70.0,
+submission_escape_threshold=85.0.
+
+**M2 history correction (documented false, not dropped).** First
+harness M2 built its reference sim by re-derivation, omitting
+`config=` — so both the reference sim AND the MC sim ran under
+the fallback triple. Bytes matched because both were wrong the
+same way. That "byte-identical fight result" reading is FALSE-AS-
+PROOF-OF-PARITY at the pre-fix diff and has been superseded by
+the current M2 which byte-copies its reference sim from the Path A
+call site. Pattern lesson: harness reference paths must be
+byte-anchored to the live call, not rebuilt from memory.
+
+**M6 INSTRUMENT SAGA (documented false, not dropped).** The first
+M6 was VACUOUS: two byte-identical clone fighters + a deterministic
+per-seed sim → Run 2 was byte-identically the SAME sim as Run 1
+with labels swapped. p_f1 = 0.340 in both runs was guaranteed
+regardless of any slot bias. Verdicts:
+- "Corner bias detected" — **RETRACTED** (unestablished).
+- "Live-play has been running with this bias since forever" —
+  **RETRACTED** (INFERRED from a vacuous instrument).
+- Step 3 clone-determinism re-run byte-exact confirms the sim is
+  deterministic per seed given (fighters, config); slot alone does
+  not perturb outcome on identical inputs.
+- M6a 10-block sweep (10 × N=50 on the clone pair, seeds shifted):
+  aggregate 0.482 across 500 sims, 2σ CI [0.437, 0.527] contains
+  0.500. The production seed batch (0..49) reading of p_f1=0.340
+  was an unlucky draw at the low end of the scatter, not a
+  systematic effect on the pair.
+- M6c/Step-4 discrimination probes were designed under the
+  assumption "striking-only buff should move p_f1 sharply" —
+  that assumption is falsified by the ENGINE-STRIKE-SENS1 finding
+  below. Those probes cannot certify slot-symmetry.
+
+### FILED OBSERVATIONS (from MC ODDS ship 2026-08-19, code `4ef0bd4`)
+
+- **Balance observation (INFERRED, single N=50 dev harness).**
+  78-OVR vs 72-OVR (6-point gap) measured at p_f1=0.900 on the
+  post-fix `_TRIPLE_LIVE_PLAY` config + per-fight-seeding
+  (`outputs/mc_odds_harness_out.txt`, single N=50 batch, crc32-
+  seeded). Small OVR gaps produce near-deterministic favorites.
+  Consequences if the reading holds across seeds and an OVR-gap
+  grid: escalation band rarely fires, upsets rare, competitive
+  odds lines rare. **NOT an odds bug** — odds honestly report
+  engine behavior. Filed as a fix-the-engine candidate; needs a
+  proper multi-seed sweep across OVR gaps before any tuning
+  conclusion. Prior single-batch readings under the old shared-
+  sequence scheme (0.960 at same OVR pair, and 0.920 post-config-
+  fix pre-seeding-change) are documented false-as-generalized
+  (both measured under stale seeding + one pre-fix under wrong
+  config).
+- **N=50 noise floor (MEASURED).** M6a 10-block sweep on a
+  symmetric clone pair scattered 0.34–0.64 across blocks
+  (aggregate 0.482, per-block sd ≈ 0.08). Single N=50 batch 2σ
+  ≈ ±14pp on a coin-flip pair. Escalated N=400 gives 2σ ≈ ±5pp.
+  Step 3 display work must know this — near-even lines will
+  read as 40-60% zone even when the true probability is 50%.
+- **ENGINE-STRIKE-SENS1 [HIGH diagnostic candidate, filed
+  2026-08-20].** +20 across all four striking stats (boxing,
+  kicks, clinch_striking, striking_defense) vs a symmetric-
+  elsewhere opponent moved P(win) by only +7pp at N=200 (2σ ≈
+  ±7pp — at the noise floor). Full-family attribute gaps produce
+  near-certain outcomes (M1: heavy fav 88 vs 55 across 10 stat
+  families → P(f1)=1.000). Hypotheses, none established:
+  (i) wiring defect muting striking stats in exchange resolution
+  (STYLE-DEAD1 precedent — a whole family of enum-comparison bugs
+  in this codebase has silently disabled features);
+  (ii) grappling / physical / mental legitimately dominate
+  outcomes and striking is secondary in this engine;
+  (iii) striking advantage expresses in METHOD (KO/TKO share)
+  rather than in win rate — M6/Step-4 counted wins only.
+  Pre-registered first check for the diagnostic: measure method
+  distribution and exchange-level strike outcomes under the same
+  buff; a method shift without a win shift resolves toward (iii).
+  Not scheduled; queued at Van's discretion.
+- **Live-inconsistency observation (MEASURED, docs-only).**
+  Path A (`_run_real_engine`) and Path B (`_simulate_card_fights`)
+  DIVERGE on the `is_main_event` sim kwarg for co_main slot
+  fights: Path A `slot in ("main_event", "co_main")` → True;
+  Path B `slot == "main_event"` → False. Latent live
+  inconsistency, not introduced by the odds arc; MC mirrors both
+  per ratified rule (a). Needs its own diagnosis; not this arc.
+- **Refactor candidate (STRONG, parked).** Shared sim-invocation
+  helper for Path A / Path B / MC. Three hand-built call sites
+  already drifted once (the fallback-triple bug this parity gate
+  caught). Touches both live paths so it needs its own
+  equivalence gate — do not bundle with a feature ship. File
+  and hold for its own single-purpose commit.
+- **Cleanup candidate (C from Step 1b, parked).** Refactor
+  `fight_integration.py:403-412` aggression buff out of in-place
+  `FighterAttributes` mutation. Blocks bundle-reuse patterns.
+  Not scheduled.
+
+### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
+
+- **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
+  full-path this ship. Spec expects 2-5× slower on PA (INFERRED,
+  not measured). Recompute on PA before adjusting `MC_ODDS_N_BASE`
+  or `MC_ODDS_N_MAX`. Needs a live card to measure meaningfully;
+  Van starts fresh saves.
+- **ENGINE-STRIKE-SENS1 diagnostic** — queued at Van's
+  discretion (above).
+
+### `5c1477d` resolution (ledger correction)
+
+Commit `5c1477d` ("docs: close COMMENTARY-STALE1 arc + convert
+FOTN caveat-#2 to MEASURED", 2026-08-18) exists and is a docs-only
+close-out. Its omission from the prior close-out table was a
+ledger gap, not fabrication.
+
 ## Certified cell baselines (symmetric skill)
 
 **Principle**: certified balance numbers live in this committed record
