@@ -14,3 +14,7 @@ __pycache__/
 saves/
 cage_dynasty_web/saves/
 deploy.sh
+
+# Claude Code per-directory config (cc-created, not project artifact)
+.claude/
+cage_dynasty_web/.claude/
