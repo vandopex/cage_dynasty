@@ -2397,6 +2397,103 @@ regardless of any slot bias. Verdicts:
   `FighterAttributes` mutation. Blocks bundle-reuse patterns.
   Not scheduled.
 
+- **STRIKE-SKILL-DMG1 phase 1a [SHIPPED 2026-08-22, commits
+  6df956e + 668a7b1; instruments c06b0f9 + 713c0a7 + 5cb1468]. NOT
+  YET DEPLOYED TO PA as of filing.**
+
+  **DESIGN DECISION (Van, 2026-08-22).** Fix for ENGINE-STRIKE-SENS1
+  mechanism #2 (DAMAGE-SKILL-ABSENT): one channel at a time,
+  skill-into-damage first. Striking to remain higher-variance than
+  grappling (family 88v55 target band 0.65-0.70, NOT parity with
+  grappling's 0.80). Single-stat weakness and kick-cliff interaction
+  deliberately deferred to phase 1b/1c rather than compensated by a
+  higher K.
+
+  **MECHANISM.** calculate_strike_damage (cage_dynasty_web/
+  fight_engine.py) now applies, after the strength terms and before
+  the kick cliffs:
+      damage *= max(STRIKE_SKILL_DAMAGE_FLOOR,
+                    1 + (STRIKE_SKILL_DAMAGE_K * (_skill - 75) / 100))
+  Family mapping mirrors calculate_strike_success: boxing punches ->
+  attacker.boxing; kicks -> attacker.kicks; clinch + fallback (incl.
+  GnP menu) -> attacker.clinch_striking. Attacker-side only, zero RNG
+  consumed, plain-global reads (sweepable by module attribute rebind).
+  STRIKE_SKILL_DAMAGE_K = 1.0; STRIKE_SKILL_DAMAGE_FLOOR = 0.25
+  (deterministically inert at K=1.0 for legal skills 1-99, factor
+  range [0.26, 1.24]; exists to protect future K retunes). Reaches
+  BOTH sim paths (fight_engine.py pre-gen caller + fight_integration
+  live caller) by construction — ratified as intended: pre-gen and
+  live-play must share physics or MC odds lie.
+
+  **GATES (all MEASURED, artifacts in outputs/).**
+  - Commit 1 (6df956e, K=0): bit-identical equivalence vs fresh
+    baseline at c06b0f9 — data-only diff empty exit=0, MD5 collision
+    on stripped streams. Arms E/F/G1/H3/J1, CRN, standup==10
+    asserted per arm.
+  - Commit 2 (668a7b1, K=1.0 + floor): per-arm CSV-domain MD5s
+    bit-match the sweep's K=1.0 rows on all 5 arms (E 42ed2d78...,
+    G1 6c2f82ac..., H3 03c579a0... first-500 under CRN, J1
+    a8a5b680..., F 11d4be8c...). Hasher discrimination PROVEN before
+    acceptance: E and G1 hashes distinct across all four sweep K
+    files, tuple counts 2000 per source.
+  - Discriminators: J1 (all-75) and F (grappling 88v55, striking
+    75/75) bit-identical across K ∈ {0.5, 1.0, 1.5, 2.0} AND across
+    both instruments. J1/F p_f1 reproduce the SENS1 filed values to
+    4 decimals (0.4840 / 0.8035) — instrument continuity with the
+    closed diagnostic confirmed at bit level.
+
+  **K-CHOICE GRID (N=2000/arm, from
+  outputs/strike_skill_dmg1_sweep_out.txt).** E (striking family
+  88v55): 0.5365 baseline -> 0.6160 (K=0.5) / 0.6945 (K=1.0) /
+  0.7610 (K=1.5) / 0.7895 (K=2.0); KO+TKO share 0.306->0.567.
+  G1 (boxing alone 88v55): 0.4805 -> 0.5085/0.5200/0.5485/0.5590.
+  H3 (kicks 74v61): ~0.464 flat across all K. (H3 K=0 baseline at
+  N=2000 not measured this arc; SENS1's filed H3 baseline is
+  0.4160 ±0.0441 at N=500 — same seeds, smaller sample, not a
+  discrepancy.) K=1.0 chosen: E lands in the 0.65-0.70 band with
+  KO+TKO 0.383; higher K rejected as using one dial to compensate
+  for channels still broken (flat landing #1, kick cliffs) whose
+  future fixes will stack on this one.
+
+  **FINDINGS FILED WITH THE SHIP.**
+  - G1 single-stat weakness: boxing-alone 88v55 reaches only 0.5590
+    even at K=2.0 — a lone striking stat rides on a minority of
+    offense while landing stays flat. Phase 2 (#1 landing curve)
+    territory, not a K problem.
+  - H3 K-flatness is arithmetic, not wiring: attacker kicks 74 sits
+    at the 75 neutral point (factor ~0.99); lift comes only from the
+    61-defender's weakened kick output, a minority slice. "Better
+    kicker wins" needs phase 1b de-cliff, not more K.
+  - Draws shrink as K rises (E arm: 65 -> 41). Partially explains
+    the SENS1 "draws scale with striking gap" observation as
+    damage-parity scoring ties that the dial breaks.
+
+  **PROCESS INCIDENTS (this arc, logged not hidden).**
+  - 713c0a7 fired after its own written STOP (cc self-flagged; Van
+    accepted rather than reverted — a reset would have orphaned the
+    sweep's provenance header). Standing rule since: commits fire
+    ONLY on Van's literal "commit approved — go". Inferred/pattern
+    approval does not qualify.
+  - H3 N changed 500->2000 in the sweep without being flagged;
+    caught by the architect from the grid. Instrument-config changes
+    must be declared before results are read.
+  - Commit-2 acceptance gate required an instrument swap (sweep
+    recorded dict-domain hashes; acceptance needed CSV-domain).
+    Swap was surfaced honestly and the replacement hasher was
+    proven to discriminate (distinct E/G1 hashes across K) before
+    the gate result was accepted. Correct handling; filed as the
+    template for "adjusted instrument" cases.
+
+  **QUEUE.** Phase 1b: replace kick cliffs (:2394-2398 region,
+  ×1.25 / ×1.15 binaries) with a gradient, measured against the
+  1a after-state; re-probe H3. Phase 1c candidates, each own arc:
+  landing-curve retune (#1), classifier hysteresis (#3), SD
+  disentangle (#5), judge-weight re-measure (#4 — may need nothing
+  now that damage carries skill). Live-roster violence check
+  (finish-rate drift on real save populations at K=1.0) owed
+  opportunistically at next live card, alongside the carried PA
+  timing measurement.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
@@ -2404,9 +2501,11 @@ regardless of any slot bias. Verdicts:
   not measured). Recompute on PA before adjusting `MC_ODDS_N_BASE`
   or `MC_ODDS_N_MAX`. Needs a live card to measure meaningfully;
   Van starts fresh saves.
-- **ENGINE-STRIKE-SENS1 design call** — diagnostic closed
-  2026-08-21 (see above); five defect mechanisms filed; design
-  choice among fix candidates outstanding.
+- **ENGINE-STRIKE-SENS1 design call** — RESOLVED 2026-08-22:
+  skill-into-damage chosen first (Van), shipped as STRIKE-SKILL-DMG1
+  phase 1a at K=1.0 (see filing above). Remaining fix candidates
+  (de-cliff kicks, landing curve, classifier, SD, judge weights)
+  carried in that filing's QUEUE, each as its own future arc.
 
 ### `5c1477d` resolution (ledger correction)
 
