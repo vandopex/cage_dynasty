@@ -462,11 +462,19 @@ GNP_DOMINANT_DAMAGE_MULT     = 1.25
 # Read at call time from this module global inside
 # calculate_strike_damage (plain name lookup, not captured into a
 # local) so the harness can sweep K by rebinding this attribute
-# between runs without any engine edit. At K=0 the multiplier
-# resolves to 1.0 exactly and the engine is byte-identical to
-# pre-dial behavior — that's the equivalence-gate guarantee for
-# phase 1a Commit 1.
-STRIKE_SKILL_DAMAGE_K        = 0.0
+# between runs without any engine edit. K=1.0 chosen from the
+# sweep grid (Commit 2): arm E (striking 88v55) row K=1.0
+# p_fav=0.6945 ±0.0206, KO+TKO share 0.383, mean_rounds 2.467.
+STRIKE_SKILL_DAMAGE_K        = 1.0
+
+# STRIKE-SKILL-DMG1 phase 1a — safety floor on the damage
+# multiplier. At K=1.0 the unclamped factor range for legal skills
+# 1-99 is [0.26, 1.24], so the 0.25 floor is deterministically
+# inert (max(0.25, ≥0.26) = the unclamped value). It exists to
+# protect future K retunes from producing negative or near-zero
+# damage factors on low-skill fighters. Plain-global read at call
+# time, same pattern as STRIKE_SKILL_DAMAGE_K.
+STRIKE_SKILL_DAMAGE_FLOOR    = 0.25
 
 
 # ============================================================================
@@ -2418,7 +2426,8 @@ def calculate_strike_damage(
         _skill = attacker.clinch_striking
     else:
         _skill = attacker.clinch_striking
-    damage *= 1 + (STRIKE_SKILL_DAMAGE_K * (_skill - 75) / 100)
+    damage *= max(STRIKE_SKILL_DAMAGE_FLOOR,
+                  1 + (STRIKE_SKILL_DAMAGE_K * (_skill - 75) / 100))
 
     # MUAY THAI VS BOXER: Kicks do extra damage to non-kickers
     # Boxers don't check kicks properly and their legs get chewed up
