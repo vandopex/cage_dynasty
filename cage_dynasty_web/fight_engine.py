@@ -458,6 +458,16 @@ TKO_DURABILITY_COMPOSURE_DIVISOR = 450.0
 # despite 64% control). Value chosen by GNP-DAMAGE-BUFF1 sweep.
 GNP_DOMINANT_DAMAGE_MULT     = 1.25
 
+# STRIKE-SKILL-DMG1 phase 1a — skill-into-damage dial.
+# Read at call time from this module global inside
+# calculate_strike_damage (plain name lookup, not captured into a
+# local) so the harness can sweep K by rebinding this attribute
+# between runs without any engine edit. At K=0 the multiplier
+# resolves to 1.0 exactly and the engine is byte-identical to
+# pre-dial behavior — that's the equivalence-gate guarantee for
+# phase 1a Commit 1.
+STRIKE_SKILL_DAMAGE_K        = 0.0
+
 
 # ============================================================================
 # DAMAGE & HEALTH SYSTEM
@@ -2388,6 +2398,27 @@ def calculate_strike_damage(
     # Power punchers bonus
     if strike in {StrikeType.CROSS, StrikeType.HOOK, StrikeType.OVERHAND}:
         damage *= 1 + (attacker.strength / 200)
+
+    # STRIKE-SKILL-DMG1 phase 1a — skill-into-damage dial.
+    # Attacker-side only. Deterministic (no random). Family mapping
+    # mirrors calculate_strike_success (:2269-2288):
+    #   boxing family                          → attacker.boxing
+    #   kick strikes                           → attacker.kicks
+    #   clinch family + fallback (incl. GnP)   → attacker.clinch_striking
+    # K read by plain global name at call time so the sweep harness
+    # can vary it by module attribute rebind. At K=0 the factor is
+    # 1.0 exactly and this line is byte-identical to no-op.
+    if strike in {StrikeType.JAB, StrikeType.CROSS, StrikeType.HOOK,
+                  StrikeType.UPPERCUT, StrikeType.OVERHAND}:
+        _skill = attacker.boxing
+    elif "kick" in strike.value.lower():
+        _skill = attacker.kicks
+    elif strike in {StrikeType.CLINCH_KNEE, StrikeType.CLINCH_ELBOW,
+                    StrikeType.DIRTY_BOXING}:
+        _skill = attacker.clinch_striking
+    else:
+        _skill = attacker.clinch_striking
+    damage *= 1 + (STRIKE_SKILL_DAMAGE_K * (_skill - 75) / 100)
 
     # MUAY THAI VS BOXER: Kicks do extra damage to non-kickers
     # Boxers don't check kicks properly and their legs get chewed up
