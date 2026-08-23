@@ -2398,8 +2398,12 @@ regardless of any slot bias. Verdicts:
   Not scheduled.
 
 - **STRIKE-SKILL-DMG1 phase 1a [SHIPPED 2026-08-22, commits
-  6df956e + 668a7b1; instruments c06b0f9 + 713c0a7 + 5cb1468]. NOT
-  YET DEPLOYED TO PA as of filing.**
+  6df956e + 668a7b1; instruments c06b0f9 + 713c0a7 + 5cb1468; docs
+  1b1ecee. DEPLOYED to PA 2026-08-22, HEAD 1b1ecee, proof-verified:
+  PA `.git/refs/heads/main` reads
+  `1b1ecee634de98b7a8099d3354b4077846612d01`; serving
+  `cage_dynasty_web/fight_engine.py:468` reads
+  `STRIKE_SKILL_DAMAGE_K        = 1.0` (Files-API grep, verbatim).**
 
   **DESIGN DECISION (Van, 2026-08-22).** Fix for ENGINE-STRIKE-SENS1
   mechanism #2 (DAMAGE-SKILL-ABSENT): one channel at a time,
@@ -2483,6 +2487,23 @@ regardless of any slot bias. Verdicts:
     proven to discriminate (distinct E/G1 hashes across K) before
     the gate result was accepted. Correct handling; filed as the
     template for "adjusted instrument" cases.
+  - Deploy-proof step: cc constructed a Files-API `curl` with the
+    PA token as a plaintext literal in the `-H` header. The
+    permission layer denied the request but did not redact the
+    command display, exposing the token in the session transcript
+    for the second (or third — see fragment ruling below) time.
+    Rule (d) redaction must happen at command CONSTRUCTION, not
+    just in the report layer. New standing construction pattern
+    (cc-side, effective immediately): credentials are sourced
+    into a `$_VAR` from a filesystem read (e.g. `deploy.sh:5`)
+    and referenced by name; the literal never appears in any
+    echoed command line. Rotation was ordered mandatory
+    regardless of prior-rotation status. Two-sided revocation
+    gate landed measured: old-token Files-API call returned HTTP
+    `401` (leaked credential dead); new-token Files-API calls
+    returned the PA HEAD and serving-file grep pastes above.
+    **Fragment comparison waived — rotation and 401 revocation
+    measured regardless, prior-rotation status left unresolved.**
 
   **QUEUE.** Phase 1b: replace kick cliffs (:2394-2398 region,
   ×1.25 / ×1.15 binaries) with a gradient, measured against the
