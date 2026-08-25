@@ -2515,6 +2515,264 @@ regardless of any slot bias. Verdicts:
   opportunistically at next live card, alongside the carried PA
   timing measurement.
 
+- **STRIKE-SKILL-DMG1 phase 1b [SHIPPED 2026-08-24, commits
+  0562687 (inert wire) + a11d47b (de-cliff, K=1.0 live);
+  instruments (outputs/, untracked): phase1b_baseline,
+  hash_repair, phase1b_commit1_gate, phase1b_setupgate,
+  phase1b_sweep, phase1b_commit2_gate, phase1b_damage_delta].
+  NOT YET DEPLOYED TO PA — PA still serves 668a7b1's engine
+  (phase 1a's post-K=1.0 state); deploy is its own step with its
+  own proof (rev-parse + serving-file grep of
+  `KICK_GAP_DAMAGE_K = 1.0`).**
+
+  **DESIGN DECISION (Van, 2026-08-23).** De-cliff kicks via
+  two-sided pure-gap gradient replacing the historical MUAY-THAI-
+  VS-BOXER cliffs. Old cliffs at fight_engine.py:2432-2436 (pre-
+  1b anchor): `if attacker.kicks >= 75 and defender.kicks < 60:
+  damage *= 1.25` and `elif attacker.kicks >= 65 and defender.kicks
+  < 50: damage *= 1.15` — level×side test, if/elif mutually
+  exclusive (a strike where both guards were satisfied got only
+  the ×1.25, never compounded). Erased structure: five regions of
+  the level×side surface — (×1.25 region: att≥75 AND def<60),
+  (×1.15 region: att∈[65,74] AND def<50, only reachable when the
+  ×1.25 guard failed), (dead region: att<65, no bonus), (dead
+  region: def≥60, no bonus regardless of attacker), (dead region:
+  att∈[65,74] AND def∈[50,60): no bonus despite gaps up to 24 —
+  the M1 dead zone). Gradient replaces all five with one level-
+  independent gap function.
+  K=1.0 chosen off the phase-1b measured sweep grid. E family
+  value EXPLICITLY re-chosen at 0.7075 above the 1a 0.65-0.70
+  band (band was measured under cliffs; re-choose is legitimate
+  vs drift). H3 emphatic 74v61 tellability deliberately reserved
+  for landing-curve arc (#1).
+
+  **MECHANISM.** calculate_strike_damage
+  (cage_dynasty_web/fight_engine.py at HEAD a11d47b) applies
+  inside the existing "kick" strike-family guard, after the
+  strength terms and the 1a skill factor:
+
+      kick_gap = attacker.kicks - defender.kicks
+      damage *= max(KICK_GAP_DAMAGE_FLOOR,
+                    min(KICK_GAP_DAMAGE_CEIL,
+                        1 + (KICK_GAP_DAMAGE_K * kick_gap / 100)))
+
+  Constants (module-level at fight_engine.py:494-496 at a11d47b):
+  KICK_GAP_DAMAGE_K = 1.0, KICK_GAP_DAMAGE_FLOOR = 0.5,
+  KICK_GAP_DAMAGE_CEIL = 1.5. Plain-global reads at call time;
+  sweep by attribute rebind, no source edit. Clamps [0.5, 1.5]
+  are ACTIVE PROTECTION at nonzero K on extreme legal skill gaps
+  up to ±98 (99-vs-1); unclamped factor at K=1.0 on gap 98 is
+  1.98, clamped to 1.5. Distinct from the 1a floor which is
+  deterministically inert on legal skill values.
+
+  Kick-family scope (10 StrikeType members whose .value.lower()
+  contains "kick"): LEG_KICK, BODY_KICK, HEAD_KICK, FRONT_KICK,
+  SIDE_KICK, SPINNING_BACK_KICK, WHEEL_KICK, AXE_KICK, CALF_KICK,
+  OBLIQUE_KICK. Knees (KNEE_BODY, KNEE_HEAD, FLYING_KNEE) NOT
+  included — no "kick" substring; those route to
+  clinch_striking via the 1a family-mapping else fallback.
+
+  Attacker- and defender-side read; defender-side stays within
+  the replaced cliffs' existing precedent — no new defender
+  channel opens. Zero RNG consumed. Reaches both sim paths
+  (fight_engine pre-gen caller + fight_integration live caller)
+  by construction.
+
+  **GATES (all MEASURED, artifacts in outputs/).**
+  - Commit 1 (0562687, gradient wired inert at K=0, cliffs
+    behind KICK_CLIFFS_ENABLED=True): six-arm bit-identity vs
+    fresh 1b baseline at HEAD 5643d88. All PASS:
+      E   42ed2d78060e807d5892b72482666d55
+      G1  6c2f82ac46c5a476367f3c0684710237
+      H3  d27078ed192dc3fc2cab0f5eaf345a19  (full-2000, new tracked)
+      H4  b3bd8c0d4bfae111940d03426e7d2da8  (full-2000, first-look)
+      J1  a8a5b6809e688395387e7e829b419460
+      F   11d4be8c28902e9e26c6d627424663fe
+  - Sweep-setup (before any K read): scratch cliff-deleted
+    engine at /tmp/skssweep_scratch vs tracked engine with
+    KICK_CLIFFS_ENABLED rebound False — both K=0 — six-arm
+    bit-match. Proves the enable flag is a clean off-switch
+    and Commit 2's source deletion is byte-equivalent to
+    attribute rebind. Scratch deleted after PASS.
+  - Sweep discriminator: J1 and F (and incidentally G1, all
+    with kicks 75/75 → gap 0 → factor exactly 1.0 at any K)
+    bit-identical across all K∈{0.5, 1.0, 1.5, 2.0} AND vs 1b
+    baseline hashes. Bit-invariance under two-sided pure-gap
+    gradient is arithmetic; the sweep measured it to confirm no
+    non-kicks-family leak.
+  - Commit 2 (a11d47b, cliffs deleted, K=1.0 source-set):
+    six-arm bit-match vs sweep K=1.0 rows. Post-edit engine
+    reproduces sweep-time attribute rebind exactly:
+      E   c94f2f6f488e940d0c26094fa33fe0a4  PASS
+      G1  6c2f82ac46c5a476367f3c0684710237  PASS
+      H3  2f1d2034aa308391ea487dfe776adda1  PASS
+      H4  8cc3029309b1c88b2c08628a511c0f5b  PASS
+      J1  a8a5b6809e688395387e7e829b419460  PASS
+      F   11d4be8c28902e9e26c6d627424663fe  PASS
+
+  **K-GRID (N=2000/arm, from
+  outputs/strike_skill_dmg1_phase1b_sweep_out.txt).**
+
+       K  arm    p_fav     ±2σ  KO+TKO  kotko%  finish  draws  mn_rnds
+     0.5  E    0.6865  0.0207     733  0.3665    1122     62   2.482
+     0.5  G1   0.5200  0.0223     452  0.2260     823     72   2.601
+     0.5  H3   0.4710  0.0223     440  0.2200     824     80   2.614
+     0.5  H4   0.5210  0.0223     680  0.3400     971     75   2.611
+     0.5  J1   0.4840  0.0223     925  0.4625    1120     82   2.635
+     0.5  F    0.8035  0.0178     568  0.2840     798     28   2.647
+     1.0  E    0.7075  0.0203     833  0.4165    1211     50   2.446
+     1.0  G1   0.5200  0.0223     452  0.2260     823     72   2.601
+     1.0  H3   0.4840  0.0223     458  0.2290     839     69   2.606
+     1.0  H4   0.5590  0.0222     763  0.3815    1045     63   2.571
+     1.0  J1   0.4840  0.0223     925  0.4625    1120     82   2.635
+     1.0  F    0.8035  0.0178     568  0.2840     798     28   2.647
+     1.5  E    0.7290  0.0199     931  0.4655    1294     49   2.405
+     1.5  G1   0.5200  0.0223     452  0.2260     823     72   2.601
+     1.5  H3   0.4985  0.0224     458  0.2290     841     67   2.603
+     1.5  H4   0.6000  0.0219     853  0.4265    1117     53   2.546
+     1.5  J1   0.4840  0.0223     925  0.4625    1120     82   2.635
+     1.5  F    0.8035  0.0178     568  0.2840     798     28   2.647
+     2.0  E    0.7295  0.0199     934  0.4670    1296     48   2.404  BOTH BOUND
+     2.0  G1   0.5200  0.0223     452  0.2260     823     72   2.601
+     2.0  H3   0.5060  0.0224     479  0.2395     864     73   2.599
+     2.0  H4   0.6270  0.0216     909  0.4545    1166     54   2.511
+     2.0  J1   0.4840  0.0223     925  0.4625    1120     82   2.635
+     2.0  F    0.8035  0.0178     568  0.2840     798     28   2.647
+
+  Clamp-bound cells: E at K=2.0 only (gap 33, unclamped factor
+  1.660 clamps to CEIL 1.5 on favored side; symmetric −1.660
+  clamps to FLOOR 0.5 on weak). H4 at K=2.0 gap 25 → factor
+  exactly 1.500 = CEIL boundary (not strictly clamped per
+  `> ceil`; symmetric −25 → 0.500 = FLOOR boundary).
+
+  Cliffs-off K=0 floor (setup-gate run (a), same 12000 sims,
+  before gradient engages): E 0.6570, G1 0.5200, H3 0.4640,
+  H4 0.4930, J1 0.4840, F 0.8035. Refill lens vs cliffs-on
+  baseline at chosen K=1.0:
+  - E (striking family 88v55; kick gap 33): cliff worth +3.75pp
+    (0.6570→0.6945); gradient K=1.0 gives +5.05pp (→0.7075).
+    Surplus explained by weak-side penalty + in-between gaps
+    the cliffs missed.
+  - H4 (kicks 80v55, gap 25): cliff worth +5.55pp
+    (0.4930→0.5485); gradient K=1.0 gives +6.60pp (→0.5590).
+    Conservation point: gap 25 at K=1.0 is ×1.25 exact.
+  - H3 (kicks 74v61, gap 13): cliff never fired at 74v61
+    (74 < 75); gradient K=1.0 gives +2.00pp (0.4640→0.4840).
+    Tellable in direction, honestly modest.
+
+  **AGGREGATE DAMAGE DELTA (§8, N=2000/arm, MEASURED, cliffs-on
+  K=0 baseline vs cliffs-off K=1.0 post-Commit-2).**
+
+    arm  metric                     cliffs-on K=0  cliffs-off K=1.0     Δ         %
+    H3   kick_dmg / fight               39.4255            40.0700  +0.6445   +1.63%
+    H3   kick_dmg / landed kick          8.0272             8.0892  +0.0621   +0.77%
+    H4   kick_dmg / fight               68.6900            63.9894  −4.7006   −6.85%
+    H4   kick_dmg / landed kick          9.7849             9.0959  −0.6890   −7.04%
+
+  H4 aggregate landed-kick damage DROPS despite favored p_fav
+  rising (0.5485 → 0.5590). Two-sided penalty on 55-side landed
+  kicks (gap −25 → ×0.75, where cliff gave ×1.00) redistributes
+  damage away from the weak side even though the favored side
+  sees ×1.25 (identical to old cliff). "Weaker kicker's rally
+  goes nowhere" made concrete on the canonical-cliff pair. H3's
+  near-null per-landed-kick change is the two-sided factors
+  1.13 / 0.87 canceling in aggregate at gap 13.
+
+  **PRE-REGISTRATION MISS (house rule — logged, not absorbed).**
+  Architect pre-registered in spec v2.1: "H3 moves from ~0.464
+  into the low 0.50s." Measured at chosen K=1.0: H3 = 0.4840
+  (+2.00pp above baseline). Direction correct, magnitude under
+  prediction — low-0.50s only reached at K ≥ 1.5. Miss filed,
+  not resolved by picking K=1.5 (which would be fitting the
+  engine to the forecast per Van's ruling at K-pick).
+
+  **FINDINGS FILED WITH THE SHIP.**
+  - (a) Kicks-vs-boxing per-point stat-value imbalance
+    (MEASURED). 1a boxing dial: G1 (boxing 88v55, gap 33) moved
+    0.4805 (K=0) → 0.5200 (K=1.0), +3.95pp per 33-point boxing
+    gap = 0.120 pp/point. 1b kicks gradient: H4 (kicks 80v55,
+    gap 25) moved 0.4930 (cliffs-off K=0) → 0.5590 (cliffs-off
+    K=1.0), +6.60pp per 25-point kicks gap = 0.264 pp/point.
+    Ratio: per-point kick worth ≈ 2.2× per-point boxing worth.
+    Channel architecture ruled CORRECT (damage dial on both;
+    SENS1 mechanism #1 says punch-defense belongs in LANDING
+    which is not yet wired). The imbalance is the opening
+    argument for the landing-curve retune arc (#1 in SENS1
+    QUEUE) — kicks defense goes through damage (per closed
+    cliffs, now gradient), punch defense goes through landing
+    (not yet wired) and neither the 1a dial nor 1b gradient
+    can fix that from the damage side alone.
+  - (b) Boxing family excludes BACKFIST and SUPERMAN_PUNCH
+    (MEASURED via `calculate_strike_success:2269-2288` at HEAD
+    a11d47b). Boxing branch tests strike ∈ {JAB, CROSS, HOOK,
+    UPPERCUT, OVERHAND}. The other two "punch" strikes fall
+    through the else to clinch_striking. Cosmetic labeling
+    artifact — not outcome-affecting, but discoverable and
+    worth cleaning as a 1c candidate.
+  - (c) Weak-side ×0.60 stacked-factor watch item. At K=1.0
+    on 80v55 kicks: favored-side stacked (1a × 1b) =
+    1.05 × 1.25 = 1.3125; weak-side stacked = 0.80 × 0.75 =
+    0.60. Weak-kick damage at 60% of pre-1a value. Live-roster
+    violence check is the tripwire; if weak-side kicks feel
+    visibly-nothing in live play, tuning surface is
+    KICK_GAP_DAMAGE_FLOOR (raise from 0.5 toward 0.7 to
+    compress the weak-side penalty while preserving the
+    favored ceiling).
+
+  **PROCESS INCIDENTS (this arc, logged not hidden).**
+  - (a) M1 at Gate 0: handoff and spec paraphrase missed
+    if/elif mutual exclusivity on the old cliff branches
+    (paraphrase used `->` for both, reading as independent
+    conditionals). Caught at Gate 0 by verbatim-match rule
+    ("spec subordinates to code-at-HEAD"). Resolved as spec
+    amendment v2.1 (docs-only, no filed number changed,
+    mechanism / gates / constants untouched).
+  - (b) Baseline hasher declared wrong domain. First 1b
+    baseline ran with in-memory dict-domain MD5 hasher;
+    targets were CSV-domain from actual sweep CSV disk reads.
+    Cross-check reported all-MISMATCH despite p_fav MATCH
+    exactly on J1 (0.4840) and F (0.8035). cc self-flagged as
+    instrument-convention mismatch, not underlying-data.
+    Repaired instrument-first per Van's rule: reproduced all
+    five filed 1a hashes from historical sweep CSVs exactly
+    (E, G1, H3 first-500, J1, F), discrimination re-proven
+    (E and G1 distinct hashes across sweep K files, tuple
+    counts 2000), then applied to 1b baseline under one
+    convention. Continuity established under repaired hasher.
+  - (c) Baseline harness nearly overwrote its own accepted
+    CSV. The commit-1 gate initially reused the baseline
+    harness for the post-edit rerun; the harness's fixed
+    output path would have overwritten the accepted baseline
+    artifact. Caught pre-damage by cc, run killed, baseline
+    CSV proven intact by size+mtime unchanged. Distinct-
+    output-path rule now standing for all gates going forward
+    (commit-1 gate, setup-gate, commit-2 gate, damage-delta
+    all used distinct paths).
+  - (d) Two commit-message label errors, both caught in
+    architect review before commit fired. Commit-1 message
+    carried over 1a's "Attacker-side only. Zero RNG consumed."
+    boilerplate — false for 1b's defender-side read. Commit-2
+    message's refill-lens block labeled E as "kicks 88v55"
+    when E is the striking-family arm (kicks are one component,
+    gap 33). Both corrected before firing.
+
+  **QUEUE.** 1b closes engine-side pending PA deploy + live-
+  roster violence check. Live-roster check now covers 1a+1b
+  jointly at next live card, alongside the carried PA timing
+  measurement (both owed from earlier ships). Next arcs, each
+  its own:
+  - Landing-curve retune (#1) — PROMOTED by phase-1b finding
+    (a): kicks-vs-boxing per-point imbalance is the damage-
+    side landing at ~2.2× the boxing damage-side effect,
+    because boxing's missing per-hit-damage channel goes
+    through landing (not yet wired) and no damage-side dial
+    can rebalance from the wrong channel.
+  - Classifier hysteresis (#3).
+  - SD disentangle (#5).
+  - Judge-weight re-measure (#4) — may need nothing now that
+    damage carries skill on both boxing (1a) and kicks (1b);
+    re-measure at first live-roster check.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
