@@ -2520,10 +2520,12 @@ regardless of any slot bias. Verdicts:
   instruments (outputs/, untracked): phase1b_baseline,
   hash_repair, phase1b_commit1_gate, phase1b_setupgate,
   phase1b_sweep, phase1b_commit2_gate, phase1b_damage_delta].
-  NOT YET DEPLOYED TO PA — PA still serves 668a7b1's engine
-  (phase 1a's post-K=1.0 state); deploy is its own step with its
-  own proof (rev-parse + serving-file grep of
-  `KICK_GAP_DAMAGE_K = 1.0`).**
+  DEPLOYED to PA 2026-08-24, HEAD 5429e0d, proof-verified: PA
+  `.git/refs/heads/main` reads
+  `5429e0d226d94a203bf8c0c527ad53d603a6040b`; serving
+  `cage_dynasty_web/fight_engine.py:494` reads
+  `KICK_GAP_DAMAGE_K            = 1.0` (Files-API, verbatim);
+  KICK_CLIFFS_ENABLED: 0 matches in served file.**
 
   **DESIGN DECISION (Van, 2026-08-23).** De-cliff kicks via
   two-sided pure-gap gradient replacing the historical MUAY-THAI-
