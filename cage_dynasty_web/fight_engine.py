@@ -477,27 +477,23 @@ STRIKE_SKILL_DAMAGE_K        = 1.0
 STRIKE_SKILL_DAMAGE_FLOOR    = 0.25
 
 # STRIKE-SKILL-DMG1 phase 1b — kick-family gap-into-damage dial.
-# Commit 1 (inert): gradient wired at K=0.0 alongside the existing
-# cliffs, which stay live behind the enable flag below. At K=0.0
-# the clamp evaluates 1 + 0*gap/100 = 1.0 for any gap, clamps to
-# 1.0 (within [FLOOR, CEIL]), and the multiplication is a no-op —
-# byte-identical to pre-1b behavior. Plain-global reads at call
-# time; sweep by attribute rebind.
+# Two-sided: factor = 1 + K * (attacker.kicks - defender.kicks) / 100,
+# clamped to [FLOOR, CEIL]. Plain-global reads at call time so the
+# harness can sweep K by module attribute rebind without any engine
+# edit. Attacker- AND defender-side read (defender-side stays
+# within the replaced cliffs' existing precedent — no new defender
+# channel opens). K=1.0 chosen by Van off the phase-1b sweep grid
+# (Commit 2): arm E (striking family 88v55) refill +5.05pp vs the
+# cliff's +3.75pp on the same arm; arm H4 (kicks 80v55, the
+# cliff's canonical instance) refill +6.60pp vs the cliff's
+# +5.55pp. See CLAUDE.md STRIKE-SKILL-DMG1 phase 1b filing for
+# the full grid and the E re-choose above the 1a band.
 # Clamps [0.5, 1.5] are ACTIVE PROTECTION (not deterministically
 # inert like the 1a floor) — legal skill gaps range up to ±98
 # (99-vs-1), where at K=1.0 the unclamped factor would reach ±1.98.
-# Grid fully unclamped through K=1.5 on all sweep arms
-# (E's gap 33 at K=1.5 = 1.495, inside CEIL); clamps bind only
-# on edges at K=2.0 (H4 gap 25 at K=2.0 = 1.5 exact).
-KICK_GAP_DAMAGE_K            = 0.0
+KICK_GAP_DAMAGE_K            = 1.0
 KICK_GAP_DAMAGE_FLOOR        = 0.5
 KICK_GAP_DAMAGE_CEIL         = 1.5
-
-# STRIKE-SKILL-DMG1 phase 1b — kick cliff enable flag. TRUE by
-# default so Commit 1 preserves the cliffs. Commit 2 (after Van
-# picks K off the sweep grid) will delete the cliff block and this
-# flag together and set KICK_GAP_DAMAGE_K to the chosen value.
-KICK_CLIFFS_ENABLED          = True
 
 
 # ============================================================================
@@ -2452,24 +2448,15 @@ def calculate_strike_damage(
     damage *= max(STRIKE_SKILL_DAMAGE_FLOOR,
                   1 + (STRIKE_SKILL_DAMAGE_K * (_skill - 75) / 100))
 
-    # MUAY THAI VS BOXER: Kicks do extra damage to non-kickers.
-    # STRIKE-SKILL-DMG1 phase 1b Commit 1 (inert): the historical
-    # cliffs are gated behind KICK_CLIFFS_ENABLED (default True); the
-    # new gap gradient runs alongside at KICK_GAP_DAMAGE_K=0.0 which
-    # is a no-op multiply. Both live in the same "kick" guard so the
-    # kick-family scope stays identical to pre-1b. Commit 2 will
-    # delete the cliff branch and the enable flag together after Van
-    # picks K.
+    # STRIKE-SKILL-DMG1 phase 1b — kick-family gap-into-damage
+    # gradient. Two-sided: factor scales per-exchange kick gap,
+    # clamped to [KICK_GAP_DAMAGE_FLOOR, KICK_GAP_DAMAGE_CEIL].
+    # Replaces the historical MUAY-THAI-VS-BOXER cliffs (deleted
+    # this commit) with a level-independent gap-driven multiplier.
+    # Attacker- and defender-side read; defender-side stays within
+    # the replaced cliffs' existing precedent. Plain-global reads
+    # at call time; sweepable by module attribute rebind.
     if "kick" in strike.value.lower():
-        if KICK_CLIFFS_ENABLED:
-            if attacker.kicks >= 75 and defender.kicks < 60:
-                damage *= 1.25  # 25% bonus damage
-            elif attacker.kicks >= 65 and defender.kicks < 50:
-                damage *= 1.15  # 15% bonus
-        # Gap gradient. At K=0 (Commit 1 inert): factor = 1.0,
-        # clamp is inert, multiply is no-op. At nonzero K (sweep by
-        # module attribute rebind, no source edit): factor scales
-        # per-exchange kick gap, clamped to [FLOOR, CEIL].
         _kick_gap = attacker.kicks - defender.kicks
         damage *= max(KICK_GAP_DAMAGE_FLOOR,
                       min(KICK_GAP_DAMAGE_CEIL,
