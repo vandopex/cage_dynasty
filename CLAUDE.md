@@ -3033,6 +3033,318 @@ regardless of any slot bias. Verdicts:
   - Owed unchanged: live-roster violence check (1a+1b joint)
     at next live card; PA timing measurement pre-N-lock.
 
+- **LANDING-CURVE-RETUNE1 — Gate 0 [CLOSED 2026-08-25, C1
+  docs checkpoint at baseline 107a3c8; read-only diagnostic
+  pass with architect's adversarial review folded in; no engine
+  commits; spec `claude/landing_curve_retune1_spec_v0_1.md`
+  ratified v0.1, kept untracked and out of repo].**
+
+  **A1. Gate 0 anchors (verbatim at baseline 107a3c8).**
+
+  Base landing formula + clamp — spec :2379-2380, matches at
+  HEAD :2379-2380:
+
+      success_chance = 0.20 + (offense / (offense + defense + 1)) * 0.5
+      success_chance = max(0.15, min(0.85, success_chance))
+
+  Kick landing cliff — spec :2317-2318, matches at HEAD
+  :2317-2318:
+
+      if attacker.kicks >= 80 and defender.kicks < 60:
+          offense += 10  # Significant accuracy bonus vs non-kickers
+
+  Grappler pressure block — spec :2333-2363, matches at HEAD
+  :2333-2363. Defensive bonuses on defender: takedowns tiers
+  ≥85/75/60 → +15/+10/+5; guard tiers ≥85/75 → +10/+5. Offensive
+  penalty multipliers on takedown_threat (def-att): ≥30/20/10 →
+  ×0.75/0.82/0.90. Sub-threat: ≥30/20 → ×0.88/0.94. Fires only
+  in STANDING.
+
+  Stamina — spec :2367-2368; code-at-HEAD is :2366-2367 (1-line
+  drift, comment vs. action):
+
+      offense *= (attacker_state.stamina / 100)
+      defense *= (defender_state.stamina / 100)
+
+  Rocked — spec :2371-2372; code-at-HEAD is :2370-2371 (1-line
+  drift):
+
+      if defender_state.is_rocked:
+          defense *= 0.5
+
+  Variance — spec :2375-2376, matches at HEAD :2375-2376:
+
+      variance = random.uniform(0.75, 1.25)
+      offense *= variance
+
+  Upset branch — spec :2383-2388; code-at-HEAD :2384-2389 (1-line
+  drift, trailing elif):
+
+      if offense < defense * 0.85:
+          upset_roll = random.random()
+          if upset_roll < 0.18:
+              success_chance = max(success_chance, 0.70)
+          elif upset_roll < 0.35:
+              success_chance = min(success_chance + 0.22, 0.70)
+
+  CSS call sites: `fight_engine.py:3315` (fe's exchange loop) and
+  `fight_integration.py:810` (fi's exchange loop). Both pass
+  `FighterAttributes` objects raw; skills read inside CSS.
+
+  **A2. H1 confirmed — no per-family defense stat exists.**
+  Family routing table at CSS :2306-2325, verbatim:
+
+    Family              | Trigger                              | offense                 | defense
+    ---                 | ---                                  | ---                     | ---
+    Boxing (5 strikes)  | JAB, CROSS, HOOK, UPPERCUT, OVERHAND | attacker.boxing         | defender.striking_defense
+    Kicks (10 strikes)  | "kick" in strike.value.lower()       | attacker.kicks (+10 cliff cond) | defender.striking_defense
+    Clinch-explicit (3) | CLINCH_KNEE, CLINCH_ELBOW, DIRTY_BOXING | attacker.clinch_striking | (defender.striking_defense + defender.takedowns) // 2
+    Clinch-fallthrough (12) | else                             | attacker.clinch_striking | defender.striking_defense
+
+  `striking_defense` is the sole defensive input for all four
+  families; clinch_explicit dilutes it 50/50 with takedowns via
+  integer division. There is no boxing_defense, no kick_defense,
+  no clinch_defense. A defender with boxing=55 is not measurably
+  harder to hit with punches than a defender with boxing=95 so
+  long as their striking_defense is the same.
+
+  **Consequence for the AUDIT1 measurements.** For boxing (L-B88)
+  and clinch (L-C88) the landing formula never reads the
+  defender's family stat — the gap propagates only through
+  offense (+13 boxing on L-B88's slot1 attacker; +13
+  clinch_striking on L-C88's slot1 attacker), zero change on
+  defense. For kicks (L-K88) the defender's kicks stat DOES
+  enter the formula, but ONLY via the +10 cliff at :2317
+  (att.kicks≥80 AND def.kicks<60), which AUDIT1 already
+  measured as producing zero aggregate lift (L-K88 slot1 kick
+  landing rate 0.4660 vs L-J1 0.4710 = −0.50pp). Same outcome,
+  different mechanism: for boxing/clinch the defender stat is
+  unread; for kicks it's read only through a cliff the audit
+  has already shown is worthless. Code's own base-pre-modifier
+  ceiling at L-B88 slot1 boxing, standing, 75-across for all
+  other stats:
+
+      offense pre-var = 88 + 7 (speed) = 95
+      defense pre-var = 75 + 7 (speed) + 10 (def.takedowns≥75)
+                      + 5 (def.guard≥75) = 97
+      base = 0.20 + 95 / (95+97+1) * 0.5 = 0.4461
+
+  vs L-J1 (75/75 mirror):
+
+      offense pre-var = 82;  defense pre-var = 97
+      base = 0.20 + 82 / 180 * 0.5 = 0.4278
+
+  Δ = **+1.83pp**. Measured aggregate delta at L-B88 slot1
+  vs L-J1 slot1 = **−0.07pp** (0.4724 vs 0.4731).
+
+  **Spec's "+5.5pp predicted" is FALSE at this baseline.** It
+  assumed a family-symmetric formula — `0.20 + boxing_att /
+  (boxing_att + boxing_def + 1) * 0.5` at 88 vs 55 = 0.5056 vs
+  75 vs 75 = 0.4483, giving Δ = +5.73pp. The engine does not
+  implement that. Filed as struck, not silently dropped: the
+  arithmetic was correct given its assumption; the assumption
+  is not what the code does.
+
+  **A3. Modifier order table (verbatim from Gate 0 §0d,
+  application order at CSS :2306-2398).**
+
+    #  | Site        | Modifier                                     | Form                                    | Symmetry
+    ---|---          |---                                           |---                                      |---
+    1  | :2306-2325  | Family routing                               | overwrite off, def                      | overwrite
+    2  | :2317-2318  | Kick landing cliff                           | offense += 10 (cond)                    | one-sided
+    3  | :2328-2329  | Speed                                        | off += att.speed//10; def += def.speed//10 | symmetric
+    4  | :2333-2346  | Grappler-pressure DEFENSE bonuses (STANDING) | def += 5/10/15 (takedowns) + 5/10 (guard) | one-sided
+    5  | :2350-2356  | Grappler-pressure OFFENSE penalty (STANDING) | off *= 0.75/0.82/0.90                   | one-sided
+    6  | :2358-2363  | Submission-pressure OFFENSE penalty (STANDING) | off *= 0.88/0.94                     | one-sided
+    7  | :2366-2367  | Stamina scaling                              | off *= att.stam/100; def *= def.stam/100 | symmetric
+    8  | :2370-2371  | Rocked defender                              | def *= 0.5 (cond)                       | one-sided
+    9  | :2375-2376  | Base variance                                | off *= U(0.75, 1.25)                    | one-sided (offense only)
+    10 | :2379-2380  | Base success chance + clamp                  | sc = 0.20 + off/(off+def+1) * 0.5; clamp [0.15, 0.85] | —
+    11 | :2384-2389  | Upset branch                                 | sc lifted to floor=0.70 (18%) or boosted +0.22 capped at 0.70 (17%) when off < def * 0.85 | one-sided
+    12 | :2391       | Landing gate                                 | landed = random.random() < sc           | —
+
+  **Notes on shape.**
+
+  - The ±25% offense variance is mean-preserving on the input
+    (E[U(0.75,1.25)] = 1.0) but not through the outcome. The
+    ratio at :2379 is convex on the low side and concave on the
+    high side; Jensen's inequality shifts E[sc] relative to
+    sc(E[offense]).
+  - Variance interacts with the upset trigger at :2384. Where
+    the offense/defense ratio sits close to 0.85, variance
+    stochastically pushes offense across the threshold, engaging
+    the upset lift at a rate driven by proximity to threshold —
+    not by underdog identity.
+  - Clamp [0.15, 0.85] hit-rate: **not computed this pass; Gate 2
+    reports `clamp_hit` per attempt.** Prior Gate 0 narration
+    speculated the clamp binds routinely when rocked; that was
+    unmeasured and has been struck. Gate 2 measurement stands as
+    the answer, not inference.
+
+  **A4. UPSET-PARITY-HYP1 [UNMEASURED HYPOTHESIS, attributed to
+  architect's Gate 0 adversarial review; Gate 2 target to
+  falsify].** The "modifier wash" that absorbs the code's +1.83pp
+  base gain on L-B88 has a name: the upset branch at :2384-2389
+  fires as a lottery at parity-and-below, not as an underdog
+  feature.
+
+  Arithmetic on Gate 0's own numbers (mirror arm L-J1, symmetric
+  75/75 attacker/defender):
+
+      offense pre-var = 82; defense = 97; upset trigger = 82.45.
+      After U(0.75, 1.25) variance on offense_pre_var = 82:
+        P(offense_post_var < 82.45) = P(U < 82.45/82)
+                                    ≈ P(U < 1.006)
+                                    = (1.006 − 0.75) / 0.5
+                                    ≈ 51%.
+      Branch fires ~50% of parity attempts.
+
+  At L-B88 slot1 (attacker boxing 88, offense pre-var 95):
+
+      P(offense_post_var < 82.45) = P(U < 82.45/95)
+                                  ≈ P(U < 0.868)
+                                  = (0.868 − 0.75) / 0.5
+                                  ≈ 24%.
+      Branch fires ~24% of the time.
+
+  Expected lift per FIRED attempt (18% floor to 0.70, 17% boost
+  +0.22 capped at 0.70, above baseline sc_pre-upset):
+
+      mirror sc_pre-upset ≈ 0.428 →
+        lift ≈ 0.18 × (0.70 − 0.428)
+             + 0.17 × min(0.22, 0.70 − 0.428)
+             ≈ 0.18 × 0.272 + 0.17 × 0.22
+             ≈ 0.049 + 0.037
+             = 0.086 per fired attempt.
+      88-side sc_pre-upset ≈ 0.446 →
+        lift ≈ 0.081 per fired attempt.
+
+  Expected lift AT AGGREGATE:
+
+      mirror : 0.51 × 0.086 ≈ +4.4pp
+      88-side: 0.24 × 0.081 ≈ +1.9pp
+
+  Net: the branch hands the equal fighter ~2.5pp MORE than the
+  better fighter, cancelling the +1.83pp base gain almost
+  exactly. Predicted post-upset landing rate:
+
+      mirror : 0.428 + 0.044 ≈ 0.471
+      88-side: 0.446 + 0.019 ≈ 0.465
+
+  Measured (AUDIT1): 0.4731 (mirror slot1) vs 0.4724 (L-B88
+  slot1). Fit within 0.6-1.0pp with zero free parameters.
+
+  **If confirmed by Gate 2's per-arm `upset_fired` rate, the
+  upset branch is the wash mechanism, not "the stack." Its
+  comment says "Anyone can get caught in MMA — Serra vs GSP,
+  etc." but the code fires it at both parity and below-parity,
+  turning it into a lottery that benefits parity as often as
+  underdog.** Falsification target: measure `upset_fired` rate
+  at mirror (predicted ~50%) vs 88-side (predicted ~24%).
+  Materially different from these fractions → HYP1 falsified
+  and the mechanism hunt resumes elsewhere.
+
+  **A5. DEAD-CONTENT-OBS1 [RESOLVED as CATALOG problem, not
+  weight problem].** All 9 unreachable at `get_available_strikes`
+  (:1115-1163):
+
+      STANDING (:1117-1124):        12 returned — JAB, CROSS,
+        HOOK, UPPERCUT, OVERHAND, LEG_KICK, BODY_KICK, HEAD_KICK,
+        FRONT_KICK, CALF_KICK, FLYING_KNEE, SUPERMAN_PUNCH.
+      CLINCH (:1126-1131):          5 returned — CLINCH_KNEE,
+        CLINCH_ELBOW, DIRTY_BOXING, KNEE_BODY, ELBOW_HORIZONTAL.
+      FRONT_HEADLOCK is_top (:1134-1135): 1 — CLINCH_KNEE.
+      TRUCK is_top (:1141-1143):    1 — GNP_PUNCH.
+      Ground-top dominant (:1148-1153): 3 — GNP_PUNCH,
+        GNP_HAMMER_FIST, GNP_ELBOW.
+      Guard-top (:1154-1156):       2 — GNP_PUNCH, GNP_ELBOW.
+      KNOCKDOWN_STANDING (:1157-1161): 3 — GNP_PUNCH,
+        GNP_HAMMER_FIST, LEG_KICK.
+      Fallback (:1163):             1 — ELBOW_UPWARD
+        (length-1 list).
+
+  Never returned anywhere: SIDE_KICK, SPINNING_BACK_KICK,
+  WHEEL_KICK, AXE_KICK, OBLIQUE_KICK (kicks-family, 5 of 10);
+  BACKFIST, KNEE_HEAD, ELBOW_VERTICAL, ELBOW_SPINNING (4).
+  Total 9 dead.
+
+  `select_strike` (:2154-2184) speed-scaling weights for
+  WHEEL_KICK and SPINNING_BACK_KICK at :2177-2178 are dead code
+  — the strikes never reach `select_strike`. ELBOW_UPWARD's
+  ~27% dominance is the length-1 fallback list at :1163 for all
+  unhandled (bottom) positions; the weight in `select_strike` is
+  arithmetically irrelevant (`random.choices` on a
+  single-element list is deterministic). Any fix lands in
+  `get_available_strikes`, not `select_strike`.
+  **DIAGNOSTIC-ONLY this arc; no behavior change; separate arc
+  if picked up.**
+
+  **A6. FAMILY-TAXONOMY-OBS1 [filed observation].** Selection
+  and landing use different family taxonomies.
+
+  `select_strike` :2160-2167 classifies for selection weight:
+
+      boxing family = {JAB, CROSS, HOOK, UPPERCUT, OVERHAND}
+        → weight += fighter.boxing // 5
+      "kick" in strike.value OR "knee" in strike.value
+        → weight += fighter.kicks // 5
+      "elbow" in strike.value OR "clinch" in strike.value
+        → weight += fighter.clinch_striking // 5
+
+  `calculate_strike_success` :2306-2325 classifies for landing:
+
+      boxing = {JAB, CROSS, HOOK, UPPERCUT, OVERHAND}
+      "kick" in strike.value.lower() (10 kicks)
+      clinch_explicit = {CLINCH_KNEE, CLINCH_ELBOW, DIRTY_BOXING}
+      else = fallthrough (BACKFIST, SUPERMAN_PUNCH, knees,
+             elbows, GnP)
+
+  **Knees are the mismatch.** Selection lumps them with kicks
+  (fighter.kicks bumps their pick probability); landing lumps
+  them with clinch (attacker.clinch_striking drives their
+  landing rate). A high-kicks / low-clinch_striking fighter
+  throws knees often but lands them poorly, and vice versa.
+  Called out so retune arithmetic doesn't cross the two
+  taxonomies.
+
+  **A7. Design fork [PARKED, post-Gate 2].** If UPSET-PARITY-
+  HYP1 is confirmed by Gate 2 measurements, two candidate fixes
+  emerge:
+
+    (i)  Upset-branch rescope. Trigger relative to skill parity,
+         not post-pressure-bonus parity; lift multiplicative
+         (not overwrite to floor 0.70). Contained edit inside
+         CSS; no save-state semantics change.
+    (ii) Defense-side family-stat blend. defender's defense
+         against boxing = f(striking_defense, defender.boxing);
+         similarly for kicks and clinch_striking. Engine-shape
+         change; alters what striking_defense means on every
+         fighter on every save.
+
+  Not folded into this arc. Post-Gate-2 decision.
+
+  **QUEUE.**
+  - Gate 1 (v1.3 probe): per-attempt CSV with decomposition
+    columns (position, is_rocked, att_stamina, def_stamina,
+    off_routed, def_routed, off_post_pressure, def_post_pressure,
+    off_post_stamina, def_post_stamina, def_post_rocked,
+    off_post_variance, sc_base, clamp_hit, upset_fired,
+    upset_path, sc_final, landed). Standing gates: probe-off ≡
+    probe-on bit-match; filed normalized hashes reproduced
+    (L-J1 cace1efa, L-B88 d2d94326, L-K74 3e5de0d7, F 78605664);
+    DISCRIM-99 forces `off_routed=99` inside wrapper decomposition
+    only (engine never sees it), must show shifted `sc_base`
+    distribution vs L-J1 while outcome CSV stays bit-identical
+    to L-J1 (proves wrapper reads signal AND cannot leak into
+    engine).
+  - Gate 2: aggregate `upset_fired` and `clamp_hit` per arm.
+    Falsification target for UPSET-PARITY-HYP1: mirror
+    `upset_fired` ~50%, 88-side ~24%. Materially different →
+    HYP1 falsified.
+  - Post-Gate-2 design fork decision.
+  - Owed unchanged: live-roster violence check (1a+1b joint)
+    at next live card; PA timing measurement pre-N-lock.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
