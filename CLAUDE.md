@@ -2758,9 +2758,9 @@ regardless of any slot bias. Verdicts:
     when E is the striking-family arm (kicks are one component,
     gap 33). Both corrected before firing.
 
-  **QUEUE.** 1b closes engine-side pending PA deploy + live-
-  roster violence check. Live-roster check now covers 1a+1b
-  jointly at next live card, alongside the carried PA timing
+  **QUEUE.** 1b closes engine-side pending live-roster
+  violence check. Live-roster check now covers 1a+1b jointly
+  at next live card, alongside the carried PA timing
   measurement (both owed from earlier ships). Next arcs, each
   its own:
   - Landing-curve retune (#1) — PROMOTED by phase-1b finding
@@ -2774,6 +2774,264 @@ regardless of any slot bias. Verdicts:
   - Judge-weight re-measure (#4) — may need nothing now that
     damage carries skill on both boxing (1a) and kicks (1b);
     re-measure at first live-roster check.
+
+- **STRIKE-LANDING-AUDIT1 [CLOSED 2026-08-24, read-only
+  diagnostic at HEAD a04faf4, no engine commits; instruments
+  (outputs/, untracked): strike_landing_audit1_probe.py,
+  strike_landing_audit1_root_probe.py,
+  strike_landing_audit1_aggregate.py].**
+
+  **INSTRUMENT + GATES (all MEASURED).** Wrapper on
+  calculate_strike_success (CSS). RL1 decided from bytes at
+  fight_integration.py:39 (fi imports CSS by name via
+  `from fight_engine import`): BOTH fe.calculate_strike_success
+  (call site fight_engine.py:3315) AND fi.calculate_strike_success
+  (call site fight_integration.py:810) overwritten with a pure
+  pass-through wrapper that consumes zero RNG. Per-call records
+  (arm, seed, side, strike_type, family, landed, was_counter).
+
+  Gates:
+  - Gate 3a probe-off reused-hash bit-match — all 4 reused arms
+    PASS raw md5:
+      L-J1   a8a5b6809e688395387e7e829b419460
+      L-B88  6c2f82ac46c5a476367f3c0684710237
+      L-K74  2f1d2034aa308391ea487dfe776adda1
+      F      11d4be8c28902e9e26c6d627424663fe
+  - 9-arm discrimination — 9 distinct raw md5s AND 9 distinct
+    normalized md5s.
+  - Gate 3b probe-on ≡ probe-off — outcome CSVs bit-identical
+    across all 9 arms (byte-level diff excluding `# mode:`
+    header = 0 lines per arm). Wrapper proven pass-through on
+    all arms, not one.
+  - Normalized-domain (winner → slot1/slot2) sibling hasher NOW
+    A PERMANENT SECONDARY CHECK. Filed norm targets for the
+    four reused arms:
+      L-J1   cace1efa4a3c8eabe8a976ec42a6f2ba
+      L-B88  d2d943266a81c6817bbed5062b6fa37a
+      L-K74  3e5de0d7963bc66cd2cf65ff1d981d0e
+      F      78605664d38afa9b6abfaa83b9cc16ce  (captured this arc)
+
+  **PROCESS INCIDENT (logged not hidden).** Gate 3a first ran
+  FAIL on three relabeled reused arms (L-J1, L-B88, L-K74 all
+  producing different raw md5s from their 1b commit-2 gate
+  targets while F PASSED). FIGHTER-ID-SENSITIVITY-OBS1 was
+  provisionally filed as a behavior claim ("fight outcomes are
+  sensitive to fighter_id string content"), then RETRACTED on
+  measurement: normalized-domain diff (winner → slot1/slot2)
+  proved all 2000 rows bit-identical per arm — normalized md5
+  matched between my probe and the historical 1b K=1.0 CSV
+  (cace1efa for L-J1↔J1, d2d94326 for L-B88↔G1, 3e5de0d7 for
+  L-K74↔H3). Zero engine sensitivity. Mechanism: the outcome
+  hasher's own domain — the `winner` column carries the raw
+  fighter_id string (e.g. "L-J1_slot1"), and when fighter_id
+  strings differ across relabeled fixtures the hash differs even
+  under bit-identical behavior. Refiled as instrument note.
+
+  Root-cause path preserved for provenance
+  (outputs/strike_landing_audit1_root_probe.py): monkeypatched
+  hit-counters on all three suspect id-consumer sites recorded
+  0 hits per site per arm on both L-J1 and F —
+  game_bridge.py:7210 dormant (fighter_id IS in _fighter_data
+  because _register_fighter populates it), game_bridge.py:7237
+  md5 fallback dormant (all 18 _attr keys present in fdata),
+  models.py:1202 not on the sim path. Additional stronger
+  negative: str-hash-driven mechanisms (set-iteration order,
+  hash-lookup path selection) ruled out by F's cross-process
+  bit-stability despite PYTHONHASHSEED unset (random per
+  process).
+
+  Fix: `_FIGHTER_ID_SOURCE` mapping — reused arms (L-J1, L-B88,
+  L-K74, F) use the 1b commit-2 gate's label strings for the
+  fighter_id construction, so raw-hash bit-continuity with
+  filed targets is preserved. Fixture attributes unchanged —
+  only the fighter_id string differs. Normalized-domain hasher
+  added as the permanent secondary check so label contamination
+  can never masquerade as behavior again.
+
+  Lesson filed for future instrument design: "outcome hash
+  differs" is not "behavior differs" when the hash domain
+  includes labels. Any hasher that includes identity columns
+  (winner_id, loser_id, fighter1_id, fighter2_id, camp_id,
+  etc.) needs a normalized-domain sibling before FAIL verdicts
+  are trusted as behavior claims.
+
+  **SENSITIVITY TABLES (N=2000/arm, HEAD a04faf4).**
+
+  Family key: box=boxing (JAB/CROSS/HOOK/UPPERCUT/OVERHAND,
+  offense=boxing), kck=kicks (10 members, offense=kicks),
+  cex=clinch_explicit ({CLINCH_KNEE, CLINCH_ELBOW, DIRTY_BOXING},
+  offense=clinch_striking, defense hybrid with takedowns),
+  cft=clinch_fallthrough (else branch, 12 members enumerated,
+  offense=clinch_striking, defense=striking_defense).
+
+  Consolidated slot1-side (single-stat mover 88 or 74 on slot1
+  for asymmetric arms):
+
+    arm     p_slot1  box_att  box_rate  kck_att  kck_rate  cex_att  cex_rate  cft_att  cft_rate
+    L-J1    0.4840   13954    0.4731    19430    0.4710    4058     0.4475    40458    0.4137
+    L-B88   0.5200    9700    0.4724    12988    0.4642    2401     0.4344    45456    0.4093
+    L-B74   0.4510    7581    0.4679    11055    0.4685    3291     0.4579    48828    0.4189
+    L-K74   0.4840    7935    0.4713    10775    0.4604    3379     0.4492    49956    0.4178
+    L-K78   0.5320   12819    0.4724    17824    0.4684    3398     0.4620    41751    0.4200
+    L-K88   0.6000    8817    0.4621    13424    0.4660    2105     0.4204    46949    0.4090
+    L-C88   0.5780    9098    0.4663    13182    0.4619    2319     0.4368    47174    0.4130
+    L-C74   0.4900   13000    0.4772    17892    0.4797    3362     0.4619    42195    0.4200
+    F       0.8035    7970    0.4593    10811    0.4621    3605     0.4352    53846    0.4059
+
+  Consolidated slot2-side (single-stat holder 55 or 61 on slot2
+  for asymmetric arms):
+
+    arm     p_slot2  box_att  box_rate  kck_att  kck_rate  cex_att  cex_rate  cft_att  cft_rate
+    L-J1    0.4750   13209    0.4860    18484    0.4798    3783     0.4843    36778    0.4294
+    L-B88   0.4440    7186    0.4883    11620    0.4824    2023     0.4572    38671    0.4415
+    L-B74   0.5155    7124    0.4969    11194    0.4761    2274     0.4415    42034    0.4289
+    L-K74   0.4815    8049    0.4839    10451    0.4733    2035     0.4486    40353    0.4348
+    L-K78   0.4395    9352    0.4846    11866    0.4728    2220     0.4604    39884    0.4261
+    L-K88   0.3695    8041    0.4931    10115    0.4786    1692     0.4657    35595    0.4497
+    L-C88   0.3900    7829    0.4918    10656    0.4815    1841     0.4666    35419    0.4285
+    L-C74   0.4650    9495    0.4799    13412    0.4688    2315     0.4242    41941    0.4161
+    F       0.1825    8185    0.4701    11633    0.4677    5569     0.4997    33556    0.4409
+
+  Control-delta summary — own-family favored-side landing rate
+  vs L-J1 control (all-75/75):
+  - Boxing: L-B88 slot1 box_rate = 0.4724 vs L-J1 slot1
+    box_rate = 0.4731. Δ = −0.0007 (−0.07pp). Effectively zero
+    at 88v55.
+  - Kicks: L-K74 slot1 kck_rate = 0.4604 (Δ = −0.0106
+    (−1.06pp)), L-K78 slot1 = 0.4684 (Δ = −0.0026 (−0.26pp)),
+    L-K88 slot1 = 0.4660 (Δ = −0.0050 (−0.50pp)) — flat-to-
+    slightly-NEGATIVE across all three kick fixtures, INCLUDING
+    L-K88 with the fight_engine.py :2317-2318 +10 offense
+    landing cliff firing (att.kicks≥80 AND def.kicks<60). The
+    cliff activates on every kick from slot1 in L-K88 yet
+    aggregate landing rate is LOWER than control.
+  - Clinch: L-C88 slot1 cex_rate = 0.4368 (Δ = −0.0107
+    (−1.07pp)), L-C74 slot1 = 0.4619 (Δ = +0.0144 (+1.44pp)).
+    Flat both directions. L-C88 fallthrough: 0.4130
+    (Δ = −0.0007 (−0.07pp)). Flat.
+  - Formula-predicted +2-3pp on 88v55 favored side (raw
+    offense/(offense+defense+1)*0.5 spread at 88v55 delivers
+    ~11.5pp pre-variance) is ABSENT from aggregate.
+
+  VERDICT: the landing channel transmits ~nothing at aggregate.
+  All p_fav movement observed on the asymmetric arms rides the
+  1a/1b damage dials and fight-shape effects (attempt-volume
+  redistribution, fatigue/momentum/state-modifier interactions),
+  not the landing formula.
+
+  **FINDINGS FILED.**
+  - (a) Landing channel dead at aggregate (above). The
+    landing-curve retune arc (#1 in SENS1 QUEUE, PROMOTED by
+    1b finding (a)) is CONFIRMED against measurement. Its spec
+    must address the state-modifier wash (grappler-pressure
+    penalties at :2333-2363, stamina scaling at :2367-2368,
+    rocked defender bonus at :2371-2372, variance at
+    :2375-2376, upset branch at :2383-2388, and clamp
+    [0.15, 0.85] at :2380) that appears to absorb skill-gap
+    input BEFORE it reaches the final `landed = random.random()
+    < success_chance` gate, not just the base-formula
+    compression `0.20 + offense/(offense+defense+1) * 0.5`.
+  - (b) Attempt-share hierarchy (MEASURED, slot1 aggregated
+    across all 9 arms, ~663K attempts):
+      cft ~62.9% > kicks ~19.2% > boxing ~13.7% > cex ~4.2%
+    clinch_striking is the highest-leverage striking stat by
+    volume (L-C88 p_slot1=0.578 > L-B88 p_slot1=0.520). Boxing
+    weakness is double-layered: no landing sensitivity AND
+    minority attempt share. When landing-curve retune ships,
+    boxing needs BOTH a landing channel and either more attempt
+    weight or acknowledgment that boxing skill will lift KO
+    numbers via 1a damage but never push p_fav much on its own.
+  - (c) SLOT-ASYM-OBS1 [FILED, mechanism unlocated]: slot2
+    lands more than slot1 systematically across ALL 9 arms
+    AND all 4 families, magnitude ~1-4pp per family per arm
+    (e.g. L-J1 all-75/75 control: box slot1 0.4731 vs slot2
+    0.4860; kck slot1 0.4710 vs slot2 0.4798; cex slot1 0.4475
+    vs slot2 0.4843; cft slot1 0.4137 vs slot2 0.4294). Not
+    seed noise — appears on the symmetric mirror arm (L-J1)
+    with matched fixtures. Mechanism unlocated in this
+    read-only pass; candidates for a future diagnostic
+    include: initiative bias (slot1 acts first each exchange,
+    consuming variance/state), fatigue-scaling asymmetry from
+    initiative order, or state-modifier order-of-operations.
+    Standing rule going forward: **landing-rate comparisons
+    must be within-slot** (slot1 vs slot1 across arms, slot2
+    vs slot2 across arms). Cross-slot comparisons within an
+    arm carry ~1-4pp systematic offset.
+  - (d) DEAD-CONTENT-OBS1 [FILED, upstream of CSS scope]:
+    9 of 30 StrikeType enum members never selected across
+    ~1.22M CSS calls in this fixture set:
+      kicks branch (5 of 10 dead):   SIDE_KICK,
+        SPINNING_BACK_KICK, WHEEL_KICK, AXE_KICK,
+        OBLIQUE_KICK
+      fallthrough branch (4 of 12 dead): BACKFIST,
+        KNEE_HEAD, ELBOW_VERTICAL, ELBOW_SPINNING
+    ELBOW_UPWARD dominates by volume: 333579 attempts =
+    ~43.8% of all clinch_fallthrough attempts, ~27.4% of all
+    CSS calls (of any family) in this fixture set.
+    `select_action` / `get_available_strikes` weighting,
+    upstream of CSS, is the mechanism — outside this audit's
+    read-only scope. Filed for the landing-curve retune arc's
+    Gate 0 diagnostic — if select_action's weighting is skewed
+    such that 30% of strike vocabulary is dead, retuning
+    landing without also examining vocabulary distribution
+    risks tuning against a non-representative attack mix.
+  - (e) F fixture observation cell (RL3 per v1.2 spec):
+    grappling-favored side (slot1, grappling family 88 vs 55)
+    throws MORE clinch_fallthrough attempts than slot2
+    (53846 vs 33556) — grappling advantage → more ground
+    control → more GnP volume feeding through the fallthrough
+    branch (GNP_PUNCH / GNP_ELBOW / GNP_HAMMER_FIST /
+    ELBOW_UPWARD). Reciprocal: slot2 (grappling 55) throws
+    MORE clinch_explicit attempts (5569 vs 3605) — likely
+    reflecting bottom-position offense as the weak grappler
+    fights from clinch. Not gate-grade; noted for the
+    retune spec's attempt-mix redistribution question.
+
+  **INSTRUMENT LIMITATION.** Landing CSV has no
+  position/state column — per-exchange conditional effects
+  (grappler-pressure penalty firing only when defender.takedowns
+  ≥60, rocked defender bonus only when defender.is_rocked,
+  upset branch only when offense < defense × 0.85, +10 kick
+  cliff only when att.kicks≥80 AND def.kicks<60) cannot be
+  attributed to specific state configurations at aggregate.
+  The aggregate landing rate IS the player-visible readout and
+  is the accepted output of this diagnostic — a v1.3
+  conditional cut (adding position/state columns per call and
+  slicing landing rate by state) can be ordered by Van if the
+  retune arc's Gate 0 needs it.
+
+  **LANDING-SIDE KICK CLIFF (measured this arc, from Gate 0
+  read).** fight_engine.py:2317-2318 — `if attacker.kicks >= 80
+  and defender.kicks < 60: offense += 10` — survived 1b (which
+  deleted the two DAMAGE-side kick cliffs but did not touch
+  this landing-side cliff). Measured effect: L-K88 slot1 kick
+  landing rate 0.4660 vs L-J1 control 0.4710 — NEGATIVE
+  aggregate effect at the point where the cliff is guaranteed
+  to fire on every slot1 kick. Consistent with the broader
+  finding (a) that the landing channel is dead at aggregate:
+  a +10 raw offense bump is absorbed by downstream state
+  modifiers and the ratio-compression formula before it can
+  move the final landed roll. De-cliff candidate for the
+  landing-curve retune arc; not a separate ship.
+
+  **QUEUE.**
+  - Landing-curve retune (#1) — spec for the retune arc must
+    cover (i) base formula compression + clamp [0.15, 0.85] at
+    :2379-2380, (ii) state-modifier wash from :2333-2372 that
+    eats skill-gap input before the landed roll,
+    (iii) select_action / get_available_strikes diagnostic in
+    its Gate 0 (per DEAD-CONTENT-OBS1) so retune is targeted
+    at the actual attack mix, not the enumerated vocabulary,
+    (iv) landing-side kick cliff de-cliff, folded from this
+    audit.
+  - SLOT-ASYM-OBS1 parked. No action this arc; landing-rate
+    comparisons must be within-slot going forward.
+  - DEAD-CONTENT-OBS1 parked. Bundled into retune arc's Gate 0.
+  - Classifier hysteresis (#3), SD disentangle (#5), Judge-
+    weight re-measure (#4) — carried from SENS1 QUEUE
+    unchanged.
+  - Owed unchanged: live-roster violence check (1a+1b joint)
+    at next live card; PA timing measurement pre-N-lock.
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
