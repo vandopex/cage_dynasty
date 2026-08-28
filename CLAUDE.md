@@ -3345,6 +3345,527 @@ regardless of any slot bias. Verdicts:
   - Owed unchanged: live-roster violence check (1a+1b joint)
     at next live card; PA timing measurement pre-N-lock.
 
+- **LANDING-CURVE-RETUNE1 — Gate 2 [CLOSED 2026-08-26, C3 docs
+  checkpoint at baseline a242dc1; instrument v1.3
+  (outputs/lcr1/strike_landing_probe_v13.py) qualified by G1a-G1d
+  100% per-row landing gate on 942,677 rows across 7 arms; no
+  engine commits].**
+
+  **2a. Per arm × slot: upset_fired, upset_path split, clamp_hit
+  (v1.3, N=2000/arm).**
+
+      arm     slot        N     upset_fired  floor70  boost22  none    clamp_hit
+      L-J1    slot1   77900       0.6717     0.1224   0.1138   0.7638   0.0000
+      L-J1    slot2   72254       0.5960     0.1078   0.1018   0.7905   0.0000
+      L-B88   slot1   70545       0.6955     0.1246   0.1188   0.7566   0.0000
+      L-B88   slot2   59500       0.6078     0.1091   0.1033   0.7876   0.0000
+      L-K74   slot1   72045       0.6965     0.1246   0.1190   0.7564   0.0000
+      L-K74   slot2   60888       0.6318     0.1112   0.1086   0.7802   0.0000
+      L-K78   slot1   75792       0.6568     0.1166   0.1111   0.7724   0.0000
+      L-K78   slot2   63322       0.6517     0.1151   0.1119   0.7730   0.0000
+      L-K88   slot1   71295       0.6953     0.1245   0.1180   0.7575   0.0000
+      L-K88   slot2   55443       0.5981     0.1080   0.1023   0.7897   0.0000
+      L-C88   slot1   71773       0.6925     0.1244   0.1189   0.7567   0.0000
+      L-C88   slot2   55745       0.6288     0.1133   0.1070   0.7797   0.0000
+      F       slot1   76232       0.6883     0.1249   0.1174   0.7577   0.0000
+      F       slot2   58943       0.6274     0.1106   0.1070   0.7824   0.0000
+
+  **Upset branch fires on 60-70% of all attempts on every one of
+  14 arm × slot cells.** The 18/17/65 split from the code
+  (`if upset_roll < 0.18: floor70; elif upset_roll < 0.35:
+  boost22; else no adjustment`) reproduces as ~12/11/76 on the
+  fired subset, which is the 0.18/0.17/0.65 split within the
+  fired-region → the branch's within-firing distribution matches
+  its code weights exactly (18% × 0.67 firing = 0.12, 17% × 0.67
+  = 0.11, 65% × 0.67 = 0.44; the "none" 0.76 aggregate ADDS the
+  0.33 non-firing rows to the 0.44 fired-no-effect rows).
+  **clamp_hit = 0.0000 on 14/14 cells.** Clamp `[0.15, 0.85]` at
+  fight_engine.py:2380 is dead code on this fixture set — no
+  attempt drove sc_base outside the clamp bounds in any arm.
+
+  **2b. UPSET-PARITY-HYP1 [FALSIFIED as stated, attributed to
+  architect's Gate 0 review].** STANDING boxing, L-J1 vs L-B88,
+  per slot:
+
+      arm    slot   STANDING boxing   N     upset_fired  mean(sc_base)  mean(sc_final)  landed
+      L-J1   slot1                    13954    0.5753       0.4145          0.4730       0.4731
+      L-J1   slot2                    13209    0.5024       0.4338          0.4844       0.4860
+      L-B88  slot1                     9700    0.5154       0.4128          0.4665       0.4724
+      L-B88  slot2                     7186    0.6353       0.4156          0.4810       0.4883
+
+  Predicted: L-J1 mirror ~50%, L-B88 slot1 (offense-95 side)
+  ~24%. Measured: L-J1 slot1 mirror = 0.5753 (+7.5pp above
+  predicted); L-J1 slot2 mirror = 0.5024 (matches ±0.3pp); L-B88
+  slot1 favored = 0.5154 (**+27.7pp above predicted 24%; hypothesis
+  falsified as stated**); L-B88 slot2 (weak) = 0.6353.
+
+  **Reason for the miss (mechanism located below in §2c):** the
+  upset trigger at fight_engine.py:2384 compares `offense`
+  against `defense * 0.85`, but by that point in the pipeline
+  BOTH offense AND defense have been multiplied by their
+  respective stamina/100 factors (:2366-2367). HYP1's arithmetic
+  assumed the trigger fired on PRE-stamina values (offense=95
+  vs 82.45 threshold → ~24% firing on the 88-side). Post-stamina
+  values are much smaller and closer together, so the trigger
+  fires ~50% at parity AND ~50% at 88-side. The +7 speed bump
+  and +13 boxing gap that push the 88-side above the pre-stamina
+  threshold are compressed by stamina scaling before the trigger
+  sees them.
+
+  Not quietly dropped. The +5.5pp arithmetic in the ratified spec
+  was falsified at Gate 0; this HYP1 arithmetic is falsified at
+  Gate 2. Both are on the record.
+
+  **2c. Located mechanism: `off_post_stamina`.** Same-family
+  restriction, slot1, aggregate. Column-by-column deltas:
+
+      L-B88 slot1, family=boxing (N=9700 vs L-J1 13954):
+        off_routed          75.0000 →  88.0000  Δ=+13.0000
+        off_post_pressure   82.0000 →  95.0000  Δ=+13.0000
+        off_post_stamina    37.2607 →  40.2459  Δ= +2.9851   ← collapse
+        off_post_variance   37.3510 →  40.2681  Δ= +2.9171
+        sc_base              0.4145 →   0.4128  Δ= −0.0017
+        sc_final             0.4730 →   0.4665  Δ= −0.0065
+        landed               0.4731 →   0.4724  Δ= −0.0007
+
+      L-K88 slot1, family=kicks (N=13424 vs L-J1 19430):
+        off_routed          75.0000 →  98.0000  Δ=+23.0000
+        off_post_pressure   82.0000 → 105.0000  Δ=+23.0000
+        off_post_stamina    36.2587 →  43.3522  Δ= +7.0935   ← collapse
+        off_post_variance   36.2818 →  43.2580  Δ= +6.9762
+        sc_base              0.4118 →   0.4143  Δ= +0.0025
+        sc_final             0.4726 →   0.4657  Δ= −0.0069
+        landed               0.4710 →   0.4660  Δ= −0.0049
+
+      L-C88 slot1, family=clinch_fallthrough (N=47174 vs L-J1 40458):
+        off_routed          75.0000 →  88.0000  Δ=+13.0000
+        off_post_pressure   82.0000 →  95.0000  Δ=+13.0000
+        off_post_stamina    13.1861 →  17.1683  Δ= +3.9823   ← collapse
+        off_post_variance   13.1759 →  17.1756  Δ= +3.9997
+        sc_base              0.3192 →   0.3275  Δ= +0.0084
+        sc_final             0.4105 →   0.4142  Δ= +0.0037
+        landed               0.4137 →   0.4130  Δ= −0.0006
+
+  **The collapse column is `off_post_stamina`.** Off_routed
+  deltas of +13 / +23 / +13 (pure attribute gap) survive intact
+  through pressure. Then `offense *= attacker_state.stamina / 100`
+  at :2366 divides by 100; on aggregate the +13/+23/+13 offense
+  gaps become +3.0 / +7.1 / +4.0. Downstream (variance, sc_base,
+  sc_final, landed) receives the compressed gap and produces
+  ~zero landing-rate lift.
+
+  **2d. STAMINA CUT.** Per arm × slot × position-bucket
+  att_stamina histogram (sample, L-J1):
+
+      arm    slot  bucket    N       [0,1)  [1,10)  [10,30)  [30,60)  [60,100]
+      L-J1   slot1 STANDING  38048    9.8%    8.7%   25.3%    20.2%    36.0%
+      L-J1   slot1 CLINCH     6507   27.6%   14.8%   21.0%    17.5%    19.0%
+      L-J1   slot1 GROUND    33345   62.4%   12.2%    9.6%     9.6%     6.1%
+      L-J1   slot2 STANDING  36127    9.1%    8.0%   24.6%    19.9%    38.4%
+      L-J1   slot2 GROUND    29971   57.6%   12.3%   10.6%    11.4%     8.3%
+
+  Pattern across all 7 arms consistent: **STANDING ~9-13% in
+  [0,1); CLINCH ~20-40% in [0,1); GROUND ~42-62% in [0,1).**
+
+  Mean att_stamina by attempt_idx decile, L-J1 slot1:
+  `79.10, 38.34, 17.47, 18.73, 9.98, 9.40, 8.71, 4.65, 2.28,
+  5.64`. Trajectory drops from ~79 at decile 1 to single digits
+  by decile 5, near-zero by decile 8-10 on every arm.
+
+  Low-fraction summary: **~30-38% of ALL rows have
+  att_stamina < 1.0** across arms/slots (0.3383 L-J1 s1, 0.3052
+  L-J1 s2, 0.3760 L-B88 s1, ..., 0.3879 L-C88 s1). On those
+  low-att-stamina rows, def_stamina is distributed across the
+  full range — **only ~1-3% of the low-att-stamina rows also
+  have def_stamina < 1.0.** The two stamina values are
+  DECOUPLED.
+
+  **Caller distinction (fe:3315 vs fi:810) UNKNOWABLE from v1.3
+  CSVs — no caller-id column captured.** Filed as instrument
+  limitation; v1.4 adds `caller_id` to the landing CSV schema
+  if a follow-up trace is needed.
+
+  **2e. SLOT-ASYM-OBS1 [mechanism CANDIDATE, hypothesis
+  only].** L-J1 informational:
+
+      L-J1 slot1  N=77900  mean(att_stamina)=28.9272  mean(def_stamina)=44.1814  mean(sc_base)=0.3633  landed=0.4404
+      L-J1 slot2  N=72254  mean(att_stamina)=31.6395  mean(def_stamina)=38.4282  mean(sc_base)=0.3883  landed=0.4555
+
+  slot1 has systematically **more attempts** (77900 vs 72254),
+  **lower mean att_stamina** (28.93 vs 31.64), **lower mean
+  sc_base** (0.3633 vs 0.3883), and **lower landed rate**
+  (0.4404 vs 0.4555). Filed as candidate mechanism for the
+  SLOT-ASYM-OBS1 observation in AUDIT1: slot1 acts first per
+  exchange (more attempts), depletes stamina faster (lower
+  mean), stamina scaling drops offense (lower sc_base), lands
+  less. Not proven — a direct trace of exchange-order and
+  action-selection would be needed. Parked under the existing
+  SLOT-ASYM-OBS1 filing.
+
+  **VERDICT.** The landing formula is not the wash; **it is
+  starved.** `offense *= attacker_state.stamina / 100` at
+  fight_engine.py:2366, with mean att_stamina ~29 and 30-38%
+  of attempts at stamina<1.0, collapses skill-derived offense
+  before the ratio at :2379 ever sees it. Both formula
+  compression AND the upset branch operate on values that are
+  already compressed by two orders of magnitude — the skill
+  gap that would make a stronger boxer land more strikes
+  literally does not survive the stamina line.
+
+  **ARC PIVOT.** Stamina drain rate + stamina scaling
+  arithmetic PRECEDE any landing-curve change. If a fighter's
+  effective offense is already 3-5% of nominal by the middle
+  of round 1, no landing-curve retune can lift them — the
+  numerator is already gone. Landing-curve retune items
+  (formula compression at :2379-2380, upset rescope at
+  :2384-2389, kick landing cliff at :2317-2318 de-cliff) are
+  **DEFERRED, not cancelled.** They wait behind a stamina
+  audit (Part B trace) that determines whether the drain
+  constants and the `/100` scaling are behaving as intended.
+
+  **Part B — read-only stamina trace (appended C3, cited at
+  baseline a242dc1).**
+
+  **B1. Stamina write sites (drain, recovery, floor, order).**
+
+  Class def + methods verbatim (fight_engine.py:545-639):
+
+      545: class FighterState:
+      552:     stamina: float = 100.0
+
+      608:     def recover_stamina(self, amount: float) -> None:
+      609:         self.stamina = min(100, self.stamina + amount)
+
+      611:     def spend_stamina(self, amount: float) -> None:
+      612:         self.stamina = max(0, self.stamina - amount)
+
+      614:     def new_round(self) -> None:
+      624:         base_recovery = 15
+      625:         _rec = self.recovery_rating
+      626:         bonus_recovery = (_rec / 100) * 25
+      628:         if getattr(self, '_current_round', 0) >= 4:
+      629:             bonus_recovery *= 1.3
+      630:         self.stamina = min(100,
+      631:             self.stamina + base_recovery + bonus_recovery)
+
+  **Floor = 0.0, NOT 0.5.** The `max(0, ...)` at fe:612 is the
+  only floor. The 0.5 value visible in the Gate 2 exemplar row
+  (att_stamina=0.5 in the TRUCK cft row) is **stamina hit engine
+  floor 0 at the previous exchange's spend_stamina, then
+  per-exchange recovery of +0.5 fired (fe:3805-3806 /
+  fi:1642-1643) BEFORE CSS was called for the next exchange.**
+  Empirically confirmed: across 942,677 rows in 7 arms both
+  slots, `att_stamina == 0.0 exactly: 0 rows (frac=0.0000)`.
+  Minimum observed att_stamina across all 14 slot-cells:
+  **exactly 0.5000**, with 16,188-28,487 rows sitting on the
+  0.5 floor per slot-cell (~21-38% of each cell). The
+  0-then-recover-0.5 pattern accounts for it entirely.
+
+  Drain sites (all callers to spend_stamina):
+
+    line     site                                          amount            trigger
+    fe:601   apply_damage — rocked side                    4                 fighter got rocked
+    fe:3105  process_submission_progress — attacker        3                 working a sub
+    fe:3106  same — defender                               5                 being submitted
+    fe:3320  simulate_exchange — attacker (FE loop)        STRIKE_PROPERTIES[strike][2]   strike thrown (range 2-12)
+    fe:3568  simulate_exchange grappling                   5                 grappling attempt
+    fe:3637  simulate_exchange grappling                   4                 another grappling branch
+    fi:948   _execute_strike — defender                    damage * 0.4      body-shot landed
+    fi:986   _execute_strike — defender                    8                 landed knockdown
+    fi:1282  _execute_strike — attacker (FI loop)          stamina_cost * (1.0 + 0.15 * agg * exec)  strike thrown
+    fi:1336  _execute_strike — defender                    8                 KO/hit branch
+    fi:1417  _execute_grappling — attacker                 5                 grappling attempt
+    fi:1419  same — extra                                  3                 failed attempt
+    fi:1487  _execute_grappling — attacker                 6                 different grappling branch
+
+  Recovery sites:
+
+    line          site                              amount
+    fe:3805-3806  simulate_exchange — both fighters +0.5 per exchange (constant)
+    fi:1642-1643  FI exchange loop — both           +0.5 per exchange (constant, same value)
+    fe:614-631    new_round() — base+recovery bonus 15 + (recovery_rating/100)*25; ×1.3 in R4+
+    fi:591 / fi:601  corner bonus (R2+ only)         15 * corner_bonus_fN (max 7.5 extra)
+    fi:612-615    round-start fatigue penalty       −_fatigue_penalty (0/1/2/4)
+
+  **Order in the exchange loop (both callers):** CSS called
+  FIRST, THEN attacker's strike cost spent.
+    fe:3315 CSS → fe:3320 attacker_state.spend_stamina
+    fi:810  CSS → fi:1282 attacker_state.spend_stamina
+
+  CSS sees stamina AT the state before the current strike's own
+  cost is deducted. Previous exchange's spend AND the +0.5
+  per-exchange recovery have already applied.
+
+  **B2. Cardio wiring — CARDIO-UNWIRED-OBS1 [PENDING, awaiting
+  intent-review before upgrade].**
+
+  Attribute definition at fight_engine.py:1035 (verbatim):
+      1035:     cardio: int = 50        # Stamina, gas tank
+
+  **Whole-codebase grep of every `cardio` read** (verbatim,
+  cage_dynasty_web/ + narrative/ + systems/):
+
+    matchmaking.py:245           getattr(fighter, 'cardio', 50) +
+    fight_engine.py:1035         cardio: int = 50        # Stamina, gas tank
+    fight_engine.py:1078         physical = (self.strength + self.speed + self.cardio + self.chin + self.recovery) // 5
+    fight_engine.py:1089         "cardio": self.cardio,
+    fight_engine.py:1384         pressure_score    = (fighter.cardio + fighter.heart + fighter.chin) / 3
+    fight_engine.py:1451         # Clinch Fighter: cage pressure + dirty boxing + cardio
+    fight_engine.py:1453         if clinch_score >= 65 and fighter.cardio >= 68 and wrestling_score >= 58:
+    fight_engine.py:1456         # Pressure Fighter: cardio + chin + heart — the walking forward style
+    fight_engine.py:1707         # High output, always forward, cardio is their weapon.
+    fight_engine.py:2070         # ── Late-round cardio advantage ──────────────────────
+    fight_engine.py:2072         # A fighter with much better cardio dominates round 3.
+    fight_engine.py:2075         _opp_cardio = getattr(opponent_attrs, 'cardio', 70)
+    fight_engine.py:2076         _my_cardio = getattr(fighter_attrs, 'cardio', 70)
+    fight_engine.py:2077         _cardio_gap = _my_cardio - _opp_cardio
+    fight_engine.py:2078         if _cardio_gap >= 12:
+    fight_engine.py:2079-2084    _cardio_mult = 1.0 + ((_cardio_gap - 10) * 0.015 * _round); min 1.35
+                                  strike_weight *= _cardio_mult; grapple_weight *= _cardio_mult; sub_weight *= _cardio_mult
+    fight_engine.py:2173         if target == "body" and opponent.cardio > 70:
+    fight_engine.py:4472/4489    strength=f1_overall, speed=f1_overall, cardio=f1_overall, ... (quick_simulate)
+    models.py:85                 ("Cardio Machine", "cardio", "+15 Cardio, -5 Power")   (trait)
+    models.py:125                cardio: int = 50   (secondary FighterAttributes-like class)
+    models.py:177                self.strength, self.speed, self.cardio, self.chin, self.recovery, ... (OVR calc)
+    models.py:588 / :638 / :1260 cardio=rand_attr(...)   (fighter generation)
+    corner_advice.py:11/:51/:628/:632/:717/:1154  cardio in coach specialty routing + advice text
+    styles.py:109/:110/:143/:175/:176  attribute_requirements / attribute_bonuses on cardio (style constraints)
+    game_start.py:208/:257/:456/:507/:657  cardio in fighter definition / gen / training weights
+    facilities.py:174            "cardio", (facility upgrade key)
+    aging.py:155                 attribute list including cardio (age decay)
+    game_bridge.py:557/:565/:573/:596  training primary/secondary tables
+    game_bridge.py:704           "cardio":           "sc_coach",   (coach specialty)
+    game_bridge.py:799           "sc_coach":        ["strength", "speed", "cardio", ...   (S&C coach stat list)
+    test_fight_sim.py:43/110/112/118/120/155  cardio in test fixtures
+
+  **Where recovery_rating is populated** (verbatim,
+  fight_engine.py:4064-4073):
+      4065:         recovery_rating=fighter1.recovery
+      4073:         recovery_rating=fighter2.recovery
+  (Populated from `FighterAttributes.recovery`, NOT from cardio.)
+
+  **Findings from the grep:**
+  - Cardio IS wired into non-drain fight logic: style detection
+    (`detect_fighter_style` at fe:1384, :1453); IQ body-targeting
+    (fe:2173 opponent.cardio > 70 → +10 weight); `physical` OVR
+    mean (fe:1078); `quick_simulate` fixture generator (fe:4472/
+    4489, symmetric).
+  - Late-round cardio multiplier (fe:2073-2084) is PRESENT IN
+    CODE; effect UNVERIFIED. The multiplier scales all three
+    selectable weights uniformly (strike, grapple, sub) at
+    :2082-2084 when cardio_gap ≥ 12 at round ≥ 2. Under
+    `random.choices` with proportional-invariance semantics, a
+    uniform scaling of ALL non-zero options is a no-op (the
+    ratios are what select). LIKELY no-op at the outcome layer
+    unless an unscaled option exists in the weight list. NOT
+    listed as a channel through which cardio affects fight
+    outcomes until STAMINA-MODEL1 Gate 0 verifies the full
+    weight list (see QUEUE below).
+  - Cardio IS wired into training/gen/UI/coach infrastructure:
+    coach specialty routing (game_bridge.py, corner_advice.py),
+    style requirements/bonuses (styles.py), attribute gen
+    (models.py, game_start.py), aging decay (aging.py), facility
+    upgrades (facilities.py).
+  - **Cardio is NOT wired into any stamina drain site.** The
+    drain amounts at all 13 spend_stamina call sites (B1 table)
+    read from STRIKE_PROPERTIES constants, aggression multiplier,
+    damage-derived values, and hardcoded numbers — never from
+    `attacker.cardio` or `defender.cardio`.
+  - **Cardio is NOT wired into stamina recovery.** Between-round
+    recovery (fe:625) reads `recovery_rating`, which is populated
+    from `FighterAttributes.recovery` (fe:4065/4073). The
+    per-exchange +0.5 constant is unconditional.
+
+  **CARDIO-UNWIRED-OBS1 refined and filed as PENDING.** The
+  attribute captioned "Stamina, gas tank" at fe:1035 has NO
+  direct effect on stamina drain rate or stamina recovery rate.
+  It affects fight outcomes through indirect channels (style
+  detection, body-targeting IQ bonus, OVR). Late-round cardio
+  multiplier at fe:2073-2084 is PRESENT-IN-CODE but effect
+  UNVERIFIED and likely no-op via uniform three-weight scaling
+  under random.choices; NOT listed as an outcome channel until
+  STAMINA-MODEL1 Gate 0 verifies. Not filed as "unwired" — the
+  attribute is used in 30+ code sites. Filed as
+  **misrouted-from-caption**: the caption suggests a stamina
+  channel that does not exist in code. Whether that's intentional
+  (cardio → recovery via `recovery` attribute correlation in
+  fighter gen, but not via direct code read) or a latent
+  simulation bug is the architect's call. Not upgraded until the
+  intent review lands.
+
+  **B3. Eight-site `stamina/100` consumer table (with floors).**
+
+    line         function                          formula                                             floor at stamina=0
+    fe:2112      select_action action-weights      stamina_factor = stamina/100 → all 3 weights *=     0 (guarded by max(5,...) at :2118 & :2126 — see below)
+    fe:2366-67   calculate_strike_success — LAND   off *= stamina/100; def *= def_stamina/100          0 (linear-to-zero, no floor)
+    fe:2470      calculate_strike_damage — DAMAGE  damage *= (stamina/100) * 0.5 + 0.5                 0.5 (50% floor)
+    fe:2684-85   calculate_grappling_success — GRAP off *= stamina/100; def *= def_stamina/100         0 (linear-to-zero)
+    fe:3001-02   attempt_submission — SUB attempt  off *= stamina/100; def *= def_stamina/100          0 (linear-to-zero)
+    fe:3081      process_submission_progress — off off = attacker.submissions * (stamina/100)          0 (linear-to-zero)
+    fe:3100      same — def                        def = ((guard+subs)/2) * (def_stamina/100)          0 (linear-to-zero)
+    fe:3121      sub defense hybrid                _def_stamina/100 + 0.3 + _composure_bonus           0.3 (30% floor)
+
+  **Damage-floor cross-reference (EXPLANATION, not correction).**
+  STRIKE-SKILL-DMG1 phase 1a (K=1.0 skill-into-damage dial) and
+  phase 1b (K=1.0 kick-gap gradient) both multiply `damage` at
+  fight_engine.py:2401's `calculate_strike_damage`. That damage
+  is subsequently multiplied by `(stamina/100) * 0.5 + 0.5` at
+  fe:2470, which retains a **50% floor at zero stamina**. The 1a
+  and 1b measurements were taken with this floor in place and
+  remain valid — the 0.7075 E-arm shift, the +2.2× per-point
+  kick-vs-boxing imbalance, the K-choice grid — all stand. This
+  cross-reference is EXPLANATORY: it names why damage dials
+  transmit measurable signal (50% floor keeps most of the
+  skill-derived value alive) while landing/grappling/submission
+  do not (linear-to-zero floor collapses skill-derived value at
+  the stamina line). Not opening 1a or 1b for edits.
+
+  **:2112 zero-stamina behavior — code and empirical result.**
+
+  Verbatim at fight_engine.py:2112-2131:
+
+      2112:    stamina_factor = fighter_state.stamina / 100
+      2113:    strike_weight = int(strike_weight * stamina_factor)
+      2114:    sub_weight = int(sub_weight * stamina_factor)
+      2115:    grapple_weight = int(grapple_weight * stamina_factor)
+      2116:
+      2117:    # Ensure minimum weights
+      2118:    strike_weight = max(5, strike_weight) if strikes else 0
+      2119:    # Sub gate: BJJ/Sambo can attempt subs at 45+, everyone else at 60+
+      2120:    _sub_threshold = 45 if my_style in ("bjj", "sambo") else 60
+      2121:    if submissions and fighter_attrs.submissions >= _sub_threshold:
+      2122:        sub_weight = max(1, sub_weight)
+      2123:    else:
+      2124:        sub_weight = 0
+      2125:    grapple_weight = max(5, grapple_weight) if grappling else 0
+      2126:
+      2127:    # Select action category
+      2128:    total = strike_weight + sub_weight + grapple_weight
+      2129:    if total == 0:
+      2130:        return ("strike", random.choice(strikes) if strikes else StrikeType.JAB)
+
+  **The `max(5, ...)` at :2118 and :2126 is the zero-case
+  guard.** At stamina=0.0: `stamina_factor = 0.0` →
+  strike_weight, sub_weight, grapple_weight all int(0). Then the
+  min-5 floors activate: strike_weight becomes 5 (if strikes
+  available), grapple_weight becomes 5 (if grappling available).
+  `total = 5 + 0 + 5 = 10` for a typical exchange; `random.choices`
+  never sees a zero-weight list, never raises. The `if total == 0`
+  fallback at :2129-2130 is a defensive path for the edge case of
+  no strikes AND no grappling available AND no viable sub.
+
+  **Fraction of v1.3 rows with att_stamina == 0.0 exactly, per
+  arm × slot** (measured across 942,677 rows):
+
+      arm     slot        N       att_stamina==0.0 exactly    frac
+      L-J1    slot1   77900      0                             0.0000
+      L-J1    slot2   72254      0                             0.0000
+      L-B88   slot1   70545      0                             0.0000
+      L-B88   slot2   59500      0                             0.0000
+      L-K74   slot1   72045      0                             0.0000
+      L-K74   slot2   60888      0                             0.0000
+      L-K78   slot1   75792      0                             0.0000
+      L-K78   slot2   63322      0                             0.0000
+      L-K88   slot1   71295      0                             0.0000
+      L-K88   slot2   55443      0                             0.0000
+      L-C88   slot1   71773      0                             0.0000
+      L-C88   slot2   55745      0                             0.0000
+      F       slot1   76232      0                             0.0000
+      F       slot2   58943      0                             0.0000
+
+  **Zero exact-zero rows in 942,677.** The min-5 weight floor at
+  :2118 exists as defense-in-depth but never activates at CSS
+  call time in this fixture set because the per-exchange +0.5
+  recovery (fe:3805-3806 / fi:1642-1643) fires BEFORE CSS is
+  called for the next exchange. Every drain-to-0 event is
+  followed by +0.5 before CSS reads it. The 0.5 floor visible in
+  Gate 2 §2c's exemplar is not a code floor — it's a
+  drain→recover pattern.
+
+  **B4. Hand trajectory vs measured decile (75-recovery,
+  gameplan=None).**
+
+  Per-exchange net drain assuming attacker acts half the time,
+  strike-cost mean ~5, per-exchange recovery +0.5:
+    when attacking: −5 + 0.5 = −4.5
+    when defending: +0.5 (or −damage*0.4 to −8 on body/KD hits)
+    average net for one fighter, half-attacking: (−4.5 + 0.5)/2 = −2.0/exchange
+
+  Exchanges per round in LIVE_PLAY config: 55.
+
+  Round 1 (start 100.0):
+    55 exchanges × −2.0 = −110 → floor at 0 around exchange 50.
+
+  Round 2 start:
+    new_round: +33.75 recovery (base 15 + (75/100)*25) → ~33.75.
+    Fatigue penalty (starting_stamina 100, bucket ≥95 → 0): 0.
+
+  Round 2 mid:
+    ~17 exchanges to floor at −2.0/exchange → hits 0 by
+    exchange 17 of 55.
+
+  Round 3 same shape.
+
+  Measured decile means (L-J1 slot1, from Gate 2 §2d):
+    79.10, 38.34, 17.47, 18.73, 9.98, 9.40, 8.71, 4.65, 2.28, 5.64
+
+  Reconciliation: decile trajectory MATCHES the hand computation
+  directionally on every step:
+    D1 (early R1): 79 vs computed high-start-dropping-fast
+    D2 (mid R1):   38 vs computed dropping through R1
+    D3 (end R1 / start R2): 17 vs computed near-zero into R2 recovery
+    D4 (R2 mid):   18 vs computed R2 recovery + drop
+    D5-8 (R2 end / R3): 4-10 vs computed near-zero
+    D9 (R3 end):    2 vs computed near-zero
+    D10 (final):    5 (uptick — plausibly last-exchange recovery
+                       or short-round fights averaging fresher
+                       states)
+
+  Between-round recovery of +33.75 IS visible as the decile 3→4
+  bump (17 → 18) despite continued drain, and the
+  L-J1 slot2 trajectory (81, 44, 23, 24, 14, 11, 10, 5, 4, 9)
+  shows a stronger R2 recovery signal (decile 3→4 rises 23 → 24,
+  decile 8→10 rises 5→4→9). Directionally consistent; not a
+  test — v1.4 round column is the test.
+
+  **QUEUE.**
+  - **LANDING-CURVE-RETUNE1 DEFERRED behind new arc
+    STAMINA-MODEL1.** Landing retune items (formula compression
+    at :2379-2380, upset rescope at :2384-2389, kick landing
+    cliff at :2317-2318, defense-side family-stat blend) all
+    wait until the stamina model is audited and, if needed,
+    corrected.
+  - **STAMINA-MODEL1 Gate 0**:
+    (a) whole-codebase cardio grep + recovery_rating population
+        read (delivered in Part B above);
+    (b) v1.4 instrument adding `round`, `exchange_idx`,
+        `caller_id` (fe:3315 vs fi:810), and `zero_flag`
+        (stamina == 0.0 exactly) columns to the landing CSV;
+    (c) verify late-round cardio multiplier (fe:2073-2084) —
+        read the full weight list at select_action's action-
+        category step and prove no unscaled option exists, or
+        identify the unscaled option that makes the uniform
+        3-weight scaling outcome-affecting after all. If proven
+        no-op, file dead-code candidate; if outcome-affecting,
+        re-open the cardio-outcome channel list.
+  - **STAMINA-MODEL1 Gate 1**: live-roster stamina trajectory by
+    round on a fresh save — the owed live-roster check from
+    1a/1b, now load-bearing. Real fighters with 85 recovery vs
+    75 recovery, does the stamina model gas mid-R1 or mid-R2?
+    No hardcoded save/fighter names; use fresh save via new_game
+    per session hygiene.
+  - **STAMINA-MODEL1 design after Gate 1 measurement.** Order of
+    levers matters: drain constants and cardio-wiring are
+    engine-truth candidates and go FIRST; flooring the /100
+    scaling would hide a broken drain and goes LAST.
+  - HYP1-adjacent hypotheses invalidated: the upset branch
+    isn't the wash it appeared to be — it operates on
+    already-starved values. Any future analysis of the branch
+    must condition on stamina state.
+  - Owed unchanged: live-roster violence check (1a+1b joint) —
+    now bundled INTO STAMINA-MODEL1 Gate 1; PA timing
+    measurement pre-N-lock (independent).
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
