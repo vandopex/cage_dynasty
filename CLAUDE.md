@@ -4260,6 +4260,377 @@ regardless of any slot bias. Verdicts:
     instrument named above, if design-phase requires.
   - Owed unchanged: PA timing measurement pre-N-lock.
 
+- **STAMINA-MODEL1 — Gate 1 pre-execution verification session
+  [CLOSED 2026-08-29, C5 docs checkpoint at baseline 896425c; harnesses
+  under outputs/sm1/gate1_v{1,2,4,5b,5c,5d,5d3}_*.py + probe files; no
+  engine commits].**
+
+  Session-wide filing covering the V1-V6 verification arc + P1-P3 drift
+  probe + Addendum 1 execution attempt + Addendum 2 ratification. Six
+  local harness runs, four PA Files-API save fetches, one PA server-log
+  fetch. Discovered a load-bearing dev/prod import-path split; Ship #28
+  record STANDS (a mid-session regression suggestion is RETRACTED).
+  All artifacts anchored under `outputs/sm1/`.
+
+  **V1 — LOCAL fresh new_game roster is +2 collinear across all 225 AI
+  fighters [MEASURED, `gate1_v1_pop_proof.py` on save
+  `gate1_1788026393`].** Iterated all 225 registry fighters through
+  `bridge._make_fighter_attrs`; 0 failures on `cardio - recovery == 2`
+  assertion; cardio ∈ [37, 97] mean 60.51 stdev 14.50; recovery ∈
+  [35, 95] mean 58.51 stdev 14.50. Absent-key histogram: 18/18 engine
+  stats absent for 225/225 fighters in `_fighter_data`. Fallback resolves
+  in `_make_fighter_attrs._a` (`game_bridge.py:16879-16880`) via
+  `getattr(fighter, attr, ovr + offset)` — deterministic OVR-derived,
+  no rng. `cardio` offset +2, `recovery` offset 0 → cardio = ovr + 2,
+  recovery = ovr, on every fighter.
+
+  **V2 — Fight-time consumption confirmed at 3718/3718 [MEASURED,
+  `gate1_v2_flighttime_log.py`].** Monkey-patched
+  `bridge.__class__._make_fighter_attrs` in-process (log-only wrapper,
+  wraps return without side-effect), advanced the gate1 save one week,
+  logged every `(fighter_id, ovr, cardio, recovery)` triple consumed.
+  Result: 3,718 triples across 18 unique fighters. 3,718/3,718 pass
+  `cardio - recovery == 2`. Sample: `fighter_189 ovr=95 → cardio=97
+  recovery=95`. Wrapper restored in `finally`; `git status --porcelain |
+  grep -v '^??'` empty at exit.
+
+  **V3 — Path parity: harness invocation reaches same AI-population
+  assembly path as `/start-game` route [MEASURED via source quote].**
+  Web route at `routes.py:441-459` calls
+  `bridge.new_game(camp_name=session.get(...), camp_location=..., 
+  camp_tier=..., coach_data=coach_data, fighter_data=fighter_data)`.
+  Enters `_new_game_impl` at `game_bridge.py:2190-2361`. AI-population
+  branch at `:2215-2279` and bridge style injection at `:2316-2327`
+  execute BEFORE the player-fighter branch (`:2330-2332`) and coach
+  branch (`:2342-2361`). My harness's empty `coach_data={}` /
+  `fighter_data={}` skip only the two player-side branches; the AI
+  branches are byte-identical to production.
+
+  **V4 — Assembly path trace: 8-key `_fighter_data` dict is a NEW
+  observation, NOT confirmation of the filed 4-key backfill branch
+  [MEASURED, `gate1_v4_assembly_trace.py`].** Observed pre-save keys:
+  `[age, country, id, name, rating, style, weight_class]` (7). Post-load
+  adds `sig_backfill_done` (8). Assembly path traced to:
+  (1) `game_state.py:700-765` `_generate_fighter` writes the 6-key dict
+  at `:754-761` (`{id, name, weight_class, rating, age, country}`);
+  (2) `game_bridge.py:2316-2327` style-injection loop adds `style`;
+  (3) load-time Ship #48 backfill adds `sig_backfill_done`. **Zero
+  overlap with the filed 4-key "backfill" branch** (which writes
+  `{style, age, country, potential}` per this file `:426-439`); the
+  observed dict lacks `potential` and includes 4 extra keys the filed
+  branch does not write. **Filed backfill branch (`:426-439`) remains
+  latent** — its `LATENT, not live` framing stands.
+
+  **V5a — Profile UI fabricates missing stats via md5-seeded variance;
+  6-of-18 offsets diverge from engine [MEASURED via source quote].**
+  Route `fighter_profile` at `routes.py:837-999` reads
+  `fighter.strength`, `fighter.cardio`, etc. from a `WebFighter` built
+  by `bridge._convert_real_fighter` (`game_bridge.py:7104-7378`). The
+  `_attr(key, default_offset)` helper at `:7226-7241`:
+
+      def _attr(key: str, default_offset: int = 0) -> int:
+          if key in fdata:
+              return int(fdata[key])
+          import hashlib as _hl
+          _seed = int.from_bytes(
+              _hl.md5((fighter.fighter_id + key).encode('utf-8')
+              ).digest()[:4], 'big')
+          rng = _rnd.Random(_seed)
+          return max(20, min(100,
+              ovr + default_offset + rng.randint(-12, 12)))
+
+  When `fdata` lacks the key (V1's case: 225/225, 18/18): UI shows
+  `ovr + default_offset + md5_seeded_rng(-12, 12)` (variance); engine
+  sees `ovr + offset` deterministic. Two axes of divergence.
+
+  **UI vs Engine fallback offsets** [MEASURED via spot-diff of `_attr`
+  offsets at `game_bridge.py:7334-7351` vs `_a` offsets at
+  `:16891-16908`]:
+
+  | stat        | UI offset | Engine offset | Δ  |
+  |---|---:|---:|---:|
+  | takedowns   | −2  | −4  | +2 |
+  | top_control | −4  | −5  | +1 |
+  | submissions | −5  | −4  | −1 |
+  | heart       | +4  | +2  | +2 |
+  | fight_iq    | +2  |  0  | +2 |
+  | composure   | +1  |  0  | +1 |
+
+  Other 12 offsets match. Consequence at the fresh-save regression:
+  a fighter shown as "cardio 75 / recovery 55" on the profile can
+  present cardio=62 / recovery=60 to the engine, and 6 stats diverge
+  in the FALLBACK OFFSET direction beyond that. UI decorrelation is
+  fabricated; engine sees flat.
+
+  **V5b — Van's autosave (`bridge_van_autosave.json`, saved
+  2026-07-03T02:58:09) carries FULL engine-stat set [MEASURED,
+  `gate1_v5b_pa_save_inspect.py` via Files-API].** 305 fighters,
+  304/305 have all 18 engine stats present, 1 has "some". cardio ∈
+  [30, 94] mean 57.79 stdev 13.87; recovery ∈ [30, 94] mean 56.94
+  stdev 14.45. `cardio − recovery` distribution spans [−26, +24] with
+  ~40 distinct values. **Van's save PREDATES anything I claimed about
+  regression** — it was generated by a code state that successfully
+  populated per-stat data. Save-loaded via slot4 (2026-07-03T02:32:41)
+  matched byte-similar.
+
+  **V5c — PA newest non-van autosave `bridge_a0eb554d_autosave`
+  (2026-08-16T03:14:07, Summit Combat, week 20, 301 fighters) also
+  carries full engine-stat set [MEASURED, `gate1_v5c_pa_current_inspect.py`].**
+  Aggregate: 301/301 present. cardio ∈ [30, 95] mean 57.65 stdev 15.09;
+  recovery ∈ [30, 95] mean 57.66 stdev 15.34. `cardio − recovery` spans
+  [−25, +25], ~48 distinct values. Van's ongoing Summit Combat playthrough
+  (a0eb554d) has been advance-week firing on the pre-existing world.
+
+  **V5d3 — PA fresh new_game TODAY (2026-08-29T19:36:37, Badlands
+  Athletics slot2, week 1, 289 AI fighters after excluding player Luis
+  Taylor) carries full engine-stat set [MEASURED,
+  `gate1_v5d3_inspect.py`].** Aggregate: 289/289 present, cardio ∈
+  [30, 95] mean 58.14 stdev 15.29; recovery ∈ [30, 94] mean 58.40
+  stdev 14.02. `cardio − recovery` spans [−24, +23], ~46 distinct
+  values. Player Luis Taylor: recovery=55, cardio=69, diff=+14, all
+  18 stats present. **PA fresh new_game today produced independent
+  cardio/recovery variance** — same shape as Van's ongoing world +
+  historic saves.
+
+  **PA server log corroboration [MEASURED, `/tmp/pa_server_r3.log`
+  1583 lines, coverage 2026-08-26 03:15 → 2026-08-29 19:13; refetched
+  after Van's fresh new_game at 19:29-19:36]:**
+
+      2026-08-29 19:29:16 Populating world with AI camps and fighters...
+      2026-08-29 19:29:16   Created 60 events (Cage Dynasty 1 - 60)
+      2026-08-29 19:29:16 Created 40 camps, 292 fighters with simulated history
+      2026-08-29 19:29:16 Creating player's fighter: Luis Taylor
+      2026-08-29 19:29:16   ✅ Created fighter: Luis Taylor (Middleweight) - OVR 63
+
+  Zero "Rich world-gen failed" hits in the whole log. "with simulated
+  history" is the rich-path success print at `game_bridge.py:2270-2271`
+  (NOT the fallback's plain "Created ... fighters" at `:2279`).
+  `world_init.WorldInitializer` completed cleanly on PA today.
+
+  **P1 — no file-tree drift PA vs local [MEASURED, Files-API tree
+  listings + `ls -la`].** PA and local have identical structure under
+  `cage_dynasty_web/{core,entities,systems,simulation}/`. All three
+  "shim directory" subtrees (`entities/` 3 files, `systems/` init +
+  `game_start.py`, `simulation/` init-only) present on both sides.
+  My earlier claim that "`cage_dynasty_web/entities/` is a PA-only
+  phantom" was **RETRACTED** — I misread my local `ls` output.
+  Corrected here.
+
+  **P2 — file bytes identical PA vs local across all audited paths
+  [MEASURED via Files-API + local `diff`, exit 0 on every pair]:**
+    - `cage_dynasty_web/core/types.py`     3032 bytes, byte-identical.
+    - `cage_dynasty_web/core/game_state.py`  444 bytes, byte-identical.
+    - `cage_dynasty_web/game_bridge.py` 1,031,281 bytes, byte-identical.
+    - `cage_dynasty_web/world_init.py`     byte-identical.
+    - `cage_dynasty/core/game_state.py`  44,089 bytes, byte-identical.
+
+  **Zero code drift PA vs local on any file examined.** The dev/prod
+  discrepancy is not in the code.
+
+  **P3 — dev/prod GAME_PATH split at `game_bridge.py:17-23`
+  [MEASURED via local `os.path.exists` probe + Files-API existence
+  check on PA]. This is the load-bearing mechanism.**
+
+  `game_bridge.py:17-23` verbatim:
+
+      GAME_PATH = os.path.join(os.path.dirname(__file__), '..', 'cage_dynasty')
+      if os.path.exists(GAME_PATH):
+          sys.path.insert(0, GAME_PATH)
+      else:
+          GAME_PATH = os.path.expanduser('~/Desktop/Games/cage_dynasty')
+          if os.path.exists(GAME_PATH):
+              sys.path.insert(0, GAME_PATH)
+
+  Primary GAME_PATH resolves to `<parent>/cage_dynasty` — a NESTED
+  subdirectory. On both PA (`/home/vandopegaming/cage_dynasty/cage_dynasty`)
+  and local (`/Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty`)
+  this path DOES NOT EXIST. Primary insert never fires on either side.
+
+  Fallback at `:23` uses `os.path.expanduser('~/Desktop/Games/cage_dynasty')`:
+    - Local (Van's dev mac): `~` = `/Users/vandope`. `~/Desktop/Games/
+      cage_dynasty` = `/Users/vandope/Desktop/Games/cage_dynasty` =
+      **the actual repo root**. Exists. **Fallback FIRES → repo_root
+      inserted at sys.path[0].**
+    - PA (Van's PythonAnywhere account): `~` = `/home/vandopegaming`.
+      `~/Desktop/Games/cage_dynasty` does not exist. **Fallback DOES
+      NOT fire → repo_root NEVER on PA's sys.path.**
+
+  Resulting import order for `from core.game_state import ...` at
+  `game_bridge.py:34`:
+
+    - **PA**: sys.path[0] = `cage_dynasty_web`. Resolves via WEB shim
+      (`cage_dynasty_web/core/__init__.py` → `cage_dynasty_web/game_state.py`).
+      `CampRecord` has `location` field.
+      `from entities.fighter import Fighter` at `:36` resolves via the
+      WEB stub `cage_dynasty_web/entities/fighter.py` (228 bytes,
+      `from game_state import FighterRecord as Fighter`) — no
+      `FightRecord` chain triggered. world_init at `:2909-2918` reuses
+      cached web `CampRecord`, passes `location=camp.location`, succeeds.
+    - **Local**: sys.path[0] = `cage_dynasty` (repo root, via fallback).
+      Resolves via CLI (`cage_dynasty/core/game_state.py`). `CampRecord`
+      has no `location` field. `from entities.fighter import Fighter`
+      resolves to CLI real Fighter (29379 bytes), which does
+      `from core.types import FightRecord` — CLI's `core/types.py` has
+      it, loads. world_init at `:2909-2918` binds CLI `CampRecord`,
+      `location=camp.location` → **`TypeError`**. Fallback at
+      `:2274-2279` fires: `game_state.initialize_world` (simple stub),
+      6-key writes only.
+
+  Van's suspected framing ("PA has stale files that make it work;
+  a clean redeploy would break it") is **INVERTED**. Actual: PA is
+  working via a load-bearing broken-path calculation whose failure
+  routes through the web shims correctly. The three shim directories
+  (`cage_dynasty_web/{core,entities,systems,simulation}/`) are all
+  present in git, all byte-identical to local — they are NOT deploy
+  drift. Local's macOS-specific hardcoded fallback path
+  (`~/Desktop/Games/cage_dynasty`) exact-matches Van's dev machine's
+  actual repo path, silently ROUTING AROUND the intended web-shim
+  resolution and inserting repo_root, which is what breaks local.
+
+  **A3-d (NEW) — the three shim directories under `cage_dynasty_web/`
+  are load-bearing on PA [FILED, cleanup discipline]:**
+    - `cage_dynasty_web/core/__init__.py` (32 bytes) — WEB `core.game_state`
+      shim; PA's world_init depends on this for `location`-bearing
+      `CampRecord`.
+    - `cage_dynasty_web/entities/__init__.py` (84 bytes) + `fighter.py`
+      (228) + `camp.py` (207) — WEB `entities.Fighter/Camp` stubs; PA's
+      `game_bridge.py:36-37` `from entities import ...` depends on
+      these because repo_root is not on PA sys.path.
+    - `cage_dynasty_web/simulation/__init__.py` (3285 bytes) — WEB
+      `simulation.fight_engine` shim (`PREGEN-FULL-ENGINE-FIX1`).
+    - `cage_dynasty_web/systems/__init__.py` (2392 bytes) — WEB
+      `systems.injury` shim (`INJURY-IMPORT-FIX1`).
+
+  Deletion of any of these on PA would break the current success path.
+  These files were plausibly filed under "unused" earlier reads
+  (per `## Architecture` note re: web `core/` being a shim) but their
+  presence is what makes PA's fresh new_game work on the current
+  code path.
+
+  **DEV/PROD FIGHTER-BINDING SPLIT [MEASURED, corollary of P3]:**
+    - **PA `Fighter`** = `cage_dynasty_web/entities/fighter.py` alias:
+      `FighterRecord as Fighter` (228 bytes).
+    - **Local `Fighter`** = `cage_dynasty/entities/fighter.py` real
+      Fighter class (29379 bytes) with FightRecord/AttributeSet/etc.
+
+    These are TWO DIFFERENT CLASSES with different interfaces. Any
+    code that consumes `Fighter` beyond `FighterRecord`-compatible
+    attributes will behave differently between PA and local. This
+    split has existed since whenever the shim files landed and is
+    invisible unless explicitly probed. Filed as a hazard for any
+    future harness or diagnostic that expects `Fighter` to be a
+    specific class.
+
+  **RETRACTED CLAIMS from this session, preserved per standing rule:**
+
+    - "Ship #28 record ('WorldInitializer never runs — RESOLVED in
+      Ship #28 2026-05-08') has regressed" — **RETRACTED.** Ship #28
+      RESOLVED status stands. PA server log for 2026-08-29 shows rich
+      world-gen completing with "Created 40 camps, 292 fighters with
+      simulated history" on Van's fresh new_game. My earlier suggestion
+      of regression was based on my local harness failure, which I
+      later traced to the dev/prod GAME_PATH split (P3). PA has been
+      running Ship #28's rich path successfully the entire time.
+    - "PA has phantom `cage_dynasty_web/entities/` files that don't
+      exist in the repo" — **RETRACTED.** Local also has them
+      (byte-identical). I misread my initial local `ls` output.
+    - "The 8-key `_fighter_data` dict on legacy saves matches the filed
+      4-key backfill branch at `:426-439`" — **RETRACTED (V4 filing).**
+      Zero overlap in write shape. The 8-key dict comes from a
+      different assembly path (`_generate_fighter` + style injection +
+      Ship #48 backfill). The filed backfill branch remains latent.
+
+  **Addendum 1 execution attempt outcome
+  [MEASURED, `gate1_addendum1_exec.py`, Van-ratified 2026-08-29].**
+  A1 preload mechanism (`import core.game_state` before `import
+  game_bridge`) succeeded at binding web-shim `CampRecord` in local
+  harness — post-import check confirmed `location` field present.
+  Cascading side-effect: preload rebound `core` package globally to
+  web-tree; game_bridge line 36 `from entities.fighter import Fighter`
+  found CLI `entities/fighter.py` on repo_root (which was still on
+  sys.path from the fallback at :23), which then did `from core.types
+  import FightRecord` — but `core` was cached to web tree, and web's
+  `core/types.py` doesn't define `FightRecord` → ImportError. Bare
+  `except ImportError` at `game_bridge.py:41-43` swallowed it →
+  `GAME_MODULES_AVAILABLE = False` → mock mode → `_new_game_mock` at
+  `:2540` crashed in `models.py:838` `random.randint(1, self.week_number - 5)`
+  = `randrange(1, -3)` (week_number = 2). **A2 gate never fired.**
+  Per amended addendum's stop-and-file rule, execution halted.
+  Mechanism filed; approach retired in favor of Addendum 2.
+
+  **Addendum 2 ratified 2026-08-29 [Option 1 + docs checkpoint sequence].**
+  Approach: skip local `new_game` entirely; download a PA-created fresh
+  world via Files-API, load locally via `bridge.web_load`, run A2-2
+  inspector on the LOADED state. The load path routes through
+  `FighterRecord.from_dict` / `CampRecord.from_dict` (dict consumers,
+  not kwarg constructors), so the CampRecord `location=` TypeError is
+  bypassed by construction. Local bridge already works in real-modules
+  mode; only world CREATION breaks. Execution begins after this docs
+  checkpoint commits.
+
+  **FIX QUEUE — root-cause locations named (deferred, each its own
+  future single-purpose commit under stop-before-commit discipline):**
+
+    - **A3-a: `game_bridge.py:17-23` GAME_PATH split fix.** ROOT-CAUSE
+      LOCATION. Two candidate fixes: (i) repair the primary
+      computation to actually resolve to the correct target (probably
+      just `os.path.dirname(__file__) + '/..'` if repo_root is intended,
+      OR remove the primary + fallback entirely if repo_root should
+      never be on sys.path per the wsgi.py architecture); (ii) remove
+      the macOS-specific fallback at `:20-23` alone. Either fix aligns
+      local with PA behavior. **Consequence: fixes the world_init
+      failure on local dev; changes nothing on PA.** Requires
+      before/after test on the Addendum-2 loaded-save path to prove
+      no PA-observable behavior change (there shouldn't be — PA
+      already never adds repo_root).
+    - **A3-b: un-silence the world-gen `except` at `game_bridge.py:2272-2279`.**
+      Current bare `except Exception as _wie` catches CampRecord
+      TypeError silently, prints a one-line warning, falls to simple
+      init. This behavior is what let the 10-week (2026-06-11 → 2026-08-29)
+      dev/prod split go undetected. Options: narrow to `TypeError` only
+      + re-raise on unexpected exceptions, OR log the full traceback.
+    - **A3-c: UI stat-fabrication + offset divergence at
+      `game_bridge.py:_convert_real_fighter._attr` (`:7226-7241`).**
+      Two changes: (1) remove md5-seeded variance fallback (return
+      `ovr + offset` deterministic to match engine), OR make engine
+      match UI variance; (2) reconcile the 6 diverging offsets to a
+      single truth. Both consumers must read from the same source or
+      the same fallback. Filed as its own arc — engine-vs-UI truth is
+      a design decision, not a bug fix.
+    - **A3-d: shim-directory cleanup discipline [NEW this session].**
+      The four `cage_dynasty_web/{core,entities,systems,simulation}/`
+      shim directories are load-bearing on PA under the current
+      GAME_PATH mechanism. Any "unused-looking file cleanup" pass MUST
+      verify PA behavior with the file removed before deleting.
+      Ordering constraint: if A3-a fixes GAME_PATH to correctly add
+      repo_root on PA, the shim files become genuinely unused — but
+      that ordering must be explicit.
+
+  **QUEUE (post-checkpoint, before Gate 1 continues):**
+    - This docs checkpoint commits.
+    - Gate 1 Step 2' per Addendum 2: download V5d3-verified PA save
+      locally, `bridge.web_load(...)`, run A2-2 inspector on loaded
+      state, if PASS → Step 3 bin table (player fighter/camp excluded),
+      Van's ratified spec + Q1 five-round arm unchanged. Stop at bin
+      table if any cell <5.
+    - A3-a/b/c/d fixes: each its own future arc, each its own single-
+      purpose commit under stop-before-commit discipline.
+
+  **ARTIFACTS (all under `outputs/sm1/`, untracked):**
+    - Harnesses: `gate1_v1_pop_proof.py`, `gate1_v2_flighttime_log.py`,
+      `gate1_v4_assembly_trace.py`, `gate1_v5b_pa_save_inspect.py`,
+      `gate1_v5c_pa_current_inspect.py`, `gate1_v5d_pa_today_inspect.py`,
+      `gate1_v5d3_inspect.py`, `gate1_v6_import_probe.py`,
+      `gate1_v6_import_probe2.py`, `gate1_addendum1_exec.py`,
+      `gate1_step2_3_bin_table.py`, `gate1_step1_smoke.py`,
+      `gate1_step3_diagnose_fdata.py`.
+    - Save manifests: `gate1_step3_bin_manifest.json` (empty-bin
+      pre-Addendum-2), `gate1_step1_smoke_out.txt` (L-J1 requal PASS).
+    - PA saves in `/tmp/` (not committed): 5 downloaded saves + 4
+      autosave probes.
+    - Draft file for this checkpoint:
+      `outputs/sm1/claude_md_gate1_session_filing_draft.md`.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
