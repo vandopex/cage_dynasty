@@ -3866,6 +3866,400 @@ regardless of any slot bias. Verdicts:
     now bundled INTO STAMINA-MODEL1 Gate 1; PA timing
     measurement pre-N-lock (independent).
 
+- **STAMINA-MODEL1 — Gate 0(b) [CLOSED 2026-08-28, C4 docs
+  checkpoint at baseline 1f06802; instrument v1.5
+  (outputs/sm1/strike_landing_probe_v15.py) qualified Q1-Q4 on
+  941,677 rows across 7 arms; analyses A1-A4 executed; no engine
+  commits].**
+
+  **QUALIFICATION RECORD.** v1.4 → v1.5 redesign chain:
+  v1.4 built with `exchange_idx = fight_state.exchanges_this_round`
+  (engine's counter, sampled at CSS call time). v1.4 Q4c FAILED
+  on 22 per-transition events (0.101% of 21,715 total
+  round-transitions), all R2→R3, all fi810-caller. Diagnostic
+  traced: engine's counter DOES reset atomically at round start
+  via fi:619 in `_init_round`; the "non-reset" appearance in the
+  landing CSV is a probe sampling artifact — grapple/sub-only
+  exchanges opening R3 don't call CSS, so the CSS-observed view
+  can skip early exchange values within a round.
+
+  v1.5 redesign per Van's ruling: `exchange_idx` REDEFINED as a
+  probe-controlled per-round CSS-call counter (0-based,
+  increments per CSS call, resets to 0 when the probe observes
+  `fight_state.current_round` change). Sixth appended column
+  `engine_exch_ctr` = raw `fight_state.exchanges_this_round` at
+  CSS call time (v1.4's old capture; preserved measurable so
+  EXCH-CTR-OBS1 sampling artifact stays visible).
+
+  Q1-Q4 v1.5 all PASS at filed config (7 arms, N=2000/arm, CRN
+  seeds identical to v1.2/v1.3):
+  - Q1 probe-off ≡ probe-on outcome CSV bit-identity: 7/7 PASS.
+  - Q2 hash reproduction: 14/14 PASS. Provenance is split — not
+    all "filed":
+    * **4 arms CLAUDE.md-record-verified** at STRIKE-LANDING-AUDIT1
+      filing anchors: raw hashes at :2796-2799 (L-J1
+      a8a5b680..., L-B88 6c2f82ac..., L-K74 2f1d2034..., F
+      11d4be8c...) and norm hashes at :2809-2812 (L-J1
+      cace1efa..., L-B88 d2d94326..., L-K74 3e5de0d7..., F
+      78605664...).
+    * **3 arms cc-derived from AUDIT1 v1.2 output CSVs**
+      (L-K78 raw 506b2a36... / norm 84398fe0..., L-K88 raw
+      1dc762fc... / norm c5c80409..., L-C88 raw abd4b299... /
+      norm 56e7987c...). Never filed in CLAUDE.md text. First
+      materialized in v1.3 probe's REUSED_HASH_TARGETS /
+      REUSED_NORM_HASH_TARGETS dicts
+      (outputs/lcr1/strike_landing_probe_v13.py); re-verified by
+      recomputation on v1.4 and v1.5 output CSVs. Provenance
+      chain is CSV → dict → three-arc reproduction, not
+      CLAUDE.md filing.
+  - Q3 per-row landing gate: 941,677/941,677 rows match
+    (landed_recomputed == landed at full float precision).
+  - Q4a zero_flag unit test: PASS.
+  - Q4b caller_id per-hook distinct-tag proof (via `_make_wrapper`
+    closure inspection): PASS (fe3315 and fi810 tags captured
+    correctly, distinct).
+  - Q4c v1.5 probe-counter consistency (live run): 0 violations
+    across all 7 arms. Probe counter strictly monotonic +1 within
+    round; resets to 0 on round change. PASS by construction.
+  - Q4c v1.5 synthetic multi-round unit test: PASS (mock CSS
+    sequence R1×3, R2×2, R3×4 produced expected
+    [(1,0),(1,1),(1,2),(2,0),(2,1),(3,0),(3,1),(3,2),(3,3)] byte-
+    for-byte; engine_exch_ctr passed through verbatim).
+  - Q4d sawtooth (round-boundary mean-stamina jump): +20 to +24pp
+    across all 7 arms, 2SE emphatically excludes 0. B4 hand-model
+    reconciliation clean (~+33.75 gross recovery at recovery=75,
+    minus concurrent early-R2 drain).
+
+  **HEADLINE CORRECTION (documented as false, not dropped per
+  standing rule).** LANDING-CURVE-RETUNE1 Gate 2 filing (this file
+  :3351) states "100% per-row on 942,677 rows across 7 arms".
+  **That figure is FALSE.** The true total is 941,677 rows,
+  identical to the sum of the §2a per-cell N table (:3358-3371):
+
+      L-J1  77900 + 72254 = 150154
+      L-B88 70545 + 59500 = 130045
+      L-K74 72045 + 60888 = 132933
+      L-K78 75792 + 63322 = 139114
+      L-K88 71295 + 55443 = 126738
+      L-C88 71773 + 55745 = 127518
+      F     76232 + 58943 = 135175
+      -----------------
+      TOTAL              = 941677
+
+  v1.4 reproduced 941,677 exactly; v1.5 reproduces 941,677
+  exactly. The "942,677" was a filing-side typo (off by 1,000),
+  not a v1.4/v1.5 miss. Corrected here per standing rule.
+
+  **EXCH-CTR-OBS1 [FILED].** No engine bug identified; sampling
+  artifact accounts for all 22 observed events. N=3 events
+  directly verified via CSV inspection at the level of (a)
+  absence of CSS calls in the R3 iteration-range gaps and (b)
+  ground/dominant positions (SIDE_CONTROL_TOP, MOUNT, BACK_MOUNT)
+  at both R2-last-CSS and R3-first-CSS boundaries. Verified
+  events: L-B88 seed 1659 (mandatory, R3 iterations 1-42 skipped,
+  ground positions), L-B88 seed 839 (R3 iterations 1-36 skipped,
+  MOUNT→BACK_MOUNT), F seed 1794 (R3 iterations 1-38 skipped,
+  SIDE_CONTROL_TOP→MOUNT). Per-exchange action attribution
+  (grapple vs. sub vs. position transition per specific
+  iteration) not resolvable from landing/outcome CSVs — CSVs
+  capture only CSS calls (strike attempts) and fight-final
+  outcomes, not per-exchange action selection logs. Absence-of-
+  CSS + ground-position-bracketing verification is sufficient to
+  rule out a counter-reset bug (the counter DID advance from
+  1..N during those exchanges per fi:680's per-iteration
+  assignment; CSS just didn't fire on any of them).
+
+  Mechanism: fi:619 `self.fight_state.exchanges_this_round = 0`
+  in `_init_round` fires at every round start (called at
+  fi:1621 immediately after `current_round += 1` at fi:1620).
+  fi:680 `self.fight_state.exchanges_this_round = exchange_num`
+  assigns the outer loop counter (1..55) per exchange call.
+  CSS-sample views can skip early values when exchanges are
+  grapple/sub-only, submission_active, or position-transition
+  actions. Not a bug; consequence of CSS's role as a strike-only
+  gate.
+
+  Instrument-design lesson: engine-side counters observed via
+  CSS wrappers are subsampled. Monotonicity/reset guarantees at
+  CSS-call points can differ from engine-side per-exchange
+  guarantees. Probes reading engine counters through CSS
+  wrappers should either (a) accept subsampling by design, or
+  (b) maintain their own probe-side counters with wrapper-
+  visible reset semantics (v1.5's approach).
+
+  **ANALYSES A1-A4 EXECUTED.**
+
+  A1 — Round-resolved stamina trajectory per arm × slot. Full
+  tables in `outputs/sm1/gate0b_v15_qualify_out.txt`. Sample
+  (L-J1 slot1):
+      R1  n=39749  max_probe_exch=54  exch-decile means:  91.09 72.21 53.49 35.91 24.00 15.70 10.45  7.28  5.93  7.27
+      R2  n=23866  max_probe_exch=54  exch-decile means:  29.87 17.91 10.52  6.26  4.21  3.03  2.65  1.18  1.67  3.16
+      R3  n=14285  max_probe_exch=45  exch-decile means:  24.45 12.64  6.73  4.87  3.21  2.77  3.14  3.33  3.65 24.47
+  Pattern across all 7 arms: R1 fresh (~87-92 opening) → single
+  digits by decile 6-8; R2 opens ~28-40 (visible partial
+  refill matching B4 hand model's +33.75 at recovery=75, minus
+  early-R2 drain); drops again; R3 opens ~20-25, similar
+  drop-off. Directionally consistent with B4; not a further test
+  of the hand model, which was already qualified by Q4d.
+
+  **R3 decile-10 uptick note.** Several arms show a jump in the
+  last decile of R3 (e.g., L-J1 slot1 R3 decile 10 = 24.47pp
+  after decile 6-9 sat at 2.77-3.65; L-B88 slot1 R3 decile 10
+  = 20.00 after single digits; L-K74 slot1 R1 decile 10 =
+  12.42). Unexplained; likely an averaging artifact of
+  early-ending fights whose short R3 puts the last-decile bin
+  dominated by fresh first-exchange stamina rather than
+  end-of-round drained state. Filed as pattern-to-note; not
+  investigated further this arc.
+
+  A2 — caller_id split, HARNESS-PATH SCOPED. The harness path
+  (`fi.simulate_narrated_fight` → fi's `_simulate_exchange`
+  loop → CSS at fi:810) runs 100% fi810 / 0% fe3315 across all
+  941,677 rows (7 arms × 2 slots). Live-path caller composition
+  is UNMEASURED until Gate 1 P4 measures on a fresh save.
+  Nothing here implies the fe loop is dead in the live game —
+  world_init history simulation and other pre-gen/live paths may
+  invoke fe.simulate_exchange at CSS fe:3315, which was not
+  exercised in the Gate 0(b) harness.
+
+  A3 — zero_flag census: 0/941,677 rows flagged with
+  `att_stamina == 0.0` exactly. Matches C3 filing (:3557-3562).
+  min(att_stamina) = exactly 0.5 across all 14 slot-cells
+  (drain-to-0 at spend_stamina, then +0.5 per-exchange recovery
+  fires before next CSS).
+
+  A4 — SLOT-ASYM cross-tab (within-slot per standing rule).
+  Confirms SLOT-ASYM-OBS1 at round-resolved granularity: slot1
+  has systematically more attempts AND lower mean att_stamina
+  in every (arm, round) cell measured. Full cross-tab in
+  gate0b_v15_qualify_out.txt. Filed as additional evidence
+  under existing observation; no fix proposed.
+
+  **INSTRUMENT NOTES.**
+
+  1. fights=1999 (on 6 of 7 arms). 6 fights across the run had 0
+     CSS calls in the landing CSV — all R1 Submissions with zero
+     strike attempts. Seed 1851 lands as R1 sub on 5 arms
+     (L-B88, L-K74, L-K78, L-K88, L-C88; shared initial RNG
+     stream from `random.seed(1851)` producing convergent
+     early-sub outcome across different fixtures). Seed 525
+     hits the same pattern on F. L-J1's all-75/75 fixture does
+     not hit this outcome. Fights that finish by grapple+sub
+     without any strike attempt produce zero landing rows by
+     construction — not an instrument miss.
+
+  **CARDIO RULING (verbatim, 2026-08-26, per RL5).**
+  Van's cardio ruling: "CARDIO governs in-fight drain rate —
+  how slowly the tank empties during a round — and possibly the
+  per-exchange +0.5 recovery (currently an unconditional
+  constant; in-round recovery is physiologically cardio's job).
+  RECOVERY keeps between-round refill (the stool), untouched.
+  The :1035 'Stamina, gas tank' caption becomes TRUE rather
+  than being rewritten. Two distinct archetypes must become
+  possible: marathon pressure fighter (high cardio, avg
+  recovery — never slows) vs burst fighter (low cardio, high
+  recovery — empties fast, fresh each round)."
+
+  This ruling scopes the STAMINA-MODEL1 arc's design intent
+  post-Gate-1. Not implemented in any code as of C4; wiring
+  design deferred until after Gate 1 live-roster measurement
+  lands and Van ratifies design scope. cardio's non-drain
+  channels (style detection fe:1384/:1453, IQ body-targeting
+  fe:2173, `physical` OVR mean fe:1078) unchanged by this arc
+  per no-double-dipping constraint.
+
+  **QUEUE.**
+  - Gate 0(c) CLOSED (filed separately as C4 block below):
+    multiplier verified outcome-affecting via ratified
+    direct-import path on real `select_action` (+7.08pp
+    strike-selection shift at starved-stamina cell, >20σ at
+    N=100k). No dead-code candidate. Landing/design
+    implications deferred post-Gate-1.
+  - Gate 1: live-roster stamina trajectory by round on a fresh
+    save (per STAMINA-MODEL1 spec v0.2 §3). Owed live-roster
+    violence check from 1a/1b bundled INTO Gate 1 Tier B.
+  - Design after Gate 1 measurement. Order of levers: drain
+    constants + cardio-wiring FIRST; /100 scaling decision LAST.
+  - Owed unchanged: PA timing measurement pre-N-lock
+    (independent of Gate 1).
+
+- **STAMINA-MODEL1 — Gate 0(c) [CLOSED 2026-08-28, C4 docs
+  checkpoint at baseline 1f06802; harness
+  `outputs/sm1/gate0c_multiplier_harness.py` (replica-based
+  grid, INDICATIVE-ONLY under R4) + `outputs/sm1/gate0c_direct_import_check.py`
+  (Van-ratified direct-import qualification path); no engine
+  commits].**
+
+  **R4 CHAIN.** Van-ratified R4 discipline: empty replica-vs-
+  engine diff or stop. Instrument produced a real line-by-line
+  diff between the replica `_apply_multiplier_pipeline` body
+  and `git show HEAD:cage_dynasty_web/fight_engine.py` extract
+  of `fe:2073-2131`, normalized (strip whitespace, drop
+  comments and blanks, preserve order). **Diff was NOT empty
+  (68 diff lines, 5 divergence categories: pre-cardio-site
+  context reads vs param passing; force-mult-to-1 counterfactual
+  gate; skipped `:2088-2109` style-conditional bumps
+  [PRESSURE_FIGHTER/CLINCH_FIGHTER/BRAWLER clinch bump,
+  POINT_FIGHTER first-exchange bump, KARATE patience flag];
+  simplified floor conditionals; missing trailing `total`/
+  `if total == 0` block). None arithmetic errors; all scope
+  decisions or simplifications.** Per R4: stopped; grid results
+  did not stand under formal fallback.
+
+  Van's Step 1c directive: attempt direct-import micro-check
+  independent of Step 1a. Executed. Real `select_action` at
+  `fight_engine.py:1532` driven through 3 spot cells with
+  N=100,000 samples each. Configuration: HYBRID-style fighter
+  (skips all STANDING-branch style elifs), all attributes 50
+  (fails `is_grappler(...)` catch-all), STANDING_OPEN position,
+  momentum=50, `exchanges_this_round=5`. Pre-cardio weight
+  triple lands at `(120, 13, 0)` (base weights preserved
+  through no-matching-branches).
+
+  Van ratified 2026-08-28: **binary verdict ACCEPTED on the
+  direct-import measurement.** Grid map DEMOTED to indicative-
+  only estimates.
+
+  **DECLARED CONFIG (with amendment).**
+  - Base triples: 19 (T1-T18 from Gate 0(c) D3 range-derivation
+    + T19 negative-grapple edge (100, −7, 0) per Van's D3
+    addition).
+  - Padding: 27 variants per triple (each of `strike, grapple,
+    sub` independently scaled by {0.8, 1.0, 1.2} with `int()`
+    truncation).
+  - (cardio_gap × round): 7 × 5 = 35 real inputs fed through
+    `fe:2073-2084` including trigger `gap ≥ 12 AND round ≥ 2`
+    and cap `min(1.35, ·)`.
+  - Stamina: 6 values {0.5, 5, 20, 50, 80, 100}.
+  - **AMENDMENT (2026-08-28):** sub_gate ×2 axis
+    ({True, False}) added to ratified grid coverage for the
+    conditional floor at `fe:2118-2126`. Doubles grid vs pre-
+    amendment ratified size.
+  - Total grid: 19 × 27 × 7 × 5 × 6 × 2 = **215,460 cells**.
+
+  **BINARY VERDICT ON REAL FUNCTION (Step 1c, ratified).**
+  Direct measurement on real `select_action`, N=100,000
+  samples/cell (SE ≈ ±0.316pp at p=0.5, 2σ):
+
+      Cell            (my, opp, r, stam)              ΔP(strike)   ΔP(grap)   ΔP(sub)
+      Cell 1 MODERATE (90, 75, 3, 50) vs (75, 75, ...)  +0.00344   −0.00344   +0.00000
+      Cell 2 STARVED  (90, 75, 5, 5)  vs (75, 75, ...)  +0.07082   −0.07082   +0.00000
+      Cell 3 FULL     (95, 50, 5, 100) vs (50, 50, ...) +0.00314   −0.00314   +0.00000
+
+  **Cell 2's +7.08pp is >20σ above noise.** Cardio multiplier
+  at `fe:2073-2084` is OUTCOME-AFFECTING on the real function.
+  No dead-code candidate.
+
+  **MECHANISM.** Designed proportional effect is nil by
+  construction — uniform multiplication of all three selectable
+  weights preserves ratios. Measured effect exists only via
+  int-truncation at `:2113-2115` (stamina factor) and unequal-
+  floor pinning at `:2118-2126` (`max(5, ·)` strike/grapple;
+  `max(1, ·)` sub under gate; else 0). Truncation loses
+  precision differentially across the three weights; floors
+  pin the small weight while the large weight preserves its
+  truncation-boosted increment. Ratio shift ≠ multiplier
+  effect; it's an artifact of what happens to the multiplier's
+  output.
+
+  **INDICATIVE GRID MAP (unqualified per R4, replica-derived).**
+
+      total cells:                             215,460
+      trigger fires (gap ≥ 12 AND round ≥ 2):  123,120
+      trigger dormant:                          92,340   [sum ✓]
+      differing cells (w_mult != w_no_mult):    93,760
+      identical cells:                         121,700   [sum ✓]
+
+      by region:
+        starved (stamina ≤ 10):    12,152 / 71,820 differ (16.92%)
+          by stamina: 0.5→414;  5→11,738
+        moderate (10 < stam ≤ 50): 40,577 / 71,820 differ (56.50%)
+        full (stam > 50):          41,031 / 71,820 differ (57.13%)
+
+      max effect sizes (indicative):
+        max |Δp_strike|:  0.084211
+        max |Δp_grapple|: 0.083333
+        max |Δp_sub|:     0.069930
+        cells with |Δp_strike| > 5pp: 5,979 (2.78% of grid)
+
+  Grid coverage percentages are NOT prevalence. No prevalence
+  claim is made. Convolving grid coverage with the real
+  stamina distribution (weighted by fraction of exchanges in
+  each stamina bin) would be required for a prevalence
+  estimate — that convolution is Gate 1 measurement territory.
+
+  **PREVALENCE CAVEAT.** Grid samples arithmetic slices of the
+  input space, not weighted samples of empirical fighter
+  states. In A1's measured stamina distribution at round ≥ 2,
+  mean att_stamina is ~9-14, so round=2+ measured exchanges
+  sit predominantly in the starved regime.
+
+  **Low stamina does NOT imply small effect.** The largest
+  confirmed effect (Cell 2, +7.08pp) is IN the starved regime
+  at stamina=5. Effect depends on whether large input weights
+  survive stamina-scaling above floor while small weights are
+  pinned — not on stamina alone.
+
+  **§2.1 STARVED-REGIME CLAIM FALSIFIED [ATTRIBUTED TO
+  ARCHITECT'S SPEC-TIME REVIEW].** Architect's spec §2.1
+  stated: "In the starved regime (stamina ≤ ~10, i.e. most of
+  R2+ per Gate 2 §2d), stamina_factor drives all raw weights
+  to int(0) and the floors take over entirely — there the
+  multiplier is provably inert." FALSIFIED by measurement.
+  Cell 2's +7.08pp at stamina=5 (in the starved regime as
+  defined) refutes "provably inert." Correct condition for
+  inertness: "all three input weights × cardio_mult scaled by
+  stamina_factor = int(0) → floor takeover." Depends on both
+  input triple AND stamina, not stamina alone. At stamina=0.5
+  most triples satisfy; at stamina=5 only small triples do.
+  Filed as falsified per standing rule (documented, not
+  dropped).
+
+  **MONKEYPATCH INSTRUMENT NAMED (design-phase, if needed).**
+  For precise post-Gate-1 mapping (if the design phase wants
+  it), the appropriate instrument is a monkeypatch on
+  `select_action` that intercepts weight variables pre- and
+  post-multiplier without replicating the arithmetic. Options:
+  (a) wrap `int()` in the `fe:2082-2131` scope via source-
+  level instrumentation; (b) `sys.setprofile` to snapshot
+  locals at `fe:2085` and `fe:2126`. Direct measurement without
+  arithmetic replay passes R4 by construction (no replica to
+  diff). Named here as instrument-of-record; not built in this
+  arc.
+
+  **REOPENED CARDIO-OUTCOME CHANNEL NOTE.** Cardio has a small
+  incidental action-mix channel via `fe:2073-2084` truncation
+  artifacts:
+  - Uniform multiplication + `int()` truncation + differential
+    floors → ratio shifts, primarily favoring strike-selection
+    when strike is the largest input weight (typical case).
+  - Effect magnitude in real function measured: +0.3pp typical
+    (Cells 1, 3), +7.1pp in confirmed high-effect cell (Cell 2).
+    Prevalence in real fights unknown (Gate 1 measurement
+    territory).
+  - **Keep/remove/redesign is a design-phase decision post-
+    Gate-1.**
+  - **No-double-dipping constraint** (Van's cardio ruling:
+    cardio governs in-fight drain rate + possibly per-exchange
+    +0.5 recovery; RECOVERY keeps between-round refill) gets
+    re-examined by Van at design time. If cardio is also wired
+    into drain rate post-Gate-1, this existing action-mix
+    channel would stack with the new drain channel unless one
+    replaces the other.
+
+  **QUEUE.**
+  - Gate 1: live-roster stamina trajectory by round on a fresh
+    save. Owed live-roster violence check from 1a/1b bundled
+    INTO Gate 1 Tier B.
+  - Design after Gate 1. Order of levers: drain constants +
+    cardio-wiring FIRST; /100 scaling decision LAST.
+  - Cardio-outcome channel disposition (keep / remove /
+    redesign): post-Gate-1, integrated with no-double-dipping
+    review.
+  - Precise cardio-multiplier prevalence mapping: monkeypatch
+    instrument named above, if design-phase requires.
+  - Owed unchanged: PA timing measurement pre-N-lock.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
