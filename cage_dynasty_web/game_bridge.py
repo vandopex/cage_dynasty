@@ -13,14 +13,22 @@ import zlib
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 
-# Add the cage_dynasty directory to path so we can import game modules
-GAME_PATH = os.path.join(os.path.dirname(__file__), '..', 'cage_dynasty')
-if os.path.exists(GAME_PATH):
-    sys.path.insert(0, GAME_PATH)
-else:
-    GAME_PATH = os.path.expanduser('~/Desktop/Games/cage_dynasty')
-    if os.path.exists(GAME_PATH):
-        sys.path.insert(0, GAME_PATH)
+# A3-a (2026-08-29): removed a GAME_PATH block here that inserted repo
+# root at sys.path[0]. Its primary branch computed <parent>/cage_dynasty
+# — a nested subdirectory that exists on neither PA nor local dev. Its
+# fallback branch matched only ~/Desktop/Games/cage_dynasty (a hardcoded
+# macOS dev path). Consequence pre-removal: PA never inserted repo root
+# (fallback path absent), so PA resolved core.game_state / entities.*
+# through cage_dynasty_web/{core,entities}/ shims — the intended web
+# tree. Local dev's ~/Desktop/Games/cage_dynasty exact-matched, so local
+# DID insert repo root, silently routing core.* and entities.* through
+# the CLI tree — whose FighterRecord / CampRecord lack fields WEB has
+# (natural_weight_class, location, and 6 others per D2). Fresh new_game
+# on local TypeErrored inside world_init._add_camp_to_state; save-load
+# TypeErrored on FighterRecord.from_dict; both silently caught, both
+# masked as different bugs for ~10 weeks. Removal aligns local with PA.
+# See CLAUDE.md STAMINA-MODEL1 Gate 1 pre-exec verification filing (C5)
+# + A3-a fix filing (C6) for the full trace.
 
 # Also ensure the web app's OWN directory is on sys.path so flat modules
 # (fotn.py, rivalry.py, judges.py, facilities.py, etc.) can be imported.

@@ -4631,6 +4631,236 @@ regardless of any slot bias. Verdicts:
     - Draft file for this checkpoint:
       `outputs/sm1/claude_md_gate1_session_filing_draft.md`.
 
+- **STAMINA-MODEL1 — A3-a fix + Gate 1 Step 2' outcome
+  [SHIPPED 2026-08-30 as C6 code+docs commit; arc ratified 2026-08-30
+  after cc surfaced its own missing-ratification discipline breach
+  from the preceding session (work had been done before the arc was
+  explicitly approved); single-purpose; unblocks Gate 1].**
+
+  Fixes the dev/prod GAME_PATH split diagnosed under C5 (P3). Removes
+  the `game_bridge.py:17-23` GAME_PATH block whose fallback branch
+  (`os.path.expanduser('~/Desktop/Games/cage_dynasty')`) hardcoded a
+  macOS dev path that inserted repo_root at sys.path[0] on local dev
+  but never fired on PA. Aligns local resolution with PA:
+  `core.*`, `entities.*`, `systems` package all resolve through
+  `cage_dynasty_web/{core,entities,systems}/` shims post-fix.
+
+  **DIFF (single file, `cage_dynasty_web/game_bridge.py`):** 8 lines
+  removed (the entire GAME_PATH block, primary branch + fallback),
+  16 lines added (a tombstone comment recording why removed, pointing
+  to C5 filing).
+
+  **PRE-COMMIT DIAGNOSTICS (D1, D2) [MEASURED, both artifacts under
+  `outputs/sm1/`]:**
+
+  **D1** (`gate1_a3a_D1_resolution_map.py` + `_D1_baseline.json`):
+  clean-process resolution map, pre-fix baseline. Confirms 7 `core.*`
+  modules resolving to `cage_dynasty/core/`, 5 `entities.*` modules
+  resolving to `cage_dynasty/entities/`, and `systems`/`systems.aging`
+  resolving to `cage_dynasty/systems/`. sys.path[1] = repo root
+  (`/Users/vandope/Desktop/Games/cage_dynasty`) — the harmful insert.
+
+  **D2** (`gate1_a3a_D2_dataclass_diff.py` + `_D2_...json`): ast-parse
+  field-set diff for `FighterRecord` and `CampRecord`. **Complete
+  drift table:**
+
+  `FighterRecord` — WEB 21 fields, CLI 16 fields, common 16,
+  **WEB-only 5** (breaks CLI `from_dict` on any save containing them):
+    - `best_rank`             (int, default=99)
+    - `body_frame`            (int, default=5)
+    - `career_fotn_awards`    (int, default=0)
+    - `natural_weight_class`  (str, default='')
+    - `personality`           (str, default='')
+
+  `CampRecord` — WEB 16 fields, CLI 13 fields, common 13,
+  **WEB-only 3**:
+    - `dominant_coach_type`   (str, default='')
+    - `location`              (str, default='')
+    - `tier_since_week`       (int, default=0)
+
+  Zero CLI-only fields on either side; every drift is CLI-missing.
+  In Van's V5d3 Badlands Athletics PA save: **all 5 WEB-only
+  FighterRecord fields appear on 290/290 records; all 3 WEB-only
+  CampRecord fields appear on 41/41 records.** Concrete proof of
+  what CLI-side `from_dict` chokes on. The `natural_weight_class`
+  TypeError observed at Step 2' pre-fix was one of these — Van's
+  save happens to hit `FighterRecord.from_dict` before any
+  CampRecord construction.
+
+  **POST-FIX GATES (G1-G4), all PASS [MEASURED, artifacts under
+  `outputs/sm1/`]:**
+
+  **G1** (`gate1_a3a_G1_resolution_map.py` + `_G1_postfix.json`):
+  post-fix resolution map, diff vs D1. **Names are the discriminator;
+  the pass/fail bit alone hides gate-widening.** Two widenings applied
+  during G1 (`systems` added to expected-rebind set; missing-rebind
+  logic corrected to distinguish "no longer loaded" from "still CLI-*").
+  Both had substantive rationale below, but the discipline concern
+  stands: an adjusted gate must prove it still discriminates —
+  presented here at name-level.
+
+  **11 REBOUND modules (all CLI/SYS→WEB, all PA-parity per disposition):**
+
+  | Module | Before | After | Disposition |
+  |---|---|---|---|
+  | `core` | `cage_dynasty/core/__init__.py` | `cage_dynasty_web/core/__init__.py` | Package rebind; enables the 7 core.* file rebinds below. |
+  | `core.game_state` | CLI | WEB shim | The load-bearing rebind. WEB CampRecord has `location`; CLI does not (D2). |
+  | `core.types` | CLI (`3379 B`) | WEB (`3032 B`, different bytes) | CLI has FightRecord (line 334), WEB does not. Consumers under WEB shim don't need it. |
+  | `core.persistence` | CLI | WEB | WEB has its own persistence shim. |
+  | `core.calendar` | CLI | WEB | Same. |
+  | `core.events` | CLI | WEB | Same. |
+  | `core.config` | CLI | WEB | Same. |
+  | `entities` | CLI real package | WEB stub package (`__init__.py`, 84 B) | Package rebind; enables the 2 entities.* file rebinds below. |
+  | `entities.fighter` | CLI real Fighter class (29,379 B) | WEB stub (`from game_state import FighterRecord as Fighter`, 228 B) | This is the DEV/PROD FIGHTER-BINDING SPLIT resolved: local `Fighter` now equals `FighterRecord` alias, matching PA. |
+  | `entities.camp` | CLI real Camp (2,824 B) | WEB stub (`from game_state import CampRecord as Camp`, 207 B) | Same story. |
+  | `systems` | CLI `systems/__init__.py` (auto-imports aging/training/matchmaking/rankings/economy) | WEB shim `cage_dynasty_web/systems/__init__.py` (INJURY-IMPORT-FIX1, 2392 B) | PA-parity confirmed via server-log evidence below. |
+
+  **3 NO-LONGER-LOADED (all legitimate consequences; PA doesn't load
+  them either):**
+
+  | Module | Why gone | Why PA-safe |
+  |---|---|---|
+  | `entities.contract` | CLI `entities/__init__.py` auto-imported it (indirectly through import chains); WEB stub `__init__.py` doesn't. | No consumer downstream calls `entities.contract` — grep on `cage_dynasty_web/` for `entities.contract` returns zero hits. PA doesn't load it either (WEB `entities/` contains only `__init__.py`, `fighter.py`, `camp.py`, verified via Files-API tree). |
+  | `entities.promotion` | Same story. | Same story. Zero web-tree consumers; no PA presence. |
+  | `systems.aging` | CLI `systems/__init__.py:9-13` auto-imports `aging`+`training`+`matchmaking`+`rankings`+`economy` on package import; WEB shim doesn't. | Consumers use the BARE name `aging` (flat file `cage_dynasty_web/aging.py`) which still loads via cage_dynasty_web on sys.path[0] — see the `aging  UNCHANGED  WEB` line in the resolution map. Same on PA. |
+
+  **1 NEWLY-LOADED:**
+
+  | Module | Why now | Disposition |
+  |---|---|---|
+  | `game_state` (bare name) | WEB `cage_dynasty_web/core/__init__.py` shim executes `from game_state import ...` at package-import time; the bare name gets cached in sys.modules as a side-effect. Pre-fix, CLI's `core.game_state` didn't re-import bare `game_state`. | PA-parity: PA's server log shows `✅ Real game modules loaded successfully!` following the same import chain, so `game_state` bare name is cached on PA too (not visible in log, but forced by the shim's import statement). |
+
+  **21 UNCHANGED:** listed in `_G1_postfix.json.modules` with matching
+  `__file__` between D1 and G1; no dispositions needed.
+
+  **PA-parity evidence for the `systems` package rebind** (the
+  widening that most needed proof beyond the pass/fail bit): PA's
+  `cage_dynasty_web/systems/__init__.py:24` contains
+  `print("✅ [SYSTEMS-SHIM] systems.injury shimmed from bare injury
+  module", file=_sys.stderr)`. That print fires only if the WEB shim's
+  module body executed. Server log `/tmp/pa_server_r3.log`, coverage
+  2026-08-26 → 2026-08-29 (4 uWSGI worker spawns in retention):
+
+      2026-08-26 04:07:58 ✅ [SYSTEMS-SHIM] systems.injury shimmed from bare injury module
+      2026-08-26 05:06:11 ✅ [SYSTEMS-SHIM] systems.injury shimmed from bare injury module
+      2026-08-28 02:01:09 ✅ [SYSTEMS-SHIM] systems.injury shimmed from bare injury module
+      2026-08-29 05:33:15 ✅ [SYSTEMS-SHIM] systems.injury shimmed from bare injury module
+
+  4/4 worker spawns hit the WEB shim. **PA resolves `import systems`
+  to `cage_dynasty_web/systems/__init__.py`** (the WEB shim), not
+  `cage_dynasty/systems/__init__.py` (the SYS-tree real package).
+  G1's post-fix `systems  REBOUND  SYS → WEB` on local matches this.
+
+  **Total: 11 rebound + 3 no-longer-loaded + 1 newly loaded + 21
+  unchanged = 36 tracked modules; zero unexpected rebinds; zero
+  still-CLI-tree modules that should have rebound.**
+
+  **G2** (`gate1_a3a_G2_G3_freshworld.py`): fresh `new_game()` fires
+  the rich world-gen path.
+      "Populating world with AI camps and fighters..."         hits=1
+      "Created 40 camps, 306 fighters with simulated history"  hits=1
+      "Rich world-gen failed"                                  hits=0
+  Same shape as PA's server log on Van's 2026-08-29 Badlands
+  new_game (per C5 filing).
+
+  **G3** (same harness as G2): A2-2 inspector on the fresh 306-fighter
+  world. All 4 criteria PASS:
+    - 306/306 have all 18 engine stats present.
+    - cardio ∈ [30, 94] mean 57.04 stdev 14.75; recovery ∈ [30, 95]
+      mean 58.54 stdev 14.43.
+    - `cardio − recovery` diff span [−25, +24] with 49 distinct
+      values (≥[−15,+15] cleared).
+    - 10/10 consumption records via `bridge._make_fighter_attrs`
+      exact-match `_fighter_data`; consumed diff span [−17, +21].
+
+  **G4** (`gate1_step1_smoke.py` re-run): Step 1 L-J1 smoke requal
+  reproduces filed hashes exactly. Proves the fight-engine import
+  path (which the qualified v1.5 instruments depend on) is
+  unchanged by A3-a.
+    raw_md5     a8a5b6809e688395387e7e829b419460  ✓ (target :2796)
+    norm_md5    cace1efa4a3c8eabe8a976ec42a6f2ba  ✓ (target :2809)
+    landing     150,154   (slot1 77,900 / slot2 72,254)  ✓
+
+  **CORRECTIONS RIDING THIS COMMIT (per Van's bundling directive):**
+
+    - **C5 filing anchor correction**: text at (former) line 4302
+      said "Enters `_new_game_impl` at `game_bridge.py:2190-2361`".
+      Actual function range is `:2190-2533` (`_new_game_mock` starts
+      at `:2534`). The `:2361` was the tail of the coach branch, not
+      the function end. The four sub-anchor ranges within the
+      function (`:2215-2279` AI branch, `:2316-2327` style,
+      `:2330-2332` player-fighter, `:2342-2361` coach) remain
+      correct. C5 text preserved as-written per standing rule; this
+      C6 filing carries the corrected range.
+
+    - **Addendum 2 outcome — RETIRED [MEASURED,
+      `gate1_step2prime_load_and_inspect.py`, 2026-08-29 pre-A3-a-fix].**
+      Attempted at Gate 1 Step 2': copied Van's V5d3-verified
+      Badlands save into local `saves/`, called
+      `bridge.web_load('probeload')`. TypeErrored at
+      `game_bridge.py:3019` inside `_web_load_impl` on
+      `FighterRecord.from_dict(fd)` → `core/game_state.py:154`
+      `cls(**data)` → `TypeError: FighterRecord.__init__() got an
+      unexpected keyword argument 'natural_weight_class'`. Same P3
+      root cause as world_init failure; different symptom (fires on
+      LOAD path, not world_init path). Van's Addendum 2 pre-approval
+      hypothesis "load path routes through from_dict (dict consumer,
+      not kwarg constructor), so CampRecord `location=` TypeError is
+      bypassed by construction" — **FALSIFIED by measurement.**
+      `from_dict` at CLI's `game_state.py:154` is a kwarg constructor
+      via `cls(**data)` and errors on the first unknown key. And
+      `FighterRecord.from_dict` fires before any CampRecord
+      construction, so it TypeErrors on `natural_weight_class`
+      (WEB-only per D2), not `location`. Approach retired.
+      **Post-A3-a-fix: Gate 1 resumes on the ORIGINAL ratified
+      Step 2** (local fresh new_game, now proven to work via G2).
+
+    - **CLI FighterRecord + CampRecord drift filed as A3-d expansion.**
+      D2's field diff enumerates the full surface. Both classes are
+      strict subsets of their WEB counterparts (0 CLI-only fields on
+      either). Consequence: any future consumer that reads from
+      either save-loaded or fresh dict data via CLI-side dataclass
+      construction will error on WEB-only keys. Post-A3-a-fix, all
+      such consumers resolve through WEB dataclasses, so this is
+      inert in production. Filed as a hazard for any future harness
+      that pre-imports `core.game_state` from repo root explicitly.
+
+    - **A3-d shim-directory disposition update.** C5 filed the four
+      `cage_dynasty_web/{core,entities,systems,simulation}/` shim
+      dirs as load-bearing under the (pre-fix) GAME_PATH mechanism.
+      Post-A3-a-fix, they are STILL load-bearing on BOTH PA and
+      local — the fix removed the mechanism that WAS routing local
+      through CLI; now both environments resolve `core.*` /
+      `entities.*` / `systems` via these shims. The C5 warning
+      remains in force: **do not delete these shim dirs without
+      re-verifying end-to-end**. A3-d ordering constraint at C5
+      ("if A3-a fixes GAME_PATH to correctly add repo_root on PA,
+      the shim files become genuinely unused") **no longer applies**
+      — the ratified A3-a shipped as REMOVAL of the GAME_PATH block,
+      not as a fix that adds repo_root. Shim files are load-bearing
+      forever under the current architecture.
+
+  **QUEUE (post-C6):**
+    - **A3-b**: un-silence world-gen `except` at
+      `game_bridge.py:2272-2279` (narrow to specific exceptions +
+      full traceback). Its own gates, its own single-purpose commit.
+    - **A3-c**: UI stat-fabrication + 6/18 offset divergence at
+      `_convert_real_fighter._attr`. Its own arc.
+    - **Gate 1 resumes on original ratified Step 2**: local fresh
+      `new_game` (now working — G2 proof), A2-2 inspector on it
+      (G3 proof), then Step 3 bin table + Q1 five-round arm per
+      the v0.2 ratified execution prompt. Addendum 2 formally
+      retired.
+
+  **ARTIFACTS this commit (all under `outputs/sm1/`, untracked):**
+    - `gate1_a3a_D1_resolution_map.py` + `_D1_baseline.json`
+    - `gate1_a3a_D2_dataclass_diff.py` + `_D2_dataclass_diff.json`
+    - `gate1_a3a_G1_resolution_map.py` + `_G1_postfix.json`
+    - `gate1_a3a_G2_G3_freshworld.py`
+    - `gate1_step2prime_load_and_inspect.py` (Addendum 2 attempt +
+      retirement evidence)
+    - `gate1_step1_smoke.py` (re-run for G4)
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
