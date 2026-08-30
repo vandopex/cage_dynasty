@@ -4861,6 +4861,278 @@ regardless of any slot bias. Verdicts:
       retirement evidence)
     - `gate1_step1_smoke.py` (re-run for G4)
 
+- **STAMINA-MODEL1 — Gate 1 CLOSED + G1F findings + Q4d premise
+  correction [SHIPPED 2026-08-30 as C7 docs checkpoint; no engine
+  edits; RECOVERY-WIRE1 fix arc queued as separate single-purpose ship].**
+
+  Session covers: Gate 1 execution (bin pool R2 + Tier A + Tier B),
+  Van-ordered G1F followups (F1-F4), and one C4-era correction owed
+  under the standing wrong-numbers rule. Full reports at
+  `outputs/sm1/gate1_report.md` (246 lines) and
+  `outputs/sm1/gate1_G1F_report.md` (172 lines). All harnesses under
+  `outputs/sm1/gate1_*_run.py`, `_analysis_and_report.py`,
+  `_G1F_*.py`. Save states under `cage_dynasty_web/saves/` (gitignored).
+
+  **Bin pool (R2, ratified 2026-08-30).** 17 fresh worlds (10 cached
+  from R1 + 7 generated under R2 extension), 4,920 AI fighters total.
+  Bin thresholds unchanged (rec≥85/≤65 × car≥85/≤65). Selected 5
+  lowest-fid per cell (deterministic, name-free). Van's docket item on
+  generator archetype scarcity filed at
+  `claude/generator_variety_notes_2026-08-30.md` (world #1 population
+  Pearson r=0.7531; HL/LH each ~0.10% per world). Pool-population
+  question closed; downstream is engine mechanics.
+
+  **Tier A — 2,100 instrumented fights** (2,000 3R + 100 5R HH-HH),
+  20 pooled fighters, v1.5 wrapper on fe.CSS + fi.CSS, base seed 1000.
+  Wall time 54.1s. Method distributions per pairing in report §2. All
+  11 pairings ran clean; landing rows total ~132K.
+
+  **P3 target-trajectory table** (report §3), last-CSS att_stamina
+  per (slot_bin, round), 3-round arm:
+
+  | bin | R1-end | R2-end | R3-end |
+  |---|---|---|---|
+  | HH | 13.4±27.5 (n=891) | 7.5±20.1 (n=817) | 8.0±20.3 (n=598) |
+  | HL | 26.1±38.6 (n=812) | 17.8±33.1 (n=764) | 13.8±28.8 (n=669) |
+  | LH | 19.1±33.2 (n=864) | 10.8±25.4 (n=802) | 9.6±22.7 (n=655) |
+  | LL | 24.9±36.2 (n=360) | 19.2±33.4 (n=361) | 15.6±30.7 (n=358) |
+
+  **F3 accounting caveat, load-bearing for LL cell interpretation:**
+  LL rounds are 60-64% CSS-blind. Per (bin, round), expected
+  fighter-rounds from schedule vs observed:
+      HH R1 891/1000, R2 817/1000, R3 598/1000 (early finish 30% by R3)
+      HL R1 812/1000, R2 764/1000, R3 669/1000
+      LH R1 864/1000, R2 802/1000, R3 655/1000
+      LL R1 360/1000, R2 361/1000, R3 358/1000  ← 64% no_CSS_gap
+  LL fighters run grapple/sub-heavy exchanges that don't fire the CSS
+  wrapper (same shape as EXCH-CTR-OBS1 filed at Gate 0(b)). LL n
+  counts of ~361 are the strike-active subset; the majority of LL
+  rounds are unobserved by this instrument. HH/HL/LH attrition is
+  dominated by early finish (KO+TKO in R1-R2), not sampling. **This
+  caveat MUST accompany any tank-vs-refill design conclusion drawn
+  from the P3 LL row.**
+
+  **P4 resolved.** 3 weeks of live-play advance_week on world #1 with
+  v1.5 wrappers on both hook sites → **206,224 CSS calls captured,
+  100% caller_id=fi810, 0% fe3315.** Same shape as harness path per
+  Gate 0(b) A2 filing. fe.simulate_exchange (fe:3315) is dead on
+  live-play. Tier A's harness path (fi810) IS the live-play path —
+  fixture arithmetic transfers by construction. (But see G1F P2 below
+  for the fi-side wiring defect that affects both harness and live.)
+
+  **Tier B — N=93 fights over 15 weeks of world #1 (advance_week).**
+  DEC 43.01% / SUB 3.23% / KO+TKO 50.54%. In-band vs POOL-DEC-RATE1
+  (this file, filed at :4364-4406): 44.6% / 1.3% / 54.1%, N=157,
+  pre-e1be619 vintage. **N=93 accepted-as-observational per Van
+  2026-08-30**, no week extension; clean violence re-read deferred
+  until post-stamina-arc when the population dynamics stabilize.
+
+  ─────────────────────────────────────────────────────────────────
+  ## G1F findings (Van-ordered follow-up, 2026-08-30)
+  ─────────────────────────────────────────────────────────────────
+
+  **P1 disposition RESTATED — CONFOUNDED-UNRESOLVED (was: refuted
+  by Gate 1 §5).** [MEASURED, `gate1_G1F_followups.py` F1 + source
+  read at `fight_integration.py:1276-1282`.]
+
+  Source verification: the drain formula at `fi:1276-1282` reads:
+
+      _stamina_cost = float(props[2])   # per-strike stamina cost
+      _att_gp_s = getattr(attacker_state, '_gameplan', None)
+      if _att_gp_s is not None:
+          _att_agg_s = int(getattr(_att_gp_s, 'aggression', 0) or 0)
+          if _att_agg_s != 0:
+              _exec_s = dial_execution(attacker, attacker_state)
+              _stamina_cost *= (1.0 + 0.15 * _att_agg_s * _exec_s)
+      attacker_state.spend_stamina(_stamina_cost)
+
+  Tier A ran default BALANCED gameplan → aggression=0 → dial_execution
+  branch never fires → drain per exchange = `props[2]` alone. **Cardio
+  is not an input to the drain formula on this path.**
+
+  Per-bin stat profile of the 20 pooled fighters (mean±stdev, n=5 per
+  cell) — HH vs HL differ on multiple aggression-relevant channels
+  beyond cardio:
+
+  | stat | HH mean | HL mean | Δ |
+  |---|---:|---:|---:|
+  | fight_iq         | 86.6 | 72.4 | +14.2 |
+  | cardio           | 91.6 | 63.4 | +28.2 (by construction) |
+  | recovery         | 88.0 | 85.0 | +3.0 |
+  | boxing           | 78.8 | 73.0 | +5.8 |
+  | kicks            | 81.2 | 65.4 | +15.8 |
+  | clinch_striking  | 78.2 | 65.8 | +12.4 |
+  | takedowns        | 82.6 | 69.0 | +13.6 |
+  | submissions      | 77.4 | 70.6 | +6.8 |
+
+  The measured HH−HL slope delta (+0.34 pts/exchange in R1) originates
+  in strike-selection confounds — HH fighters' higher kicks (+15.8)
+  and clinch_striking (+12.4) and fight_iq (+14.2) shift their action
+  distribution toward different strike TYPES with different `props[2]`
+  costs. Not a cardio-in-formula effect. P1 moves from 'refuted' to
+  'confounded-unresolved'. **A design edit wiring cardio into drain
+  will need remeasurement on a schedule where cardio-in-drain is the
+  only variable.**
+
+  ─────────────────────────────────────────────────────────────────
+
+  **P2 disposition RESTATED — WIRING DEFECT at `fi:503-515` (was:
+  under-response to recovery, attributed to CSS-sampling artifact in
+  Gate 1 §6).** [MEASURED, `gate1_G1F_followups.py` F2 +
+  `gate1_G1F_F2_debug.py` + source reads at `fi:503-515` and
+  `fe:4060-4074`.]
+
+  F2 log-only wrapper on `fe.FighterState.new_round` across 200
+  diagnostic fights (HH×LH + HL×LL, 50 fights per orient, declared
+  seeds base=1000, pairing_idx ∈ {105, 108}). **1,114 refill events
+  captured. Variance of recovery_rating_consumed = 0 across all 20
+  fighters** despite real recovery stats spanning 33-94.
+
+  Root cause quoted from source (`fight_integration.py:503-515`,
+  `simulate_narrated_fight._init_engine`):
+
+      self.fighter1_state = FighterState(
+          fighter_id=self.fighter1.fighter_id,
+          name=self.fighter1.name,
+          health=100.0 + self.fighter1.chin * 0.5,
+          stamina=self.starting_stamina_f1
+      )
+      self.fighter2_state = FighterState(
+          fighter_id=self.fighter2.fighter_id,
+          name=self.fighter2.name,
+          health=100.0 + self.fighter2.chin * 0.5,
+          stamina=self.starting_stamina_f2
+      )
+
+  **No `recovery_rating` kwarg.** Falls to `FighterState.recovery_rating:
+  int = 50` class default at `fight_engine.py:565`. Formula at
+  `fe:614-631` fires correctly with whatever `recovery_rating` is —
+  but the source value is dead on this path.
+
+  **Pre-gen path is wired correctly**: `fe.simulate_fight` at
+  `fe:4060-4074` constructs FighterState WITH `recovery_rating=
+  fighter1.recovery` and `recovery_rating=fighter2.recovery`.
+  **Pre-gen and live-play use different stamina refill formulas
+  by construction** — pre-gen respects per-fighter recovery, live-play
+  applies rec=50 to everyone. This split predates every measurement
+  in this arc.
+
+  Single-fight trace confirms directly
+  (`outputs/sm1/gate1_G1F_F2_debug.py`, one 3R fight between LL
+  `00090425` (rec=33) and HL `42dab69a` (rec=85)):
+
+      new_round: fid=00090425 cur_round=2 rec_rating=50 stam_before=46.31 stam_after=73.81 delta=+27.50
+      new_round: fid=42dab69a cur_round=2 rec_rating=50 stam_before=0.50  stam_after=28.00 delta=+27.50
+
+  Both fighters `rec_rating=50` despite real stats 33 vs 85. Formula
+  output identical: `15 + (50/100)*25 = 27.5` for both. **Elite
+  recovery (94) and poor recovery (33) fighters get identical refills
+  in live play.**
+
+  **Recovery is a design attribute with a dead consumer on the
+  runtime path production uses.** RECOVERY-WIRE1 fix arc queued as
+  separate single-purpose ship — spec draft under
+  `outputs/sm1/gate1_RECOVERY_WIRE1_spec_draft.md`, awaiting Van's
+  ratification.
+
+  **Gate 1 §6 P2 finding (~0.007 slope) restated:** was two artifacts
+  stacked: (a) CSS-sampling attenuation of first-CSS-of-round
+  measurement (real, EXCH-CTR-OBS1 shape); (b) wiring defect above
+  — the recovery source is dead so the slope is genuinely 0 on the
+  live path regardless of measurement instrument.
+
+  ─────────────────────────────────────────────────────────────────
+
+  **×1.3 championship-round ratio CONFIRMED.** [MEASURED, Gate 1 §6
+  5-round arm, HH×HH pairing_idx=10.] Across 5 HH fighters, mean
+  late/early refill ratio = **1.212** (stdev 0.137, n=5). Prediction
+  1.3 per `fe:628-629` `bonus_recovery *= 1.3 if _current_round >= 4`.
+  Slightly under 1.3, consistent with the same CSS-sampling
+  attenuation as P2. Formula fires correctly; the ×1.3 multiplier
+  IS active on R4+ boundaries in the harness. (Note: fires with
+  rec_rating=50 for the same wiring reason as P2; post-fix expected
+  behavior is unchanged in RATIO but different in ABSOLUTE refill
+  magnitude.)
+
+  ─────────────────────────────────────────────────────────────────
+  ## CORRECTION — Gate 0(b) Q4d filing (owed under standing rule)
+  ─────────────────────────────────────────────────────────────────
+
+  C4 checkpoint at (this file, currently :3928 in the Q4d bullet
+  of the "STAMINA-MODEL1 — Gate 0(b)" block) filed:
+
+    > "Q4d sawtooth (round-boundary mean-stamina jump): +20 to +24pp
+    > across all 7 arms, 2SE emphatically excludes 0. B4 hand-model
+    > reconciliation clean (~+33.75 gross recovery at recovery=75,
+    > minus concurrent early-R2 drain)."
+
+  **The ~33.75 gross-refill premise is documented-was-wrong.**
+  Derivation assumed `recovery_rating=75` (the L-J1 all-75 fixture
+  stat). Per F2 above, the v1.5 probe's `_run_path_a_ref` calls
+  `fi.simulate_narrated_fight`, which per fi:503-515 uses
+  `recovery_rating=50` regardless of the fighter's fixture stat.
+  **Actual gross refill was `15 + (50/100)*25 = 27.5`**, not 33.75.
+
+  The sawtooth finding itself STANDS: +20 to +24pp measured
+  round-boundary jump across all 7 arms, 2SE excludes 0 — the shape
+  is real. The measured 20-24 range fits the corrected premise of
+  27.5 gross minus concurrent early-R2 drain, just as it fit the
+  wrong 33.75-minus-larger-drain premise. Sawtooth existence
+  reconciles either way; the premise number was wrong.
+
+  Related same-family correction at :3999-4000: the A1 subsection
+  paragraph "R2 opens ~28-40 (visible partial refill matching B4 hand
+  model's +33.75 at recovery=75, minus early-R2 drain)" — same
+  33.75→27.5 substitution applies. R2 opening in the L-J1 fixture was 27.5-pt gross refill
+  minus early-R2 drain, not 33.75-pt.
+
+  Per standing rule (documented, not dropped): original C4 text
+  preserved as-written; this C7 filing carries the corrected premise.
+  Post-RECOVERY-WIRE1: L-J1 will run at recovery_rating=75 (from
+  fighter.recovery=75), gross refill returns to the intended 33.75.
+  Fixture hashes will break (expected, gated in RECOVERY-WIRE1 W3).
+
+  ─────────────────────────────────────────────────────────────────
+  ## Queue
+  ─────────────────────────────────────────────────────────────────
+
+  - **RECOVERY-WIRE1** — single-purpose fix arc, Van-ratified in
+    principle 2026-08-30, spec awaiting ratification. Fix: pass
+    `recovery_rating=<fighter>.recovery` at fi:503-515, mirroring
+    fe:4060-4074. Gates W1-W4 (F2 rerun, Tier A P3 rerun, L-J1
+    hash break certification, tree cleanliness). Behavior-changing
+    arc; L-J1 fixture hashes EXPECTED to break. Spec draft at
+    `outputs/sm1/gate1_RECOVERY_WIRE1_spec_draft.md`.
+  - **Post-RECOVERY-WIRE1**: Van fills target-trajectory table using
+    RERUN P3 (Tier A schedule against real per-fighter recovery).
+  - **Post-target-table**: stamina-model design phase begins. Docket
+    items already filed for that phase: (a) generator archetype
+    scarcity (`claude/generator_variety_notes_2026-08-30.md`);
+    (b) P1's cardio-into-drain design question; (c) Tier B clean
+    violence re-read (deferred until post-stamina-arc per Van
+    2026-08-30).
+
+  ─────────────────────────────────────────────────────────────────
+  ## Artifacts (all under `outputs/sm1/`, untracked)
+  ─────────────────────────────────────────────────────────────────
+
+  - `gate1_report.md` (246 lines, Gate 1 full report — unmodified)
+  - `gate1_G1F_report.md` (172 lines, F1-F4 followups)
+  - `gate1_step3_pool_manifest_R2.json` (bin pool + selection +
+    provenance + world #1 correlation)
+  - `gate1_tierA/` (46 files: 22 outcome CSVs + 22 landing CSVs +
+    manifest + done flag; 2,100 fights, ~132K landing rows)
+  - `gate1_tierB/` (5c landing CSV + manifest + done flag)
+  - Harnesses: `gate1_tierA_run.py`, `gate1_tierB_run.py`,
+    `gate1_analysis_and_report.py`, `gate1_G1F_followups.py`,
+    `gate1_G1F_F2_debug.py`
+  - Multi-world pool harnesses: `gate1_step3_multiworld_pool.py` +
+    `..._extend.py`
+  - RECOVERY-WIRE1 spec draft: `gate1_RECOVERY_WIRE1_spec_draft.md`
+  - Save states under `cage_dynasty_web/saves/bridge_anon_gate1_mw_*`
+    (17 world saves) and `bridge_gate1tierB_w1*` (Tier B anchor +
+    5b mid-checkpoint) — all gitignored.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
