@@ -5133,6 +5133,254 @@ regardless of any slot bias. Verdicts:
     (17 world saves) and `bridge_gate1tierB_w1*` (Tier B anchor +
     5b mid-checkpoint) — all gitignored.
 
+- **STAMINA-MODEL1 — RECOVERY-WIRE1 fix + fixture re-baseline
+  [SHIPPED 2026-08-30 as C8 code+docs commit; single-purpose fix per
+  Van-ratified spec; unblocks target-trajectory table].**
+
+  Fixes the wiring defect diagnosed at C7 P2 (fi:503-515 constructs
+  `FighterState` without `recovery_rating` kwarg → falls to class
+  default 50 → per-fighter recovery attribute is a dead input to the
+  between-round refill formula on the live-play path). Fix passes
+  `recovery_rating=<fighter>.recovery` per FighterState construction,
+  mirroring the correctly-wired pre-gen path at fe:4060-4074. Amended
+  spec at `outputs/sm1/gate1_RECOVERY_WIRE1_spec_draft.md`
+  (amendments B + C ratified 2026-08-30).
+
+  **DIFF (single tracked file, `cage_dynasty_web/fight_integration.py`):**
+  +11 / −2 lines. Two `recovery_rating=` kwargs added; two trailing
+  commas added on the preceding `stamina=` lines; a 7-line comment
+  block above the constructions documenting the fix + cross-referring
+  C7 filing.
+
+  **W1 — wiring PASS gate + slope report** [MEASURED,
+  `outputs/sm1/gate1_G1F_followups.py` F2 block rerun post-fix]:
+    - 200 diagnostic fights (HH×LH pairing_idx=105 + HL×LL
+      pairing_idx=108, 50 fights per orient, declared seeds base=1000).
+    - 1,096 refill events captured across 20 pooled fighters.
+    - **PASS GATE: 20/20 fighters have `recovery_rating_consumed
+      == fighter.recovery`.** Variance of rec_used now > 0 (range
+      33-94, was exactly 50 for all 20 pre-fix).
+    - Report-not-gate: aggregate R2 refill vs recovery slope = 0.470
+      (>0, 2SE excludes zero); attenuators named per amendment B —
+      `min(100, ·)` ceiling clamp truncates high-recovery refills
+      (HH fighters' stamina_before was already high → measured deltas
+      undershoot formula's 0.25 slope); LL contamination amplifies
+      slope estimate above 0.25 because LL measured refills undershoot
+      formula more than HL measured refills.
+    - Per-fighter clean cases (predicted vs measured R2 refill for the
+      5 HL fighters, all at recovery=85, formula predicts 36.25):
+      42dab69a 36.25 (n=20), 5f03bb6c 36.25 (n=19), 60a65022 36.25
+      (n=20), 85f73bf3 36.25 (n=19), f6750bf7 36.25 (n=20). **HL
+      fighters' measured refill hits the formula prediction exactly**
+      — clamp doesn't reach them since their pre-refill stamina is
+      low. Formula fires as designed with real recovery input.
+
+  **W2 — Tier A P3 rerun + before/after table** [MEASURED,
+  `outputs/sm1/gate1_tierA_run.py` rerun; report at
+  `gate1_recovery_wire1_W2_report.md`]:
+
+  2,100 instrumented fights rerun on the same 20 pooled fighters,
+  same seeds, same 11 pairings. Wall time: pre 54.1s vs post 53.9s.
+
+  **P3 target-trajectory table (post-fix)** — last-CSS att_stamina
+  per (slot_bin, round), 3-round arm:
+
+  | bin | R1-end (mean±sd, n) | R2-end (mean±sd, n) | R3-end (mean±sd, n) |
+  |---|---|---|---|
+  | HH | 14.9±29.3 (n=894) | 8.5±20.4 (n=789) | 9.4±20.7 (n=543) |
+  | HL | 26.8±39.0 (n=814) | 19.4±34.1 (n=749) | 16.7±30.9 (n=656) |
+  | LH | 18.5±32.6 (n=861) | 11.4±26.5 (n=798) | 10.5±24.2 (n=652) |
+  | LL | 24.6±35.6 (n=360) | 19.3±33.4 (n=364) | 15.3±30.4 (n=359) |
+
+  **Δ (POST − PRE mean, per cell)**:
+
+  | bin | ΔR1-end | ΔR2-end | ΔR3-end |
+  |---|---:|---:|---:|
+  | HH | +1.45 | +0.93 | +1.38 |
+  | HL | +0.67 | +1.52 | +2.94 |
+  | LH | −0.54 | +0.60 | +0.90 |
+  | LL | −0.30 | +0.11 | −0.30 |
+
+  Direction of Δ matches arithmetic predictions: HL fighters (rec=85)
+  get the biggest jumps (+2.94 R3-end) because their recovery-scaled
+  refill jumped 27.5→36.25 (+8.75 per boundary, compounding across R2
+  and R3). LL fighters (rec 33-52) see slight decreases — their
+  refills fell 27.5→~25 per boundary. LH fighters mid.
+
+  **5R HH×HH arm — R4-end and R5-end (championship-bonus rounds)**:
+
+  | round | pre  | post | Δ |
+  |---|---|---|---:|
+  | R4 | 9.6±14.9 (n=66) | 12.2±20.7 (n=63) | +2.6 |
+  | R5 | 10.0±16.1 (n=18) | 18.1±24.9 (n=19) | +8.1 |
+
+  The ×1.3 championship-bonus compounds with the corrected recovery
+  input — R5-end jumped +8.1 pts. Pre-fix, ×1.3 fires on rec=50 →
+  bonus 12.5×1.3=16.25 → gross refill 15+16.25=31.25 (vs unchamp
+  27.5, only +3.75). Post-fix at rec=85: bonus 21.25×1.3=27.625 →
+  gross 42.625 (vs unchamp 36.25, +6.375). Championship rounds now
+  meaningfully favor high-recovery fighters.
+
+  **Method distribution shifts, largest first**:
+
+  | pairing | Δ KO+TKO% | Δ DEC% |
+  |---|---:|---:|
+  | P06 HHxLL_3R | +8.0 | −7.0 |
+  | P08 HLxLL_3R | +8.0 | −8.0 |
+  | P02 LHxLH_3R | −5.5 | +7.0 |
+  | P00 HHxHH_3R | +5.0 | −2.5 |
+  | P07 HLxLH_3R | −4.0 | +4.0 |
+
+  High-recovery vs low-recovery pairings finish MORE (HH×LL +8.0pp
+  KO+TKO); mid-recovery symmetric pairings decision MORE (LH×LH +7.0pp
+  DEC). The recovery-scaled refill differentiates cardio-heavy vs
+  cardio-light fighters where the wiring bug was masking that
+  differentiation.
+
+  **W3 — fixture-hash EXPECTED BREAK: all 7 arms failed old hashes**
+  [MEASURED, `outputs/sm1/strike_landing_probe_v15.py` full 7-arm
+  rerun at N=2000 with wrappers ON].
+
+  **All 7 fixture hashes broke as designed.** Every arm's fighters
+  have recovery != 50 (L-J1 fixture all-75 symmetric; single-stat
+  arms modify one stat but not recovery unless it's the modified
+  stat; grappling fixture has default 75). Recovery-scaled refill
+  changes outcome shapes on every fixture.
+
+  **Retirement table — OLD hashes (pre-fix relic, correct
+  measurements of the recovery_rating=50 buggy behavior)**:
+
+  | arm | OLD raw md5 | OLD norm md5 |
+  |---|---|---|
+  | L-J1  | a8a5b6809e688395387e7e829b419460 | cace1efa4a3c8eabe8a976ec42a6f2ba |
+  | L-B88 | 6c2f82ac46c5a476367f3c0684710237 | d2d943266a81c6817bbed5062b6fa37a |
+  | L-K74 | 2f1d2034aa308391ea487dfe776adda1 | 3e5de0d7963bc66cd2cf65ff1d981d0e |
+  | L-K78 | 506b2a36c75597c6966bc9db0ca5f7cc | 84398fe0269ee06968643ca3b10dc570 |
+  | L-K88 | 1dc762fcd6a399c623a958cc50989009 | c5c8040941c25b2f7ecff1afce049a20 |
+  | L-C88 | abd4b299ef565d5b1ae6fccf792510c2 | 56e7987c0bbf99d78db8cccf29fa3ef8 |
+  | F     | 11d4be8c28902e9e26c6d627424663fe | 78605664d38afa9b6abfaa83b9cc16ce |
+
+  Retired as regression targets; preserved per standing wrong-numbers
+  rule. Previous filings at STRIKE-LANDING-AUDIT1 (this file
+  :2796-2799 raw, :2809-2812 norm), STAMINA-MODEL1 Gate 0(b) v1.5
+  qualification (:3897-3914), Gate 1 Step 1 smoke requal
+  (`outputs/sm1/gate1_step1_smoke.py`), Gate 1 A3-a G4 smoke requal
+  (part of C6 filing) are all documented-was-correct-for-pre-fix.
+  Any future regression check against those specific values must be
+  qualified with "pre-RECOVERY-WIRE1 (C8)".
+
+  **NEW post-RECOVERY-WIRE1 hashes (certified baseline)**:
+
+  | arm | NEW raw md5 | NEW norm md5 | landing rows |
+  |---|---|---|---:|
+  | L-J1  | 02b9a62ea1a581da43cda0074a3c36f7 | 9271a4e60a35247ba0613b10dd715382 | 154,913 |
+  | L-B88 | b421b5c01534d8f1013b8fdf4f4d97be | 483cd4dea135b6ce7753d2977669036d | 134,147 |
+  | L-K74 | 4dae6c6be0f100763cde137d6cffef1b | e31e79d9546dcf77330a67496b1afc14 | 136,972 |
+  | L-K78 | 52387566b8d2d29fb1e85e1aa4de0985 | 9532ce8cc061de1ddc106a65709e3b4a | 143,393 |
+  | L-K88 | 547966e1913ecd2a32bf8d1b5ee15412 | c025febdf78d3e81429cc671f05a3ac3 | 130,897 |
+  | L-C88 | 041dae4ffc41d431ab6b97c1b66fcdec | 065172df2b40face63d839a73392c03e | 131,357 |
+  | F     | 00f41d144dea015f675b177725f20c41 | d74f66f5d1c33927fbc2d17d0c1e2fd5 | 136,899 |
+
+  L-J1 landing row count went 150,154 → 154,913 (+4,759). Consistent
+  with fighters lasting longer per round-boundary (more refill → more
+  exchanges → more CSS calls). Direction is uniform across arms.
+
+  Probe file (`outputs/sm1/strike_landing_probe_v15.py`)
+  `REUSED_HASH_TARGETS` and `REUSED_NORM_HASH_TARGETS` dicts updated
+  in place to the NEW post-fix values. Future re-anchor gates against
+  the probe check the new hashes.
+
+  **Probe file sha256 transition (per amendment C)**:
+
+  | epoch | sha256 |
+  |---|---|
+  | pre-fix (retiring — was the certified fingerprint through C5+C6+C7) | `aef08f57cba1be6c694a7c8d10d151ed439bccd1246a77c0e5290d7a8bb98093` |
+  | post-fix (certified 2026-08-30 as C8 baseline) | `3ca1f644828c1277f7118229f2438235c6ead51a2e81431a8e08ed0669b88a52` |
+
+  Future sessions' instrument re-anchor gates should compare against
+  the NEW sha256. The old value is retired as the pre-fix fingerprint.
+  Same standing rule as fixture hashes — old preserved as accurate
+  measurement of its era, new certified as the post-fix baseline.
+
+  **W4 — tree cleanliness**:
+    - Single tracked file modified: `cage_dynasty_web/fight_integration.py`
+      (+11 / −2).
+    - Probe file untracked (session artifact under `outputs/sm1/`,
+      which is not gitignored but has never been tracked); dict
+      updates + comment there are captured in the sha256 transition
+      above.
+    - `git status --porcelain | grep -v '^??'` shows only the one
+      tracked file modified.
+    - **Diff shape deviates from spec §1's declared +2/−0** (7-line
+      explanatory comment block added above the FighterState
+      constructions cross-referring C7 + G1F F2 measurement);
+      deviation reviewed and accepted by Van at commit approval.
+
+  **CORRECTIONS RIDING THIS COMMIT (per bundling directive)**:
+
+    - **C7 Q4d correction's forward-looking claim reverts**: C7 filed
+      (currently `~L4830`, "Post-RECOVERY-WIRE1: L-J1 will run at
+      recovery_rating=75 (from fighter.recovery=75), gross refill
+      returns to the intended 33.75. Fixture hashes will break
+      (expected, gated in RECOVERY-WIRE1 W3)."). **Prediction
+      confirmed by W3.** L-J1's `fighter.recovery=75` reaches the
+      formula; L-J1's between-round refill is now 33.75 (=15 +
+      75/100*25) per the C7 correction; hashes broke as expected.
+
+    - **Any Van-facing analytical filing that depended on
+      recovery_rating=50 as the wire-truth is now pre-C8 vintage**:
+      Gate 0(b) L-J1 sawtooth measurement (+20-24pp per Q4d in C7);
+      Gate 1 §6 P2 slope (~0.007) and mean refill (20.52); Gate 1
+      §6 5R HH ratio (1.212, n=5 pre-fix). All were correct
+      measurements of the pre-fix behavior. Post-fix, corresponding
+      numbers land elsewhere on the same axes — the shapes remain
+      (sawtooth, ratio ~1.3, refill positively correlated with
+      recovery) but the specific numeric anchors shift. Future
+      regression checks against those anchors must qualify as
+      "pre-C8 (RECOVERY-WIRE1)".
+
+    - **Pre-gen vs live-play stamina physics unified as of C8.**
+      C7 P2 filing noted the split: pre-gen (fe.simulate_fight)
+      correctly wired at fe:4060-4074, live-play (fi.simulate_narrated_fight)
+      wrong at fi:503-515. C8 removes the split — both paths now
+      pass per-fighter recovery. The historical filing's "pre-gen
+      and live-play use different stamina refill formulas by
+      construction" line is documented-was-true-through-C7,
+      resolved as of C8.
+
+  **QUEUE (post-C8)**:
+    - **Target-trajectory table is now Van's to fill** using the
+      W2 post-fix P3 table above as the measurement anchor.
+    - **Framework-gate cascade re-baselines** (own arcs, filed but
+      not scheduled): Gate 0c golden master, Stage 0d, MC ODDS
+      invariants, and any other filed test-fixture arithmetic that
+      pinned to the recovery_rating=50 behavior. Each needs its own
+      before/after certification pass.
+    - **Deploy decision is Van's** — separate from this commit.
+      Post-deploy, live-play behavior shifts population-wide: any
+      Van-facing analytical filing that measured decision rates,
+      finish rates, upset rates, etc. on the pre-C8 live path
+      becomes vintage on deploy day.
+    - **Post-target-table: stamina-model design phase begins.** Docket
+      items from C7 unchanged: (a) generator archetype scarcity,
+      (b) P1 cardio-into-drain design question, (c) Tier B clean
+      violence re-read post-stamina.
+
+  **ARTIFACTS (all under `outputs/sm1/`, untracked)**:
+    - `gate1_RECOVERY_WIRE1_spec_draft.md` (amended spec)
+    - `gate1_recovery_wire1_W2_report.md` (before/after P3 + method
+      shifts)
+    - `gate1_recovery_wire1_analysis.py` (analysis harness)
+    - `gate1_tierA_prefix/` (pre-fix Tier A run, preserved for
+      side-by-side)
+    - `gate1_tierA/` (post-fix Tier A rerun; 46 files)
+    - `gate1_step1_smoke_out.txt` (W3 evidence for L-J1)
+    - `strike_landing_v15_on_landing_*.csv` and `_outcome_*.csv`
+      (full 7-arm probe rerun for hash re-baselining)
+    - `strike_landing_probe_v15.py` UPDATED: REUSED_HASH_TARGETS +
+      REUSED_NORM_HASH_TARGETS to new hashes; new sha256
+      `3ca1f644828c1277f7118229f2438235c6ead51a2e81431a8e08ed0669b88a52`.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

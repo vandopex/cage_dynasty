@@ -500,18 +500,27 @@ class NarratedFightSimulator:
         _assert_sanctioned_config(self.config)
 
         # Create fighter states
+        # RECOVERY-WIRE1 (2026-08-30): recovery_rating passed per-fighter,
+        # mirroring fe.simulate_fight at fe:4060-4074. Pre-fix this kwarg
+        # was omitted → FighterState.recovery_rating fell to class default
+        # 50 (fe:565), making per-fighter recovery a dead input to the
+        # between-round refill formula at fe:614-631 on the live-play path.
+        # G1F F2 measurement: 1,114 refill events across 20 fighters had
+        # variance of recovery_rating_consumed = 0. See CLAUDE.md C7 filing.
         self.fighter1_state = FighterState(
             fighter_id=self.fighter1.fighter_id,
             name=self.fighter1.name,
             health=100.0 + self.fighter1.chin * 0.5,
-            stamina=self.starting_stamina_f1
+            stamina=self.starting_stamina_f1,
+            recovery_rating=self.fighter1.recovery,
         )
 
         self.fighter2_state = FighterState(
             fighter_id=self.fighter2.fighter_id,
             name=self.fighter2.name,
             health=100.0 + self.fighter2.chin * 0.5,
-            stamina=self.starting_stamina_f2
+            stamina=self.starting_stamina_f2,
+            recovery_rating=self.fighter2.recovery,
         )
         
         # Create fight state
