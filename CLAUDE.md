@@ -5381,6 +5381,853 @@ regardless of any slot bias. Verdicts:
       REUSED_NORM_HASH_TARGETS to new hashes; new sha256
       `3ca1f644828c1277f7118229f2438235c6ead51a2e81431a8e08ed0669b88a52`.
 
+- **STAMINA-MODEL1 — Design Gate 0 [CLOSED 2026-08-31, docs
+  checkpoint at baseline `0ca052c`, no engine edits; read-only
+  measurement pass ordered G0-1 → G0-1b → G0-1c → G0-3 → G0-4 →
+  G0-4b → G0-4c → G0-4d → G0-2].**
+
+  Scope: characterize starting-stamina wiring, drain accounting,
+  cardio consumers, and pre-fix baselines needed for design phase
+  and Gate 1. Read-only throughout; every claim measured or
+  source-quoted.
+
+  Artifacts:
+   - Harnesses: outputs/sm1/design0/g0_{1,1b,1c,3,4,4b,4c,4d,2}*.py
+   - Manifests: outputs/sm1/design0/g0_{...}_manifest.json
+   - Corrections draft: outputs/sm1/design0/gate0_corrections.md
+   - Certified corrected Tier A CSVs:
+     outputs/sm1/design0/tierA_corrected/ (2100 outcomes + 2100
+     landing CSVs from outputs/sm1/design0/tierA_corrected_run.py)
+
+  ═══════════════════════════════════════════════════════════════════
+  ## MEASUREMENTS
+
+  **G0-1 — starting_stamina fatigue-channel wiring.**
+   - Verdict per channel (initial reading, later corrected —
+     see CORRECTIONS #1):
+     * CH1 starting_stamina from fatigue: WIRED to constructor
+       (15/15 samples match `condition.get_starting_stamina(fatigue)`).
+     * CH2 per-round fatigue penalty (fi:427-434 inline table):
+       PARTIAL — inline table returns half or less of condition's
+       intended per-round penalty (READY→0 vs cond 1; TIRED→1 vs
+       cond 2; EXHAUSTED→2 vs cond 4). The `return 4` at fi:432 is
+       reachable only if starting_stamina < 65; not directly
+       reachable via fatigue alone (condition floors at 65) but
+       IS reachable via cut floor 60 — see G0-1c Item 5.
+     * CH3 pre-gen inline get_starting_stamina at fe:4023-4043:
+       PARTIAL — pre-gen adds a fatigue ≤ 10 → 103.0 "peak
+       condition" bucket that condition module clips at 100.
+   - Anchor: `outputs/sm1/design0/g0_1_manifest.json`,
+     `g0_1_condition_wiring.py`.
+
+  **G0-1b — cut-severity population distribution + histogram.**
+     Initial reading (later corrected — see CORRECTIONS #2):
+     cut ON aggregate mean 89.48; 25/290 at floor 60 exactly;
+     severity dist {0:178, 1:35, 2:26, 3:34, 4:17}.
+   - Instrument: `g0_1b_starting_stamina_origin.py`. Anchor world
+     `gate1_mw_1_1788106887` (290 AI fighters).
+   - Contamination discovered in G0-1c: harness read
+     `fdata.get("weight_class", "Lightweight")`, but fighter_data
+     lacks the key. All 290 fighters defaulted to Lightweight in
+     the harness → cut_severity computed against real natural
+     inflated up to 4. **G0-1b numbers preserved as WRONG-and-
+     documented per standing rule.**
+
+  **G0-1c — cut confound + natural_weight_class origin trace +
+   corrected pool table.**
+   - Corrected population cut-severity distribution (N=290):
+     * severity 0: 270  (268 confirmed + 2 empty-natural fighters
+       fdata-fid 331f9ba4, 46645ab7 which route through gb:19780
+       empty-nat fallback → severity 0)
+     * severity 1: 20
+     * severity ≥ 2: 0
+   - Corrected 20-pool table: 16 at starting_stamina=100, 4 at
+     [85, 90) (00090425 LL 85.71, 074cd4d1 HH 88.66, 85f73bf3 HL
+     88.75, a218b4d7 LH 89.39). None below 85. Matches
+     `world_init.py:2548-2555` generator arithmetic (gap ∈
+     {-1, 0, +1} by construction).
+   - HH<HL at R1-end SURVIVES on cut-0 fighters only:
+     ALL slice Δ(HH−HL) = −11.88 (n_HH=894, n_HL=814)
+     CUT-0 slice Δ(HH−HL) = −9.01 (n_HH=720, n_HL=684)
+     Cut explains ~24% of the HH<HL gap; ~76% is intrinsic.
+     **Both numbers computed on the pre-correction Tier A CSVs
+     (`gate1_tierA/`, WC-bug population). Not certified against
+     the corrected population.** The certified corrected-population
+     version of the HH−HL cut-0 R1 comparison is G0-4d Item 2d
+     (Δ = +7.87 ±3.71 total-drain on the total-drain axis, not
+     the CSS-last_ss axis).
+   - Empty-natural fallback at gb:19780 SILENTLY returns severity 0.
+     No crash, no warning. 2 anchor-world fighters exercise this
+     path today.
+   - Anchor: `outputs/sm1/design0/g0_1c_manifest.json`,
+     `g0_1c_cut_confound_and_origin.py`.
+
+  **G0-3 — drain-side inventory: STRIKE_PROPERTIES, aggression
+   multiplier, per-round drain (CSS-strike-only, later completed
+   by wrapper in G0-4d).**
+   - STRIKE_PROPERTIES props[2] cost table dumped by family
+     (fight_engine.py:219-261). Ranges:
+     * boxing (5 strikes): mean 4.4, [2, 6]
+     * kicks (10 strikes): mean 6.5, [3, 12]
+     * clinch_explicit (3 strikes): mean 4.0, [3, 5]
+     * clinch_fallthrough (12 strikes): mean 5.5, [3, 12]
+   - Aggression multiplier fi:1276-1284:
+     `_stamina_cost *= 1 + 0.15 * aggression * dial_execution`.
+     Reachable range [0.850, 1.150]. **BALANCED gameplan (Tier A
+     default) → aggression=0 → multiplier=1.000 → DORMANT on
+     every measurement in this gate.**
+   - Per-round strike-drain (CSS-only, ALL pool):
+     HH R1 drain 79.6, HL R1 70.1, LH R1 75.7, LL R1 68.1.
+     R2/R3 lower (fewer exchanges, floor-clipped).
+   - Coverage limit noted upfront: CSS captures STRIKE attempts
+     only; grapple/sub/body/KD/rocked drain sites are invisible
+     to CSS. Numbers are LOWER BOUND on total drain.
+   - Cut-fighter slice vs cut-0 slice per bin: cut fighters
+     showed LOWER strike drain per R1 in every bin, driven by
+     LOWER strike-attempt count, not lower per-strike cost.
+     Rider filed by Van; investigated in G0-4/G0-4c: body_frame
+     ruled out as engine consumer (G0-4 grep — zero fe/fi hits).
+     Remaining explanation: n=1 cut fighter per bin, individual
+     identity confound.
+   - Anchor: `outputs/sm1/design0/g0_3_manifest.json`,
+     `g0_3_drain_decomposition.py`.
+   - **Anchor note:** G0-3's report body cited fi:1417/1419/1487,
+     fi:948, fi:986 for grapple/body/KD spend sites — pre-shift
+     line numbers from an earlier bytes snapshot. Every subsequent
+     filing in this gate (G0-4 onward, including this checkpoint)
+     uses current-HEAD anchors verified at `0ca052c`: fi:1426
+     (grapple attempt +5), fi:1428 (grapple failed +3), fi:1496
+     (sub failed +6), fi:957 (body shot damage×0.4), fi:995 (KD +8).
+
+  **G0-4 — total-drain wrapper instrument + zero-floor census +
+   body_frame consumer grep.**
+   - Instrument: log-only wrapper on fe.FighterState.new_round
+     (round transitions) + fe.FighterState.spend_stamina (drain
+     sites). Discrimination proof on one HH×HH fight seed 1000:
+     wrapper R2 total drain 36.25 vs CSS R2 strike drain 8.75 —
+     27.5 pts of R2 drain occur BEFORE the first CSS call (grapple
+     opening exchanges). Wrapper sees ~2-3× more drain than CSS
+     on grapple-heavy rounds.
+   - Zero-floor census (2280 fights, initial count later corrected
+     to 2100 in G0-4b — see CORRECTIONS #7):
+     * HH R1: 65% hit floor 0, median call to first-zero = 23
+     * HH R2: 71% hit floor 0, median call = 9
+     * HL R1: 53% / 23
+     * LH R1: 64% / 24
+     * LL R1: 23% / 25 (weakest fighters throw fewer actions →
+       don't reach floor as often)
+     * R2/R3 for HH/HL/LH: 60-70% of fighter-rounds spend the
+       LAST ~46 exchanges at stamina=0.
+   - Clamp anchor at fe:611-612: `max(0, self.stamina - amount)`.
+     Stamina cannot cross zero; recovery capped at min(100, ·).
+   - body_frame grep across fe.py + fi.py + gb.py:
+     * fight_engine.py: ZERO hits
+     * fight_integration.py: ZERO hits
+     * game_bridge.py: hits at 1504 (field def), 7324-7325
+       (WebFighter backfill), 19810-19811 (weight-class news),
+       19893 (weight-class-move logic)
+     **body_frame is NOT a fight-engine consumer. Cut-fighter
+     identity confound in G0-3 is not driven by body_frame
+     directly.** Initial reading in G0-4 that "R1 refill wipes
+     cut/fatigue to 100 for everyone" was overstated — see
+     CORRECTIONS #5 and G0-4c Item 4.
+   - Anchor: `outputs/sm1/design0/g0_4_manifest.json`,
+     `g0_4_total_drain_and_zero_floor.py`.
+
+  **G0-4b — three closures before G0-2 (condition live/dead
+   probe + effective-delta ledger + same-fights proof).**
+   - CH1 fatigue-refill probe on donor 012d6319 (cardio 91,
+     recovery 85), fatigue {0, 50, 100}:
+     assemble_ss = 100.00 / 88.00 / 65.00 respectively
+     R1 post-new_round stamina = 100.00 in ALL THREE cases
+     (recovery 85 refill overshoots any starting deficit → clamp
+     100). fi:592 `new_round()` runs unconditionally at R1 with
+     no round>1 guard. **G0-1 CH1 verdict corrected: wired to
+     constructor, value discarded by R1 refill when recovery is
+     sufficient — see CORRECTIONS #1.**
+   - Effective-delta ledger + same-fights proof: 2100 fights via
+     Tier A verbatim seed scheme. Wrapper N=2100 = Tier A N=2100
+     (fixes G0-4's 2280 miscount).
+   - Winner agreement wrapper vs Tier A: 92.0% (168 disagreements
+     across 2100). Attribution to config + wrappers in G0-4b was
+     partial; fully bisected in G0-4c as builder/entry difference,
+     not wrapper — see CORRECTIONS #8.
+   - Effective-delta ledger showed residuals ranging −0.79 to
+     −2.04pt per fighter-round — direction indicates unwrapped
+     stamina writes (identified as fi:620-624 fatigue penalty +
+     fi:600/610 corner bonus). Fix landed in G0-4d.
+   - Anchor: `outputs/sm1/design0/g0_4b_manifest.json`,
+     `g0_4b_closures.py`.
+
+  **G0-4c — instrument certification bisect + R1-refill sizing
+   baseline.**
+   - Bisect (three 2100-fight runs vs gate1_tierA/ CSVs):
+     * (a) Tier A verbatim builder+entry, wrappers OFF: winner
+       agree 100.0% (2100/2100), method agree 100.0%
+     * (b) Tier A verbatim builder+entry, wrappers ON: winner
+       agree 100.0% (2100/2100), method agree 100.0%
+     * (c) Corrected builder + hardcoded fight dict, wrappers ON:
+       winner agree 92.5% (1942/2100), method agree 79.9% (1678/2100)
+     Draw-serialization was identified as a comparator artifact
+     (Tier A CSV empty-string winner vs my None on Draws); fixed
+     in comparator, agreement resolved to 100.0% for (a)+(b).
+     **Wrappers RNG-neutral. G0-4b's 8% drift is cause = corrected
+     builder + fight-dict weight_class differ from Tier A's
+     Lightweight-default builder + `pv15._make_fight_const`.**
+   - Ledger residual gate BEFORE _init_round hook: max 4.0, mean
+     1.14, 36% of fighter-rounds > 0.01. Attribution: unwrapped
+     fi:620-624 fatigue-penalty direct writes to `.stamina`.
+   - R1-refill sizing baseline (anchor 290 at fatigue=0):
+     * 20 cut fighters differ from assemble_ss (all severity 1;
+       assemble ~85-89 → R1 refill boosts to 100 → R1 open ≠
+       assemble_ss). Expected.
+     * 270 non-cut fighters have R1 open == assemble_ss ==
+       100.00. Expected.
+     5-fighter recovery spread (rec 33..94) at fatigue=100:
+     | fid | rec | cardio | assemble_ss | R1_open | deficit |
+     |---|---:|---:|---:|---:|---:|
+     | 00090425 | 33 | 33 | 60.00 | 83.25 | 16.75 |
+     | c170cb47 | 60 | 85 | 65.00 | 95.00 | 5.00 |
+     | 012d6319 | 85 | 91 | 65.00 | 100.00 | 0.00 |
+     | 85f73bf3 | 85 | 65 | 60.00 | 96.25 | 3.75 |
+     | 119a9190 | 94 | 88 | 65.00 | 100.00 | 0.00 |
+     **The condition/cut channel is NOT universally dead. It's
+     dead for high-recovery fighters (rec ≥ 80) whose refill
+     overshoots 100; it's LIVE with deficits 5-17pts for
+     low/mid-recovery fighters at high fatigue.** Overstated
+     "R1 wipes everything" from G0-4 corrected — see
+     CORRECTIONS #5.
+   - Anchor: `outputs/sm1/design0/g0_4c_manifest.json`,
+     `g0_4c_instrument_cert.py`.
+
+  **G0-4d — corrected baseline + ledger close.**
+   - LEDGER CLOSE (Tier A verbatim, 7276 fighter-rounds):
+     max |residual| = 0.000000, mean 0.000000, over-0.01 count 0.
+     **GATE PASS.** `_init_round` hook captures fi:620-624
+     penalty + fi:600/610 corner writes and updates round-open
+     to post-adjustment stamina. Ledger equation `(open−close)
+     = (Σspend_eff − Σrecover)` holds to zero on every row.
+   - Ran corrected population (via G0-4d Item 2 in-harness
+     rerun, N=2100, wall=46.3s per `g0_4d_out.txt`; standalone
+     `tierA_corrected_run.py` produced the CSVs at 57.2s wall).
+     Ledger also closes to zero on corrected run. Outputs at
+     `outputs/sm1/design0/tierA_corrected/`.
+   - 2a per-fighter assemble_ss (corrected): 16 at 100.00, 4 in
+     [85, 90) (00090425, 074cd4d1, 85f73bf3, a218b4d7), 0 below
+     85. Matches world_init.py:2548-2555 arithmetic.
+   - 2b CSS P3 side-by-side (corrected vs W2 post-fix). Δ per
+     cell all ≤ ±1.4pp:
+     | bin | ΔR1 | ΔR2 | ΔR3 |
+     |---|---:|---:|---:|
+     | HH | +0.69 | +1.38 | +0.61 |
+     | HL | +0.47 | −0.39 | −0.39 |
+     | LH | +0.56 | +0.41 | +0.76 |
+     | LL | −0.40 | −1.17 | −0.24 |
+     **W2's P3 trajectory numbers are directionally trustworthy
+     at aggregate; magnitude bias from the WC bug is <1.5pp per
+     cell.** Individual fight outcomes differ on 168 fights
+     (7.5%), but aggregate absorbed the bias.
+   - 2c certified ledger table (corrected population, all
+     residuals ≈ 0 to two decimals):
+     HH R1: open 100.00, close 22.50, drain 77.50
+            = strike 64.01 + grapple 27.97 + body 1.14
+            + KD 2.60 + other 7.35 (spend total 103.07)
+            − regen 25.58 = 77.49 ≈ drain 77.50 ✓
+     HL R1: open 100.00, close 35.25, drain 64.75
+            = strike 57.23 + grapple 19.30 + body 1.27
+            + KD 3.44 + other 7.69 (spend total 88.93)
+            − regen 24.18 = 64.75 = drain 64.75 ✓
+     LH R1: open 100.00, close 25.04, drain 74.96 ✓
+     LL R1: open 99.80, close 57.59, drain 42.21 ✓
+     **Regen column ≈ 22-26 pts/round from breath recovery
+     (+0.5/exchange × ~45-52 exchanges).**
+     LL R1/R2 also carry a small `penalty` column of 0.20
+     from the cut fighter 00090425's fi:620-624 fires (see
+     G0-2 Item E arithmetic).
+   - 2d HH vs HL cut-0 R1 with 2SE:
+     * HH cut-0 R1 drain: 78.76 ±2.39, n=870
+     * HL cut-0 R1 drain: 70.88 ±2.84, n=768
+     * **Δ (HH − HL) = +7.87 ±3.71 (2SE)** — statistically
+       significant (|Δ| > 2SE)
+     Channel decomposition of +7.87 total-drain gap:
+     strike +1.99, **grapple +6.72**, body +0.10, KD −0.59,
+     other +0.50. **Grapple channel carries 85% of the
+     HH>HL drain gap.** HH fighters grapple more per R1
+     (28.02 vs 21.30 pts) — likely correlated wrestling stats
+     in the HH bin, not a pure cardio effect.
+   - 2e method distribution corrected vs Tier A per pairing
+     (details in output). Aggregate 92.5% winner agree, 79.9%
+     method — same as G0-4c(c), same population difference.
+   - Anchor: `outputs/sm1/design0/g0_4d_manifest.json`,
+     `g0_4d_corrected_baseline.py`.
+
+  **G0-2 — cardio consumer map + insertion-point coverage +
+   clone-and-vary pilot + LL penalty arithmetic + run(c) identity.**
+   - Cardio consumers grep across fe.py + fi.py + gb.py: FIVE
+     fight-time live consumers, plus one field def and one OVR-
+     derived non-fight-time consumer:
+     1. fe:1384 `pressure_score = (cardio+heart+chin)/3` in
+        detect_fighter_style — STYLE CLASSIFIER (fight-time)
+     2. fe:1453 Clinch Fighter gate
+        `if clinch_score ≥ 65 AND cardio ≥ 68 AND wrestling ≥ 58`
+        — STYLE CLASSIFIER (fight-time)
+     3. fe:2073-2084 late-round `_cardio_gap` multiplier applied
+        uniformly to strike/grapple/sub weights — ACTION-SELECT
+        (fight-time, int-truncation effective per Gate 0(c) Step
+        1c live probe: +7.08pp starved-stamina cell)
+     4. fe:2173 IQ body-targeting bonus
+        `if fight_iq > 60 AND target == body AND opponent.cardio > 70`
+        — STRIKE-SELECT (fight-time)
+     5. gb:17064 cut penalty cardio offset
+        `_cardio_offset = (cardio - 50) / 200` — STARTING-STAMINA
+        (pre-fight, cut-gated)
+     Zero .cardio attribute reads in fight_integration.py at
+     fight time. **Cardio is NOT a direct input to spend_stamina,
+     recover_stamina, new_round refill, STRIKE_PROPERTIES costs,
+     or any drain formula.**
+   - Insertion-point coverage for a hypothetical future cardio-
+     into-drain wire (coverage only, no recommendation):
+     * (i) fe:611 `def spend_stamina` — CHOKE POINT, covers
+       ALL 13 spend_stamina call sites (6 fe + 7 fi enumerated
+       in `g0_2_out.txt`)
+     * (ii) fi:1291 strike-cost only — covers 1 of 13 sites (7.7%);
+       leaves grapple/body/KD/TD/sub/rocked untouched
+     * (iii) fi:1651-52 breath recover — 4 recover sites; NOT a
+       spend site (modifies +0.5/exch regen, not drain)
+   - Clone-and-vary pilot (donor 012d6319, cardio 30/50/70/90,
+     N=200 per level, vs fixed all-75 balanced opponent, certified
+     ledger residual 0.0 on every level):
+     | cardio | nR1 | R1 open | R1 close ±2SE | R1 drain |
+     |---:|---:|---:|---:|---:|
+     | 30 | 184 | 100.00 | 5.78 ±2.30 | 94.22 |
+     | 50 | 183 | 100.00 | 4.64 ±1.81 | 95.36 |
+     | 70 | 169 | 100.00 | 3.25 ±1.62 | 96.75 |
+     | 90 | 176 | 100.00 | 2.96 ±1.43 | 97.04 |
+     **PILOT IS FLOOR-SATURATED.** Every cardio level closes R1
+     at 3-6 out of 100. A drain of 94-97 means "everything the
+     fighter had." Differences between levels are inside the
+     clip zone and are NOT a mechanism slope. The 2.82pp
+     range across cardio 30→90 is a clip-zone artifact, not a
+     measured slope. **The pilot proves the instrument RUNS
+     (residual 0.0 everywhere); it does NOT prove it
+     DISCRIMINATES, because nothing in the current engine can
+     move a fighter off the floor.** Design headline number:
+     **an elite-cardio (91) elite-recovery (85) fighter vs a
+     mediocre opponent who goes the distance is empty after
+     R1.** Gate 1 fix: report first-zero call index + requested
+     drain per level alongside close — those keep discriminating
+     when close cannot.
+   - LL R1 penalty arithmetic (fix): 0.20 pt/round in G0-4d
+     Item 2c comes from LL cut fighter 00090425 whose
+     assemble_ss=85.71 → fi._fatigue_to_penalty(85.71) returns
+     1.0 (s≥78 branch fires). Cut fighter appears in ~20% of
+     LL R1 slot-events (1 of 5 LL fighters × pairing schedule),
+     so mean per LL R1 event = 0.20 × 1.0 = 0.20 pt. Matches
+     observed exactly.
+   - run(c) identity: G0-4c run(c) ≡ G0-4d Item 2 ≡
+     tierA_corrected_run.py. All three use identical builder,
+     fight-dict weight_class, seed scheme, and pairing
+     schedule; wrappers (CSS pv15 + certified ledger) are
+     RNG-neutral per G0-4c Item 1 bisect. Same 2100 fights,
+     byte-identical outcomes, differ only in captured
+     instrumentation.
+   - Anchor: `outputs/sm1/design0/g0_2_manifest.json`,
+     `g0_2_cardio_map_and_pilot.py`.
+
+  ═══════════════════════════════════════════════════════════════════
+  ## CORRECTIONS
+
+  Standing wrong-numbers rule applied: original text preserved
+  at each cited filing; correction annotates. Anchors given by
+  grep-locatable identifier rather than line number to survive
+  file drift.
+
+  **CORRECTION #1 — G0-1 Channel 1 verdict is refined.**
+   - Original claim (grep anchor: "G0-1 Channel 1 verdict"):
+     "CHANNEL 1 (starting_stamina from fatigue): WIRED (15/15
+     samples match condition module)."
+   - Where filed: G0-1 report + inherited into any downstream
+     analysis that treated fatigue starting-stamina as
+     outcome-affecting.
+   - Corrected: WIRED at construction (fi:503-515 post-C8
+     RECOVERY-WIRE1 assigns starting_stamina to condition-
+     computed value), but VALUE DISCARDED by unconditional R1
+     new_round refill IF `assemble_ss + 15 + recovery*0.25 ≥
+     100`. Dead for high-recovery fighters at any fatigue; LIVE
+     with deficits 5-17pts for low-to-mid-recovery fighters at
+     high fatigue.
+   - Retired-not-deleted: "WIRED (15/15 samples match)" was a
+     correct CONSTRUCTION-layer measurement — kept as such.
+     The OUTCOME-layer inference from that measurement is what
+     the correction refines.
+   - Anchor: G0-4b Item 1 probe; G0-4c Item 4 5-fighter
+     recovery spread.
+
+  **CORRECTION #2 — G0-1b population cut-severity histogram.**
+   - Original claim (grep anchor: "cut-severity dist" G0-1b):
+     "cut ON aggregate mean 89.48; 25/290 at floor 60 exactly;
+     severity dist {0:178, 1:35, 2:26, 3:34, 4:17}"; bimodal
+     histogram with 178 at [100-105), 50 at [60-65), etc.
+   - Where filed: G0-1b manifest + report + any downstream
+     analysis citing 8.6% at floor / 17.6% severity ≥ 3.
+   - Corrected: cut ON mean 99.15; 0/290 at floor 60; severity
+     dist {0: 270, 1: 20, 2+: 0}.
+   - **Attribution (stated plainly):**
+     `gate1_tierA_run.py`'s `_make_real_fighter` (the source-of-
+     truth for the Tier A / W2 / C7 / C8 population) set
+     `f.weight_class = fdata.get("weight_class", "Lightweight")`
+     — but `fighter_data` doesn't carry `weight_class` (it lives
+     on `FighterRecord`). All fighters in that run defaulted to
+     "Lightweight". `pv15._make_fight_const` reinforced the same
+     default in the fight dict. **Tier A came first (C7);
+     G0-1b's harness inherited the same pattern from the Tier A
+     harness, and G0-1b's phantom severity 2/3/4 fighters are
+     the downstream signature of that inherited pattern applied
+     to the whole 290-fighter anchor population.**
+   - Retired-not-deleted: G0-1b histogram is preserved as a
+     correct measurement of the buggy population. The claim
+     "severity 3+ covers 17.6% of the population" is
+     population-artifact, not world_init output.
+   - Anchor: G0-1c Rider; G0-4c Item 4.
+
+  **CORRECTION #3 — C7 P3 population framing.**
+   - Original claim (grep anchor: `**P3 target-trajectory table**
+     (report §3)` — verified at CLAUDE.md's C7 filing block,
+     currently ~L4890): pre-RECOVERY-WIRE1 P3 table:
+     HH R1-end 13.4±27.5 (n=891); HL R1-end 26.1±38.6 (n=812);
+     LH R1-end 19.1±33.2 (n=864); LL R1-end 24.9±36.2 (n=360).
+   - Where filed: CLAUDE.md C7 filing under
+     "**STAMINA-MODEL1 — Gate 1 CLOSED + G1F findings + Q4d
+     premise correction [SHIPPED 2026-08-30 as C7 docs
+     checkpoint]**".
+   - Corrected framing (not corrected numbers): numbers are
+     true measurements of the run's population, but that
+     population was produced by `gate1_tierA_run.py`'s
+     `_make_real_fighter` (Lightweight-default WC bug) +
+     `pv15._make_fight_const` (WC always "Lightweight" in fight
+     dict). Cut fighter classification and per-fighter cut
+     penalties were computed against a Lightweight-defaulted
+     population for the whole 20-pool. Direction of HH<HL
+     inversion SURVIVES on the corrected population; aggregate
+     magnitudes differ by ≤1.4pp per cell (measured G0-4d
+     Item 2b Δ table).
+   - Retired-not-deleted: the C7 P3 numbers themselves are
+     retained as-filed; they measure a population accurately.
+     The framing "trajectories with production wiring" is what
+     the correction refines to "trajectories with production
+     wiring under the `_make_real_fighter` + `_make_fight_const`
+     Lightweight-default pattern documented in CORRECTION #2."
+   - Anchor: G0-4d Item 2b Δ table; G0-4c Item 1 bisect proving
+     wrapper-neutrality + attribution to builder/entry-dict.
+
+  **CORRECTION #4 — C8 W2 before/after P3 population framing.**
+   - Original claim (grep anchor: `**P3 target-trajectory table
+     (post-fix)**` — verified at CLAUDE.md's C8 filing block,
+     currently ~L5185): post-RECOVERY-WIRE1 P3 table:
+     HH R1-end 14.9±29.3 (n=894); HL R1-end 26.8±39.0 (n=814);
+     LH R1-end 18.5±32.6 (n=861); LL R1-end 24.6±35.6 (n=360).
+     Δ (POST − PRE) table also filed (HL R3-end +2.94, etc.).
+   - Where filed: CLAUDE.md C8 filing under
+     "**STAMINA-MODEL1 — RECOVERY-WIRE1 fix + fixture
+     re-baseline [SHIPPED 2026-08-30 as C8 code+docs commit]**".
+   - Corrected framing: before/after deltas are correct
+     measurements of the RECOVERY-WIRE1 code change; the
+     population reference frame is the SAME Tier A population
+     produced by `_make_real_fighter` + `_make_fight_const`
+     (per CORRECTION #2 attribution). Same-population delta
+     remains valid; absolute post-fix trajectory numbers carry
+     the same WC-default population bias as C7's pre-fix numbers.
+   - Retired-not-deleted: C8 W2 numbers stand as before/after
+     evidence of RECOVERY-WIRE1 effect on the shared population.
+   - Anchor: G0-4d Item 2b Δ table (corrected vs W2 post-fix,
+     |Δ| ≤ 1.4pp per cell).
+
+  **CORRECTION #5 — G0-4 / G0-4b "R1 refill wipes cut/fatigue
+   to 100 for everyone" is overstated.**
+   - Original claim (grep anchor: G0-4 Item 4b "cut penalty is
+     functionally dead"): R1 new_round refill always brings
+     stamina to 100, making cut and fatigue starting-stamina
+     penalties dormant at fight time.
+   - Where filed: G0-4 Item 4b conclusion + G0-4b Item 1
+     interpretation.
+   - Corrected: R1 refill formula = `min(100, assemble_ss + 15
+     + recovery/100 × 25)`. TRUE for fresh-world fighters and
+     any fighter whose refill overshoots 100. FALSE for
+     exhausted low/mid-recovery fighters. Rec 33 exhausted →
+     deficit 17pt. Rec 60 exhausted → deficit 5pt.
+   - Retired-not-deleted: original claim is correct for the
+     pool fighters G0-4 measured (all fatigue=0). Overstates
+     universality.
+   - Anchor: G0-4c Item 4 5-fighter recovery spread table.
+
+  **CORRECTION #6 — G0-4 site sum > total_drain accounting bug.**
+   - Original claim (grep anchor: G0-4 Item 2 "sum-of-channels
+     residual"): per-fighter-round site sums exceed total drain
+     by ~35-100pt; attributed to "wasted drain against floor."
+   - Where filed: G0-4 Item 2 discussion.
+   - Corrected: two accounting bugs stacked:
+     (a) In-round `recover_stamina(+0.5)` breath regen (fi:1651-52)
+         NOT tracked — injects 22-27 pts per round;
+     (b) master site accumulator included drain from rounds
+         without close capture (rounds that ended the fight);
+         n_events denominator excluded those events → per-event
+         mean inflated.
+     G0-4c wrapped recover; G0-4d hooked _init_round and
+     restricted master to fighter-rounds with both endpoints.
+     Residual gate PASS at 0.000000 in G0-4d Item 1.
+   - Retired-not-deleted: G0-4 "wasted drain" framing is a
+     valid measurement of REQUESTED drain vs ACTUAL drain
+     (with the +27pt regen and event-count bias baked in).
+   - Anchor: G0-4d Item 1 gate result.
+
+  **CORRECTION #7 — G0-4 fight count 2280 vs Tier A 2100.**
+   - Original claim: G0-4 loop reported "total fights: 2280".
+   - Corrected: 2,100 fights via Tier A's verbatim seed scheme
+     (`pairs[fight_idx % len(pairs)]` cycling). Extra 180
+     came from G0-4's alternative pair-first seed distribution.
+     G0-4b (and all downstream harnesses) use verbatim scheme
+     for 2,100 count matching Tier A.
+   - Anchor: G0-4b Item 3 count reconciliation; G0-4c Item 1.
+
+  **CORRECTION #8 — G0-4b "wrappers cause 8% drift" attribution.**
+   - Original claim (grep anchor: G0-4b Item 3 "wrappers
+     introduce measurable outcome drift"): wrapper run vs Tier
+     A showed 92% winner agreement; attributed partially to
+     wrappers, partially to P10 config mismatch.
+   - Where filed: G0-4b Item 3 discussion.
+   - Corrected: WRAPPERS ARE RNG-NEUTRAL. G0-4c bisect: (a)
+     verbatim builder+entry, wrappers OFF → 100% agreement;
+     (b) verbatim builder+entry, wrappers ON → 100% agreement;
+     (c) corrected builder + hardcoded fight dict, wrappers ON
+     → 92.5%. The 8% drift comes ENTIRELY from builder/entry
+     difference (corrected `weight_class` from FighterRecord;
+     hardcoded fight-dict `weight_class` differs from
+     `pv15._make_fight_const`'s always-Lightweight).
+   - Retired-not-deleted: G0-4b's 92% number is a real
+     measurement of run(c)-shape vs Tier A; the attribution
+     framing is what corrects.
+   - Anchor: G0-4c Item 1 bisect summary.
+
+  **CORRECTION #9 — G0-1 "penalty-4 branch unreachable" claim.**
+   - Original claim (grep anchor: G0-1 Item 5 verdict text —
+     "unreachable"): fi:432 `return 4.0` branch is unreachable
+     because condition.get_starting_stamina floors at 65 (never
+     produces s < 65).
+   - Where filed: G0-1 report Item 5 conclusion + inherited into
+     G0-1 manifest.
+   - Corrected: **reachable via cut floor 60.** `gb:17066`'s
+     `max(60, ...)` clamp can produce starting_stamina = 60 for
+     cut fighters; fi:432 `if s >= 65: return 2.0` fails at
+     s=60, so `return 4.0` fires. G0-1c Item 5 measured
+     `fi._fatigue_to_penalty(60.0) = 4.0`.
+   - Dormancy scope refined: **dormant at fatigue=0** because
+     all 20 anchor cut fighters have assemble_ss ≥ 85 (G0-1c
+     pool table + G0-4d Item 2a) → fi:427-434 lands in the
+     `s ≥ 78 → return 1.0` branch, never the `return 4.0`
+     branch. **REACHABLE in live play for cut+exhausted
+     fighters:** a severity-1 fighter at high fatigue whose
+     condition-derived assemble = 65 further reduced by
+     ~12pt cut → floor 60 → fi:432 fires → penalty = 4/round.
+     Not exercised in world_init T0 (all fighters fatigue=0),
+     LIVE post-fights-accumulate-fatigue for the cut subset.
+   - Retired-not-deleted: "unreachable" was source-read reasoning
+     that ignored the cut channel — falsified by direct
+     measurement in G0-1c/G0-4c.
+   - Anchor: G0-1c Item 5 (measurement); G0-4d Item 2a (all 20
+     cut fighters ≥ 85 assemble evidence).
+
+  **CORRECTION #10 — C7 P1 composition explanation.**
+   - Original claim (grep anchor: `**P1 disposition RESTATED —
+     CONFOUNDED-UNRESOLVED (was: refuted by Gate 1 §5).**` —
+     verified at CLAUDE.md's C7 filing block, currently ~L4934):
+     "The measured HH−HL slope delta (+0.34 pts/exchange in R1)
+     originates in strike-selection confounds — HH fighters'
+     higher kicks (+15.8) and clinch_striking (+12.4) and
+     fight_iq (+14.2) shift their action distribution toward
+     different strike TYPES with different `props[2]` costs."
+   - Where filed: CLAUDE.md C7 filing under P1 disposition
+     restatement.
+   - Correction (annotation, not deletion): G0-3 measured
+     mean per-strike cost in HH cut-0 R1 slice at 4.81 vs HL
+     cut-0 R1 at 4.93 — essentially equal, both bins throw a
+     similar per-attempt cost mix. G0-4d Item 2d then located
+     85% of the HH>HL total-drain gap (+6.72 of +7.87) in
+     **grapple VOLUME**, not strike-type composition. Grapple
+     and sub-failed sites drain fixed 5/3/6 pts respectively at
+     fi:1426 (grapple attempt +5) / fi:1428 (grapple failed
+     extra +3) / fi:1496 (sub failed +6) — no skill input; HH
+     fighters attempt more grapples per R1 (28.02 vs 21.30 pts).
+   - Retired-not-deleted: C7 P1's "strike-type composition
+     explanation" stands as a hypothesis for a small residual
+     component. The dominant channel (85% of the gap) is
+     measured to be grapple volume, not strike composition. C7
+     P1's `props[2]` cost-mix hypothesis is measured-insufficient
+     as the primary mechanism.
+   - Anchor: G0-3 (mean_cost per bin/slice); G0-4d Item 2d
+     (channel decomposition).
+
+  **CORRECTION #11 — G0-1c HH−HL cut-0 re-slice population
+   annotation.**
+   - Original claim (this filing, MEASUREMENTS/G0-1c bullet):
+     the −11.88 (ALL slice) and −9.01 (CUT-0 slice) R1-end
+     inversion figures.
+   - Where filed: G0-1c report Item 2 + inherited framing.
+   - Correction: those figures were computed by re-slicing the
+     PRE-CORRECTION Tier A landing CSVs at `gate1_tierA/`
+     (produced by `gate1_tierA_run.py` under the WC-default
+     builder). The "cut-0" filter used `_make_correct_fighter`'s
+     natural/wc classification, but the FIGHTS themselves were
+     the WC-default-population runs. Cut classification and
+     underlying sim outcomes are from two different populations
+     for that measurement.
+   - Corrected version: G0-4d Item 2d computes HH cut-0 R1
+     drain 78.76 ±2.39 vs HL cut-0 R1 drain 70.88 ±2.84 →
+     **Δ = +7.87 ±3.71 (2SE)** on the CERTIFIED corrected
+     population. Direction survives; the total-drain axis (not
+     the CSS-last_ss axis of G0-1c) is the certified basis.
+   - Retired-not-deleted: G0-1c's numbers stand as evidence the
+     HH<HL inversion is present under a mixed-population filter;
+     the certified magnitude is G0-4d Item 2d.
+   - Anchor: G0-4d Item 2d.
+
+  ═══════════════════════════════════════════════════════════════════
+  ## DESIGN INPUTS (facts only, no recommendations)
+
+  Numbers arithmetic-consistent within each row. Every figure
+  cites the manifest that produced it.
+
+  **1. TANK-VS-BILL ARITHMETIC (corrected population, ledger
+  residual 0.000000; source: g0_4d_manifest.json for effective,
+  g0_4b_manifest.json for requested).**
+   - R1 income = 100.0 (fresh start; refill formula caps at 100
+     for pool fighters at fatigue=0).
+   - R1 in-round regen (breath +0.5/exch): **22-26 pts** across
+     bins (EFFECTIVE, ledger-captured).
+   - R1 spend REQUESTED (all channels sum, uncapped by floor;
+     source: G0-4b Item 2 uncapped ledger): **175-215 pts**
+     across HH/HL/LH bins depending on cell; LL requested ~88
+     (fewer actions).
+   - R1 spend EFFECTIVE (post-floor, ledger-captured; source:
+     G0-4d Item 2c): **88.9-104.5 pts** across HH/HL/LH bins;
+     LL effective ~63.
+   - REQUESTED − EFFECTIVE gap ≈ 86-110 pts per fighter-round
+     for HH/HL/LH R1 → the engine's action-select formula wants
+     to drain 2-2.4× more than the fighter has to give. That gap
+     is "wasted drain" against `fe:611-612`'s `max(0, ...)` floor.
+   - R1 net drain (open − close): 42-77.5 depending on bin.
+   - Endpoint identity holds: **open − close = spend_effective −
+     recover, per fighter-round, to zero.** (Requested does NOT
+     appear in the identity because floor-clipped calls don't
+     move stamina.)
+
+  **2. ZERO-FLOOR CENSUS (corrected population; source:
+  g0_4d_manifest.json).**
+   | bin | R | nEv | n_zero | frac | median call at first-zero |
+   |---|---:|---:|---:|---:|---:|
+   | HH | 1 | 1079 | 747 | 69.2% | 23 |
+   | HH | 2 | 760 | 569 | 74.9% | 10 |
+   | HL | 1 | 963 | 524 | 54.4% | 23 |
+   | HL | 2 | 817 | 508 | 62.2% | 9 |
+   | LH | 1 | 945 | 627 | 66.3% | 24 |
+   | LH | 2 | 760 | 573 | 75.4% | 8 |
+   | LL | 1 | 959 | 236 | 24.6% | 25 |
+   | LL | 2 | 825 | 325 | 39.4% | 8 |
+   By R2, ≥60% of HH/HL/LH fighter-rounds spend the last ~46
+   exchanges at stamina=0. LL fighters throw less, drain
+   less, hit floor less. Clamp at fe:611-612 `max(0, ...)`.
+
+  **3. THREE STAMINA CHANNELS. CARDIO IN NONE.**
+   - DRAIN channel: 13 `spend_stamina(...)` call sites (6 fe
+     + 7 fi enumerated in g0_2_out.txt Item C). All route
+     through fe:611 `def spend_stamina`. Amounts are literals
+     (2-12 per strike via STRIKE_PROPERTIES[k][2]; fixed
+     3-8 for grapple/sub/KD/TD; damage×0.4 for body-shot;
+     aggression multiplier [0.85, 1.15] dormant when
+     gameplan=BALANCED). **No cardio input at any drain site.**
+   - BETWEEN-ROUND channel: fe:614-631 `def new_round`.
+     Formula: `stamina = min(100, stamina + 15 + recovery/100
+     × 25)` with ×1.3 championship bonus at round ≥ 4. **Reads
+     recovery, not cardio.**
+   - IN-ROUND REGEN channel: fi:1651-1652
+     `recover_stamina(0.5)` both fighters, unconditional
+     per-exchange. **Flat 0.5 constant; no cardio input.**
+
+  **4. R1 REFILL RECOVERY-GATED ERASURE (source: g0_4c manifest,
+  5-fighter table).**
+   | fatigue | recovery | assemble_ss | R1_open | deficit |
+   |---:|---:|---:|---:|---:|
+   | 100 | 33 | 60.00 | 83.25 | 16.75 |
+   | 100 | 60 | 65.00 | 95.00 | 5.00 |
+   | 100 | 85 | 65.00 | 100.00 | 0.00 |
+   | 100 | 94 | 65.00 | 100.00 | 0.00 |
+   Any fatigue-cut deficit gets erased when `assemble_ss + 15 +
+   recovery×0.25 ≥ 100`. Rec ≥ 80 → always erased regardless of
+   starting deficit. Rec ≤ 50 → deficit persists.
+
+  **5. CUT / FATIGUE FUNCTIONAL STATUS.**
+   - CUT (gb:17064 offset formula): FIRES pre-fight; produces
+     4-14pt starting-stamina reduction on ~7% of world_init
+     population (20/290 anchor, all severity=1). **Always erased
+     at R1 for cut-only fighters (fatigue=0) under current
+     world_init output:** world_init.py:2548-2555 produces
+     severity ≤ 1, so cut-only assemble_ss ≥ ~86 (severity 1
+     max ~14pt reduction on age-adjusted formula). Minimum
+     refill = 15 + recovery×0.25 = 15 + 8.25 = 23.25 (at rec 33,
+     the floor recovery in the world-gen distribution). 86 +
+     23.25 = 109.25 > 100 → clamp fires → R1 open = 100 for
+     every cut-only fighter regardless of recovery. **CUT IS
+     LIVE ONLY STACKED ON FATIGUE:** a cut+fatigued fighter
+     whose assemble_ss lands below `100 − 15 − recovery×0.25`
+     carries a deficit at R1 open. Not exercised in world_init
+     T0 (all fighters fatigue=0).
+   - FATIGUE (condition.get_starting_stamina): DORMANT in
+     fresh worlds — every AI at fatigue=0. LIVE mechanism
+     available: post-fight fatigue accumulation would produce
+     R1 deficits per the recovery-gated table (DESIGN INPUTS #4)
+     for low-to-mid-recovery fighters. Not exercised in
+     world_init T0.
+   - fi:427-434 inline `_fatigue_to_penalty` fires 0-4pt
+     subtraction at every _init_round when
+     `_fatigue_penalty_f{1,2}` is set. Half-strength vs
+     condition module's intended table (READY 0 vs cond 1,
+     TIRED 1 vs cond 2, EXHAUSTED 2 vs cond 4). LIVE effect
+     magnitude: ≤4pt per round per fighter for cut/fatigued
+     fighters at assemble_ss<95.
+
+  **6. GRAPPLE SHARE OF THE HH−HL R1 DRAIN GAP (source:
+  g0_4d Item 2d, corrected population).**
+   - HH cut-0 R1 drain: 78.76 ±2.39 (2SE), n=870
+   - HL cut-0 R1 drain: 70.88 ±2.84 (2SE), n=768
+   - Δ (HH − HL) = +7.87 ±3.71 (statistically significant,
+     |Δ| > 2SE)
+   - Channel decomposition of +7.87 gap:
+     * strike: +1.99
+     * **grapple: +6.72 (85% of the gap)**
+     * body: +0.10
+     * KD: −0.59
+     * other: +0.50
+   HH fighters grapple more per R1 (28.02 vs 21.30 pts),
+   correlated with high wrestling stats in HH-bin construction.
+   A drain-side fix touching only strike cost would leave 85%
+   of the gap intact.
+
+  **7. FIVE CARDIO CONSUMERS AT FIGHT TIME (source:
+  g0_2_manifest.json).**
+   1. fe:1384 pressure_score = (cardio+heart+chin)/3 — style
+      classifier
+   2. fe:1453 Clinch Fighter gate (cardio ≥ 68 required) —
+      style classifier
+   3. fe:2073-2084 late-round cardio_gap multiplier applied
+      uniformly to strike/grapple/sub weights — action-select
+      (int-truncation effective; +7.08pp starved-stamina cell
+      per Gate 0(c) Step 1c)
+   4. fe:2173 IQ body-target bonus (opponent.cardio > 70) —
+      strike-select
+   5. gb:17064 cut penalty cardio offset — pre-fight,
+      cut-gated
+   None of the 5 reach a `spend_stamina`, `recover_stamina`, or
+   `new_round` call.
+
+  **8. PILOT FLOOR-SATURATION NOTE.**
+   Cardio 30/50/70/90 pilot (donor 012d6319, N=200/level, ledger
+   residual 0.0) produced R1 close of 5.78 / 4.64 / 3.25 / 2.96
+   respectively. All four levels sit inside the [0, ~6] clip
+   zone at fe:611-612's `max(0, ...)` floor. The 2.82pp
+   apparent range is NOT a slope — it's what remains uncrossed
+   in the clip zone. **Instrument runs (residual 0.0);
+   instrument does NOT discriminate cardio effects today because
+   no engine channel can move a fighter off the floor.** Gate 1
+   fix: report first-zero call index + requested drain per level
+   alongside close — those keep discriminating in the clip zone.
+   **Design headline from the pilot: an elite-cardio (91) elite-
+   recovery (85) fighter vs a mediocre opponent who goes the
+   distance is empty after one round.**
+
+  ═══════════════════════════════════════════════════════════════════
+  ## QUEUE
+
+  **R1-REFILL1** — single-purpose fix arc. **Defect:** fi:592
+  `new_round()` fires at R1 entry unconditionally (per G0-4b
+  Item 1 source read + measured triple 100/88/65 → all post-
+  new_round 100). The construction-layer wiring of
+  starting_stamina (fi:503-515) is discarded at R1 for any
+  fighter whose refill overshoots 100. Per G0-4c Item 4, this
+  erases cut penalty and any fatigue deficit up to `100 − 15 −
+  recovery×0.25`. **Before-baseline:** G0-4c Item 4 five-fighter
+  recovery-spread table (rec 33/60/85/85/94, fatigue=100,
+  deficit 16.75/5.00/0.00/3.75/0.00 respectively) is the anchor
+  post-fix regressions verify against. **Mechanism deferred to
+  spec:** cap-refill-at-starting_stamina, skip-refill-at-R1,
+  gate-refill-on-current_round>1, and other candidates are all
+  distinct fixes with different side effects. Not chosen here.
+  Ship discipline: single-purpose commit, own gate (rerun G0-4c
+  Item 4 probe post-fix and confirm the deficit column moves per
+  whichever mechanism the ratified spec adopts).
+
+  **Design Gate 1 instrument** — clone-and-vary as in G0-2 Item
+  D, with the following required additions per the floor-
+  saturation finding:
+   1. Report `first_zero_call_index` per cardio level (median,
+      p25, p75). Keeps discriminating when close is clipped.
+   2. Report `requested_drain` sum per cardio level (uncapped
+      by floor). Cardio-into-drain wire will move requested
+      drain before it moves close.
+   3. Report `regen_total` per cardio level. If regen channel is
+      chosen, it moves regen; if drain channel is chosen, it
+      leaves regen constant.
+   4. STYLE-PIN INSPECTION (see below): confirm whether the
+      engine supports pinning fighting_style to bypass
+      detect_fighter_style. If not, Gate 1 must control for
+      style-classifier confounds via holding all inputs to
+      pressure_score + clinch_score + cardio thresholds constant
+      alongside cardio itself.
+
+  **STYLE-PIN CHECK — answered by source read + measured pair.**
+   Source (fe:1372-1503):
+   - `detect_fighter_style` at fe:1372 reads `fighter.fighting_style`
+     at fe:1394-1414 as `_hint` via `_HINT_MAP`.
+   - `_hint` is used ONLY at fe:1501-1502 as a LAST-RESORT
+     fallback (`if _hint: return _hint`) that fires ONLY when
+     no primary check (fe:1416-1478) AND no secondary check
+     (fe:1482-1497) fires.
+   - Primary/secondary checks are pure stat-threshold gates —
+     they do NOT consult fighter.fighting_style.
+   Measured pair (this checkpoint):
+   - Strong-wrestler fighter (takedowns=80, top_control=75,
+     others=60):
+     * fighting_style=None       → detect returns "wrestler"
+     * fighting_style=BJJ_SPECIALIST → detect returns "wrestler"
+     * fighting_style=MUAY_THAI  → detect returns "wrestler"
+     Hint IGNORED when stats trigger.
+   - Weak fighter (all attributes=55):
+     * fighting_style=None       → detect returns "balanced"
+     * fighting_style=BJJ_SPECIALIST → detect returns "bjj"
+     Hint FIRES only in the fallback case.
+   Verdict: **fighting_style CANNOT PIN style at fight-time.**
+   Setting the attribute only routes borderline fighters (those
+   who miss every threshold) to a specific fallback. Any
+   Gate 1 clone-and-vary that sweeps cardio across the
+   fe:1453 threshold (cardio ≥ 68) will produce a style-tag
+   flip regardless of the fighting_style attribute. The style
+   confound cannot be pinned via the existing engine API.
+   Alternatives for Gate 1: (a) hold cardio in a range that
+   doesn't cross fe:1453 (e.g. sweep 30-65 only, or 68-99 only),
+   (b) hold clinch_score OR wrestling_score below the Clinch
+   Fighter gate's threshold to prevent triggering regardless of
+   cardio, (c) accept the style-classifier confound and control
+   for it via post-run style-tag inspection (extra column in
+   the ledger). Not part of Gate 0 scope.
+
+  ═══════════════════════════════════════════════════════════════════
+
+  Gate 0 CLOSED as measurement pass. Design phase begins at
+  Van's ruling; **design decisions pending Van's rulings; nothing
+  in this filing is a lever decision.** The CLAUDE.md filing is
+  measurement + corrections + design inputs. Lever decisions
+  (drain-side yes/no, insertion point, R1-REFILL1 mechanism,
+  regen policy, floor policy, deploy queue) live in the ship
+  filings that follow this checkpoint.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
