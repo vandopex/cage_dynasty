@@ -5492,8 +5492,8 @@ regardless of any slot bias. Verdicts:
    - Anchor: `outputs/sm1/design0/g0_3_manifest.json`,
      `g0_3_drain_decomposition.py`.
    - **Anchor note:** G0-3's report body cited fi:1417/1419/1487,
-     fi:948, fi:986 for grapple/body/KD spend sites — pre-shift
-     line numbers from an earlier bytes snapshot. Every subsequent
+     fi:948, fi:986 for grapple/body/KD spend sites — origin
+     unknown; wrong. Every subsequent
      filing in this gate (G0-4 onward, including this checkpoint)
      uses current-HEAD anchors verified at `0ca052c`: fi:1426
      (grapple attempt +5), fi:1428 (grapple failed +3), fi:1496
@@ -6328,6 +6328,201 @@ regardless of any slot bias. Verdicts:
   propagation to fire correctly in pre-gen. Gates W1-W7 declared in
   the R1-REFILL1 spec. Commit A ships alone first per Van's
   ratification.
+
+- **R1-REFILL1 [SHIPPED 2026-08-31 as C11 engine+docs commit;
+  single-purpose fix, Van-ratified spec + mechanism confirmation;
+  second of two commits landing R1-REFILL1 (Commit A = PREGEN-ROUND-
+  WIRE1 = C10 precedes)].**
+
+  Fixes the R1 refill-at-fight-start defect diagnosed at Gate 0
+  D1/D2/G0-4b Item 1: `FighterState.new_round` at fe:614-639
+  unconditionally refilled stamina every round including R1, erasing
+  condition-derived starting_stamina (cut penalty, fatigue). Fix
+  wraps the refill block in `if getattr(self, '_current_round', 0)
+  != 1:` guard. All other side effects (KD reset, is_knocked_down
+  clear, health regen, is_rocked clear, rock_duration reset) fire
+  unguarded every round. `!= 1` chosen over `>= 2` so any caller
+  that doesn't propagate `_current_round` (default 0) still triggers
+  the refill — protects against future unwrapped call sites.
+
+  **DIFF (single tracked file, `cage_dynasty_web/fight_engine.py`):**
+  +13/−8 exactly as declared pre-edit.
+
+  ```
+  @@ -621,14 +621,19 @@ class FighterState:
+           # Bonus: scales 0-25 with recovery stat (was 0-10)
+           # Elite (90+) gets back ~40 stamina between rounds;
+           # poor (40-) gets back ~18.
+  -        base_recovery = 15
+  -        _rec = self.recovery_rating
+  -        bonus_recovery = (_rec / 100) * 25
+  -        # Championship round bonus — adrenaline in late rounds
+  -        if getattr(self, '_current_round', 0) >= 4:
+  -            bonus_recovery *= 1.3
+  -        self.stamina = min(100,
+  -            self.stamina + base_recovery + bonus_recovery)
+  +        # R1-REFILL1: skip refill at R1 to preserve condition-derived
+  +        # starting_stamina (cut/fatigue). `!= 1` means unset
+  +        # _current_round (default 0) still refills — protects any
+  +        # caller that doesn't propagate round explicitly.
+  +        if getattr(self, '_current_round', 0) != 1:
+  +            base_recovery = 15
+  +            _rec = self.recovery_rating
+  +            bonus_recovery = (_rec / 100) * 25
+  +            # Championship round bonus — adrenaline in late rounds
+  +            if getattr(self, '_current_round', 0) >= 4:
+  +                bonus_recovery *= 1.3
+  +            self.stamina = min(100,
+  +                self.stamina + base_recovery + bonus_recovery)
+  ```
+
+  **GATES W1-W7 (all MEASURED, artifacts under
+  `outputs/sm1/r1refill1/`).**
+
+  - **W1 origin** — PASS.
+    * W1a: 5-fighter recovery-spread table at fatigue=100. Live-path
+      assemble_ss pattern **60/65/65/60/65** (cut fighters 00090425
+      and 85f73bf3 clamp to 60 via gb:17066 `max(60, ...)` floor;
+      non-cut land at 65 per condition table exhausted bucket).
+      R1_open == assemble_ss for all five (deficit=0.00 across all).
+      Compare G0-4c Item 4 pre-fix table (deficits 16.75, 5.00,
+      0.00, 3.75, 0.00 respectively) — that erasure gap is closed.
+      W4 (pre-gen path) reads 65 for all five including the cut
+      fighters because fe.simulate_fight applies no cut penalty
+      (Gate 0 Item 4a: zero cut-related hits in fight_engine.py) —
+      pre-gen/live-play cut split remains a known filing.
+    * W1b: anchor world `gate1_mw_1_1788106887` at fatigue=0, 290
+      fighters probed: 270 non-cut open at 100.00, 20 cut open at
+      their assemble_ss (85-89). Zero deviations.
+  - **W2 equivalence (split)** — **NO-CUT PASS**, cut drift expected.
+    2100-fight Tier A-corrected schedule (same pool, same seeds)
+    post-fix vs `outputs/sm1/design0/tierA_corrected/` pre-fix
+    baseline:
+    * **NO cut in either slot (n=1308): 1308/1308 winner AND 1308/
+      1308 method identical.** STOP condition satisfied.
+    * ≥1 cut in slot (n=792): 677/792 winner (85.5%), 472/792
+      method (59.6%). 115 winner-flips, 320 method-flips. Drift
+      EXPECTED — cut fighters now enter R1 at their assemble_ss.
+    * Cut-fighter R1 open/close from ledger (post-fix means), with
+      84.71 explanation:
+      | fid | nR1 | R1 open | R1 close | assemble_ss | fi:427-434 penalty |
+      |---|---:|---:|---:|---:|---:|
+      | 00090425 | 193 | **84.71** | 57.89 | 85.71 | **1.0 (s≥78)** |
+      | 074cd4d1 | 215 | 88.66 | 27.15 | 88.66 | 0.0 (s≥88) |
+      | 85f73bf3 | 195 | 88.75 | 57.41 | 88.75 | 0.0 (s≥88) |
+      | a218b4d7 | 191 | 89.39 | 38.43 | 89.39 | 0.0 (s≥88) |
+      The 84.71 vs 85.71 gap on 00090425: ledger captures R1 open
+      POST fi:620-624 penalty subtraction. 00090425's assemble_ss =
+      85.71 → `fi._fatigue_to_penalty(85.71)` returns 1.0 (falls
+      into `s ≥ 78` branch, since 85.71 < 88). 85.71 − 1.0 = 84.71.
+      Other three: assemble_ss ≥ 88 → penalty 0 → open = assemble
+      exactly.
+      **Pre-fix direct evidence: G0-4 Item 4b** showed every slice's
+      R1 open mean = 100.00 INCLUDING the CUT slice — cut fighters
+      entered R1 at 100 pre-fix. Post-fix: 84.71-89.39.
+    * **Cut-fighter direction (per-fighter + aggregate, 792 cut
+      fights):**
+      | fid | fights | Δwin% | ΔKO/TKO-loss% |
+      |---|---:|---:|---:|
+      | 00090425 | 200 | +1.5pp | −2.5pp |
+      | 074cd4d1 | 240 | −1.7pp | +1.2pp |
+      | 85f73bf3 | 200 | +2.0pp | −3.0pp |
+      | a218b4d7 | 200 | −1.0pp | +4.0pp |
+      Aggregate (all 4 pooled cut-side, 840 fighter-fights, 48
+      double-counted from cross-cell both-cut pairings):
+      **Δwin% = +0.1pp**, **ΔKO/TKO-loss% = +0.0pp**. **No systemic
+      direction observed on the current 4-fighter pool** (all sev=1,
+      ages 27-32, recovery 33-88). Individual variance ±3pp reads
+      as seed-cascade noise. Broader-population direction claim
+      deferred.
+  - **W3 fixture** — PASS. All 7 v1.5 arms N=2000, pv15's own
+    `_hash_outcome_rows` + `_hash_normalized_rows`. All 7 raw +
+    7 norm hashes match C8 baseline byte-for-byte. Probe sha256
+    unchanged: `3ca1f644828c1277f7118229f2438235c6ead51a2e81431a8e08ed0669b88a52`.
+    Fixture fighters have `weight_class == natural_weight_class`
+    (Lightweight both) and fatigue=0 → assemble_ss = 100 → refill
+    formula produces `min(100, 100 + 15 + rec*0.25) = 100` with
+    or without the R1 skip. Wall 228.6s. Used pv15's own hashers
+    per A5 lesson.
+  - **W4 pre-gen** — PASS. 5-fighter recovery-spread via
+    `fe.simulate_fight`, fatigue=100: R1_open == assemble_ss
+    (65.00) for all 5. Pre-gen path now honors starting_stamina
+    at R1 open. Depends on Commit A's `_current_round`
+    propagation in FightState.new_round.
+  - **W5 ledger** — PASS. 7,204 fighter-rounds captured on W2
+    rerun; max |residual| = 7.1e-14 (floating-point noise);
+    mean = 0.
+  - **W6 tree** — PASS. `git diff --stat`: 1 file changed
+    (`cage_dynasty_web/fight_engine.py`), 13 insertions, 8
+    deletions. Porcelain otherwise `??` only.
+  - **W7 pre-gen 103 exposure** — measured.
+    * R1 open (post-refill-guard): **103.00** (matches fe:4023-4043
+      peak-condition branch for fatigue ≤ 10).
+    * Max stamina at any event in R1: **103.00** (only the initial
+      new_round_post value; every subsequent touch either reduces
+      it or triggers the clamp).
+    * **Does fe:3813/3814 recover_stamina fire in pre-gen? YES
+      (measured, 55 calls per fight for the W7 donor).** Line-
+      anchor note: this is the same code G0-2 called "fe:3805/3806";
+      Commits A (+3 lines around fe:774) + B (+5 net lines around
+      fe:614) shifted subsequent lines by +8. G0-2's "dead on
+      live-play" claim (fi bypasses fe.simulate_exchange) is
+      unchanged; the site DOES fire in pre-gen.
+    * **Exposure window:** bounded to the interval between R1
+      open and the first spend_stamina or recover_stamina call
+      on the pre-gen path, whichever fires first. Typically a
+      single-exchange window per fighter per fight for pre-gen
+      fatigue-≤10 fighters.
+    * Consumer census (grep-verified pre-W7, unchanged post-W7):
+      * Category A (`min(100, ·)` clamps at fe:609, fe:630, fi:600,
+        fi:610): SAFE, clamp 103 → 100 on first fire.
+      * Category B (`stamina / 100` factors at 11 sites: fe:2112,
+        2366, 2367, 2470, 2684, 2685, 3001, 3002, 3081, 3100,
+        3121): 1-3% lift for exchanges before first clamp. Time-
+        bounded by the exposure window above.
+      * Category D (strict `> 100` or `== 100` branches): NONE. No
+        crash path.
+    * **PREGEN-PEAK103 remains queued as follow-up** — 4 candidate
+      fixes (i-iv) named in prior spec, chosen in its own arc.
+      W7 measurement above is the before-baseline that fix will
+      be gated against.
+
+  **CONSEQUENCES FILED (not gated).**
+  1. **Cut-fighter R1 stamina is now visible in-fight for the first
+     time.** 4 fighters in the current pool with severity=1 enter
+     R1 at ~85-89 (their assemble_ss) instead of 100. Cut penalty
+     is now a live outcome-affecting mechanism instead of a
+     construction-only stat.
+  2. **Fatigue channel is now LIVE for any fighter with
+     `assemble_ss < 100 − 15 − recovery×0.25`.** In world_init T0,
+     all fighters have fatigue=0 → no deficit. As post-fight fatigue
+     accumulates, low-recovery fighters develop R1 deficits per
+     G0-4c Item 4 arithmetic. **Whether fatigue actually accumulates
+     in live play across weeks is an open owed measurement**, not
+     investigated in this arc. Filed for the next stamina-arc
+     ship.
+  3. **Live-play championship ×1.3 R4/R5 was already correctly
+     wired** (fi:590-591 sets `_current_round`). C10 closed the
+     pre-gen leg. This commit doesn't affect either.
+  4. **Floor-interaction: C9 CORRECTION #9's "reachable via cut
+     floor 60, dormant at fatigue=0" branch is now LIVE for the
+     cut+exhausted subset.** An exhausted cut fighter's assemble_ss
+     clamps to 60 at gb:17066 (`max(60, ...)`); post-B, R1 opens
+     at 60 (no more refill overshoot); fi:620-624 immediately
+     subtracts fi:427-434's penalty per its inline table, and
+     `fi._fatigue_to_penalty(60.0) = 4.0` (falls into the `else:
+     return 4.0` branch, s<65). R1 open post-init_round = 56 for
+     that subset. Not observed in current world_init T0 (all
+     fighters fatigue=0 → no exhausted cut fighters in the anchor
+     pool), but the exact fighter class C9 CORRECTION #9 predicted
+     would activate is now measurable the moment any fighter
+     accumulates enough fatigue while carrying a cut.
+
+  **QUEUE.** PREGEN-PEAK103 (single-purpose follow-up, own spec
+  per prior message). Fatigue-accumulation-in-live-play measurement
+  (owed, unscheduled). Design phase for cardio-into-drain resumes
+  post-C11 per Van's rulings.
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

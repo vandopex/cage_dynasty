@@ -621,14 +621,19 @@ class FighterState:
         # Bonus: scales 0-25 with recovery stat (was 0-10)
         # Elite (90+) gets back ~40 stamina between rounds;
         # poor (40-) gets back ~18.
-        base_recovery = 15
-        _rec = self.recovery_rating
-        bonus_recovery = (_rec / 100) * 25
-        # Championship round bonus — adrenaline in late rounds
-        if getattr(self, '_current_round', 0) >= 4:
-            bonus_recovery *= 1.3
-        self.stamina = min(100,
-            self.stamina + base_recovery + bonus_recovery)
+        # R1-REFILL1: skip refill at R1 to preserve condition-derived
+        # starting_stamina (cut/fatigue). `!= 1` means unset
+        # _current_round (default 0) still refills — protects any
+        # caller that doesn't propagate round explicitly.
+        if getattr(self, '_current_round', 0) != 1:
+            base_recovery = 15
+            _rec = self.recovery_rating
+            bonus_recovery = (_rec / 100) * 25
+            # Championship round bonus — adrenaline in late rounds
+            if getattr(self, '_current_round', 0) >= 4:
+                bonus_recovery *= 1.3
+            self.stamina = min(100,
+                self.stamina + base_recovery + bonus_recovery)
 
         # Health recovery: up to 8 points (was 5).
         health_regain = self.recovery_rating * 0.08
