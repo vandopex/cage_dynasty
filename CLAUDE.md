@@ -6228,6 +6228,107 @@ regardless of any slot bias. Verdicts:
   regen policy, floor policy, deploy queue) live in the ship
   filings that follow this checkpoint.
 
+- **PREGEN-ROUND-WIRE1 [SHIPPED 2026-08-31 as C10 engine+docs commit;
+  single-purpose fix, Van-ratified spec + mechanism confirmation;
+  first of two commits landing R1-REFILL1 (Commit B follows)].**
+
+  Fixes the pre-gen missing-propagation defect diagnosed at Gate 0
+  D3/D5: `fe.simulate_fight` at fe:4111 calls `fight_state.new_round()`
+  which at fe:769-782 calls `self.fighter1.new_round() /
+  self.fighter2.new_round()` — but `_current_round` was NEVER set on
+  those FighterState objects in the pre-gen path (unset across 6
+  events in D3 probe; probe read −1 via its own `getattr` fallback,
+  engine fallback at fe:628 evaluates 0). Live-play (fi._init_round)
+  sets `_current_round` correctly before its new_round calls; pre-gen
+  didn't. Fix adds 2 propagation lines + 1 comment in
+  `FightState.new_round`.
+
+  **DIFF (single tracked file, `cage_dynasty_web/fight_engine.py`):**
+  +3/−0 exactly as declared pre-edit.
+
+  ```
+  @@ -774,6 +774,9 @@ class FightState:
+           self.ground_inactivity = 0
+           self.dominant_control_duration = 0
+           self.submission_active = False
+  +        # PREGEN-ROUND-WIRE1: propagate round to fighters (live path sets this in fi._init_round)
+  +        self.fighter1._current_round = self.current_round
+  +        self.fighter2._current_round = self.current_round
+           self.fighter1.new_round()
+           self.fighter2.new_round()
+  ```
+
+  **MECHANISM.** In `FightState.new_round`, set
+  `fighter1._current_round = self.current_round` and same for
+  `fighter2` immediately before their `new_round()` calls. That is
+  the only change. All other side effects preserved. Live-play path
+  (fi._init_round) unchanged — it bypasses FightState.new_round per
+  D5 caller census and continues to set `_current_round` at
+  fi:590-591 as before. CLI parallel copy `systems/fight_engine.py`
+  (dead-in-runtime per PREGEN-FULL-ENGINE-FIX1 sys.path shim) not
+  touched.
+
+  **GATES A1-A6 (all MEASURED, artifacts under
+  `outputs/sm1/r1refill1/`).**
+
+  - **A1 propagation lands** — PASS. Original A1 seed=2000 ended R4
+    KO (each fighter saw sequence 1..4, missed R5 in the championship-
+    bonus domain). A1 rerun with seed=1003 (first sweep hit that
+    goes 5R Unanimous Decision post-fix; D5's original seed=1000
+    now ends R4 TKO post-fix due to championship-bonus outcome drift)
+    observed the full 1..5 sequence for each fighter across 10
+    events. R4 F1 (rec 85) refill = +42.62 (matches 15+85/100*25*1.3);
+    R5 F2 (rec 70) refill = +37.75 (matches 15+70/100*25*1.3).
+    Both ×1.3 activations directly measured.
+  - **A2 pre-gen 3R identical** — PASS. N=200 pre-gen 3R fights,
+    same seeds base=3000, before/after: **200/200 winner AND method
+    identical.** Championship-bonus `>= 4` gate never fires in 3R,
+    so refill formula produces byte-identical output regardless of
+    propagation.
+  - **A3 pre-gen 5R drift expected** — measured. N=200 pre-gen 5R
+    fights, same seeds base=5000: 177/200 winner match (23 flipped),
+    140/200 method match (60 flipped). Refill delta measurement on
+    seed=4000 shows R4 F1 (rec 85) refill went from +36.25 to +42.62
+    post-fix (+6.37 pt championship ×1.3 activation). Cascades into
+    subsequent action-select/landing/damage formulas → outcome drift.
+    **EXPECTED — this is the pre-gen championship-bonus dormancy
+    closing.** Same C7 P2 family (pre-gen/live-play physics split).
+  - **A4 Tier A-corrected live 100% identical** — PASS. 2100 fights
+    via Tier A-corrected schedule (pool from
+    `gate1_step3_pool_manifest_R2.json`, seed scheme verbatim per
+    gate1_tierA_run.py), before/after: **2100/2100 winner AND method
+    identical.** Wall: before 40.2s, after 40.2s. Mechanically
+    guaranteed — fi._init_round bypasses FightState.new_round.
+  - **A5 7 fixture hashes vs C8 baseline** — PASS. All 7 raw + norm
+    hashes byte-match filed C8 baseline. First-run failed because cc
+    invented a custom hasher instead of using pv15's
+    `_hash_outcome_rows` / `_hash_normalized_rows`; A5 redo used
+    pv15's own functions and all 7 arms matched. Instrument-artifact
+    caught pre-report. First-run output preserved at
+    `commitA_gates_out.txt`; certified result at
+    `commitA_gate_A5_redo_out.txt`.
+  - **A6 tree** — PASS. `git diff --stat`: 1 file changed
+    (`cage_dynasty_web/fight_engine.py`), 3 insertions, 0 deletions.
+    Porcelain otherwise `??` only (untracked outputs).
+
+  **CHAMPIONSHIP-BONUS DORMANCY CLOSED (side effect, filed).** The
+  fe:628 branch `if getattr(self, '_current_round', 0) >= 4:
+  bonus_recovery *= 1.3` has been dormant in pre-gen since inception:
+  `_current_round` was never set on FighterState in the fe path, so
+  the getattr fallback returned 0, always failing the `>= 4` gate.
+  Post-Commit-A, pre-gen R4/R5 refills activate the ×1.3 bonus (F1
+  rec 85: 36.25 → 42.62 per round; F2 rec 70 already clamps to 100).
+  Same class as C7 P2 (RECOVERY-WIRE1's pre-gen/live-play split);
+  this closes the ×1.3 half. Live-play was already correct via
+  fi:590-591.
+
+  **QUEUE.** Commit B (R1-REFILL1) is next — wraps
+  `FighterState.new_round`'s stamina refill block in `if getattr(self,
+  '_current_round', 0) != 1:` guard. Depends on this commit's
+  propagation to fire correctly in pre-gen. Gates W1-W7 declared in
+  the R1-REFILL1 spec. Commit A ships alone first per Van's
+  ratification.
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

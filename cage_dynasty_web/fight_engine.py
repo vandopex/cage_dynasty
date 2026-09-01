@@ -774,6 +774,9 @@ class FightState:
         self.ground_inactivity = 0
         self.dominant_control_duration = 0
         self.submission_active = False
+        # PREGEN-ROUND-WIRE1: propagate round to fighters (live path sets this in fi._init_round)
+        self.fighter1._current_round = self.current_round
+        self.fighter2._current_round = self.current_round
         self.fighter1.new_round()
         self.fighter2.new_round()
     
