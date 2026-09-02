@@ -513,6 +513,7 @@ class NarratedFightSimulator:
             health=100.0 + self.fighter1.chin * 0.5,
             stamina=self.starting_stamina_f1,
             recovery_rating=self.fighter1.recovery,
+            cardio_rating=self.fighter1.cardio,
         )
 
         self.fighter2_state = FighterState(
@@ -521,6 +522,7 @@ class NarratedFightSimulator:
             health=100.0 + self.fighter2.chin * 0.5,
             stamina=self.starting_stamina_f2,
             recovery_rating=self.fighter2.recovery,
+            cardio_rating=self.fighter2.cardio,
         )
         
         # Create fight state

@@ -541,6 +541,13 @@ class BodyPartDamage:
         }
 
 
+# STAMINA-DRAIN1: drain-side knobs on FighterState.spend_stamina.
+# effective = amount * DRAIN_SCALE_K * (1 + DRAIN_CARDIO_S * (60 - cardio_rating) / 40)
+# B9 (2026-09-01, Van signal 2): K=0.6, S=0.5.
+DRAIN_SCALE_K   = 0.6
+DRAIN_CARDIO_S  = 0.5
+
+
 @dataclass
 class FighterState:
     """Complete state of a fighter during the fight"""
@@ -563,7 +570,10 @@ class FighterState:
     
     # Recovery attribute (stored for between-round calculations)
     recovery_rating: int = 50
-    
+    # STAMINA-DRAIN1: cardio at fight time — used by spend_stamina.
+    # Default 60 = neutral (g=1 at any S). Callers pass fighter.cardio.
+    cardio_rating: int = 60
+
     def apply_damage(self, amount: float, target: str = "head") -> Tuple[bool, bool]:
         """Apply damage and return (is_knockdown, is_finish)."""
         self.damage.apply_damage(amount, target)
@@ -609,7 +619,11 @@ class FighterState:
         self.stamina = min(100, self.stamina + amount)
     
     def spend_stamina(self, amount: float) -> None:
-        self.stamina = max(0, self.stamina - amount)
+        # STAMINA-DRAIN1: K + cardio-spread multiplier at the choke.
+        # Identity at K=1.0, S=0.0 → effective = amount (byte-identical).
+        effective = amount * DRAIN_SCALE_K * (
+            1 + DRAIN_CARDIO_S * (60 - self.cardio_rating) / 40)
+        self.stamina = max(0, self.stamina - effective)
     
     def new_round(self) -> None:
         """Between-round recovery using recovery attribute."""
@@ -4070,7 +4084,8 @@ def simulate_fight(
         health=f1_max_health,
         max_health=f1_max_health,
         stamina=f1_starting_stamina,
-        recovery_rating=fighter1.recovery
+        recovery_rating=fighter1.recovery,
+        cardio_rating=fighter1.cardio,
     )
     f2_state = FighterState(
         fighter_id=fighter2.fighter_id,
@@ -4078,7 +4093,8 @@ def simulate_fight(
         health=f2_max_health,
         max_health=f2_max_health,
         stamina=f2_starting_stamina,
-        recovery_rating=fighter2.recovery
+        recovery_rating=fighter2.recovery,
+        cardio_rating=fighter2.cardio,
     )
     
     fight_state = FightState(fighter1=f1_state, fighter2=f2_state)
