@@ -6523,6 +6523,346 @@ regardless of any slot bias. Verdicts:
   (owed, unscheduled). Design phase for cardio-into-drain resumes
   post-C11 per Van's rulings.
 
+- **STAMINA-DRAIN1 [SHIPPED as C12 engine + C13 docs, split commits,
+      2026-09-01. C12 ships the FULL cardio-scaled drain wire — the
+      `cardio_rating` field on `FighterState`, the multiplier body in
+      `spend_stamina`, four constructor kwargs at `fe.simulate_fight`
+      and `fi.NarratedFightSimulator._init_fight`, and the module-level
+      constants `DRAIN_SCALE_K=0.6, DRAIN_CARDIO_S=0.5`. NOTHING from
+      Gate 1a was ever committed; the identity-value working-tree edit
+      that sat in the tree from Gate 1a through Gate 1c is part of this
+      C12 ship, at B9-ratified constants.]**
+
+  Fixes the flat drain physics diagnosed across STAMINA-MODEL1 Gate 0 →
+  Design Gate 0 → Design Gate 1a/1b/1c. B7 donor pool + POP-POOL1
+  stratified sample + tierA_corrected_c11 re-vintage established the
+  measurement surface; Gate 1b frontier + B8-a discrimination-criterion
+  amendment + Gate 1c file-constants certification chose (K=0.6, S=0.5)
+  from the K∈{0.5,0.6,0.7,0.8,1.0}×S∈{0.3,0.5,0.7} bounded search.
+
+  **Design ratifications (B1-B9 arc, each dated separately):**
+  - **Signal 1 (scope), 2026-09-01** — spec + B2 (defender-side scaling
+    KEPT) ratified together as the original scope of STAMINA-DRAIN1.
+  - **B7 (2026-09-01)** — donor recipe substitution heart=50, chin=50
+    (mid-Gate-1a rulingafter the original heart=60/chin=60 recipe
+    tripped the style-tag gate at cardio=90 pressure_fighter boundary).
+  - **B8 (2026-09-01)** — frontier rerun scope on POP-POOL1 after the
+    cardio-distribution measurement discovered Tier A pool cardio-
+    skewed +18pp vs world-gen population median.
+  - **B8-a (2026-09-01)** — discrimination-criterion amendment
+    (majority R1 fighter-rounds hit floor, median R1 close = floor)
+    after POP-POOL1 at IDENTITY missed Van's Gate-0-shape band by
+    0.02pp — the band was a Tier-A-pool statistic, not a world constant.
+  - **Signal 2 (constants), 2026-09-01 (= B9)** — K=0.6, S=0.5 chosen
+    from the POP-POOL1 frontier report over K=0.5/S=0.5 because T3
+    (population health) is the load-bearing gate; T1 partial pass at
+    K=0.6/S=0.5 (R1 39.8 passes, R3 14.3 fails, owed to lever two).
+
+  **DIFF (two tracked engine files, whole-arc vs C11 = R1-REFILL1 at
+  HEAD `71e94de`):** `cage_dynasty_web/fight_engine.py` +20/−4,
+  `cage_dynasty_web/fight_integration.py` +2/−0. Shape:
+
+  - **Module-level Hunk A** (`fe.py` above the FighterState class): two
+    new constants `DRAIN_SCALE_K = 0.6` and `DRAIN_CARDIO_S = 0.5`
+    with the equation comment naming the multiplier.
+  - **`FighterState` field** (`fe.py`): new `cardio_rating: int = 60`
+    (default 60 → g=1 at any S → fail-open, class default matches
+    C11's `!= 1` pattern for `_current_round`).
+  - **`FighterState.spend_stamina` body** (`fe.py`): the multiplier
+    itself — `effective = amount * DRAIN_SCALE_K * (1 + DRAIN_CARDIO_S
+    * (60 - cardio_rating) / 40)` then `self.stamina = max(0,
+    self.stamina - effective)`. The `max(0, ...)` floor semantics are
+    unchanged; only the amount is scaled.
+  - **Constructor kwargs, four sites**: `fe.simulate_fight` at
+    fe:4084-4085 and fe:4093-4094 (`f1_state`, `f2_state`);
+    `fi.NarratedFightSimulator._init_fight` at fi:513 and fi:522
+    (`fighter1_state`, `fighter2_state`). Each passes
+    `cardio_rating=fighter{1,2}.cardio` alongside C11's
+    `recovery_rating=fighter{1,2}.recovery`.
+
+  The Gate 1a working-tree edit (which held identity constants K=1.0,
+  S=0.0) never landed as its own commit — the whole wire ships here
+  at B9 constants. The two numeric literals below are the only pieces
+  whose values were re-chosen between Gate 1a's identity and C12's
+  ship:
+
+  ```
+  + DRAIN_SCALE_K   = 0.6
+  + DRAIN_CARDIO_S  = 0.5
+  ```
+
+  **MECHANISM.** `fe.FighterState.spend_stamina(amount)` (fe:619-624)
+  applies `effective = amount * DRAIN_SCALE_K * (1 + DRAIN_CARDIO_S *
+  (60 - cardio_rating) / 40)`. At K=0.6, S=0.5: cardio=60 fighter
+  drains at 0.6× nominal; cardio=30 at 0.6 * 1.375 = 0.825× nominal;
+  cardio=90 at 0.6 * 0.625 = 0.375× nominal. Cardio-90/cardio-30
+  per-spend ratio = 0.455 (elite drains at 45% of poor's rate).
+  Attacker-side spend sites use payer's own cardio_rating; defender-
+  side (body-shot, KD-tax, TD-impact, rocked-drain, being-submitted;
+  5 of 13 sites) use defender's cardio_rating per B2 ruling. All
+  plain-global reads at call time; sweep by attribute rebind for
+  future work (setattr-live proven Gate 1a Step 3(a) at Δ = 0.00e+00).
+
+  **GATES (all MEASURED, artifacts under `outputs/sm1/stamina_drain1/gate_1c/`):**
+
+  - **3a file-vs-setattr parity** (source: `3a_pop_pool1_outcomes.csv`
+    vs `gate_1b/pop_pool1/cell_K0.6_S0.5/outcomes.csv`):
+    1225/1225 winner + method + round IDENTICAL on POP-POOL1
+    round-robin. File constants reproduce the setattr grid cell
+    exactly. Ledger residual max 1.28e-13.
+  - **3b tierA_corrected_c11 2100 after-run** (source: `3b_tierA_c11_after.csv`,
+    `3b_per_bin_stats.csv`, `3b_method_dist_per_pairing.csv`):
+    ledger residual 9.95e-14. Per-bin close (median R1/R2/R3) reported
+    vs Van's Q5 T4 reference; T4 REPORTED not gated per scope. Method
+    dist per pairing: DEC in-band (|Δ|≤5pp vs c11 baseline) = 2/11;
+    9 pairings drop 20-54pp DEC toward finishes (Q6 direction inverted,
+    accepted-open per B9).
+  - **3c fresh T1 at file-constants** (source: `3c_clone_T1.csv`):
+    T1_R1 = 39.87 (passes ≥25). T1_R3 = 14.12 — **NOT ESTABLISHED**:
+    the R3 sample is selection-thinned (striking-cardio-90 R3_n=3,
+    because high-cardio strikers finish fights before R3 under drain-
+    active physics) and grappling-cardio-90 closes R3 at floor 0.50
+    despite the 0.375× per-spend drain factor — a flat-regen
+    cumulative-cost ceiling: even a light-drain fighter accumulates
+    enough total spend over 3 rounds to reach the floor when the
+    per-exchange +0.5 recovery doesn't scale with cardio. **Re-measure
+    T1_R3 after lever two ships** (in-round regen at fi:1651-52 is the
+    cardio-owned recovery channel Q1 named; scaling that with cardio
+    restores headroom above the floor at R3). The T1_R3 miss at file-
+    constants matches the grid measurement (grid 14.31, file 14.12)
+    and is not a Gate 1c defect — it's a joint constraint on the
+    drain lever alone that lever two is designed to relieve.
+    B7 donors (heart=50, chin=50), cardio 30 vs 90, N=200 each.
+  - **4 fixture re-baseline** (source: `4_fixture_hashes.csv`):
+    7/7 raw + 7/7 norm hashes BROKE as expected; zero arms unchanged
+    (no red flag). Old C11 baseline retired-not-deleted at
+    CLAUDE.md:5274-5282. **pv15 probe file edited alongside fe** to
+    update `REUSED_HASH_TARGETS` and `REUSED_NORM_HASH_TARGETS` to
+    the new B9 baseline; probe sha256 transition MEASURED:
+      - PRE-C12 (C11 baseline, RETIRED): `3ca1f644828c1277f7118229f2438235c6ead51a2e81431a8e08ed0669b88a52`
+      - POST-C12 (B9 baseline, CERTIFIED): `62d05b560954838816fe3e9e6fcbad0bd9d7274b10d52f9ba4d75e428fb0a517`
+
+    **New B9 fixture baseline (certified 2026-09-01):**
+
+    | arm | new raw md5 | new norm md5 |
+    |---|---|---|
+    | L-J1 | `da069edf204e80e9d4f3ad1a17b61d9b` | `d179ae234eeb159a6a18995db129d01e` |
+    | L-B88 | `2fe2dc05d8001d8f784974236e4e3142` | `d3119dd87a9b2bb221c2209a25593694` |
+    | L-K74 | `bf90f37e02759fc5d6f26131c8dd59e5` | `ec3d2d278fe6b2d8dc642b27d61d65c6` |
+    | L-K78 | `2a174ca9678d1d22c9a48c32dce319be` | `596618a7c535cbb9fa6a5f97817651da` |
+    | L-K88 | `269d0a1317ea8813ce34892ca6d7b8bf` | `adfde80199982e80236fedf8eb26ec3f` |
+    | L-C88 | `6fc46439b6f9885ebc1bcda541906d02` | `565b8de33307dcfba6daebfe774d2a9b` |
+    | F | `c4059b6c5b4c56e22860ca9db47aa188` | `1be7dae543bccc14ca725781735e6ea7` |
+
+    **Old C11 baseline retired here (not deleted from CLAUDE.md's C8
+    filing at :5274-5282):**
+
+    | arm | old raw md5 (retired) | old norm md5 (retired) |
+    |---|---|---|
+    | L-J1 | `02b9a62ea1a581da43cda0074a3c36f7` | `9271a4e60a35247ba0613b10dd715382` |
+    | L-B88 | `b421b5c01534d8f1013b8fdf4f4d97be` | `483cd4dea135b6ce7753d2977669036d` |
+    | L-K74 | `4dae6c6be0f100763cde137d6cffef1b` | `e31e79d9546dcf77330a67496b1afc14` |
+    | L-K78 | `52387566b8d2d29fb1e85e1aa4de0985` | `9532ce8cc061de1ddc106a65709e3b4a` |
+    | L-K88 | `547966e1913ecd2a32bf8d1b5ee15412` | `c025febdf78d3e81429cc671f05a3ac3` |
+    | L-C88 | `041dae4ffc41d431ab6b97c1b66fcdec` | `065172df2b40face63d839a73392c03e` |
+    | F | `00f41d144dea015f675b177725f20c41` | `d74f66f5d1c33927fbc2d17d0c1e2fd5` |
+
+  - **5 pre-gen parity + REVEALED-not-created verdict** (source:
+    `gate_1c/5_pregen_parity.csv` + `gate_1c/two_engine_verify.py`).
+    Same clone pair (striking c=70 vs all-60, seed 999, 3R), donor R1:
+
+    | config | engine | requested drain | actual drain | req−act | open→close |
+    |---|---|---:|---:|---:|---|
+    | IDENTITY (K=1.0, S=0.0) | live | 121.00 | 121.00 | 0.00 | 100 → 5.5 |
+    | IDENTITY (K=1.0, S=0.0) | pre-gen | 183.00 | 129.00 | 54.00 | 103 → 0.5 |
+    | B9 (K=0.6, S=0.5) | live | 81.90 | 81.90 | 0.00 | 100 → 44.6 |
+    | B9 (K=0.6, S=0.5) | pre-gen | 117.08 | 117.07 | 0.00 | 103 → 11.0 |
+
+    Proportional REQUESTED gap (pre-gen − live) / live:
+      - IDENTITY: **51.2%**
+      - B9: **43.0%**
+
+    Proportional ACTUAL gap:
+      - IDENTITY: 6.6% (floor clipping absorbed 54pt of pre-gen's excess
+        request into equal-actual on both engines)
+      - B9: 43.0% (no clipping — both engines' actual == requested)
+
+    **VERDICT — REVEALED, not created.** The engines always disagreed
+    on requested drain by ~43-51%. At IDENTITY, live's requested drain
+    (121) fits inside the tank plus regen; pre-gen's (183) overshoots,
+    and the fe:611-612 `max(0, ...)` floor clip discards 54pt as waste
+    — smoothing both engines down to nearly-equal actual drain. Under
+    B9, K=0.6 × g(70)=0.875 = 0.525× per-spend factor keeps both
+    fighters well above the floor at R1 end; no clipping fires; the
+    latent requested-drain divergence surfaces at the actual layer for
+    the first time. Ledger CLOSES independently on each path (both
+    residuals ~1e-13). Drain physics correct per path; the divergence
+    is upstream in the engines' action-selection loops. Filed as a
+    RIDER to the TWO-ENGINE CONSOLIDATION arc at CLAUDE.md:691-711
+    (which had measured finish-rate divergence, not drain divergence
+    under a shared dial) — the widening was pre-existing under drain
+    physics, hidden by universal flooring; B9 didn't create it.
+  - **6 C11 cut-direction re-run** (source: `6_cut_direction.csv`;
+    792 cut fights from tierA_c11 baseline schedule):
+    Cut fighters aggregate: Δwin = +0.6pp (essentially flat);
+    **ΔKO/TKO-loss = +7.9pp** (26.8% → 34.6%). Per fighter, biggest
+    ΔKO/TKO-loss jump: 85f73bf3 (HL cardio 65) at +16.0pp. Direction
+    MEASURED — cut fighters lose the same amount but lose worse
+    (more knockouts, fewer decisions). C11's "cut penalty is
+    functionally dead" reading (already refined at C7 for high-recovery
+    cases) is now falsified at the outcome layer for the low/mid-cardio
+    cut subset under drain-active physics.
+
+  **CONSEQUENCES FILED WITH THE SHIP:**
+
+  1. **DEC/violence shift is population-wide.** POP-POOL1 identity 52%
+     DEC → K=0.6/S=0.5 28.6% (Gate 1b frontier, N=1225). tierA_c11
+     drops 20-54pp DEC on 9/11 pairings (Gate 1c 3b, N=2100). Q6
+     predicted "more decisions from fresher fighters (defends-better
+     dominant)"; measured direction inverted ("more finishes,
+     presses-better dominant"). B9 accepts-open. **PA violence-shift
+     monitoring owed post-deploy**: watch the DFC N per-week fight
+     summary (📊 terminal diagnostic) for KO+TKO+SUB share vs decision
+     share; if the shift is game-feel-negative in live play, a
+     subsequent design ship (lever-two regen tuning, or a
+     compensating dial elsewhere) is the response, not a rollback of
+     B9's drain physics.
+  2. **T2 partially met; remainder assigned to lever two.** K=0.6/S=0.5
+     delivers T2_R1 35.5% (target <25%, misses by 10.5pp) and T2_R2
+     48.1% (target <40%, misses by 8.1pp) on POP-POOL1 (Gate 1b
+     frontier). B9 rules the remainder goes to Q1's in-round regen
+     (fi:1651-52), not to bending T2's thresholds. STAMINA-DRAIN1
+     delivers the drain half; a future lever-two ship delivers the
+     recovery half.
+  3. **T1_R3 not established at file-constants; owed to lever-two
+     re-measurement.** T1_R3 = 14.12 (grid 14.31 within rounding),
+     below the 20 target. Two joint constraints: (a) the R3 sample
+     thins under drain-active physics for high-cardio strikers who
+     finish fights before R3 (striking-90 R3_n=3 on N=200), and
+     (b) a flat-regen cumulative-cost ceiling exists — grappling-90
+     closes R3 at 0.50 despite drain at 0.375× nominal, because the
+     per-exchange +0.5 recovery (fi:1651-52) doesn't scale with cardio
+     and the fighter accumulates enough spend across R1-R3 to floor
+     regardless of per-hit efficiency. Both constraints relieve when
+     lever two scales in-round recovery with cardio. Re-measure T1_R3
+     post-lever-two.
+  4. **PEAK103 exposure widens slightly** at K=0.6 vs K=1.0. First
+     pre-gen `spend_stamina` call drains less (K=0.6), leaving the
+     103.0 starting stamina exposed to Category B (`stamina/100`
+     consumer) lift for a slightly longer window before the first
+     `recover_stamina` call at fe:3813/3814 clamps to 100. Still
+     bounded by first regen; still exists only for the pre-gen
+     fatigue≤10 "peak condition" branch at fe:4023-4043. Filed for
+     potential PREGEN-PEAK103 arc; NOT blocking B9 commit.
+  5. **tierA_corrected_c11 baseline retired on B9 deploy.** New post-B9
+     baseline generation owed (C8 pattern). MC ODDS invariants +
+     Stage 0d `_assert_sanctioned_config` allowlist may need re-check
+     against B9-shipped numbers; MC ODDS storage schema and Stage 0d
+     sanctioned triple LIVE_PLAY = (55, 0.48, 10) are unaffected (B9
+     changes drain constants, not config triples).
+  6. **Two-engine drain divergence REVEALED (rider to
+     TWO-ENGINE CONSOLIDATION arc at CLAUDE.md:691-711).** Gate 1c
+     Step 5 + closeout Item 1b MEASURED that the engines request
+     drastically different drain totals per round (pre-gen requests
+     ~43-51% more than live on the same seed/donor/opponent). Under
+     IDENTITY constants (K=1.0, S=0.0), fe:611-612's `max(0, ...)`
+     floor clipped 54pt of pre-gen's excess request into equal-actual
+     drain on both engines — floor saturation was hiding the
+     requested-drain divergence. Under B9 (K=0.6, S=0.5), no
+     clipping fires on this pair and the divergence surfaces at the
+     actual layer for the first time (43.0% actual gap == the
+     pre-existing requested-drain gap). B9 does NOT create the
+     divergence; it REVEALS it. Filed as a rider to the TWO-ENGINE
+     arc — the parent arc measured finish-rate divergence (~39pp),
+     not drain divergence under a shared dial; this rider adds the
+     drain axis. Consolidation is already scoped HIGH; no additional
+     ship is required by B9. Per-exchange action-mix investigation
+     folds into that arc, not into C12.
+
+  **RIDERS OWED (docs-only, C12 carries):**
+
+  - **B4 PHANTOM NAME RETIRED**: fi has no `_init_engine`. The method
+    constructing FighterState in NarratedFightSimulator is `_init_fight`
+    at fi:482. Every prior citation of "_init_engine" (v0.1 spec, Gate
+    1a harness comments) is FALSE — retired-not-deleted.
+  - **C11 cut-direction refinement**: C11 W2 filing recorded "no
+    systemic direction observed on the current 4-fighter pool" for
+    cut-fighter Δwin. That reading is CORRECT for Δwin (Gate 1c
+    measures Δwin_agg = +0.6pp, still flat). It is INCOMPLETE for the
+    broader cut-direction question: **ΔKO/TKO-loss_agg = +7.9pp** at
+    B9-active drain (Gate 1c Step 6). The "cut penalty is functionally
+    dead" corollary reading (already refined at C7 for high-recovery
+    cases) is now falsified at the outcome layer post-B9.
+
+  **PROCESS INCIDENTS THIS ARC (logged not hidden):**
+
+  - Gate 1a 1st pass filed T2 on the wrong population (clone-donor
+    median instead of Tier A population). Caught by Van at report
+    read; T2 recomputed from Tier A population; corrected metric
+    became the record.
+  - Gate 1a 1st pass DEC in/out compared per-pairing rate to pool-wide
+    44.6%±5pp band; baseline itself violated that band on P03/P10.
+    Corrected metric = per-pairing Δ vs c11 baseline.
+  - Gate 1b summary table mis-recalled donor bin cardio ranges
+    (three of four cells wrong); caught by Van comparing to verbatim
+    clone.csv output. B6 discipline enforced.
+  - Gate 1c cardio-distribution measurement discovered Tier A pool
+    cardio-skewed +18pp vs world-gen population median; B8 filed;
+    POP-POOL1 stratified sample built for frontier rerun.
+  - POP-POOL1 discrimination FAILED by 0.02pp on Van's Gate 0-shape
+    band; B8-a amendment ruled by Van (Option A) that the band was
+    Tier-A-pool statistic, not world constant; amended criterion is
+    "reproduces broken-world signature at identity" (both
+    overwhelmingly true).
+  - Gate 1c initial two-engine parity framing ("gap is pre-existing
+    per TWO-ENGINE CONSOLIDATION") was too comfortable — the parent
+    arc measured finish-rate divergence, not drain-under-shared-dial.
+    Van caught the framing; closeout Item 1b MEASURED requested drain
+    at IDENTITY, confirmed the divergence was hidden by floor
+    clipping (REVEALED not created). Framing corrected in consequence
+    #6 above; rider filed to TWO-ENGINE arc.
+
+  **QUEUE POST-C12:**
+
+  - STAMINA-OFFENSE-CURVE1 docket parked at
+    `claude/stamina_offense_curve1_docket_v0_1.md` — three measurements
+    (consumer census, effectiveness-vs-stamina curve per engine,
+    finish-rate-vs-skill-gap). SEQUENCING RULED: runs BEFORE lever
+    two, because if regen makes the finish-fest worse and lever two
+    shipping blind would compound it.
+  - Lever-two (in-round regen +0.5/exchange at fi:1651-52) as the
+    next stamina-arc ship, delivering T2's remainder — SEQUENCED
+    AFTER the offense-curve docket per above.
+  - PA violence-shift monitoring post-deploy (Q6 direction shift).
+  - tierA_corrected_c11 → tierA_corrected_c12 re-vintage (C8 pattern).
+  - Live-roster violence check on next live card (owed from Gate 0(b)
+    R2 A5, was carried into STAMINA-MODEL1 Gate 1 Tier B — B9 changes
+    the underlying physics; the check comes due).
+  - TWO-ENGINE CONSOLIDATION arc continues to carry both the
+    finish-rate divergence (its original scope) and the drain-under-
+    shared-dial divergence (new rider from this ship's Gate 1c Step 5
+    + closeout Item 1b).
+
+  **ARTIFACTS (all under `outputs/sm1/stamina_drain1/gate_1c/`, untracked):**
+
+  - `harness.py` — Gate 1c 6-step consolidated harness
+  - `harness_stdout.txt` — full session log (mtime 2026-09-01 21:11)
+  - `gate_1c_out.txt` — cc's structured session log
+  - `3a_pop_pool1_outcomes.csv` — 1225 file-constants outcomes for parity
+  - `3b_tierA_c11_after.csv` — 2100 tierA after-run outcomes
+  - `3b_per_bin_stats.csv` — per-bin close+zero at file-constants
+  - `3b_method_dist_per_pairing.csv` — DEC delta table vs c11
+  - `3c_clone_T1.csv` — clone T1 measurements
+  - `4_fixture_hashes.csv` — 7-arm hash old-vs-new
+  - `5_pregen_parity.csv` — pre-gen parity numbers (actual only)
+  - `6_cut_direction.csv` — 792 cut fights, Δwin + ΔKO/TKO-loss
+  - `two_engine_verify.py` — closeout Item 1b: 2×2 requested+actual
+  - `C12_claude_md_draft.md` — this docs block
+
+  Scope doc: `claude/stamina_drain1_scope_v0_1.md` carries B1-B9 +
+  B7 + B8 + B8-a addenda; updated in-session as each was ratified.
+
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
