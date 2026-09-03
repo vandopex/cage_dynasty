@@ -6862,6 +6862,49 @@ regardless of any slot bias. Verdicts:
   Scope doc: `claude/stamina_drain1_scope_v0_1.md` carries B1-B9 +
   B7 + B8 + B8-a addenda; updated in-session as each was ratified.
 
+- **DMGCURVE1-WIRE + P1 RULINGS [COMMITTED as C14, 2026-09-02]**
+
+  WIRE DISPOSITION (Van P1 ruling 3: KEEP). The STAMINA-DMGCURVE1
+  identity wire commits as a future dial: `damage_stamina_factor()`
+  + `DMG_PIVOT = 0.0` / `DMG_COMPRESS = 1.0` (fe.py +15/−1, sites
+  per as-built §3.2 / fe:554-562). Proven byte-inert at Gate 1a
+  (3680/3680 A/B identical). NO behavior change ships in C14.
+
+  P1 RULINGS RECORDED (Van, 2026-09-02, post-#22 measurement):
+  (1) SURVIVING ENGINE = fi. fight_integration is the consolidation
+  chassis; fe-only mechanisms (cut writer, heat system, failed-
+  grappling counter damage) are deliberate carry-over candidates at
+  P3, not lost. Evidence: P0 comparison_master (EP1@ident fi 32.91%
+  / fe 29.74% DEC — both in Van's 25-45 band; POP@B9 fi 28.57% /
+  fe 42.04%), fi's richer finish/style mechanics, correct KD-scoring
+  call, activity-aware standup.
+  (2) DEPLOY = GO, EXECUTED 2026-09-02 ~23:00 PDT: C6→C13 pushed
+  896425c..727dee8; PA proof legs — refs/heads/main =
+  727dee822aeb628813c0467ab38e029044dc0165, running
+  cage_dynasty_web/fight_engine.py:547-548 = DRAIN_SCALE_K 0.6 /
+  DRAIN_CARDIO_S 0.5, site HTTP 200. Instrument note: running-file
+  grep is the PRIMARY proof leg henceforth; ref-file read is
+  secondary (ref proves where main points, not what's checked out).
+  Post-deploy owed items now DUE: PA violence-shift monitoring,
+  tierA re-vintage, live-roster violence check on next live card.
+  (3) DMGCURVE1 wire = KEEP (this commit).
+
+  DIVERGENCE #22 — MEASURED + CONFIRMED (2026-09-02, artifacts
+  outputs/sm1/fight_model/div22/): fe awards KD-asymmetric decided
+  rounds to the KD SUFFERER 227/227 (100%); fi awards to the SCORER
+  245/245 (100%) — opposite sides, instrument discriminated before
+  acceptance. Consumer grep: round scores feed ONLY decision
+  resolution in both engines, so P0 comparison DEC/finish RATES are
+  CLEAN — #22 corrupts decision WINNERS only. Blast radius: ≤1.8%
+  of fe decisions (54/2935 with ≥1 KD-asymmetric round, upper
+  bound). The earlier "fe DEC rates contaminated" claim (P1 handoff
+  + retiring-thread recap) is documented FALSE. Fix lands at Fight
+  Model consolidation (fe retires); forward-only, no backfill.
+
+  NEW FINDING (open): fi:1240 double-writes knockdowns_this_round
+  (apply_damage already increments at fe:616) → fi per-round KD
+  counts 2× actual; inflates 10-8 margins, does not flip winners on
+  observed rows. Re-opens at consolidation.
 
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)

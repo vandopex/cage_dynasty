@@ -548,6 +548,20 @@ DRAIN_SCALE_K   = 0.6
 DRAIN_CARDIO_S  = 0.5
 
 
+# STAMINA-DMGCURVE1: damage-side stamina curve at fe:2492 call site.
+# Identity at DMG_COMPRESS=1.0 → function returns (s/100)*0.5+0.5 for
+# every stamina (byte-identical to today's inline factor).
+DMG_PIVOT       = 0.0
+DMG_COMPRESS    = 1.0
+
+def damage_stamina_factor(stamina):
+    f = (stamina / 100) * 0.5 + 0.5
+    p = (DMG_PIVOT / 100) * 0.5 + 0.5
+    if stamina <= DMG_PIVOT:
+        return f
+    return p + DMG_COMPRESS * (f - p)
+
+
 @dataclass
 class FighterState:
     """Complete state of a fighter during the fight"""
@@ -2489,7 +2503,7 @@ def calculate_strike_damage(
         damage *= 1.3
 
     # Stamina affects power
-    damage *= (attacker_state.stamina / 100) * 0.5 + 0.5
+    damage *= damage_stamina_factor(attacker_state.stamina)
 
     # Compromised chin
     if target == "head" and defender_state.chin_compromised:
