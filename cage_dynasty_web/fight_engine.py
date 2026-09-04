@@ -2327,6 +2327,179 @@ def select_grappling_action(
 # ACTION RESOLUTION
 # ============================================================================
 
+# ============================================================================
+# P3-3 CONTEST FUNCTION (D13 ratified 2026-09-04; scope
+# claude/fight_model_p3_scope_v0_1.md; composites
+# claude/fight_model_composites_v1.md; contract fight_model_v1_0.md §4).
+#
+#   P_c = clamp(P_MIN, P_MAX, P_EVEN + S × (A_eff/(A_eff+D_eff) − ½))
+#
+# CONTEST_RECIPES = per event class {attack: {attr: weight}, defense: same}
+# CONTEST_TARGETS = per event class (P_EVEN, EDGE20_TARGET) from D10
+# S values DERIVED analytically at import time from (P_EVEN,
+# EDGE20_TARGET, recipe) — printed at first import for provenance.
+# P_MIN = 0.4 × P_EVEN. P_MAX = min(0.90, P_EVEN + 1.5 × edge_gain).
+#
+# Situational scalars (stamina, rocked, grappler-pressure) multiply
+# composites BEFORE the P_c form — never scale the result. Result-level
+# upset branches from the pre-D13 CSS/CGS retire here (D4 vindicated
+# by F9 measurement; upset was paying fighters to be worse).
+# ============================================================================
+
+# D13 recipes (canonical: fight_model_composites_v1.md)
+CONTEST_RECIPES = {
+    "punch":          {"a": {"boxing": 0.7, "speed": 0.3},          "d": {"striking_defense": 0.65, "speed": 0.35}},
+    "kick":           {"a": {"kicks": 0.7, "speed": 0.3},           "d": {"striking_defense": 0.65, "speed": 0.35}},
+    "clinch_strike":  {"a": {"clinch_striking": 0.75, "speed": 0.25}, "d": {"striking_defense": 0.6, "clinch_control": 0.4}},
+    "td_distance":    {"a": {"takedowns": 1.0},                     "d": {"takedown_defense": 0.7, "speed": 0.3}},
+    "td_clinch":      {"a": {"takedowns": 0.6, "clinch_control": 0.4}, "d": {"takedown_defense": 0.6, "strength": 0.4}},
+    "throw":          {"a": {"strength": 0.5, "takedowns": 0.5},    "d": {"takedown_defense": 0.6, "strength": 0.4}},
+    "pass":           {"a": {"top_control": 1.0},                   "d": {"guard": 1.0}},
+    "sweep":          {"a": {"guard": 0.8, "strength": 0.2},        "d": {"top_control": 1.0}},
+    "standup":        {"a": {"guard": 0.7, "strength": 0.3},        "d": {"top_control": 1.0}},
+    "clinch_entry":   {"a": {"clinch_control": 0.6, "takedowns": 0.4}, "d": {"clinch_control": 0.6, "striking_defense": 0.4}},
+    "clinch_break":   {"a": {"strength": 1.0},                      "d": {"clinch_control": 0.7, "strength": 0.3}},
+    "sub_lockin":     {"a": {"submissions": 1.0},                   "d": {"guard": 0.5, "submissions": 0.5}},
+}
+
+# D10 P_EVEN targets + EDGE20 targets (per D10 tier tables; strikes +15pp,
+# takedowns +22pp, throws +17pp, sub lockin preserves F8 slope +14pp)
+CONTEST_TARGETS = {
+    "punch":         {"P_EVEN": 0.45, "EDGE20_TARGET": 0.60},
+    "kick":          {"P_EVEN": 0.42, "EDGE20_TARGET": 0.57},
+    "clinch_strike": {"P_EVEN": 0.48, "EDGE20_TARGET": 0.63},
+    "td_distance":   {"P_EVEN": 0.30, "EDGE20_TARGET": 0.52},
+    "td_clinch":     {"P_EVEN": 0.45, "EDGE20_TARGET": 0.67},
+    "throw":         {"P_EVEN": 0.38, "EDGE20_TARGET": 0.55},
+    "pass":          {"P_EVEN": 0.45, "EDGE20_TARGET": 0.60},
+    "sweep":         {"P_EVEN": 0.35, "EDGE20_TARGET": 0.50},
+    "standup":       {"P_EVEN": 0.50, "EDGE20_TARGET": 0.60},
+    "clinch_entry":  {"P_EVEN": 0.40, "EDGE20_TARGET": 0.55},
+    "clinch_break":  {"P_EVEN": 0.45, "EDGE20_TARGET": 0.60},
+    "sub_lockin":    {"P_EVEN": 0.35, "EDGE20_TARGET": 0.49},  # F8 preserve
+}
+
+
+def _composite_eff(stat_dict, weights):
+    """Weighted-average composite: A_eff = Σ weight_i × attr_i."""
+    return sum(weights[k] * stat_dict[k] for k in weights)
+
+
+def _derive_S(cls_key):
+    """Analytically derive S for a class from its recipe + (P_EVEN, EDGE20_TARGET).
+    Convention: 20-pt edge is on the attacker's PRIMARY (highest-weighted)
+    attribute; defender + assist attrs held at baseline 50."""
+    tgt = CONTEST_TARGETS[cls_key]
+    rec = CONTEST_RECIPES[cls_key]
+    p_even = tgt["P_EVEN"]
+    edge_target = tgt["EDGE20_TARGET"]
+    a_wts, d_wts = rec["a"], rec["d"]
+    primary = max(a_wts.items(), key=lambda kv: kv[1])[0]
+    base = 50.0
+    a_stats_even = {k: base for k in a_wts}
+    d_stats_even = {k: base for k in d_wts}
+    a_eff_even = _composite_eff(a_stats_even, a_wts)
+    d_eff_even = _composite_eff(d_stats_even, d_wts)
+    # At even, ratio = 0.5 - 0.5 = 0, P_c = P_EVEN ✓
+    a_stats_edge = {k: (base + 20 if k == primary else base) for k in a_wts}
+    a_eff_edge = _composite_eff(a_stats_edge, a_wts)
+    d_eff_edge = d_eff_even  # defender unchanged
+    ratio = a_eff_edge / (a_eff_edge + d_eff_edge) - 0.5
+    if ratio <= 0:
+        return 0.0
+    return (edge_target - p_even) / ratio
+
+
+# Derive S per class at module import; print for provenance
+CONTEST_S = {k: round(_derive_S(k), 4) for k in CONTEST_TARGETS}
+CONTEST_P_MIN = {k: round(0.4 * CONTEST_TARGETS[k]["P_EVEN"], 4)
+                  for k in CONTEST_TARGETS}
+CONTEST_P_MAX = {k: round(min(0.90, CONTEST_TARGETS[k]["P_EVEN"]
+                                + 1.5 * (CONTEST_TARGETS[k]["EDGE20_TARGET"]
+                                          - CONTEST_TARGETS[k]["P_EVEN"])), 4)
+                  for k in CONTEST_TARGETS}
+
+
+def _get_attr_dict(fighter, wts):
+    """Materialize the attribute values for the recipe weights."""
+    return {k: float(getattr(fighter, k)) for k in wts}
+
+
+def _assemble_composite(cls_key, attacker, defender):
+    """Return (A_eff, D_eff) for the attacker vs defender on class cls_key.
+    Composite-only; NO situational factors. Caller applies stamina, rocked,
+    pressure, etc. as multiplicative composite scalers per D13."""
+    rec = CONTEST_RECIPES[cls_key]
+    a_stats = _get_attr_dict(attacker, rec["a"])
+    d_stats = _get_attr_dict(defender, rec["d"])
+    return (_composite_eff(a_stats, rec["a"]),
+            _composite_eff(d_stats, rec["d"]))
+
+
+def _p_c(cls_key, a_eff, d_eff):
+    """Contest form: P_c = clamp(P_MIN, P_MAX, P_EVEN + S × (A/(A+D) − ½))."""
+    tgt = CONTEST_TARGETS[cls_key]
+    p_even = tgt["P_EVEN"]
+    s = CONTEST_S[cls_key]
+    p_min = CONTEST_P_MIN[cls_key]
+    p_max = CONTEST_P_MAX[cls_key]
+    if a_eff + d_eff <= 0:
+        return p_even
+    ratio = a_eff / (a_eff + d_eff) - 0.5
+    return max(p_min, min(p_max, p_even + s * ratio))
+
+
+# Provenance print (fires once at import). Format matches STAMINA-DRAIN1's
+# ship line so the arc's diagnostic tools recognize P3-3 activation.
+import sys as _p33_sys
+_p33_sys.stderr.write(
+    "✅ [P3-3 CONTEST] loaded; per-class S derived from (P_EVEN, EDGE20_TARGET):\n")
+for _k in CONTEST_TARGETS:
+    _t = CONTEST_TARGETS[_k]
+    _p33_sys.stderr.write(
+        f"    {_k:<14s}  P_EVEN={_t['P_EVEN']:.2f}  EDGE20={_t['EDGE20_TARGET']:.2f}  "
+        f"S={CONTEST_S[_k]:.4f}  P_MIN={CONTEST_P_MIN[_k]:.4f}  P_MAX={CONTEST_P_MAX[_k]:.4f}\n")
+
+
+# Strike-family classifier (used by CSS)
+def _strike_class(strike):
+    if strike in {StrikeType.JAB, StrikeType.CROSS, StrikeType.HOOK,
+                  StrikeType.UPPERCUT, StrikeType.OVERHAND}:
+        return "punch"
+    if "kick" in strike.value.lower():
+        return "kick"
+    if strike in {StrikeType.CLINCH_KNEE, StrikeType.CLINCH_ELBOW,
+                  StrikeType.DIRTY_BOXING}:
+        return "clinch_strike"
+    return "clinch_strike"  # else fallthrough (knees, elbows, GnP)
+
+
+# Grappling classifier (used by CGS)
+def _grapple_class(action):
+    if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG}:
+        return "td_distance"
+    if action == GrapplingAction.BODY_LOCK_TAKEDOWN:
+        return "td_clinch"
+    if action in {GrapplingAction.TRIP, GrapplingAction.HIP_TOSS,
+                  GrapplingAction.SUPLEX}:
+        return "throw"
+    if action in {GrapplingAction.PASS_TO_SIDE, GrapplingAction.PASS_TO_MOUNT,
+                  GrapplingAction.KNEE_SLICE}:
+        return "pass"
+    if action in {GrapplingAction.SCISSOR_SWEEP, GrapplingAction.BUTTERFLY_SWEEP,
+                  GrapplingAction.FLOWER_SWEEP}:
+        return "sweep"
+    if action in {GrapplingAction.SHRIMP_ESCAPE, GrapplingAction.BRIDGE_ESCAPE}:
+        return "standup"  # bottom-to-neutral, same recipe as STAND_UP
+    if action == GrapplingAction.STAND_UP:
+        return "standup"
+    if action == GrapplingAction.CLINCH_ENTRY:
+        return "clinch_entry"
+    if action == GrapplingAction.CLINCH_BREAK:
+        return "clinch_break"
+    return "td_distance"  # default: mirrors old default's takedowns-primary shape
+
+
 def calculate_strike_success(
     attacker: FighterAttributes,
     defender: FighterAttributes,
@@ -2335,9 +2508,75 @@ def calculate_strike_success(
     defender_state: FighterState,
     fight_state: FightState
 ) -> Tuple[bool, bool]:
+    """P3-3: Contest function rebuild (D13). Returns (landed, was_counter).
+
+    Composites per fight_model_composites_v1.md; P_c form per §4 of the
+    contract. Situational scalars (stamina, rocked, grappler-pressure,
+    sub-threat) multiply composites — never scale the result. Result-level
+    upset branches from the pre-D13 CSS are RETIRED-NOT-DELETED (see
+    _legacy_calculate_strike_success below).
     """
-    Calculate if a strike lands and if it's a counter.
-    Returns (landed, was_counter)
+    cls = _strike_class(strike)
+    a_eff, d_eff = _assemble_composite(cls, attacker, defender)
+
+    # Situational scalars (composite-space per D13). Only the pressure /
+    # threat modifiers survive from the pre-D13 CSS — additive defensive
+    # bonuses (elite wrestler defends strikes +15) are RETIRED under the
+    # scopes contract: strike-defense recipe is SD + speed/CC, not TD.
+    if fight_state.position in STANDING_POSITIONS:
+        takedown_threat = defender.takedowns - attacker.takedowns
+        if takedown_threat >= 30:
+            a_eff *= 0.75
+        elif takedown_threat >= 20:
+            a_eff *= 0.82
+        elif takedown_threat >= 10:
+            a_eff *= 0.90
+        sub_threat = defender.submissions - attacker.submissions
+        if sub_threat >= 30:
+            a_eff *= 0.88
+        elif sub_threat >= 20:
+            a_eff *= 0.94
+
+    # Stamina (composite scalar)
+    a_eff *= (attacker_state.stamina / 100)
+    d_eff *= (defender_state.stamina / 100)
+
+    # Rocked opponent easier to hit (composite scalar on defender)
+    if defender_state.is_rocked:
+        d_eff *= 0.5
+
+    # Symmetric two-sided variance per D13 (both sides get their own draw).
+    # The pre-D13 form had offense-only ±25% — F3/F6 traced part of the
+    # dead defense layer to that asymmetry.
+    a_eff *= random.uniform(0.85, 1.15)
+    d_eff *= random.uniform(0.85, 1.15)
+
+    # Contest form
+    p_c = _p_c(cls, a_eff, d_eff)
+    landed = random.random() < p_c
+
+    # Counter check (unchanged from pre-D13 — separate mechanism)
+    was_counter = False
+    if landed and defender.fight_iq > 60 and random.random() < 0.15:
+        was_counter = True
+
+    return landed, was_counter
+
+
+def _legacy_calculate_strike_success(
+    attacker: FighterAttributes,
+    defender: FighterAttributes,
+    strike: StrikeType,
+    attacker_state: FighterState,
+    defender_state: FighterState,
+    fight_state: FightState
+) -> Tuple[bool, bool]:
+    """RETIRED-NOT-DELETED (P3-3, C19 pending). Pre-D13 CSS.
+
+    Verbatim pre-D13 code preserved as-is for provenance. Any code
+    calling this by name is out of the P3-3 contest form and will
+    reintroduce F4/F6/F9 signatures (boxing inversion, dead landing
+    dial, upset-branch inversion). Do not resurrect without a filing.
     """
     # Determine relevant skills
     if strike in {StrikeType.JAB, StrikeType.CROSS, StrikeType.HOOK,
@@ -2347,90 +2586,47 @@ def calculate_strike_success(
     elif "kick" in strike.value.lower():
         offense = attacker.kicks
         defense = defender.striking_defense
-        
-        # MUAY THAI VS BOXER: Leg kicks are devastating vs pure boxers
-        # Boxers don't train to check kicks and have narrow stances
         if attacker.kicks >= 80 and defender.kicks < 60:
-            offense += 10  # Significant accuracy bonus vs non-kickers
+            offense += 10
     elif strike in {StrikeType.CLINCH_KNEE, StrikeType.CLINCH_ELBOW, StrikeType.DIRTY_BOXING}:
         offense = attacker.clinch_striking
-        # In clinch, takedown defense helps defend (posture)
         defense = (defender.striking_defense + defender.takedowns) // 2
     else:
         offense = attacker.clinch_striking
         defense = defender.striking_defense
-    
-    # Speed modifier
     offense += attacker.speed // 10
     defense += defender.speed // 10
-    
-    # GRAPPLER PRESSURE: When standing, grapplers affect both offense AND defense
-    # Strikers can't fully commit when worried about takedowns
     if fight_state.position in STANDING_POSITIONS:
-        # Defensive bonus - grappler's threat makes striker tentative
-        if defender.takedowns >= 85:
-            defense += 15  # Elite wrestler - striker very cautious
-        elif defender.takedowns >= 75:
-            defense += 10  # Good wrestler 
-        elif defender.takedowns >= 60:
-            defense += 5
-        
-        # Guard player defensive bonus - imanari rolls, guard pulls make strikers wary
-        if defender.guard >= 85:
-            defense += 10
-        elif defender.guard >= 75:
-            defense += 5
-        
-        # OFFENSIVE PENALTY - strikers can't load up vs elite wrestlers
-        # This is key - even if they're more skilled, they can't fully use it
+        if defender.takedowns >= 85: defense += 15
+        elif defender.takedowns >= 75: defense += 10
+        elif defender.takedowns >= 60: defense += 5
+        if defender.guard >= 85: defense += 10
+        elif defender.guard >= 75: defense += 5
         takedown_threat = defender.takedowns - attacker.takedowns
-        if takedown_threat >= 30:
-            offense *= 0.75  # 25% offense reduction vs elite wrestler
-        elif takedown_threat >= 20:
-            offense *= 0.82  # 18% reduction
-        elif takedown_threat >= 10:
-            offense *= 0.90  # 10% reduction
-        
-        # Submission threat offense penalty
+        if takedown_threat >= 30: offense *= 0.75
+        elif takedown_threat >= 20: offense *= 0.82
+        elif takedown_threat >= 10: offense *= 0.90
         sub_threat = defender.submissions - attacker.submissions
-        if sub_threat >= 30:
-            offense *= 0.88  # 12% reduction
-        elif sub_threat >= 20:
-            offense *= 0.94  # 6% reduction
-    
-    # Stamina affects accuracy
+        if sub_threat >= 30: offense *= 0.88
+        elif sub_threat >= 20: offense *= 0.94
     offense *= (attacker_state.stamina / 100)
     defense *= (defender_state.stamina / 100)
-    
-    # Rocked opponent is easier to hit
     if defender_state.is_rocked:
         defense *= 0.5
-    
-    # BASE VARIANCE: Add significant randomness to every exchange
-    # This creates "anyone can get caught" MMA reality
-    variance = random.uniform(0.75, 1.25)  # Â±25% variance (was Â±15%)
+    variance = random.uniform(0.75, 1.25)
     offense *= variance
-    
-    # Base success chance
     success_chance = 0.20 + (offense / (offense + defense + 1)) * 0.5
     success_chance = max(0.15, min(0.85, success_chance))
-    
-    # UPSET VARIANCE: Underdogs can land lucky shots
-    # Anyone can get caught in MMA - Serra vs GSP, etc.
     if offense < defense * 0.85:
         upset_roll = random.random()
-        if upset_roll < 0.18:  # INCREASED - lucky punch chance
+        if upset_roll < 0.18:
             success_chance = max(success_chance, 0.70)
-        elif upset_roll < 0.35:  # INCREASED - small boost zone
+        elif upset_roll < 0.35:
             success_chance = min(success_chance + 0.22, 0.70)
-    
     landed = random.random() < success_chance
-    
-    # Counter check
     was_counter = False
     if landed and defender.fight_iq > 60 and random.random() < 0.15:
         was_counter = True
-    
     return landed, was_counter
 
 
@@ -2534,21 +2730,42 @@ def calculate_grappling_success(
     defender_state: FighterState,
     fight_state: FightState
 ) -> bool:
+    """P3-3: Contest function rebuild (D13). Returns bool (success).
+
+    Composites per fight_model_composites_v1.md; P_c form per contract
+    §4. Family-specific base_chance bumps + upset variance branches
+    from the pre-D13 CGS are RETIRED — F9 measurement showed the
+    upset branch paid fighters to be worse (−9.3pp extreme). Skill
+    differential is now analytical via S constants derived from D10
+    targets, not threshold-based bumps.
+    See _legacy_calculate_grappling_success below for pre-D13 code.
     """
-    Calculate if a grappling action succeeds.
-    
-    Uses new 17-attribute system:
-    - takedowns: Getting fight to ground
-    - top_control: Holding position, passing, preventing sweeps
-    - submissions: Finishing ability (not used here - see attempt_submission)
-    - guard: Sweeps, escapes, getting back up
-    """
-    
-    # Calculate takedown differential - THIS IS THE KEY
-    # When a wrestler has 30+ point advantage, they should dominate
+    cls = _grapple_class(action)
+    a_eff, d_eff = _assemble_composite(cls, attacker, defender)
+
+    # Stamina (composite scalar). No pressure/threat scalars here —
+    # grappling has no "you can't commit" penalty analogous to strikes.
+    a_eff *= (attacker_state.stamina / 100)
+    d_eff *= (defender_state.stamina / 100)
+
+    # Symmetric variance (D13)
+    a_eff *= random.uniform(0.85, 1.15)
+    d_eff *= random.uniform(0.85, 1.15)
+
+    p_c = _p_c(cls, a_eff, d_eff)
+    return random.random() < p_c
+
+
+def _legacy_calculate_grappling_success(
+    attacker: FighterAttributes,
+    defender: FighterAttributes,
+    action: GrapplingAction,
+    attacker_state: FighterState,
+    defender_state: FighterState,
+    fight_state: FightState
+) -> bool:
+    """RETIRED-NOT-DELETED (P3-3, C19 pending). Pre-D13 CGS verbatim."""
     takedown_diff = attacker.takedowns - defender.takedowns
-    
-    # Determine relevant skills based on action type
     if action in {GrapplingAction.SINGLE_LEG, GrapplingAction.DOUBLE_LEG}:
         # DISTANCE TAKEDOWNS: takedowns vs takedown_defense
         # Shooting from distance is HARD - defenders see it coming
@@ -2999,60 +3216,34 @@ def attempt_submission(
     - But when they DO attempt, very high success rate
     """
     danger, escape_diff, positions = SUBMISSION_PROPERTIES[sub_type]
-    
+
     if fight_state.position not in positions:
         return False, False, 0.0
-    
-    # Calculate lock-in chance - VERY HIGH base
-    # Offense: Pure submission ability
-    offense = attacker.submissions + (danger / 10)
-    # Defense: Guard + submission knowledge (need to know subs to defend them)
-    defense = (defender.guard + defender.submissions) // 2 + (escape_diff / 10)
-    
-    # SUBMISSION DIFFERENTIAL BONUS - MASSIVE for specialists
-    sub_diff = attacker.submissions - defender.submissions
-    sub_bonus = 0.0
-    if sub_diff >= 40:
-        sub_bonus = 0.35  # Near-certain lock
-    elif sub_diff >= 30:
-        sub_bonus = 0.28
-    elif sub_diff >= 20:
-        sub_bonus = 0.20
-    elif sub_diff >= 10:
-        sub_bonus = 0.12
-    elif sub_diff <= -30:
-        sub_bonus = -0.30
-    elif sub_diff <= -20:
-        sub_bonus = -0.18
-    elif sub_diff <= -10:
-        sub_bonus = -0.08
-    
-    # PURE SUBMISSION SPECIALIST BONUS (92+) - massive advantage
-    if attacker.submissions >= 92:
-        sub_bonus += 0.15
-    elif attacker.submissions >= 88:
-        sub_bonus += 0.08
-    
-    # Stamina is crucial
-    offense *= (attacker_state.stamina / 100)
-    defense *= (defender_state.stamina / 100)
-    
-    # Heart helps defense - minimal
-    defense += defender.heart // 20
-    
-    # Guard helps escape - using guard skill
-    defense += defender.guard // 35
-    
-    # Lock-in chance - VERY HIGH because attempts are now rare
-    lock_in_chance = 0.30 + sub_bonus + (offense / (offense + defense + 1)) * 0.55
-    # Skill-gated cap: specialists access higher ceiling.
-    # 60 subs = 0.50 cap, 80 subs = 0.70 cap, scales linearly.
-    _sub_cap = min(0.70, 0.50 + max(0, attacker.submissions - 75) * 0.013)
-    lock_in_chance = min(_sub_cap, lock_in_chance)
+
+    # ── P3-3: LOCK-IN via P_c form (sub_lockin class) ──
+    # D13 recipe: submissions 100 vs guard 50 + submissions 50. S derived from
+    # (P_EVEN=0.35, EDGE20_TARGET=0.49) preserves F8's measured +14pp/20pt slope.
+    # RETIRED (pre-D13 lock-in): sub_diff threshold ladder (+0.35/0.28/0.20/0.12
+    # up, −0.30/−0.18/−0.08 down); PURE SUBMISSION SPECIALIST additive; base
+    # 0.30 constant; danger/10, heart//20, escape_diff/10, guard//35 divisor-zoo
+    # additives; and the _sub_cap ceiling (P_MAX in CONTEST_P_MAX handles that
+    # structurally). Skill differential is now analytical.
+    a_eff_sub, d_eff_sub = _assemble_composite("sub_lockin", attacker, defender)
+    a_eff_sub *= (attacker_state.stamina / 100)
+    d_eff_sub *= (defender_state.stamina / 100)
+    a_eff_sub *= random.uniform(0.85, 1.15)
+    d_eff_sub *= random.uniform(0.85, 1.15)
+    lock_in_chance = _p_c("sub_lockin", a_eff_sub, d_eff_sub)
     locked_in = random.random() < lock_in_chance
-    
+
     if not locked_in:
         return False, False, 0.0
+
+    # sub_diff still needed for the (unchanged) starting-progress bonuses below.
+    sub_diff = attacker.submissions - defender.submissions
+    # _tick_offense: pre-D13 stamina-scaled offense used for base_progress.
+    # Tick mechanics stay this docket (§5a rebuild is P3-4).
+    offense = (attacker.submissions + (danger / 10)) * (attacker_state.stamina / 100)
     
     # Start submission sequence - small starting progress so the race
     # actually plays out over multiple ticks rather than instant finish

@@ -329,6 +329,16 @@ def grappling_to_action_type(action: GrapplingAction) -> ActionType:
 
 
 # ============================================================================
+# P3-3 INITIATIVE DAMPER (D13 sensitivity target: +1SD speed → ~+8pp twin
+# decided-share, not +49pp per F2). Speed enters initiative dampened via
+# K_SPEED_INIT applied to (speed − 50) so speed=50 contributes 0 and the
+# ±10 randint stays a meaningful jitter over the speed term. Iterated at
+# the P3-3 §5c gate. Coin-flip tie-break (F1 fix, C16) unchanged.
+# ============================================================================
+K_SPEED_INIT = 0.35   # starting value; sweep at gate 5c against +8pp ±3
+
+
+# ============================================================================
 # INTEGRATED FIGHT SIMULATOR
 # ============================================================================
 
@@ -647,9 +657,16 @@ class NarratedFightSimulator:
         return self.fighter1, self.fighter1_state
     
     def _determine_initiative(self) -> str:
-        """Determine which fighter acts this exchange"""
-        f1_init = self.fighter1.speed + random.randint(-10, 10)
-        f2_init = self.fighter2.speed + random.randint(-10, 10)
+        """Determine which fighter acts this exchange.
+
+        P3-3: speed contribution dampened via module-level K_SPEED_INIT
+        against (speed − 50) — see the P3-3 INITIATIVE DAMPER block
+        above. Momentum/position/aggression bonuses unchanged. F1 fix
+        (slot-symmetric coin-flip tie-break, C16) unchanged.
+        """
+        _K = K_SPEED_INIT
+        f1_init = _K * (self.fighter1.speed - 50) + random.randint(-10, 10)
+        f2_init = _K * (self.fighter2.speed - 50) + random.randint(-10, 10)
 
         # Momentum bonus
         if self.fight_state.momentum_fighter_id == self.fighter1.fighter_id:

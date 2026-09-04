@@ -6955,6 +6955,30 @@ regardless of any slot bias. Verdicts:
   accumulator paths). Accepted per S4(a); never deploys under the
   freeze. Artifacts: outputs/sm1/fight_model/p32_census/ + p32_exec/.
 
+- **FIGHT MODEL P3-3 CONTEST REBUILD [COMMITTED as C19, 2026-09-04 — STRUCTURAL]**
+  One contest form everywhere: P_c = clamp(P_MIN, P_MAX,
+  P_EVEN + S × (A/(A+D) − ½)), D13 composites, symmetric two-sided
+  variance, upset branches RETIRED (_legacy_* preserved), sub lock-in
+  on the same form, initiative dampened (K_SPEED_INIT=0.35, speed−50
+  centered, coin-flip tie-break unchanged).
+  CONSTANTS ARE PROVISIONAL per ruling S5 — magnitude calibration
+  deferred to P3-5's single pass (contest dials + finish knobs together,
+  final physics).
+  STRUCTURAL GATES ALL PASSED: logger inert 100/100; no-op 600/600;
+  F4 FIXED (boxing +2.13pp, CI excludes 0 — inversion lived in the
+  contest layer); F3 striking_defense ALIVE (+3.94pp); F9 inversion
+  GONE; F8 preserved (+13.3pp vs +14 target); F6 direction fixed
+  (all strike slopes positive).
+  MAGNITUDE READINGS (deferred, not failed): P_EVEN 2-6pp under
+  targets (situational fog); slopes shallow vs D10 (dilution); speed
+  neutral at all K (K sweep 0.02-0.35 exhausted, logged) — NEW
+  FINDING F10, THE ACTIVITY TAX: acting more now costs stamina that
+  the amplified stamina channel punishes (cardio +18.48pp, was +8.95).
+  Speed's worth re-ruled at P3-5 after lever two.
+  EP1 drift 99.4% finish — bridge state, P3-5 calibration target,
+  freeze-protected. Artifacts: outputs/sm1/fight_model/p33_gates/
+  (incl. full_diff.patch + dial log).
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
