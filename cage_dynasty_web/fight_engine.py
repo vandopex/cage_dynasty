@@ -3863,12 +3863,18 @@ def simulate_exchange(
 def score_round(
     stats1: RoundStats,
     stats2: RoundStats,
-    knockdowns1: int,
-    knockdowns2: int
+    kd_inflicted_by_1: int,
+    kd_inflicted_by_2: int
 ) -> Tuple[int, int]:
     """
     Score a round using 10-point must system.
     Balanced scoring: grappling control valued higher.
+
+    #22 fix (fight_model_v1_0 §7): the KD args are now unambiguously named
+    to prevent the fe.simulate_fight suffered-vs-inflicted mismatch that
+    awarded rounds to the knocked-down fighter (227/227 measured).
+    Callers must pass INFLICTED counts (KDs delivered BY that fighter),
+    not the defender_state.knockdowns_this_round SUFFERED counters.
     """
     # Scoring weights - grappling valued more
     score1 = (
@@ -3879,7 +3885,7 @@ def score_round(
         stats1.knockdowns * 20.0 +
         stats1.submission_attempts * 4.0      # Increased from 3
     )
-    
+
     score2 = (
         stats2.damage_dealt * 1.5 +
         stats2.significant_strikes_landed * 1.0 +
@@ -3888,19 +3894,19 @@ def score_round(
         stats2.knockdowns * 20.0 +
         stats2.submission_attempts * 4.0
     )
-    
+
     # Multiple knockdowns = automatic 10-8 or worse
-    if knockdowns1 >= 2 and knockdowns2 == 0:
-        return (10, 8) if knockdowns1 == 2 else (10, 7)
-    if knockdowns2 >= 2 and knockdowns1 == 0:
-        return (8, 10) if knockdowns2 == 2 else (7, 10)
-    
+    if kd_inflicted_by_1 >= 2 and kd_inflicted_by_2 == 0:
+        return (10, 8) if kd_inflicted_by_1 == 2 else (10, 7)
+    if kd_inflicted_by_2 >= 2 and kd_inflicted_by_1 == 0:
+        return (8, 10) if kd_inflicted_by_2 == 2 else (7, 10)
+
     # Single knockdown advantage
-    if knockdowns1 > knockdowns2:
+    if kd_inflicted_by_1 > kd_inflicted_by_2:
         if score1 > score2 * 1.5 and score1 > 20:
             return (10, 8)
         return (10, 9)
-    if knockdowns2 > knockdowns1:
+    if kd_inflicted_by_2 > kd_inflicted_by_1:
         if score2 > score1 * 1.5 and score2 > 20:
             return (8, 10)
         return (9, 10)
@@ -4280,11 +4286,16 @@ def simulate_fight(
                     )
 
         # Score round
+        # #22 fix (fight_model_v1_0 §7): knockdowns_this_round on a FighterState
+        # is KDs SUFFERED by that fighter, so INFLICTED-by-1 == f2.suffered
+        # and INFLICTED-by-2 == f1.suffered. Pre-fix passed the suffered
+        # order (matched-order call), awarding round bonuses to the KD
+        # sufferer — 227/227 asymmetric rounds measured.
         s1, s2 = score_round(
             round_stats[fighter1.fighter_id],
             round_stats[fighter2.fighter_id],
-            f1_state.knockdowns_this_round,
-            f2_state.knockdowns_this_round
+            f2_state.knockdowns_this_round,  # KDs inflicted BY fighter1
+            f1_state.knockdowns_this_round   # KDs inflicted BY fighter2
         )
         round_scores.append((s1, s2))
         
