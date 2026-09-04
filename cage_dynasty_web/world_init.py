@@ -75,9 +75,17 @@ try:
         FighterAttributes,
         FightConfig,
     )
+    # P3-2 CONSOLIDATION: pre-gen now routes through fi (the surviving
+    # chassis per fight_model_v1_0 §1) via the same simulation-shim
+    # discipline. fe.simulate_fight retained above so a fi import
+    # failure can fall back to fe (bridge state under S4a).
+    from simulation.fight_integration import (
+        simulate_narrated_fight as engine_simulate_narrated_fight,
+    )
     FULL_ENGINE_AVAILABLE = True
     print("✅ world_init: FULL fight engine loaded — pre-gen will use "
-          "simulation.fight_engine (shimmed to web fight_engine)")
+          "simulation.fight_integration (shimmed to web fight_integration; "
+          "fe retained as fallback)")
 except Exception as _fe_e:
     # PREGEN-FULL-ENGINE-FIX1: was silent (`except ImportError: pass`).
     # That silence hid the fact that pre-gen has been running the crude
@@ -1421,15 +1429,32 @@ class HistorySimulator:
             # Configure fight (no commentary needed for history)
             config = FightConfig.championship_fight() if is_title_fight else FightConfig.standard_fight()
 
-            # Run simulation
-            result = engine_simulate_fight(f1_attrs, f2_attrs, config)
+            # P3-2 CONSOLIDATION: route pre-gen through fi (the surviving
+            # chassis). rounds is passed to match config.scheduled_rounds
+            # so fi's :2096 `if rounds == 5: config.scheduled_rounds = 5`
+            # override is a no-op. Explicit `config=` reaches LIVE_PLAY
+            # directly (P3-2b three-path probe) — the bundle path (which
+            # would require a bridge-with-gamestate and adds pre-fight
+            # RNG cost from cut/style/coach assemblies pre-gen doesn't
+            # need) is deliberately NOT used here.
+            _rounds = 5 if is_title_fight else 3
+            result = engine_simulate_narrated_fight(
+                f1_attrs, f2_attrs,
+                rounds=_rounds,
+                config=config,
+            )
 
             # FINISH-DETAIL-PERSIST: capture the specialty label BEFORE collapse.
-            # Raw engine's result.method is e.g. "KO (Head Kick)" or
-            # "Submission (armbar)" ~52% of KOs / 100% of subs, per the
-            # 500-fight direct measurement in the ship's diagnostic.
+            # fi's NarratedFightResult separates method + sub_type (bare
+            # "Submission" + "armbar"); canonical_specialty_method accepts
+            # sub_type as its second arg and reconstructs "SUB (armbar)".
+            # fe's raw "Submission (armbar)" all-in-one form is also handled
+            # by the same canonicalizer for the fallback path below.
             from awards import canonical_specialty_method
-            specialty = canonical_specialty_method(result.method or "")
+            specialty = canonical_specialty_method(
+                result.method or "",
+                getattr(result, "sub_type", "") or "",
+            )
 
             # Extract collapsed method for existing consumers
             method = result.method

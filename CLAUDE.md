@@ -6932,6 +6932,29 @@ regardless of any slot bias. Verdicts:
   ~2.5pp low on twin decided-share — noise envelope of the coin-flip
   cascade is wider than naive binomial; future twin gates pool ≥2 blocks.
 
+- **FIGHT MODEL P3-2 CONSOLIDATION [COMMITTED as C18, 2026-09-03]**
+  Pre-gen now routes through fi — one engine. world_init:1425 calls
+  simulate_narrated_fight with EXPLICIT config (LIVE_PLAY /
+  championship); P3-2b three-path probe proved config= reaches
+  LIVE_PLAY directly (bundle path NOT structurally required — the
+  D2-era belief is amended in the design doc; D2 anchors remain
+  self-consistent). simulation shim mirrors the fe pattern; sub_type
+  wired to canonical_specialty_method (submission flavor preserved).
+  fe.simulate_fight loses its last production caller —
+  RETIRED-NOT-DELETED (the module still serves fi's shared
+  primitives and score_round).
+  MEASURED (2 worlds, seeds 20260904/20268823, before/after):
+  0 simulate_fight_simple fallback fires; cut-MECHANISM finishes
+  103 → 0 (fe-only writer; carry queued P3-4; fi's independent
+  head-damage doctor stoppages persist, 12-19/world); records +
+  belt lineage intact; world-gen wall 7.67s → 9.08s (+18%, vs 53%
+  inferred pre-measurement); direct-call fi 4.92 ms/fight vs fe
+  4.62 (+6.5%). BRIDGE STATE: pre-gen DEC 45.1% → 29.2% — INSIDE
+  the 25-45 band, matching POP fi@B9's 28.6% (P0 instrument
+  predicted the consolidated world). TKO share doubles (fi
+  accumulator paths). Accepted per S4(a); never deploys under the
+  freeze. Artifacts: outputs/sm1/fight_model/p32_census/ + p32_exec/.
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

@@ -37,6 +37,16 @@ try:
     print("✅ [SIMULATION-SHIM] simulation.fight_engine shimmed from bare "
           "fight_engine module (web engine — same as live-play)",
           file=_sys.stderr)
+    # P3-2 CONSOLIDATION: mirror the fe shim for fight_integration so
+    # world_init can bring `simulate_narrated_fight` in via the same
+    # `from simulation.X import ...` discipline. Adds no runtime cost
+    # beyond one module registration.
+    _real_fi = _il.import_module("fight_integration")
+    _sys.modules["simulation.fight_integration"] = _real_fi
+    fight_integration = _real_fi
+    print("✅ [SIMULATION-SHIM] simulation.fight_integration shimmed from "
+          "bare fight_integration module (web engine — same as live-play)",
+          file=_sys.stderr)
 except Exception as _e:
     # Widened from ImportError so syntax errors, module-level raises, or any
     # other failure mode surfaces loudly instead of silently disabling pre-gen.
