@@ -6906,6 +6906,32 @@ regardless of any slot bias. Verdicts:
   counts 2× actual; inflates 10-8 margins, does not flip winners on
   observed rows. Re-opens at consolidation.
 
+- **FIGHT MODEL P1 CLOSED + P3 OPENED [C15 filing; rides with P3-1 commit]**
+  P1 design phase CLOSED 2026-09-03. Ratified contract:
+  claude/fight_model_v1_0.md (D1-D12; fi chassis; roster 19 incl. POWER;
+  one contest function with declared P_even/S_c; five-part finish model,
+  leg-kick TKO private dial ~1%; elite-peer mix 22/20/16/40/~2).
+  P3 scope ratified 2026-09-03: claude/fight_model_p3_scope_v0_1.md
+  (dockets P3-0..6; deploy freeze after P3-1 until P3-5 gates).
+  D2 docket findings filed: F6 landing skill-slope ≈ 0 (signed,
+  exact-anchored 2455/2455 both worlds); F7 finish-fest = sub-tick
+  collapse under drain (12.59% vs 0.80%/tick, 15.7×); F8 submissions
+  the one live skill wire (+13-16pp, +38pp extreme); F9 upset-branch
+  inversion (−9.3pp extreme, vindicates upset-branch retirement).
+  Artifacts: outputs/sm1/fight_model/d2_peven/ (per-call event CSVs
+  banked). P2 sensitivity baseline artifacts:
+  outputs/sm1/fight_model/p2_sensitivity/.
+
+  INSTRUMENT NOTES (P3-1b, 2026-09-03): GE-6 filed — the P3-1 twin gate
+  compared A/(A+B+D) to 50; with ~4% draws fair is ~48 (GE-2's error
+  repeated by the architect). Corrected decided-share verdict: baseline
+  52.8% (F1 bias), post-fix blocks ~49.5%/51.0% — fair. The P2b-pattern
+  initiative wrapper is NOT RNG-neutral once the coin-flip tie-break
+  exists (replay draws 2, tied path draws 3) — wrapper RETIRED for all
+  post-fix-1 engines, ~1pp artifact measured. Seed block 950000+ pulled
+  ~2.5pp low on twin decided-share — noise envelope of the coin-flip
+  cascade is wider than naive binomial; future twin gates pool ≥2 blocks.
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

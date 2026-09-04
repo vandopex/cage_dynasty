@@ -680,7 +680,12 @@ class NarratedFightSimulator:
             if _a2 != 0:
                 f2_init += 2 * _a2
 
-        return self.fighter1.fighter_id if f1_init >= f2_init else self.fighter2.fighter_id
+        # F1 fix (fight_model_v1_0 §7): tie-break is slot-symmetric coin flip.
+        # RNG is consumed ONLY on exact tie — non-tie path draws nothing, so
+        # every non-tie outcome is byte-identical to the pre-fix behavior.
+        if f1_init == f2_init:
+            return self.fighter1.fighter_id if random.random() < 0.5 else self.fighter2.fighter_id
+        return self.fighter1.fighter_id if f1_init > f2_init else self.fighter2.fighter_id
     
     def _simulate_exchange(self, exchange_num: int) -> Optional[Tuple[str, str]]:
         """
@@ -1237,8 +1242,10 @@ class NarratedFightSimulator:
             # Handle knockdown
             if caused_knockdown:
                 stats.knockdowns += 1
-                defender_state.knockdowns_this_round += 1
-                defender_state.knockdowns_total += 1
+                # fi:1240 fix (fight_model_v1_0 §7): apply_damage at
+                # fe:616 already incremented defender_state.knockdowns_this_round
+                # and .knockdowns_total for the head-damage KD path. Duplicate
+                # increments here inflated 10-8/10-7 shares in score_round.
                 self.fight_state.position = Position.KNOCKDOWN_STANDING
                 self.fight_state.top_fighter_id = attacker.fighter_id
                 
@@ -1799,14 +1806,15 @@ class NarratedFightSimulator:
                         self.config.exchanges_per_round)
                     return (_opp.fighter_id, _stop)
 
-        # Score the round
-        # NOTE: knockdowns_this_round tracks knockdowns SUFFERED, but score_round
-        # expects knockdowns INFLICTED. So we swap: f2's suffered = f1's inflicted
+        # Score the round — pass INFLICTED KD counts (score_round renamed
+        # params post-#22 fix; fight_model_v1_0 §7). fighter_state.
+        # knockdowns_this_round is KDs SUFFERED, so fighter2's suffered =
+        # fighter1's inflicted.
         score1, score2 = score_round(
             self.round_stats[self.fighter1.fighter_id],
             self.round_stats[self.fighter2.fighter_id],
-            self.fighter2_state.knockdowns_this_round,  # KDs inflicted BY f1 (suffered by f2)
-            self.fighter1_state.knockdowns_this_round   # KDs inflicted BY f2 (suffered by f1)
+            self.fighter2_state.knockdowns_this_round,  # kd_inflicted_by_1
+            self.fighter1_state.knockdowns_this_round   # kd_inflicted_by_2
         )
         
         self.round_scores.append((score1, score2))
