@@ -97,6 +97,13 @@ GROUND_BOTTOM_POSITIONS = {
     Position.NORTH_SOUTH_BOTTOM, Position.CRUCIFIX_BOTTOM, Position.TURTLE_BOTTOM,
 }
 
+# STAMINA-LEVER2 (P3-4a): route _init_round's between-round fatigue
+# penalty through FighterState.spend_stamina so it gains the K×g drain
+# scaling. C20 (2026-09-04, Van): True — closes the fi:623/625 K×g
+# bypass. P3-5 calibration may retune the drain constants but this
+# routing stays live.
+LEVER2_FATIGUE_ROUTING = True
+
 # Define missing helper functions locally
 def get_position_control(position: Position) -> str:
     """Get who has control in a position."""
@@ -629,11 +636,20 @@ class NarratedFightSimulator:
         # Fatigue compounds through rounds — tired fighters recover
         # stamina more slowly between rounds.
         # get_cardio_recovery_penalty returns 0/1/2/4 by fatigue bucket.
+        # STAMINA-LEVER2 (P3-4a): when routing ON, subtract via
+        # spend_stamina so the penalty inherits DRAIN_SCALE_K × g(cardio)
+        # scaling — high-cardio fighters carry pre-fight fatigue better.
+        # Legacy direct-write path retained behind the toggle for the
+        # identity gate (must byte-match pre-wire outcomes).
         if hasattr(self, '_fatigue_penalty_f1'):
-            self.fighter1_state.stamina = max(0.0,
-                self.fighter1_state.stamina - self._fatigue_penalty_f1)
-            self.fighter2_state.stamina = max(0.0,
-                self.fighter2_state.stamina - self._fatigue_penalty_f2)
+            if LEVER2_FATIGUE_ROUTING:
+                self.fighter1_state.spend_stamina(self._fatigue_penalty_f1)
+                self.fighter2_state.spend_stamina(self._fatigue_penalty_f2)
+            else:
+                self.fighter1_state.stamina = max(0.0,
+                    self.fighter1_state.stamina - self._fatigue_penalty_f1)
+                self.fighter2_state.stamina = max(0.0,
+                    self.fighter2_state.stamina - self._fatigue_penalty_f2)
 
         # Reset fight state for new round
         self.fight_state.current_round = self.current_round

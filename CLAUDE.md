@@ -6979,6 +6979,46 @@ regardless of any slot bias. Verdicts:
   freeze-protected. Artifacts: outputs/sm1/fight_model/p33_gates/
   (incl. full_diff.patch + dial log).
 
+- **STAMINA-LEVER2 [COMMITTED as C20, 2026-09-04]**
+  Cardio-owned in-round regen: `recover_stamina` scaled by
+  `(1 + REGEN_CARDIO_S × (cardio − 60) / 40)`, S_r=0.5 (Van's word;
+  minimal dose clearing T1). Between-round fatigue penalty routed
+  through `spend_stamina` (K×g scaling) — fi:623/625 direct-write
+  bypass CLOSED. Identity gate 200/200 pre-values (S_r=0.0 +
+  routing=False); file-vs-rebind parity 200/200 byte-identical
+  (MD5 `33178973796446aa6a4c129d16fb1144` on 200 fixed-seed POP
+  fights, pre-flip runtime rebind vs post-flip file defaults —
+  Gate-3a pattern).
+
+  T1_R3 DEBT PAID: 14.12 → 29.2 at S_r=0.5 (target ≥20, owed to
+  lever two since B9/C12) — measured 4a, B7 donors N=200/arm.
+
+  B9 PREDICTION REFINED (documented as false in part): T2's
+  remainder was assigned to lever two; measured on T2's DEFINING
+  instrument (touched-zero, pop_pool1 flag — NOT close ≤ ε, NOT
+  ledger-close; the architect's ledger assertion was corrected by
+  measurement in 4a-bis discrimination probe), regen does not move
+  touched-zero (R1 ~34% vs <25 target across the whole S_r sweep;
+  R2 ~53% vs <40 target). T2 remainder refiled to P3-5 calibration
+  (drain-side / activity economy).
+
+  Report cells (P3-5 inputs, forwarded from 4a): cardio +25.25pp
+  and climbing; speed −16.5pp (F10 deepens); POP ~50% DEC vs EP1
+  99% finish — pool divergence noted for per-class targets.
+  4a-bis instrument notes: ledger < proxy direction (grapple/sub
+  drains fire post-last-CSS; mean Δ −1.69pt across 42 fighter-
+  rounds, 20/42 ledger < proxy, 6/42 ledger > proxy — cc's
+  "proxy inflated" hypothesis REFUTED, opposite direction);
+  corner-bonus writes at fi:615-633 unwrapped in the probe ledger
+  (3.24pt residual max, touched-zero boolean flag unaffected).
+
+  No deploy per S2 freeze.
+
+  Artifacts: outputs/sm1/fight_model/lever2* +
+  outputs/sm1/stamina_drain1/p3_4a_bis/ (harness.py, parity_worker.py,
+  parity_rebind.csv, parity_file.csv, frontier_table.csv,
+  discrimination_probe.csv, p3_4a_bis_out.txt).
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

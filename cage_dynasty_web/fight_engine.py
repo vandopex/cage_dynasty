@@ -547,6 +547,13 @@ class BodyPartDamage:
 DRAIN_SCALE_K   = 0.6
 DRAIN_CARDIO_S  = 0.5
 
+# STAMINA-LEVER2 (P3-4a): regen-side cardio-spread multiplier on
+# FighterState.recover_stamina — mirror of DRAIN's cardio spread.
+# effective = amount * (1 + REGEN_CARDIO_S * (cardio_rating - 60) / 40)
+# C20 (2026-09-04, Van): S_r=0.5 ratified — minimal dose that pays
+# T1_R3 debt (14.12 → 29.2, target ≥20). P3-5 calibration may retune.
+REGEN_CARDIO_S = 0.5
+
 
 # STAMINA-DMGCURVE1: damage-side stamina curve at fe:2492 call site.
 # Identity at DMG_COMPRESS=1.0 → function returns (s/100)*0.5+0.5 for
@@ -630,7 +637,11 @@ class FighterState:
         return is_knockdown, is_finish
     
     def recover_stamina(self, amount: float) -> None:
-        self.stamina = min(100, self.stamina + amount)
+        # STAMINA-LEVER2: cardio-spread multiplier at the choke.
+        # Identity at S_r=0.0 → effective = amount (byte-identical).
+        effective = amount * (
+            1 + REGEN_CARDIO_S * (self.cardio_rating - 60) / 40)
+        self.stamina = min(100, self.stamina + effective)
     
     def spend_stamina(self, amount: float) -> None:
         # STAMINA-DRAIN1: K + cardio-spread multiplier at the choke.
