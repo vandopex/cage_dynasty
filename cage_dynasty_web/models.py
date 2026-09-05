@@ -119,12 +119,13 @@ class Fighter:
     ko_wins: int = 0
     sub_wins: int = 0
     
-    # Attributes (0-100)
+    # Attributes (0-100) — P3-4d added `power` (19-stat schema)
     strength: int = 50
     speed: int = 50
     cardio: int = 50
     chin: int = 50
     recovery: int = 50
+    power: int = 50
     boxing: int = 50
     kicks: int = 50
     clinch_striking: int = 50
@@ -172,9 +173,12 @@ class Fighter:
     
     @property
     def overall_rating(self) -> int:
-        """Calculate overall rating from attributes."""
+        """Calculate overall rating from attributes.
+
+        P3-4d added `self.power` — attrs is now 19-long, len() adjusts.
+        """
         attrs = [
-            self.strength, self.speed, self.cardio, self.chin, self.recovery,
+            self.strength, self.speed, self.cardio, self.chin, self.recovery, self.power,
             self.boxing, self.kicks, self.clinch_striking, self.striking_defense,
             self.takedowns, self.takedown_defense, self.top_control,
             self.submissions, self.guard, self.clinch_control,

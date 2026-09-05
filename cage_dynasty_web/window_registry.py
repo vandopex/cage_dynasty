@@ -53,6 +53,19 @@ FI_SPRAWL_PUNISH_ENABLED: bool = False
 FI_CHIN_WIRING_ENABLED: bool = True
 FI_COMPOSURE_WIRING_ENABLED: bool = True
 
+# ── P3-4d: POWER wiring toggle.
+# C23: FLIPPED ON. Van-approved with C23 paste based on G2
+# separability reading (POWER+20 → KO+TKO +3.0pp ±2.4pp ALIVE;
+# STRENGTH+20 → KO+TKO +0.1pp FLAT; positive controls proven-
+# discriminating at N=1000/cell, seed base 983000). Per C22 rule (a):
+# no wiring-flag flips without a defining-instrument sensitivity
+# reading in a prior verify pass.
+# When ON, strike-damage lanes at fe:2833/2837 and the flash-KO
+# branch at fi:1328 read attacker.power instead of attacker.strength.
+# Strength keeps grappling-physicality (throws/slams/clinch break/
+# escape assist).
+FI_POWER_WIRING_ENABLED: bool = True
+
 # ── Stage 2c constants ──────────────────────────────────────────
 SPRAWL_PUNISH_DAMAGE_MULT: float = 1.25  # P3-5 calibrates
 

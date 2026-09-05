@@ -703,11 +703,13 @@
             💪 Physical
         </div>
         <div style="padding:var(--spacing-sm) var(--spacing-md);">
+            {# P3-4d added `power` — 6th physical stat #}
             {% for name, v in [('Strength', fighter.strength),
                                 ('Speed', fighter.speed),
                                 ('Cardio', fighter.cardio),
                                 ('Chin', fighter.chin),
-                                ('Recovery', fighter.recovery)] %}
+                                ('Recovery', fighter.recovery),
+                                ('Power', fighter.power)] %}
             {% set c = tier_color(v) %}
             <div class="stat-row"
                  {% if name == 'Chin' %}title="Chin durability — affected by KO losses.{% if fighter.ko_losses_received > 0 %} {{ fighter.ko_losses_received }} KO loss{{ 'es' if fighter.ko_losses_received != 1 else '' }} on record.{% endif %}"{% endif %}>

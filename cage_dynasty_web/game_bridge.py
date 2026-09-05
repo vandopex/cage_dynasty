@@ -805,8 +805,10 @@ COACH_BUCKET_ATTRS: Dict[str, List[str]] = {
     # under the new mapping — new writes emit wrestling_coach/bjj_coach.
     "grappling_coach": ["takedowns", "takedown_defense", "top_control",
                         "submissions", "guard"],
+    # P3-4d added `power` — sc_coach is the natural power trainer
+    # (strength & conditioning covers explosive-power work).
     "sc_coach":        ["strength", "speed", "cardio", "chin",
-                        "recovery", "heart"],
+                        "recovery", "heart", "power"],
     "mma_coach":       ["fight_iq", "composure"],
 }
 
@@ -972,7 +974,8 @@ def analyze_matchup(player, opponent, depth: int = 1) -> Dict[str, Any]:
         "boxing", "kicks", "clinch_striking", "clinch_control",
         "striking_defense", "takedowns", "takedown_defense",
         "top_control", "submissions", "guard",
-        "strength", "speed", "cardio", "chin", "recovery",
+        # P3-4d added `power` to the physical group.
+        "strength", "speed", "cardio", "chin", "recovery", "power",
         "heart", "fight_iq", "composure",
     )
     _EVEN = {"risks": [], "edges": [], "even": True, "summary": ""}
@@ -2494,14 +2497,16 @@ class GameBridge:
         # caller, older prospect dict shape), synthesize the vector
         # via generate_prospect_attributes so no fresh player fighter
         # ever ships with a hollow stat sheet.
+        # P3-4d: 19-stat schema (added `power`). Thresholds bumped
+        # from 18 to 19 to match.
         _STAT_KEYS = [
-            "strength","speed","cardio","chin","recovery",
+            "strength","speed","cardio","chin","recovery","power",
             "boxing","kicks","clinch_striking","striking_defense",
             "takedowns","takedown_defense","top_control","submissions",
             "guard","clinch_control","heart","fight_iq","composure",
         ]
         _stats_in_input = sum(1 for k in _STAT_KEYS if k in fighter_data)
-        if _stats_in_input < 18:
+        if _stats_in_input < 19:
             try:
                 from game_start import generate_prospect_attributes
                 _synth = generate_prospect_attributes(
@@ -2511,7 +2516,7 @@ class GameBridge:
                 for k in _STAT_KEYS:
                     if k not in fighter_data:
                         fighter_data[k] = _synth.get(k, 50)
-                print(f"  ⚠️  Synthesized {18 - _stats_in_input} missing stats "
+                print(f"  ⚠️  Synthesized {19 - _stats_in_input} missing stats "
                       f"for {fighter.name} via generate_prospect_attributes")
             except Exception as _se:
                 print(f"  ⚠️  Stat synthesis failed: {_se}")
@@ -7502,7 +7507,8 @@ class GameBridge:
     }
 
     # Prime/decline curve constants (Ship #43)
-    _DECLINE_PHYSICAL_STATS = ["speed", "strength", "cardio", "chin", "recovery"]
+    # P3-4d added `power` — declines with age like other physicals.
+    _DECLINE_PHYSICAL_STATS = ["speed", "strength", "cardio", "chin", "recovery", "power"]
     _DECLINE_TECHNIQUE_STATS = ["kicks", "boxing", "takedowns", "submissions"]
     _PRIME_START   = 26
     _DECLINE_START = 31
@@ -7578,7 +7584,8 @@ class GameBridge:
         "striking":  ["boxing", "kicks", "clinch_striking", "clinch_control", "striking_defense"],
         "wrestling": ["takedowns", "top_control", "takedown_defense"],
         "bjj":       ["submissions", "guard"],
-        "physical":  ["strength", "speed", "cardio"],
+        # P3-4d: added `power` to the physical equipment domain.
+        "physical":  ["strength", "speed", "cardio", "power"],
         "recovery":  ["recovery", "chin"],
         "mental":    ["fight_iq", "composure", "heart"],
     }
@@ -7723,7 +7730,12 @@ class GameBridge:
         missing stat data.
         """
         _TRAINABLE = [
-            "strength","speed","cardio","chin","recovery",
+            # P3-4d added `power` to the physical group. Downstream
+            # _STYLE_OVR_WEIGHTS entries don't declare a weight for
+            # power — the .get(stat, 1.0) fallback at :7747 gives
+            # power weight 1.0 for every style until D14 tunes
+            # per-style weightings.
+            "strength","speed","cardio","chin","recovery","power",
             "boxing","kicks","clinch_striking","striking_defense",
             "takedowns","takedown_defense","top_control","submissions",
             "guard","clinch_control","heart","fight_iq","composure",
@@ -7760,7 +7772,8 @@ class GameBridge:
     # Drives per-stat gain multipliers in _diminishing_gain and decay
     # multipliers in maintenance_training.get_decay_multiplier.
     _ATHLETIC_BASE_STATS = {
-        "strength", "speed", "cardio", "chin", "recovery", "heart"
+        # P3-4d added power — power is an athletic/physical stat.
+        "strength", "speed", "cardio", "chin", "recovery", "heart", "power"
     }
     _TECHNICAL_STATS = {
         "boxing", "kicks", "clinch_striking", "striking_defense",
@@ -10586,8 +10599,10 @@ class GameBridge:
                 "potential":  potential_data,
             }
         except ImportError:
+            # P3-4d added `power` — scout-report fallback includes it.
             attr_list = [
                 ("Strength","strength"),("Speed","speed"),("Cardio","cardio"),("Chin","chin"),
+                ("Power","power"),
                 ("Boxing","boxing"),("Kicks","kicks"),("Takedowns","takedowns"),
                 ("Submissions","submissions"),("Heart","heart"),("Fight IQ","fight_iq"),
                 ("Composure","composure"),("Guard","guard"),
@@ -16966,6 +16981,26 @@ class GameBridge:
     # REAL FIGHT ENGINE INTEGRATION
     # =========================================================================
 
+    # P3-4d C23 — POWER style offset now lives at
+    # core.types.POWER_STYLE_OFFSET (single canonical dict, keyed by
+    # both display names AND enum-string keys). Bridge reads by enum
+    # key (post `_STYLE_MAP` normalization); world_init reads by
+    # display name; both hit the same values. Pre-C23 the bridge held
+    # its own enum-keyed copy — retired; kept the same values in the
+    # canonical table so bridge-derived power for enum keys is
+    # bit-identical to pre-C23.
+    @property
+    def _POWER_STYLE_OFFSET(self):
+        """Back-compat property — delegates to the canonical dict at
+        core.types.POWER_STYLE_OFFSET. Kept as a property to preserve
+        the `self._POWER_STYLE_OFFSET` call site in _a_power_derived
+        without adding a new import in every caller."""
+        try:
+            from core.types import POWER_STYLE_OFFSET
+            return POWER_STYLE_OFFSET
+        except ImportError:
+            return {}
+
     # Style string → FightingStyle enum mapping
     _STYLE_MAP = {
         # Current 11 display names
@@ -16997,7 +17032,16 @@ class GameBridge:
     }
 
     def _make_fighter_attrs(self, fighter, name: str, fighter_id: str):
-        """Convert a FighterRecord/WebFighter to FighterAttributes for the engine."""
+        """Convert a FighterRecord/WebFighter to FighterAttributes for the engine.
+
+        P3-4d (C23): POWER is the 19th stat. Assembly reads it from
+        _fighter_data if present (post-4d saves); otherwise DERIVES
+        deterministically per fighter_id via _POWER_STYLE_OFFSET +
+        strength + bounded id-seeded noise. Derivation is FORWARD-ONLY
+        — the value is returned to the engine but NOT written back to
+        _fighter_data, so legacy saves stay untouched and reloads
+        agree (same fighter_id → same derived power).
+        """
         fdata = {}
         if self._game_state and fighter_id in self._game_state._fighter_data:
             fdata = self._game_state._fighter_data[fighter_id]
@@ -17013,6 +17057,33 @@ class GameBridge:
         from core.types import FightingStyle
         style = FightingStyle[style_key]
 
+        # P3-4d C23 — POWER derivation. Canonical style offset lives
+        # at core.types.POWER_STYLE_OFFSET (one dict, both
+        # display-name and enum-string keys). world_init writes by
+        # display name; bridge reads by enum-key style_key here; both
+        # resolve to the same values, so a fighter's derived power
+        # matches what world-gen would have written had they been
+        # generated post-C23. Deterministic per fighter_id via crc32
+        # (stable across Python processes — hash() is
+        # PYTHONHASHSEED-salted and would break reload-agreement).
+        def _a_power_derived():
+            # 1. _fighter_data has power — direct read (post-4d saves).
+            if 'power' in fdata:
+                return max(1, min(99, int(fdata['power'])))
+            # 2. Transient object carries power — respect it.
+            _pow_attr = getattr(fighter, 'power', None)
+            if isinstance(_pow_attr, (int, float)):
+                return max(1, min(99, int(_pow_attr)))
+            # 3. Derive: strength + style offset + bounded noise.
+            _str = _a("strength")
+            _off = self._POWER_STYLE_OFFSET.get(style_key, 0)
+            import zlib as _zlib
+            _seed = _zlib.crc32(
+                (str(fighter_id) + "_power_d7").encode("utf-8"))
+            # Bounded noise: [-3, +3] deterministic per fighter_id.
+            _noise = (_seed % 7) - 3
+            return max(1, min(99, _str + _off + _noise))
+
         return _FighterAttributes(
             fighter_id  = fighter_id,
             name        = name,
@@ -17021,6 +17092,7 @@ class GameBridge:
             cardio      = _a("cardio",    +2),
             chin        = _a("chin",      -2),
             recovery    = _a("recovery"),
+            power       = _a_power_derived(),  # P3-4d — forward-only derivation
             boxing      = _a("boxing"),
             kicks       = _a("kicks",     -4),
             clinch_striking     = _a("clinch_striking", -3),

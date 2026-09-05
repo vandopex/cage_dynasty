@@ -308,7 +308,12 @@ def analyze_matchup(
         compare_stat("reach", fighter1.reach, fighter2.reach, threshold=2),
         compare_stat("height", fighter1.height, fighter2.height, threshold=2),
     ]
-    physical_comps.extend(get_stat_comparison(fighter1, fighter2, ["strength", "speed", "cardio"]))
+    # P3-4d: added `power` to physical comparison list. Note the
+    # pre-existing `power` inside STRIKING_STATS at :82 is a CLI-schema
+    # artifact (CLI power was striking power). Web-side power is the
+    # 19th canonical stat under P3-4d and belongs with the physical
+    # group; the CLI striking-power carry-over is separate cleanup.
+    physical_comps.extend(get_stat_comparison(fighter1, fighter2, ["strength", "speed", "cardio", "power"]))
     physical_adv = calculate_category_advantage(physical_comps)
     
     # Experience comparison

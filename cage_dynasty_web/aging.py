@@ -152,8 +152,8 @@ def calculate_physical_decline(age: int, base_rate: Optional[float] = None) -> f
     """
     Calculate annual physical attribute decline rate.
     
-    Physical attributes (strength, speed, cardio, chin, recovery)
-    decline faster than other attributes.
+    Physical attributes (strength, speed, cardio, chin, recovery, power)
+    decline faster than other attributes.  # P3-4d added power
     
     Args:
         age: Fighter's current age

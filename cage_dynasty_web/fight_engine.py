@@ -1216,16 +1216,25 @@ class FightEvent:
 
 @dataclass
 class FighterAttributes:
-    """Fighter attributes for the fight engine (18-attribute system)."""
+    """Fighter attributes for the fight engine (19-attribute system).
+
+    P3-4d (C23): POWER split from STRENGTH. Strength keeps the
+    grappling-physicality lanes (throws/slams, clinch break, escape
+    assist); POWER takes over striking-damage + flash-KO. Behind
+    FI_POWER_WIRING_ENABLED (default OFF) at the damage sites so the
+    ship is byte-inert until the flag flips. Default power=50 mirrors
+    strength=50 for any test constructor that doesn't specify power.
+    """
     fighter_id: str
     name: str
 
-    # Physical (5)
-    strength: int = 50      # Power behind strikes, clinch control
+    # Physical (6)
+    strength: int = 50      # Grappling physicality — throws/slams/clinch break
     speed: int = 50         # Hand speed, movement, reaction time
     cardio: int = 50        # Stamina, gas tank
     chin: int = 50          # Ability to absorb damage
     recovery: int = 50      # Between-round recovery, shaking off being hurt
+    power: int = 50         # Striking damage, KD/flash-KO chance (P3-4d D7)
 
     # Striking (4)
     boxing: int = 50            # Punching technique, combinations
@@ -1265,8 +1274,14 @@ class FighterAttributes:
     
     @property
     def overall(self) -> int:
-        """Calculate overall fighter rating."""
-        physical = (self.strength + self.speed + self.cardio + self.chin + self.recovery) // 5
+        """Calculate overall fighter rating.
+
+        P3-4d: physical composite now includes power (6 stats / 6).
+        Same arithmetic shape as pre-C23; new stat contributes
+        equally to the physical bucket.
+        """
+        physical = (self.strength + self.speed + self.cardio +
+                    self.chin + self.recovery + self.power) // 6
         mental = (self.heart + self.fight_iq + self.composure) // 3
         return (self.overall_striking + self.overall_grappling + physical + mental) // 4
     
@@ -1274,12 +1289,13 @@ class FighterAttributes:
         return {
             "fighter_id": self.fighter_id,
             "name": self.name,
-            # Physical (5)
+            # Physical (6) — P3-4d added `power`
             "strength": self.strength,
             "speed": self.speed,
             "cardio": self.cardio,
             "chin": self.chin,
             "recovery": self.recovery,
+            "power": self.power,
             # Striking (4)
             "boxing": self.boxing,
             "kicks": self.kicks,
@@ -2829,12 +2845,27 @@ def calculate_strike_damage(
     """
     base_damage, ko_power, stamina_cost, target = STRIKE_PROPERTIES[strike]
 
-    # Strength adds damage
-    damage = base_damage + (attacker.strength - 50) / 10
+    # P3-4d: POWER lane (default OFF → reads strength, byte-identical to
+    # pre-C23). Flag flip re-routes striking damage to POWER; strength
+    # keeps grappling-physicality lanes untouched. Read via module attr
+    # so runtime flips propagate (same pattern as CHIN/COMPOSURE at
+    # fe:737-747).
+    _power_or_strength = attacker.strength
+    try:
+        import window_registry as _wreg_pw
+        if _wreg_pw.FI_POWER_WIRING_ENABLED:
+            _power_or_strength = getattr(
+                attacker, 'power', attacker.strength)
+    except ImportError:
+        pass
 
-    # Power punchers bonus
+    # Strike-family base damage bonus — reads POWER (or STRENGTH when
+    # flag OFF; identical arithmetic in OFF mode).
+    damage = base_damage + (_power_or_strength - 50) / 10
+
+    # Power punchers bonus — same POWER/STRENGTH gate.
     if strike in {StrikeType.CROSS, StrikeType.HOOK, StrikeType.OVERHAND}:
-        damage *= 1 + (attacker.strength / 200)
+        damage *= 1 + (_power_or_strength / 200)
 
     # STRIKE-SKILL-DMG1 phase 1a — skill-into-damage dial.
     # Attacker-side only. Deterministic (no random). Family mapping
@@ -4957,9 +4988,9 @@ def quick_simulate(
     fighter1 = FighterAttributes(
         fighter_id="f1",
         name="Fighter 1",
-        # Physical
+        # Physical (P3-4d added power)
         strength=f1_overall, speed=f1_overall, cardio=f1_overall,
-        chin=f1_overall, recovery=f1_overall,
+        chin=f1_overall, recovery=f1_overall, power=f1_overall,
         # Striking
         boxing=f1_overall, kicks=f1_overall, clinch_striking=f1_overall,
         striking_defense=f1_overall,
@@ -4975,8 +5006,9 @@ def quick_simulate(
         fighter_id="f2",
         name="Fighter 2",
         # Physical
+        # Physical (P3-4d added power)
         strength=f2_overall, speed=f2_overall, cardio=f2_overall,
-        chin=f2_overall, recovery=f2_overall,
+        chin=f2_overall, recovery=f2_overall, power=f2_overall,
         # Striking
         boxing=f2_overall, kicks=f2_overall, clinch_striking=f2_overall,
         striking_defense=f2_overall,

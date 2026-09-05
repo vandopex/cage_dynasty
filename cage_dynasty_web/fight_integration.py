@@ -1324,8 +1324,18 @@ class NarratedFightSimulator:
                 if attacker.boxing >= 85 or attacker.kicks >= 85:
                     flash_ko_chance += 0.022
                 
-                # Power bonus (high strength)
-                if attacker.strength >= 85:
+                # P3-4d: POWER bonus (was: "Power bonus (high strength)").
+                # Flag OFF reads strength (byte-identical to pre-C23);
+                # flag ON reads power. See window_registry.
+                _fkw_stat = attacker.strength
+                try:
+                    import window_registry as _wreg_fko
+                    if _wreg_fko.FI_POWER_WIRING_ENABLED:
+                        _fkw_stat = getattr(attacker, 'power',
+                                            attacker.strength)
+                except ImportError:
+                    pass
+                if _fkw_stat >= 85:
                     flash_ko_chance += 0.015
                 
                 # Hurt bonus (defender already rocked)
@@ -2429,9 +2439,9 @@ def quick_narrated_fight(
     fighter1 = FighterAttributes(
         fighter_id="fighter_1",
         name=f1_name,
-        # Physical (5)
-        strength=f1_overall, speed=f1_overall, cardio=f1_overall, 
-        chin=f1_overall, recovery=f1_overall,
+        # Physical (6) — P3-4d added power
+        strength=f1_overall, speed=f1_overall, cardio=f1_overall,
+        chin=f1_overall, recovery=f1_overall, power=f1_overall,
         # Striking (4)
         boxing=f1_overall, kicks=f1_overall, clinch_striking=f1_overall,
         striking_defense=f1_overall,
@@ -2448,9 +2458,9 @@ def quick_narrated_fight(
     fighter2 = FighterAttributes(
         fighter_id="fighter_2",
         name=f2_name,
-        # Physical (5)
-        strength=f2_overall, speed=f2_overall, cardio=f2_overall, 
-        chin=f2_overall, recovery=f2_overall,
+        # Physical (6) — P3-4d added power
+        strength=f2_overall, speed=f2_overall, cardio=f2_overall,
+        chin=f2_overall, recovery=f2_overall, power=f2_overall,
         # Striking (4)
         boxing=f2_overall, kicks=f2_overall, clinch_striking=f2_overall,
         striking_defense=f2_overall,

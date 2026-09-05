@@ -192,7 +192,7 @@ MENTAL_DECAY_MULTIPLIER = 0.5
 # clinch) that don't exist on FighterRecord — decay rolled and printed warnings
 # but setattr() silently no-op'd. Critical real stats (takedown_defense,
 # striking_defense, guard) were entirely untracked.
-PHYSICAL_STATS = {"strength", "speed", "cardio", "chin", "recovery"}
+PHYSICAL_STATS = {"strength", "speed", "cardio", "chin", "recovery", "power"}  # P3-4d added power
 STRIKING_STATS = {"boxing", "kicks", "clinch_striking",
                    "clinch_control", "striking_defense"}
 GRAPPLING_STATS = {"takedowns", "takedown_defense", "top_control", "submissions", "guard"}
@@ -376,7 +376,8 @@ def get_decay_multiplier(stat: str) -> float:
     because ring IQ rusts without live training, while heart stays under
     ATHLETIC at 0.3x as a stand-in for grit/conditioning capacity.
     """
-    if stat in {"strength", "speed", "cardio", "chin", "recovery", "heart"}:
+    # P3-4d added power — same ATHLETIC decay rate as other physicals.
+    if stat in {"strength", "speed", "cardio", "chin", "recovery", "heart", "power"}:
         return 0.3
     elif stat in {"boxing", "kicks", "clinch_striking", "clinch_control",
                   "striking_defense",

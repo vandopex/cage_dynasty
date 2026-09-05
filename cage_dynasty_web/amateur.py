@@ -1360,16 +1360,18 @@ class AmateurSystem:
             "Point Fighter":    "speed",
             "Brawler":          "strength",
         }
+        # P3-4d added `power` — amateur pools include it.
         _AMATEUR_SECONDARY_POOL = [
             "boxing", "kicks", "clinch_striking", "striking_defense",
             "takedown_defense", "wrestling", "bjj",
-            "strength", "speed", "cardio", "chin", "heart",
+            "strength", "speed", "cardio", "chin", "heart", "power",
             "fight_iq", "composure"
         ]
         _AMATEUR_TRAINABLE = [
             "boxing", "kicks", "wrestling", "bjj", "clinch_striking",
             "striking_defense", "takedown_defense", "strength", "speed",
-            "cardio", "chin", "heart", "fight_iq", "composure"
+            "cardio", "chin", "heart", "power",
+            "fight_iq", "composure"
         ]
 
         for participant, did_win in [(winner, True), (loser, False)]:

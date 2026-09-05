@@ -1294,10 +1294,11 @@ def register_routes(app):
         if not bridge.game_started:
             return jsonify({"error": "No game loaded"}), 400
         floors = {}
+        # P3-4d added `power` — stat-floor form accepts it.
         for stat in [
             'boxing','kicks','clinch_striking','clinch_control','striking_defense',
             'takedowns','takedown_defense','top_control','submissions',
-            'guard','strength','speed','cardio','chin','recovery',
+            'guard','strength','speed','cardio','chin','recovery','power',
             'fight_iq','composure','heart',
         ]:
             val = request.form.get(f'floor_{stat}', '0').strip()
@@ -1373,10 +1374,11 @@ def register_routes(app):
         if not bridge.game_started:
             return jsonify({"error": "No game loaded"}), 400
 
+        # P3-4d added `power` — 19-stat all_stats list.
         all_stats = [
             'boxing','kicks','clinch_striking','clinch_control','striking_defense',
             'takedowns','takedown_defense','top_control','submissions','guard',
-            'strength','speed','cardio','chin','recovery',
+            'strength','speed','cardio','chin','recovery','power',
             'heart','fight_iq','composure',
         ]
 

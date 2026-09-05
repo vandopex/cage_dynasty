@@ -135,12 +135,14 @@
                 ('Submissions',      data.player.submissions,      data.opponent.submissions),
                 ('Guard',            data.player.guard,            data.opponent.guard),
             ]),
+            {# P3-4d added `power` — 6th physical stat, tale-of-tape shows it. #}
             ('Physical', 'var(--warning)', [
                 ('Strength',         data.player.strength,         data.opponent.strength),
                 ('Speed',            data.player.speed,            data.opponent.speed),
                 ('Cardio',           data.player.cardio,           data.opponent.cardio),
                 ('Chin',             data.player.chin,             data.opponent.chin),
                 ('Recovery',         data.player.recovery,         data.opponent.recovery),
+                ('Power',            data.player.power,            data.opponent.power),
             ]),
             ('Mental', 'var(--gold)', [
                 ('Fight IQ',         data.player.fight_iq,         data.opponent.fight_iq),

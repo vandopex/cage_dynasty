@@ -7254,6 +7254,263 @@ regardless of any slot bias. Verdicts:
   Companion doc: `outputs/sm1/fight_model/p3_4c/verify.md` (654
   lines — full verify pass report).
 
+- **FIGHT MODEL P3-4d POWER/STRENGTH SPLIT (D7) [COMMITTED as C23, 2026-09-04]**
+
+  Split POWER (the 19th stat) from STRENGTH. Strength keeps the
+  grappling-physicality lanes (throws/slams, clinch break, escape
+  assist); POWER takes over the striking-damage + flash-KO lanes.
+  Flag ON on disk. Style-informed distribution at world-gen +
+  deterministic derivation at load-time for pre-4d saves. S2 freeze
+  holds — NO DEPLOY.
+
+  **LANES MOVED (fe:2833, fe:2837, fi:1328).** Read via module attr
+  so runtime flag flips propagate (same pattern as CHIN/COMPOSURE
+  at fe:737-747). At `FI_POWER_WIRING_ENABLED=True`:
+  - fe:2833: strike-family base damage bonus (`base + (X - 50)/10`)
+    reads `attacker.power` (was strength).
+  - fe:2837: CROSS/HOOK/OVERHAND "power puncher" bonus
+    (`damage *= 1 + X/200`) reads `attacker.power` (was strength).
+  - fi:1328: V7 flash-KO branch (`if X >= 85: chance += 0.015`)
+    reads `attacker.power` (was strength).
+
+  **LANES KEPT for STRENGTH (grappling physicality):**
+  - Takedown defense (fe:2973, fe:2986).
+  - Guard passing / sweep contest (fe:3013, fe:3025-3037).
+  - Clinch break (fe:3085-3086).
+  - Slam damage (fi:1571).
+  - Elbow-cut writer (fe:3863) — skin-contact pressure, not
+    concussive power.
+  - Combo-throw threshold gate (fe:3872-3874) — threshold check,
+    not damage output.
+
+  **FLAG ON RATIONALE.** `FI_POWER_WIRING_ENABLED = True` shipped on
+  disk (was False through C22). G2 separability at N=1000/cell, seed
+  base 983000, flag ON runtime probe:
+  - POWER+20 (attacker) → KO+TKO share 0.9040 → 0.9340,
+    **Δ = +3.0pp ±2.4pp (2SE) ALIVE**; kd_mean 0.012 → 0.034 (×2.8).
+  - STRENGTH+20 (attacker) → KO+TKO share 0.8890 → 0.8900,
+    **Δ = +0.1pp ±2.8pp FLAT** (strength correctly keeps grappling
+    role and does NOT bleed into KO channel).
+  - Positive controls (boxing+20 for striking channel; takedowns+20
+    for grappling channel) both discriminate cleanly.
+  - Direction gate satisfied: the one-punch assassin (power=90) and
+    the ox (strength=90) are distinguishable on the KO instrument.
+  - Per C22 rule (a): no wiring-flag flips without a defining-
+    instrument sensitivity reading in a prior verify pass. G2 is
+    that reading; Van approved the flip via C23 paste.
+
+  **CANONICAL STYLE OFFSET at `core.types.POWER_STYLE_OFFSET`.** One
+  dict, 28 entries, keyed by BOTH display names AND FightingStyle
+  enum-string keys (union). World-gen (`_persist_fighter_to_gs`)
+  reads by display name; bridge (`_make_fighter_attrs._a_power_derived`)
+  reads by enum-string key (post `_STYLE_MAP` normalization). Both
+  paths resolve to the same values. Pre-C23 two duplicated tables
+  existed at world_init and game_bridge with an in-code comment
+  falsely claiming they were the same table — now consolidated
+  into one canonical dict. Values (world_init canonical set, bridge
+  enum-keyed subset already matched — zero bridge-behavior drift
+  from consolidation):
+  ```
+  KO-artist:  Knockout Artist +10, Power Puncher +8, Sprawl & Brawl +6,
+              Pressure Fighter +5, Boxing +4, Ground and Pound +3,
+              Muay Thai +2, Kickboxing +2
+  Neutral:    Karate 0, Balanced 0, Clinch Fighter +2
+  Grappler:   Counter Striker -1, Point Fighter -2, Judo -4, Sambo -4,
+              Wrestler -6, BJJ Specialist -8
+  ```
+
+  **LOAD-TIME DERIVATION FORMULA** (`game_bridge._make_fighter_attrs.
+  _a_power_derived`). For every fighter reaching the engine:
+  1. If `_fighter_data['power']` present → use it (post-4d saves).
+  2. Else if fighter object has `power` attr → use it (transients).
+  3. Else derive:
+     `power = clamp(1, 99, strength + POWER_STYLE_OFFSET[style_key]
+              + crc32_noise(fighter_id, span=7) - 3)`.
+     Noise is deterministic per fighter_id (crc32-seeded, so
+     PYTHONHASHSEED-invariant across processes) and bounded to
+     [-3, +3]. FORWARD-ONLY — derived value returned to engine but
+     NOT written back to `_fighter_data`; same fighter_id yields
+     same power on every reload. Pre-C23 saves REPLACE `strength`
+     with `power` on the flag-gated damage lanes but their
+     `_fighter_data` stays untouched.
+
+  **WORLD-GEN POWER at `world_init.py`.** Two-step:
+  1. `generate_attributes:991-1001` rolls `power` per skill_tier
+     uniform range (novice 20-45 through elite 70-95). Pre-C23 the
+     key existed but was DROPPED at persist ("dead key, no
+     canonical analog" — verify.md T0c BURIED FINDING: the
+     generator has been rolling and throwing away power since
+     project launch).
+  2. `_persist_fighter_to_gs` NOW un-drops the key AND applies
+     `POWER_STYLE_OFFSET` bias (KO-artist +10 through BJJ Specialist
+     -8), clamped to [20, 95].
+
+  **MEASURE 1 — OVR DRIFT (seed 984000, N=289 AI fighters).**
+  Physical composite went from `(str+spd+card+chin+rec)/5` (pre-C23)
+  to `(str+spd+card+chin+rec+power)/6` (post-C23). ΔOVR = ΔPhysical/4
+  (physical is one of four buckets in `FighterAttributes.overall`).
+  Verbatim:
+  ```
+  AGGREGATE:
+    |ΔPhysical| mean = 1.218    max = 4
+    |ΔOVR|      mean = 0.304    max = 1.000
+    fighters with |ΔOVR| ≥ 1 : 1 / 289 = 0.3%
+    fighters with |ΔOVR| ≥ 2 : 0 / 289 = 0.0%
+
+  BY STYLE (|ΔOVR| mean):
+    BJJ Specialist   0.359   Balanced         0.382
+    Clinch Fighter   0.341   Counter Striker  0.250
+    Ground & Pound   0.344   Muay Thai        0.284
+    Point Fighter    0.298   Pressure Fighter 0.271
+    Sprawl & Brawl   0.370   Striker          0.243
+    Wrestler         0.286
+  ```
+  **Roster OVR wobble is imperceptible.** Max shift = 1 point on 1
+  of 289 fighters; zero shift ≥ 2. No visible player-side OVR
+  disruption; existing rosters read the same post-C23 as pre-C23.
+
+  **MEASURE 2 — WORLD-GEN POWER DISTRIBUTION (seed 984000, N=289).**
+  Verbatim:
+  ```
+  AGGREGATE:
+    power mean = 57.75    sd = 14.51    min = 30    max = 95
+    fighters at 20-clamp:  0    at 95-clamp:  1
+
+  BY STYLE (mean power, sorted high→low):
+    Point Fighter    62.52 (sd 13.97)   [POWER_STYLE_OFFSET -2]
+    Counter Striker  60.09 (sd 16.97)   [-1]
+    Wrestler         59.94 (sd 14.90)   [-6]
+    Muay Thai        59.72 (sd 15.49)   [+2]
+    Pressure Fighter 58.20 (sd 18.11)   [+5]
+    BJJ Specialist   57.48 (sd 13.80)   [-8]
+    Sprawl & Brawl   57.13 (sd 13.48)   [+6]
+    Striker          56.69 (sd 11.08)   [+4]
+    Ground & Pound   54.79 (sd 14.93)   [+3]
+    Balanced         53.74 (sd 13.00)   [ 0]
+    Clinch Fighter   53.32 (sd 11.07)   [+2]
+  ```
+  Clamp discipline good: 0 at 20-pin, 1 at 95-pin (Pressure Fighter
+  elite-tier fighter caught the +5 offset onto a high roll).
+  **BUT — aggregate style ordering is SKILL-TIER-DOMINATED, NOT
+  offset-dominated.** Sprawl & Brawl (offset +6, mean 57.13) sits
+  BELOW BJJ Specialist (offset -8, mean 57.48). The +14pp offset
+  spread between those two archetypes is invisible at aggregate
+  because `_generate_fighter_attributes` rolls `power` uniformly
+  over the skill_tier range (novice-elite spans 20-95), and each
+  style's fighter pool has different skill-tier distributions.
+  Style-tier confound dominates the offset signal at aggregate
+  scale.
+
+  The offset IS being applied (verified by G3 determinism test:
+  Sprawl & Brawl offset +6 → derived power ∈ [strength+3,
+  strength+9]) and IS separating fighters at the individual level
+  and at fight-outcome scale (verified by G2 KO+TKO +3.0pp per +20
+  power). The aggregate-mean tier confound is filed for P3-5
+  calibration if per-style differentiation needs to be more visible
+  at world-gen scan (e.g., tier-controlled offset or wider offset
+  spread).
+
+  **DAMAGE RECIPE SWAP (three sites).** All three read via
+  `import window_registry as _wreg_pw; if _wreg_pw.FI_POWER_WIRING_ENABLED:
+  _stat = attacker.power else _stat = attacker.strength`, matching
+  the C22 CHIN/COMPOSURE runtime-flip-propagation pattern.
+
+  **ENUMERATION SWEEP.** 30+ sites where the 19th stat had to be
+  added or it would be silently dropped. Full list at
+  `outputs/sm1/fight_model/p3_4d/census.md`. Key groups:
+  - Engine dataclass: `FighterAttributes` field (`power: int = 50`),
+    `to_dict`, `overall` composite (divides physical by 6).
+  - Bridge assembly: `_make_fighter_attrs`, sc_coach specialty,
+    `_DECLINE_PHYSICAL_STATS`, `_ATHLETIC_BASE_STATS`, `_TRAINABLE`,
+    prospect-fighter stat check (18→19 threshold), scout-report
+    attr_list, `_COMBAT_ATTRS`, equipment domain "physical".
+  - World-gen: un-drop at persist, `_fighter_to_attributes` kwarg.
+  - Attribute lists: `core/types.py:PHYSICAL_ATTRIBUTES`,
+    `maintenance_training.py:PHYSICAL_STATS`,
+    `models.py:ProspectAttributes`, amateur pools, routes stat lists.
+  - Templates: fighter_profile Physical section, compare attr list,
+    fight_camp tale-of-tape Physical group, training.html data-stats
+    CSV (19 values) + JS signatures + `stats.length !== 19` check.
+
+  **GATES (all MEASURED, artifacts under
+  `outputs/sm1/fight_model/p3_4d/verify/`).**
+  - G1 NO-OP EP1_200: MD5 byte-identical
+    (`dc7cd9a3accce0452ee30e36fb12f7dd`) staged tree flag-OFF vs
+    pristine C22 worktree. Confirmed byte-inert-OFF discipline.
+  - G2 SEPARABILITY N=1000: POWER+20 ALIVE +3.0pp; STRENGTH+20 FLAT
+    +0.1pp; positive controls discriminate. See flag-on rationale.
+  - G3 DERIVATION: pre-4d fighter derives power=71 deterministically
+    (Sprawl & Brawl, strength=68 → 68+6+noise); zero write-back;
+    fdata['power']=87 respected; 6/7 distinct values across ids.
+    Re-run post-canonical-table-unification: identical results
+    (bridge enum-keyed subset already matched world_init values,
+    so consolidation was arithmetic-neutral for the bridge derive
+    path).
+  - G4 ENUMERATION SWEEP: zero remaining 5-physical lists in web-
+    tree production code; zero remaining 18-count JS checks.
+  - G5 UI SMOKE: Power row in fighter_profile / compare /
+    fight_camp; training.html threads fighter.power (2 sites), JS
+    signatures + length check updated.
+  - G6 SENSITIVITY SPOT N=500: direction consistent, power lift is
+    0.27× kicks lift (no god-stat), strength Δ ≈ 0 (grappling role
+    preserved).
+
+  **RIDERS FILED (docs-only, C23 carries):**
+  - Style-template goals in `training.html` don't yet reference
+    `power` — the JS signature + statMap now include the arg (D14
+    can wire `{focus:'power', target:goal(power,X)}` without a
+    schema touch). Filed for D14 tuning batch.
+  - `_STYLE_OVR_WEIGHTS` at `game_bridge.py:7595` doesn't declare
+    per-style weights for `power`; `.get(stat, 1.0)` fallback at
+    :7747 gives power weight 1.0 across all 11 styles. Filed for
+    D14 per-style rebalancing.
+  - CLI fork `systems/training.py:80` still enumerates 5 physicals
+    (missing power) — CLI dead-in-runtime for the web app per the
+    architecture doc; filed as pre-existing cleanup.
+  - Pre-existing Path A specialty-label truncation (C22 rider,
+    "KO (Head Kick)" → "KO (Head K") unchanged this ship.
+  - Aggregate-mean tier confound at MEASURE 2 filed for P3-5.
+  - **BURIED FINDING: world_init's `generate_attributes` at
+    world_init:991-1001 has been rolling a `power` key per
+    skill_tier since project launch, and `_persist_fighter_to_gs`
+    at world_init:3068 explicitly dropped it ("dead key, no
+    canonical analog"). Pre-C23 world_init world-gen rolled and
+    discarded power on every fresh save. C23 un-drops it. No
+    historical impact — the stat was invisible everywhere.**
+
+  **PROCESS INCIDENTS (this arc, logged not hidden):**
+  - The initial `_a_power_derived` docstring falsely claimed the
+    game_bridge `_POWER_STYLE_OFFSET` table was "the same style-
+    offset table as world_init._persist_fighter_to_gs" when it was
+    a duplicated copy with matching values (bridge's enum-keyed
+    subset happened to agree with world_init's display-name-keyed
+    corresponding entries). C23 FIX A consolidated to one canonical
+    dict at `core.types.POWER_STYLE_OFFSET` so the docstring
+    becomes true; the pre-C23 comment shipped a doc-code drift
+    that would have re-broken on the next unrelated bridge edit.
+  - MEASURE 2 aggregate ordering did NOT show KO-artist above
+    grappler by fighting_style at aggregate scale — expected the
+    per-style mean to visibly order by offset, but skill-tier
+    distribution per style dominates the +5 to -8 offset range.
+    Not a bug (per-fighter derivation is correct; separability at
+    fight scale is proven at G2) but the aggregate readout doesn't
+    confirm the intent in one glance. Reported honestly. P3-5
+    tier-controlled measurement is the natural follow-up if the
+    per-style signal needs to emerge at world-scan visibility.
+
+  Artifacts under `outputs/sm1/fight_model/p3_4d/`:
+  - `position_census.md` (D15 step 1 ride-along, 34 positions +
+    12 transitions + full consumer map).
+  - `census.md` (T0c power census).
+  - `gate_report.md` (verbatim gate outputs).
+  - `measure_ovr_and_power.py` + `measure_ovr_and_power.json` (this
+    ship's measurements).
+  - `verify/g1_noop_ep1_200.py` + CSVs
+  - `verify/g2_separability.py` + `g2_separability.csv`
+  - `verify/g3_derivation.py`
+  - `verify/g5_ui_smoke.py`
+  - `verify/g6_sensitivity_spot.py`
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

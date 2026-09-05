@@ -492,9 +492,10 @@
                             {{ fighter.submissions }},{{ fighter.guard }},
                             {{ fighter.strength }},{{ fighter.speed }},
                             {{ fighter.cardio }},{{ fighter.chin }},
-                            {{ fighter.recovery }},{{ fighter.fight_iq }},
+                            {{ fighter.recovery }},{{ fighter.power }},
+                            {{ fighter.fight_iq }},
                             {{ fighter.composure }},{{ fighter.heart }},
-                            '{{ fighter.career_phase }}')"
+                            '{{ fighter.career_phase }}')"  {# P3-4d: threaded power after recovery #}
                         style="font-size:.72rem;padding:6px 14px;
                                background:rgba(255,165,0,.08);
                                border:1px solid rgba(255,165,0,.25);
@@ -515,7 +516,7 @@
                 <div id="coach-rec-{{ fighter.fighter_id }}"
                      data-fid="{{ fighter.fighter_id }}"
                      data-style="{{ fighter.fighting_style }}"
-                     data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.clinch_control }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"
+                     data-stats="{{ fighter.boxing }},{{ fighter.kicks }},{{ fighter.clinch_striking }},{{ fighter.clinch_control }},{{ fighter.striking_defense }},{{ fighter.takedowns }},{{ fighter.takedown_defense }},{{ fighter.top_control }},{{ fighter.submissions }},{{ fighter.guard }},{{ fighter.strength }},{{ fighter.speed }},{{ fighter.cardio }},{{ fighter.chin }},{{ fighter.recovery }},{{ fighter.power }},{{ fighter.fight_iq }},{{ fighter.composure }},{{ fighter.heart }}"  {# P3-4d: power threaded after recovery, 19 CSV values #}
                      data-fight-weeks="{% if _nf %}{{ _nf.weeks_until }}{% else %}-1{% endif %}"
                      data-fight-opp="{% if _nf and _nf.opponent %}{{ _nf.opponent }}{% endif %}"
                      style="font-size:.72rem;color:var(--text-muted);">
@@ -826,10 +827,14 @@
 {% endfor %}
 
 <script>
+// P3-4d: added `power` param after `recovery`. Not yet consumed by
+// any style-template goal (D14 tunes per-style power targets); the
+// arg threads through so JS destructure stays aligned with the 19
+// data-stats CSV values.
 function buildStyleTemplates(
     boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
-    chin, recovery, fightIq, composure, heart) {
+    chin, recovery, power, fightIq, composure, heart) {
 
     function goal(cur, styleMin) {
         const t = Math.max(cur + 15, styleMin);
@@ -1773,19 +1778,21 @@ function coachRecommend(
     fighterId, style,
     boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
-    chin, recovery, fightIq, composure, heart) {
+    chin, recovery, power, fightIq, composure, heart) {  // P3-4d added power
     const templates = buildStyleTemplates(
         boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
         topCtrl, subs, guard, strength, speed, cardio,
-        chin, recovery, fightIq, composure, heart);
+        chin, recovery, power, fightIq, composure, heart);  // P3-4d threaded power
     let arr = templates[style];
     if (!arr) arr = templates['Hybrid'];
     if (!Array.isArray(arr) || !arr.length) return null;
+    // P3-4d: statMap picks up `power` — future style templates can
+    // score `{focus:'power', target:...}` goals against fighter state.
     const statMap = {boxing, kicks, clinch_striking:clinch,
         clinch_control:clinchCtrl,
         striking_defense:strDef, takedowns, takedown_defense:tdDef,
         top_control:topCtrl, submissions:subs, guard,
-        strength, speed, cardio, chin, recovery,
+        strength, speed, cardio, chin, recovery, power,
         fight_iq:fightIq, composure, heart};
     // Score by sum(target - current, floored at 0) across non-maintain goals.
     let best = null, bestScore = -1, bestIdx = -1;
@@ -1805,7 +1812,7 @@ function coachRecommend(
 function loadStyleTemplate(fighterId, style,
     boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
     topCtrl, subs, guard, strength, speed, cardio,
-    chin, recovery, fightIq, composure, heart, careerPhase) {
+    chin, recovery, power, fightIq, composure, heart, careerPhase) {  // P3-4d added power
 
     const intensity = (careerPhase === 'Declining' || careerPhase === 'Veteran')
         ? 'MODERATE' : 'INTENSE';
@@ -1813,7 +1820,7 @@ function loadStyleTemplate(fighterId, style,
     const templates = buildStyleTemplates(
         boxing, kicks, clinch, clinchCtrl, strDef, takedowns, tdDef,
         topCtrl, subs, guard, strength, speed, cardio,
-        chin, recovery, fightIq, composure, heart);
+        chin, recovery, power, fightIq, composure, heart);  // P3-4d threaded power
 
 
     // Cache library + intensity for picker callbacks.
@@ -2158,7 +2165,7 @@ function applyPickedTemplate(fighterId, style, idx) {
         const el = document.getElementById('coach-rec-' + fighterId);
         if (!el) return;
         const stats = (el.dataset.stats || '').split(',').map(Number);
-        if (stats.length !== 18 || stats.some(isNaN)) return;
+        if (stats.length !== 19 || stats.some(isNaN)) return;  // P3-4d: 19 stats (added power)
         try {
             const templates = buildStyleTemplates(...stats);
             cache = { templates: templates, intensity: 'INTENSE' };
@@ -2360,7 +2367,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const fid    = el.dataset.fid;
         const style  = el.dataset.style;
         const stats  = el.dataset.stats.split(',').map(Number);
-        if (stats.length !== 18 || stats.some(isNaN)) return;
+        if (stats.length !== 19 || stats.some(isNaN)) return;  // P3-4d: 19 stats (added power)
         let rec;
         try {
             rec = coachRecommend(fid, style, ...stats);
