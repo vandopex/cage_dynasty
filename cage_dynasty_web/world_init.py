@@ -3047,6 +3047,15 @@ class WorldInitializer:
             if hasattr(record, 'personality'):
                 record.personality = getattr(
                     fighter, 'personality', 'Competitor')
+            # C25: FighterRecord.fighting_style promoted to a real field.
+            # Stamp it here at world-gen so fresh AI fighters carry it
+            # into the resolve_gameplan path natively — closes the AI-
+            # plans-dead defect that C24 papered over via a fallback.
+            # hasattr-guard preserved for old FighterRecord shapes on
+            # legacy saves without the field.
+            if hasattr(record, 'fighting_style'):
+                record.fighting_style = str(getattr(
+                    fighter, 'fighting_style', '') or '')
             self.game_state.fighters[fighter.fighter_id] = record
 
         # Ship #32: persist world-gen's actual attribute values into

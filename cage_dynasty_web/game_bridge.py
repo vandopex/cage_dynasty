@@ -17989,20 +17989,25 @@ class GameBridge:
                 _tend_on = False
             _record = (self._game_state.get_fighter(_fid)
                        if (self._game_state and _fid) else None)
-            # P3-4e BURIED FINDING: FighterRecord baseline has no
-            # `fighting_style` attribute (only line 2344's dynamic-
-            # attr stamp path sets it, and hasattr-guarded that
-            # never fires for fresh AI fighters). So pre-C24
-            # `_resolve_gameplan` reads '' for every AI fighter,
-            # then _STYLE_TO_CANONICAL.get('', '') is '', then
-            # ai_gameplan_for_style('') is 'BALANCED', then aggr=0
-            # range=0 collapses to None. **AI gameplans have been
-            # dead (None) since GAMEPLAN-AI-SELECT1 shipped.** Not
-            # touched by C24 flag-OFF (preserves G1 byte-identity
-            # vs pristine C23). Under the C24 flag ON, style is
-            # sourced from `_fighter_data[fid]['style']` — where
-            # world_init actually stores it — so tendency-based AI
-            # plan is real, not empty-string collapse.
+            # P3-4e BURIED FINDING: pre-C24 FighterRecord baseline
+            # had no `fighting_style` attribute — the field was only
+            # stamped via game_bridge.py:2344's hasattr-guarded
+            # dynamic-attr path, which never fired for fresh AI
+            # fighters. So pre-C24 `_resolve_gameplan` read '' for
+            # every AI fighter → `ai_gameplan_for_style('')` →
+            # 'BALANCED' → aggr=0 range=0 → collapse to None. **AI
+            # gameplans have been dead (None) since GAMEPLAN-AI-
+            # SELECT1 shipped.**
+            #
+            # C25 promoted `fighting_style` to a real field on
+            # FighterRecord (game_state.py) + stamped it at world-
+            # gen (world_init._persist_fighter_to_gs). For post-C25
+            # universes the record read succeeds directly and the
+            # `_fighter_data['style']` fallback becomes dead code.
+            # The fallback is KEPT because legacy saves (fresh saves
+            # generated pre-C25) still have empty record.fighting_style
+            # and need the fallback to resolve real styles at load.
+            # Forward-only; no backfill onto legacy saves.
             _raw = str(getattr(_record, 'fighting_style', '') or '')
             if _tend_on and not _raw:
                 _fd = (self._game_state._fighter_data.get(_fid, {})

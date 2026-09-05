@@ -100,6 +100,17 @@ class FighterRecord:
     # Personality — drives challenge acceptance + inbound offer frequency.
     # One of: Warrior / Competitor / Calculated / Hungry / Political.
     personality: str = ""
+    # C25: fighting_style promoted to a real field. Pre-C25 the field
+    # was only stamped onto the record via game_bridge.py:2344's
+    # hasattr-guarded dynamic-attr path, which never fired for fresh
+    # AI fighters because the dataclass had no such attribute. That
+    # is the root cause of the C24 "AI plans have been None since
+    # GAMEPLAN-AI-SELECT1" defect. Making the field real fixes the
+    # write side. Legacy saves without the field get '' by default;
+    # game_bridge._resolve_gameplan's `_fighter_data['style']`
+    # fallback (C24) covers those old universes until they re-save
+    # through a fresh new_game. Forward-only, no backfill.
+    fighting_style: str = ""
     camp_id: Optional[str] = None
     contract_id: Optional[str] = None
     is_champion: bool = False
@@ -145,6 +156,7 @@ class FighterRecord:
             "natural_weight_class": self.natural_weight_class,
             "body_frame": self.body_frame,
             "personality": self.personality,
+            "fighting_style": self.fighting_style,  # C25
             "camp_id": self.camp_id,
             "contract_id": self.contract_id,
             "is_champion": self.is_champion,
@@ -170,6 +182,8 @@ class FighterRecord:
             data["fight_history"] = []  # Default
         if "career_fotn_awards" not in data:
             data["career_fotn_awards"] = 0  # FOTN-PERSIST-FIX1: forward-only default
+        if "fighting_style" not in data:
+            data["fighting_style"] = ""  # C25: forward-only default
         return cls(**data)
 
 
