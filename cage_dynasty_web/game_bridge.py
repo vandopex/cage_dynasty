@@ -2336,14 +2336,31 @@ class GameBridge:
             for _fid, _frec in self._game_state.fighters.items():
                 _fdata = self._game_state._fighter_data.get(_fid, {})
                 if "style" not in _fdata:
-                    # Seed per fighter for consistency across calls
-                    _srnd.seed(hash(_fid) & 0xFFFFFFFF)
-                    _style = _srnd.choices(_STYLE_POOL, weights=_STYLE_WEIGHTS, k=1)[0]
+                    # STYLECOHERENCE1 (P5-B2, 2026-09-05). Prefer the
+                    # style world_init assigned (record.fighting_style),
+                    # populated post-P5-B2 by world_init.py:3058 with
+                    # GeneratedFighter's country/stat-informed born
+                    # style. Fall back to the pre-P5-B2 seeded random
+                    # ONLY when the record field is empty — this covers
+                    # fighter-creation paths that skip world_init AND
+                    # legacy saves that reach this branch (though
+                    # normally legacy saves have _fdata['style'] cached
+                    # and skip this whole block). Note: pre-P5-B2 the
+                    # code special-cased "Balanced" as treated-as-empty
+                    # (legacy default); dropped here because P5-B2 makes
+                    # Balanced a real world-init pick, not a placeholder.
+                    # Forward-only per Van's directive — legacy saves
+                    # keep their currently-played styles.
+                    _rec_style = str(getattr(_frec, 'fighting_style', '') or '')
+                    if _rec_style:
+                        _style = _rec_style
+                    else:
+                        # Seed per fighter for consistency across calls
+                        _srnd.seed(hash(_fid) & 0xFFFFFFFF)
+                        _style = _srnd.choices(_STYLE_POOL, weights=_STYLE_WEIGHTS, k=1)[0]
+                        if hasattr(_frec, 'fighting_style'):
+                            _frec.fighting_style = _style
                     _fdata["style"] = _style
-                    # Also store on the FighterRecord if it has the field
-                    if hasattr(_frec, 'fighting_style') and (
-                            not _frec.fighting_style or _frec.fighting_style == "Balanced"):
-                        _frec.fighting_style = _style
                     self._game_state._fighter_data[_fid] = _fdata
             
             # Create player's starting fighter from selected prospect

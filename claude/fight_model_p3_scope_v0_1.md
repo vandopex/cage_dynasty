@@ -7,10 +7,11 @@
 # ARCHIVE1 (CLAUDE.md split); P5-A FINISH MODEL SHIPPED as C29
 # (2026-09-05, machinery only — no calibration); P5-B1 SHIPPED as
 # C30 (2026-09-05, D17 stamina floor + D18 unified power model +
-# BF-2 offset-table aliases; BF-1 filed as STYLECOHERENCE1 to
-# post-arc queue with 10.2% born-vs-played match as entry gate);
-# next: P5-B2 (cuts flip + aggression pack), then P3-5 calibration.
-# Updated 2026-09-05 (C30 docs-and-engine ship).
+# BF-2 offset-table aliases); STYLECOHERENCE1 SHIPPED as C31
+# (2026-09-05, born styles reach the play surface; coach selection
+# resurrected; flag-gated style bonuses); next: P5-B3 cuts flip +
+# aggression pack, P5-B4 judge re-weight + D19 plumbing, then
+# P3-5 calibration. Updated 2026-09-05 (C31 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -134,6 +135,57 @@ strict architect-intent reading. Filed to P3-5 with numbers.
 
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
+
+### STYLECOHERENCE1 — SHIPPED as C31 (2026-09-05)
+
+Born styles reach the play surface. Three-part fix:
+- **world_init sites 1 + 4**: attribute-read fix
+  (`fighter.fighting_style` → `fighter.style`) at
+  `world_init.py:3070` (C25 record stamp — dead-in-write since C25
+  shipped) and `world_init.py:2801-2807` (style census counter
+  feeding `_dominant_coach_type`).
+- **Bridge coherence fix**: `game_bridge.py:2336-2352` reads
+  `record.fighting_style` first (populated post-fix by
+  world_init); falls back to per-fid seeded random only when
+  empty (legacy saves + defensive). Dropped the
+  `== "Balanced"` special case (Balanced is now a real world-init
+  pick, not a placeholder). Forward-only per Van.
+- **Sites 2+3 flag-gated**: attribute-read fix AND behavior
+  wrapped behind `STYLE_CLINCH_BONUS_ENABLED` +
+  `STYLE_TDD_BONUS_ENABLED` (both default False, in
+  `window_registry.py`). Flip flags in later ships with their own
+  readings per Van rule (a). P5-B1 filing labeled site 3
+  "training modifier"; corrected here — actual code is a
+  world-gen takedown_defense bonus.
+
+Gates: **G1 COHERENCE 100.00% (278/278) — was 10.2%**;
+G2 legacy safety both paths (Path A cache present, Path B record
+present) 50/50 unchanged; G3 flag inertness EP1 MD5 identical,
+sites 2+3 stat MD5s identical (only power MD5 differs — falsified
+as noise via staged-vs-staged run, coach system dormant in probe
+matching PA production `COACHES_AVAILABLE=False`); G4 behavior
+banked for P5-C (Wrestler sub-att ×3, finish +13pp; BJJ Specialist
+finish −16.5pp as sub-finish-rate dial input; TAKEDOWN preset
++40, BALANCED +44, CLINCH −49); G5 played-style distribution
+verbatim (Wrestler 36→50, Clinch Fighter 27→3, Counter Striker
+23→5 — world-init's country/stat-informed clusters reach the
+surface).
+
+Buried-finding chain now three deep: (1) C25 stamp dead-in-write
+since C25 shipped, (2) bridge random deal masked the write bug,
+(3) `_dominant_coach_type` always returns `boxing_coach` when
+counter is empty. Site 4's fix is functionally dormant until a
+separate ship unblocks `systems.coaches` import (documented at
+CLAUDE.md "PA silent-fail feature losses" and reconfirmed in
+this session's probe: both trees show `Coaches: 0`).
+
+STYLE-DEAD1 (outcome-layer style-flip constructor bug) remains
+independent; coherent styles do not activate that branch.
+
+Full filing under CLAUDE.md "FIGHT MODEL STYLECOHERENCE1
+[COMMITTED as C31, 2026-09-05]".
+
+NO DEPLOY (S2 freeze holds).
 
 ### P5-B1 D17 STAMINA FLOOR + D18 POWER MODEL — SHIPPED as C30 (2026-09-05)
 
@@ -341,24 +393,24 @@ record shape read-only first. Lands with the D14/P3-6 batch.
 
 ## POST-ARC DOCKET QUEUE (D15)
 
-STYLECOHERENCE1 (Van 2026-09-05) — WORLD-INIT ↔ BRIDGE STYLE
-ALIGNMENT. Fix the four `getattr(fighter, 'fighting_style', '')`
-sites in `world_init.py` (attribute is `.style` on
-GeneratedFighter): (1) C25 `record.fighting_style` stamp at
-world_init:3058-3060 (dead-in-write since C25 shipped); (2) style-
-based clinch_control bonus at world_init:3128 (never applied);
-(3) style-based training modifier at world_init:3142 (never
-applied); (4) style census counter at world_init:2802-2803 (always
-zero). Entry gate MEASURED at P5-B1 (C30): fresh world seed
-995700 through bridge.new_game (production population, n=285),
-world_init.style vs record.fighting_style match rate = 10.2%
-(1/11 uniform-random). 89.8% of AI fighters play under styles
-DIFFERENT from what world_init built them as. Prerequisite:
-consumer census on downstream effects (rankings, matchmaking,
-coach interactions, gameplan resolution rates) BEFORE fix —
-STYLECOHERENCE1 shifts 89.8% of the roster onto their world-init
-styles, real live-behavior change. Instrument-before-fix per
-standing rule.
+STYLECOHERENCE1 — PROMOTED and SHIPPED as C31 (2026-09-05). See
+DOCKET P3-5 section above and CLAUDE.md filing. Post-C31 queue:
+- **STYLE_CLINCH_BONUS_ENABLED flip** (world_init:3159) — flag
+  dark, needs before/after reading on clinch_control-driven
+  behavior (clinch entries, clinch-strike damage, cage-control
+  time) per C22 rule (a).
+- **STYLE_TDD_BONUS_ENABLED flip** (world_init:3183) — same
+  discipline; measure takedown-defense-driven behavior (TD
+  landing rates for Muay Thai / Sprawl & Brawl / Karate
+  matchups).
+- **`systems.coaches` import unblock** — separate ship (not
+  scoped for the fight-model arc). Once `COACHES_AVAILABLE=True`
+  in production, site 4's coach-fits-style ripple activates
+  naturally without further code changes.
+- **STYLE-DEAD1 outcome-layer style-flip** — independent
+  mechanism, dead-in-write at the constructor value-lookup site;
+  P5-C or a later ship if Van wants style-matchup modifier
+  active.
 
 POSITIONS1: fence/cage → front headlock → standing-over-downed →
 scrambles-as-windows → back-mount quality.
@@ -463,7 +515,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C29 1e12a0f. Standing
+Fresh date + HEAD gate (last shipped: C30 fb3febf. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

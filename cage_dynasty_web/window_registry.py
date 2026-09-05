@@ -77,6 +77,30 @@ FI_POWER_WIRING_ENABLED: bool = True
 FI_AGGRESSION_RULES_ENABLED: bool = False
 FI_IQ_EXECUTION_ENABLED: bool = False
 
+# ── STYLECOHERENCE1 (P5-B2, 2026-09-05): world-gen style-based
+# attribute bonuses. Pre-P5-B2 these blocks read
+# `getattr(fighter, 'fighting_style', ...)` on a GeneratedFighter
+# whose attribute is `.style` — the read returned '' and the
+# bonus never applied (BF-1 finding). P5-B2 fixes the attribute
+# read but leaves the behavior BEHIND FLAGS so styles becoming
+# real doesn't silently activate world-gen attribute biases
+# alongside AI-plan coherence. Van rule (a) — no wiring-flag flips
+# without a defining-instrument sensitivity reading in a prior
+# verify pass.
+#
+# When ON:
+#  - STYLE_CLINCH_BONUS_ENABLED: world_init:3136 (was 3128 pre-D18)
+#    applies +8/+6/+6/+5/+4/+4 to clinch_control for Clinch
+#    Fighter / Muay Thai / Judo / Sambo / Wrestler / Pressure
+#    Fighter respectively.
+#  - STYLE_TDD_BONUS_ENABLED: world_init:3150 (was 3142 pre-D18)
+#    applies +6/+4/+3 to takedown_defense for Muay Thai / Sprawl
+#    & Brawl / Karate respectively. [P5-B1 filing labeled this
+#    "training modifier" — corrected here: the code is a TDD
+#    bonus at world-gen, not a training modifier.]
+STYLE_CLINCH_BONUS_ENABLED: bool = False
+STYLE_TDD_BONUS_ENABLED: bool = False
+
 # ── Stage 2c constants ──────────────────────────────────────────
 SPRAWL_PUNISH_DAMAGE_MULT: float = 1.25  # P3-5 calibrates
 

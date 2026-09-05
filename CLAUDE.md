@@ -3776,6 +3776,273 @@ d17_readings.py + JSON (staged + pristine), d18_readings.py + JSON
 style_coherence_out.txt.
 
 
+### FIGHT MODEL STYLECOHERENCE1 [COMMITTED as C31, 2026-09-05]
+
+Born styles reach the play surface. World-init's country/stat-
+informed style generation now flows through to `_resolve_gameplan`,
+style windows, counter mechanics, scout reports — every play-time
+consumer surface. Promoted from post-arc queue by Van's P5-B2 paste.
+S2 freeze holds — NO DEPLOY.
+
+**THE FIX (three parts, forward-only).**
+- **T2 (a) — world_init sites 1 + 4 (attribute-read fix, no
+  gating).** `world_init.py:3070` (C25 record.fighting_style
+  stamp) + `:2801-2807` (style census counter): `getattr(fighter,
+  'fighting_style', '')` → `getattr(fighter, 'style', '')`.
+  GeneratedFighter's actual attribute is `.style` (line 1115);
+  the pre-fix reads returned '' every time.
+- **T2 (b) — the coherence fix at `game_bridge.py:2336-2352`.**
+  Bridge backfill now reads `record.fighting_style` FIRST
+  (populated post-fix by world_init); falls back to per-fid seeded
+  random ONLY when the record field is empty (legacy saves +
+  defensive). Dropped the pre-P5-B2 `_frec.fighting_style ==
+  "Balanced"` special case — under STYLECOHERENCE1 Balanced is a
+  real world-init pick, not a placeholder to overwrite. Forward-
+  only per Van: legacy saves keep their currently-played styles
+  because they hit the outer `if "style" not in _fdata:` guard.
+- **T2 (c) — sites 2 + 3 (attribute fix + flag gating).** Added
+  `window_registry.py`:
+  - `STYLE_CLINCH_BONUS_ENABLED: bool = False` (world_init:3159
+    — clinch_control bonus for Clinch Fighter / Muay Thai / Judo
+    / Sambo / Wrestler / Pressure Fighter)
+  - `STYLE_TDD_BONUS_ENABLED: bool = False` (world_init:3183 —
+    takedown_defense bonus for Muay Thai / Sprawl & Brawl / Karate)
+  Both blocks fix the getattr and short-circuit to `_bonus = 0`
+  under flag OFF (runtime-flip propagation pattern per C22
+  CHIN/COMP/POWER wiring).
+
+**BURIED FINDING CHAIN — now three deep.**
+1. **C25 stamp dead-in-write since C25 shipped** (BF-1 site 1).
+   `record.fighting_style` was stamped as `''` on every fresh
+   fighter because the getattr targeted an attribute the source
+   object never had. The C25 promotion ledger (record.fighting_style
+   as a real field) was correct; the write path was broken from
+   day one. C27's KEEP ruling still stands — it measured the
+   bridge-side pipeline (`game_bridge.py:2336-2347`), not
+   world_init's stamp.
+2. **Bridge random deal masked the write bug** (P5-B1 measurement).
+   Because world_init's stamp wrote '', the bridge backfill saw
+   an empty record and used its own per-fid-seeded random pick.
+   Fighters played under styles ~89.8% different from what
+   world_init built them as (10.2% match = 1/11 uniform-random
+   coincidence rate). AI gameplans dispatched on the random
+   played style, not the born style.
+3. **`_dominant_coach_type` always returns `boxing_coach`**
+   (BF-1 site 4). The style census counter was reading the same
+   broken getattr → Counter stayed empty → fallback triggered
+   at `world_init.py:2796-2809` returned `"boxing_coach"`
+   unconditionally. Every camp received a boxing coach regardless
+   of style mix. Fixed here — but the ripple is bounded by (4).
+4. **Coach system silent-fail in production** (documented at
+   CLAUDE.md "PA silent-fail feature losses"): `from
+   systems.coaches import CoachSystem` fails on PA because
+   `systems` resolves to `cage_dynasty_web/systems/` stub. So
+   world_init's `COACHES_AVAILABLE=False` and the coach block
+   never runs. **Site 4's fix is functionally dormant in
+   production** until systems.coaches import is unblocked by a
+   separate ship. Defensive correctness lands here; the actual
+   coach-fits-style ripple activates in a future world where
+   COACHES_AVAILABLE=True.
+
+**GATES.**
+
+*G1 COHERENCE — seed 997000 through bridge.new_game.*
+
+| metric | pre-P5-B2 (C30) | staged P5-B2 |
+|---|---:|---:|
+| n_ai_fighters | 285 | 278 |
+| **born-vs-played match** | **10.2%** | **100.00%** (278/278) |
+| played-vs-cache match | 100.0% | 100.0% |
+
+**G1 PASS.** Zero mismatches. Born distribution equals played
+distribution byte-identically.
+
+*G2 LEGACY SAFETY — synthetic legacy-shaped states.*
+
+| path | n | unchanged | mutated |
+|---|---:|---:|---:|
+| A (`_fdata['style']` cached) | 50 | 50 | 0 |
+| B (record populated, cache absent) | 50 | 50 | 0 |
+
+**G2 PASS.** Path A hits the outer `if "style" not in _fdata:`
+guard and skips the whole block. Path B reads
+`record.fighting_style` and uses it without rerolling. Forward-
+only proven.
+
+*G3 FLAG INERTNESS — sites 2 + 3 flags OFF.*
+
+EP1_200 hand-built fight outcomes MD5:
+- pristine C30: `9238a179ba2d0424752b76f45ae63410`
+- staged (flags OFF): `9238a179ba2d0424752b76f45ae63410` ✓
+
+**G3(a) PASS — MD5 IDENTICAL.** Fight-engine behavior byte-
+identical.
+
+Fresh-world attribute distributions (seed 997250, N=276):
+
+| stat | pristine md5 | staged md5 | match |
+|---|---|---|---|
+| clinch_control | `60259f45...` | `60259f45...` | ✓ |
+| takedown_defense | `0395a8b6...` | `0395a8b6...` | ✓ |
+| strength | `86d75d7e...` | `86d75d7e...` | ✓ |
+| power | `0d41f312...` | `d9390db3...` | ✗ (Δ=+0.0072 mean) |
+
+**G3(b) PASS with root-cause correction.** Sites 2+3 (flag-gated
+bonuses) MD5-identical — confirmed inert. Strength MD5-identical
+— generation stage clean.
+
+The power MD5 difference was initially hypothesized to be site 4's
+coach-fits-style ripple. **Falsified by two follow-up
+measurements this session:**
+- **staged vs itself** (same code, two runs): power MD5 differs
+  (`d9390db3...` vs `bd0a14c4...`), mean differs by 0.036 —
+  LARGER than the staged-vs-pristine 0.007. Power derivation
+  depends on RNG state at persist-time, which is downstream of
+  uuid.uuid4() nondeterminism (per CLAUDE.md's "same-seed
+  measurements have never been reproducible" filing). This is
+  a noise floor artifact, not a mechanism-driven ripple.
+- **Coach system loading**: both trees show `Coaches: 0` under
+  the P5-B2 probe environment (staged AND pristine), matching
+  PA production's `COACHES_AVAILABLE=False` state. Site 4's
+  code path is DEAD in both arms. It cannot cause the delta
+  because it doesn't fire.
+
+Root cause of the delta: measurement noise (uuid-nondeterminism
+propagating through world-init RNG order). Site 4's fix is
+defensively correct but functionally dormant until a separate
+ship unblocks `systems.coaches` import.
+
+*Coach distribution measure* (seed 997500, both trees, through
+`bridge.new_game`):
+
+| arm | 40-camp coach-type distribution | verdict |
+|---|---|---|
+| pristine C30 | 40 × NONE (empty-counter fallback dormant) | dormant |
+| staged P5-B2 | 40 × NONE (empty-counter fallback dormant) | dormant |
+
+Van's spec anticipated PATHOLOGICAL vs SANE with SANE required
+to proceed. Actual verdict: **DORMANT in this environment** —
+the coach path doesn't fire at all. Van's accept-A ruling holds
+trivially: with no ripple to accept, the fix commits under the
+"defensively correct, functionally-dormant-until-systems-coaches-
+loads" reading.
+
+*G4 BEHAVIOR READING — banked for P5-C, not judged here.*
+Fixed-card AI-vs-AI, N=300 pairs, seeds 997400+.
+
+Method mix (per 300 fights):
+| bucket | pristine | staged | Δ |
+|---|---:|---:|---:|
+| KO | 4 | 2 | −2 |
+| TKO | 198 | 213 | +15 |
+| SUB | 44 | 34 | −10 |
+| DEC | 50 | 48 | −2 |
+| DRAW | 4 | 3 | −1 |
+
+AI plan preset census (600 fighter-slots):
+| preset | pristine | staged | Δ |
+|---|---:|---:|---:|
+| AGGRESSIVE | 179 | 198 | +19 |
+| TAKEDOWN | 77 | **117** | **+40** |
+| BALANCED | 26 | 70 | +44 |
+| CLINCH | 108 | 59 | **−49** |
+| DEFENSIVE | 43 | 12 | −31 |
+| MEASURED | 37 | 9 | −28 |
+| SUBMISSION | 80 | 81 | +1 |
+| GNP | 50 | 54 | +4 |
+
+Per-style SUB-attempts/fight (coherent wrestlers visibly wrestle):
+| style | pristine | staged |
+|---|---:|---:|
+| BJJ Specialist | 1.69 | 1.37 |
+| **Wrestler** | **0.25** | **0.74 (+195%)** |
+| Balanced | 0.17 | 0.61 |
+| Ground & Pound | 0.50 | 0.45 |
+
+Per-style finish rate:
+| style | pristine | staged | Δ |
+|---|---:|---:|---:|
+| **Wrestler** | **72.8%** | **85.7%** | **+13pp** |
+| Sprawl & Brawl | 89.8% | 97.2% | +7pp |
+| BJJ Specialist | 92.3% | 75.8% | **−16.5pp** |
+| Ground & Pound | 86.0% | 73.8% | −12pp |
+| Counter Striker | 86.0% | 75.0% | −11pp (n=12) |
+| Pressure Fighter | 84.0% | 75.7% | −8.3pp |
+| Muay Thai | 87.5% | 91.3% | +4pp |
+| Striker | 86.9% | 87.2% | +0.3pp |
+| Balanced | 82.9% | 82.9% | 0.0pp |
+| Clinch Fighter | 79.4% | 72.7% | −6.7pp |
+| Point Fighter | 85.3% | 100.0% | +14.7pp (n=9) |
+
+Coherent Wrestlers finish +13pp more, attempt subs ×3 more.
+Ground & Pound / Pressure Fighter drop ~10pp — striking-heavy
+dispatch dilutes under coherence, filed as P5-C dial input. The
+BJJ Specialist −16.5pp drop is a P5-C sub-finish-rate dial
+target — coherent BJJ specialists are stat-thinner than the
+bridge-random-picked ones were.
+
+*G5 PLAYED-STYLE DISTRIBUTION — fresh-universe flavor change is
+intentional world-gen design reaching the surface.*
+
+| style | pristine (bridge uniform) | staged (world-init informed) |
+|---|---:|---:|
+| Wrestler | 36 | 50 |
+| Striker | 33 | 46 |
+| Pressure Fighter | 37 | 38 |
+| Balanced | 15 | 36 |
+| BJJ Specialist | 32 | 36 |
+| Ground & Pound | 25 | 25 |
+| Muay Thai | 23 | 24 |
+| Sprawl & Brawl | 16 | 14 |
+| Point Fighter | 16 | 6 |
+| Counter Striker | 23 | **5** |
+| Clinch Fighter | 27 | **3** |
+
+Bridge weights (`14,8,10,9,12,9,10,8,6,7,7`) → flat-ish uniform.
+Post-STYLECOHERENCE1: world_init's country/stat-informed
+generation clusters heavier around Wrestler / Striker / Pressure
+Fighter / Balanced / BJJ Specialist. Clinch Fighter crashes 27→3
+and Counter Striker 23→5 — matching world_init's design intent
+(rarer archetypes in real MMA populations).
+
+**RIDERS.**
+- **BF-1 site 3 naming correction**: P5-B1 filing labeled site 3
+  as "training modifier"; the actual code is a world-gen
+  takedown_defense bonus. Flag named `STYLE_TDD_BONUS_ENABLED`
+  for accuracy; corrected in the code comment.
+- **STYLE-DEAD1 independence**: the outcome-layer style-flip
+  mechanism at `game_bridge.py` remains dead-in-write per the
+  CLAUDE.md STYLE-DEAD1 filing (constructor value-lookup on
+  enum-name string). Coherent styles do NOT activate the
+  style_mod branch. Independent ship if Van wants it fixed.
+- **Sites 2+3 flag flips are Van rule (a)** (no wiring-flag flips
+  without a defining-instrument sensitivity reading in a prior
+  verify pass). P5-C or later ships their own before/after
+  readings on clinch/tdd bonus effects.
+- **Bridge "Balanced" special-case retired**: pre-P5-B2 code
+  treated `record.fighting_style == "Balanced"` as empty and
+  re-rolled. Under STYLECOHERENCE1 Balanced is a real
+  world-init pick (~16% of the pool per G1 born distribution);
+  keeping the special case would incorrectly mangle real
+  Balanced fighters into other styles.
+- **UI safety**: every display consumer (12 templates + 3
+  narrative sites) reads through `record.fighting_style` or
+  `_fdata['style']`; both now populated with the coherent style.
+  No template changes required.
+- **Site 4 dormancy**: functionally dormant until
+  `systems.coaches` import unblocked on both dev harness and
+  PA production. The defensive fix commits here for correctness
+  and future-proofing; the actual coach-fits-style ripple
+  activates when a separate ship enables COACHES_AVAILABLE=True.
+
+Full report: `outputs/sm1/fight_model/p3_5/p5b2/report.md`.
+Artifacts under `outputs/sm1/fight_model/p3_5/p5b2/`: census.md,
+g1_coherence.py + JSON, g2_legacy_safety.py, g3_flag_inert.py +
+JSON (staged + pristine + staged_run2), g4_g5_behavior.py + JSON
++ txt (staged + pristine), coach_measure.py + JSON (staged +
+pristine), report.md.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

@@ -2799,8 +2799,12 @@ class WorldInitializer:
             _styles = Counter()
             for _fid in camp_obj.fighter_ids:
                 _f = self.fighters.get(_fid)
-                if _f and getattr(_f, 'fighting_style', None):
-                    _styles[_f.fighting_style] += 1
+                # STYLECOHERENCE1 (P5-B2): GeneratedFighter's
+                # attribute is .style; pre-fix the getattr fell
+                # through and the counter stayed empty (BF-1 site 4).
+                _fs = getattr(_f, 'style', None) if _f else None
+                if _f and _fs:
+                    _styles[_fs] += 1
             if not _styles:
                 return "boxing_coach"
             best_type = "boxing_coach"
@@ -3056,8 +3060,15 @@ class WorldInitializer:
             # hasattr-guard preserved for old FighterRecord shapes on
             # legacy saves without the field.
             if hasattr(record, 'fighting_style'):
+                # STYLECOHERENCE1 (P5-B2): GeneratedFighter's
+                # attribute is .style; pre-fix this stamp wrote
+                # '' every fresh fighter (BF-1 site 1, C25 mechanism
+                # dead-in-write since C25 shipped). Now stamps the
+                # world-init-born style so it survives to the bridge
+                # backfill (which prefers record.fighting_style over
+                # its own seeded random assignment post-P5-B2).
                 record.fighting_style = str(getattr(
-                    fighter, 'fighting_style', '') or '')
+                    fighter, 'style', '') or '')
             self.game_state.fighters[fighter.fighter_id] = record
 
         # Ship #32: persist world-gen's actual attribute values into
@@ -3124,6 +3135,13 @@ class WorldInitializer:
             # Style-based clinch_control bonus (Ship A — clinch_control as
             # 18th stat). Fighters whose style centers on grip dominance
             # start with above-baseline clinch_control.
+            # STYLECOHERENCE1 (P5-B2, BF-1 site 2): attribute read fixed
+            # (.fighting_style → .style; the pre-fix getattr returned ''
+            # so the bonus never applied). Behavior kept behind
+            # STYLE_CLINCH_BONUS_ENABLED (default False) — flipping it on
+            # is a separate ship with its own before/after readings, per
+            # C22 rule (a). Reads a fresh module attr each call so runtime
+            # flag flips propagate for probes.
             _style_clinch_bonus = {
                 'Clinch Fighter':   8,
                 'Muay Thai':        6,
@@ -3132,8 +3150,13 @@ class WorldInitializer:
                 'Wrestler':         4,
                 'Pressure Fighter': 4,
             }
+            try:
+                import window_registry as _wreg_sc
+                _sc_on = _wreg_sc.STYLE_CLINCH_BONUS_ENABLED
+            except Exception:
+                _sc_on = False
             _bonus = _style_clinch_bonus.get(
-                getattr(fighter, 'fighting_style', ''), 0)
+                getattr(fighter, 'style', ''), 0) if _sc_on else 0
             if _bonus and 'clinch_control' in _fdata:
                 _fdata['clinch_control'] = min(95,
                     _fdata['clinch_control'] + _bonus)
@@ -3141,13 +3164,23 @@ class WorldInitializer:
             # their counter-knee superpower on failed shots actually fires;
             # without it wrestlers complete takedowns before the clinch
             # game develops.
+            # STYLECOHERENCE1 (P5-B2, BF-1 site 3): attribute read fixed
+            # and behavior gated behind STYLE_TDD_BONUS_ENABLED (default
+            # False). P5-B1 filing named this "training modifier" — code
+            # correction: it's a world-gen TDD bonus, not a training-loop
+            # modifier.
             _style_tdd_bonus = {
                 'Muay Thai':        6,
                 'Sprawl & Brawl':   4,
                 'Karate':           3,
             }
+            try:
+                import window_registry as _wreg_td
+                _td_on = _wreg_td.STYLE_TDD_BONUS_ENABLED
+            except Exception:
+                _td_on = False
             _tdd_bonus = _style_tdd_bonus.get(
-                getattr(fighter, 'fighting_style', ''), 0)
+                getattr(fighter, 'style', ''), 0) if _td_on else 0
             if _tdd_bonus and 'takedown_defense' in _fdata:
                 _fdata['takedown_defense'] = min(95,
                     _fdata['takedown_defense'] + _tdd_bonus)
