@@ -125,7 +125,8 @@ def run_cell(attacker: FighterAttributes,
         for _ in range(MAX_PROGRESS_STEPS):
             if not fight_state.submission_active:
                 break
-            escaped, finished = process_submission_progress(
+            # C22 FIX A: 3-tuple unpack matches P3-4c §5a return shape.
+            escaped, finished, _finish_kind = process_submission_progress(
                 attacker, defender,
                 a_state, d_state,
                 fight_state, config,

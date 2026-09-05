@@ -47,6 +47,20 @@ def canonical_specialty_method(engine_method: str, sub_type: str = '') -> str:
     Returns:
       The canonical specialty_method string.
     """
+    # C22 FIX B — canonicalize all three P3-4c §5a submission finish
+    # forms to the same "SUB (<sub_type>)" specialty. Sleep + injury
+    # collapse to the same string a tap of that sub type would produce,
+    # per architect directive. Pre-C22 the sleep form fell through to
+    # the raw-return branch (uncanonical string leak); the injury form
+    # returned "SUB (Injury - armbar)" (specialty carried the flavor,
+    # which is inconsistent with the sleep + tap forms).
+    if engine_method.startswith('Technical Submission ('):
+        # "Technical Submission (rear_naked_choke)" → "SUB (rear_naked_choke)"
+        return 'SUB' + engine_method[len('Technical Submission'):]
+    if engine_method.startswith('Submission (Injury - '):
+        # "Submission (Injury - armbar)" → "SUB (armbar)"
+        _inner = engine_method[len('Submission (Injury - '):-1]  # strip trailing ")"
+        return f'SUB ({_inner})'
     if engine_method.startswith('Submission ('):
         # Raw engine format: "Submission (armbar)" → "SUB (armbar)"
         return 'SUB' + engine_method[len('Submission'):]

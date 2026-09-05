@@ -7085,6 +7085,175 @@ regardless of any slot bias. Verdicts:
   Artifacts: `outputs/sm1/fight_model/p3_4b/` (gate_tables.md,
   staged.patch, gate_worker.py, method_mix.txt).
 
+- **FIGHT MODEL P3-4c SUBMISSION MODEL + CHIN/COMPOSURE WIRED [COMMITTED as C22, 2026-09-04]**
+
+  §5a submission model shipped as REPLACEMENT (no toggle). Sleep +
+  injury emerge alongside tap under heart-modulated tap threshold +
+  refusal band. Chin + composure wiring flipped ON. Downstream
+  method-string routing fixed (Path A, Path B, awards). Injury
+  persistence wired via injury_hook. S2 freeze holds — NO DEPLOY.
+
+  **FIX A — 3-tuple unpack (fe:3652 + test_sub_sim.py:128).**
+  P3-4c §5a's `process_submission_progress` returns
+  `(escaped, finished, finish_kind)`. Legacy 2-tuple unpackers at
+  `fe.simulate_fight`'s internal loop and in `test_sub_sim.py`
+  patched to consume the new 3-tuple (`_finish_kind` discarded on
+  the fe path, which is retired-not-deleted and has no live
+  production caller per verify.md T1).
+
+  **FIX B — method-string routing (three sites).**
+  1. `game_bridge.py:13748` (Path B `_simulate_card_fights`
+     AI-vs-AI collapse): changed `_raw.startswith("Submission")`
+     to `"Submission" in _raw`. Pre-C22 collapsed
+     `"Technical Submission (rear_naked_choke)"` to `"DEC"`,
+     causing `winner.sub_wins` at :13857 NOT to increment for
+     AI-vs-AI submission-by-sleep finishes.
+  2. `game_bridge.py:17919` (Path A `_run_real_engine` player-fight
+     collapse): substring `"Submission" in method_raw` short-circuits
+     to `"SUB"` before the method_map lookup. Pre-C22 the
+     method_map miss fell to `method_raw[:10]` which produced
+     `"Technical "` (10-char slice with trailing space) that
+     persisted into `fight_history.method` and rendered as decision
+     in templates.
+  3. `awards.py:50` `canonical_specialty_method`: added explicit
+     branches for `"Technical Submission ("` and
+     `"Submission (Injury - "`. All three §5a submission forms now
+     canonicalize to `"SUB (<sub>)"` — sleep + injury normalize
+     to the same specialty as a tap of that sub type.
+
+  **FIX C — injury_hook wired.** Added `GameBridge._sub_injury_hook`
+  (`game_bridge.py:~9948-10063`) mirroring the existing
+  `generate_fight_injury` persistence pattern from
+  `_simulate_card_fights:13898-13930` — same `InjurySystem`, same
+  `add_injury`, same `_apply_medical_recovery_reduction` call, same
+  champion/top-15 news-headline shape. Hook maps fi's severity
+  vocabulary (`MODERATE`/`SEVERE`/`CAREER`) to `InjuryType`, calls
+  `generate_injury(fighter_id, injury_type, source="submission:<sub>",
+  opponent_id=…)`. Random location pick from the severity's
+  `INJURY_DESCRIPTIONS` table (matches how `generate_fight_injury`
+  picks). Silent-guarded per fi's `try/except Exception: pass`
+  wrapper at fi:1776-1777.
+
+  Wired at Path A (`gb:17838-17847`, `_run_real_engine`) and Path B
+  (`gb:13651-13662`, `_simulate_card_fights`). NOT wired at MC odds
+  (`gb:17276+`): MC is a probability estimator that runs many sims
+  per fight; persisting injuries there would multi-count.
+
+  **FLAGS FLIPPED ON (window_registry.py).**
+  `FI_CHIN_WIRING_ENABLED = True` and
+  `FI_COMPOSURE_WIRING_ENABLED = True`. Van-approved by C22 paste
+  based on verify.md T4 measurements:
+  - HEART: sub-loss Δ = −21.5pp ±4.3pp (~10σ) at heart 90 vs 50
+    defenders on sub-specialist attacker. HEART is not gated — read
+    directly at fe:3522/3536.
+  - CHIN (wiring-gated): kd_mean −18% relative at chin 90 vs 50
+    (0.207 → 0.169). Aggregate KO+TKO shifts in the OPPOSITE naive
+    direction (+7.2pp) because chin also lifts `_def_max_hp` at
+    fe:3526 → higher `state_mult` at fe:3528 → higher tap threshold
+    → sub finishes plummet, KO+TKO catches the rest.
+  - COMPOSURE (wiring-gated): mean rock_duration −32% relative at
+    composure 90 vs 50. Tertiary KO-while-rocked FLAT (composure
+    gates duration, not KO probability per-rock-tick).
+  - All three positive controls (attacker submissions 65→99;
+    boxing 65→99; strength 65→99) proven-discriminating.
+  N=1000/cell, seed block 981000+, on-disk flag state verified
+  False during measurement.
+
+  **GATES (all MEASURED, artifacts under
+  `outputs/sm1/fight_model/p3_4c/verify/`).**
+  - G1 ROUTING PROBE (`g1_routing_probe.py`): 18/18 assertions
+    PASS. All three §5a submission forms collapse to SUB in Path A,
+    Path B, and awards. No `"Technical "` truncation artifact.
+    Sanity: KO / TKO / Decision do NOT leak to SUB.
+  - G2 BRIDGE SMOKE (`g2_bridge_smoke.py`): located sleep finish
+    at seed 982011 (`"Technical Submission (von_flue_choke)"` R1)
+    and injury finish at seed 982001
+    (`"Submission (Injury - calf_slicer)"` R1). Path A collapse
+    routes both to `"SUB"` → `sub_wins`-branch guard passes for
+    sleep + injury + tap. Scratch bridge `_sub_injury_hook` call
+    persisted MODERATE injury to `_injury_system._injuries[fid]`
+    (Δ=1); severity mapping smoke verified MODERATE/SEVERE/CAREER
+    round-trip; invalid severity `"BOGUS"` produced silent no-op.
+  - G3 RE-MEASURE EP1_500 flags-ON (`g3_ep1_flags_on.py`,
+    `g3_ep1_flags_on.csv`): 500 fights, seed_base=982000, flags-ON
+    disk state. **127 subs total (tap=100 sleep=7 injury=20)**;
+    KO=275, TKO=87, DEC=11. INJURY_HITS via hook: MODERATE=20
+    SEVERE=0 CAREER=0. `hook_fires == injury_kinds` ✓.
+    Compare gate_tables.md flags-OFF seed_base=980000 baseline
+    (119 subs — tap=85 sleep=7 injury=27). Drift is expected (flag
+    state + seed base differ; CHIN+COMP ON cascade produces ~19.6%
+    diff-line share on EP1 per T5 reconcile).
+  - G4 SYNTAX + IMPORT (`ast.parse` on 6 touched files, plus
+    `import game_bridge` end-to-end): PASS. Runtime flag state
+    `True/True`.
+
+  **RIDERS FILED (docs-only, C22 carries):**
+
+  - **Legacy sub-model fields dead-in-legacy-only.**
+    `submission_escape_progress` (fe:923) and
+    `submission_escape_threshold` (fe:1036) are read only by the
+    retired `_legacy_process_submission_progress`. Config kwarg
+    `submission_escape_threshold=85.0` at `gb:17160` is harmless-
+    but-dead. Deletion deferred to a future consolidation ship
+    that retires `_legacy_process_submission_progress` itself.
+  - **Pre-existing Path A specialty-label truncation surfaced by
+    G1 sanity row.** `"KO (Head Kick)"` → `"KO (Head K"` in Path A
+    (`gb:17931` fallback slice `method_raw[:10]`). Pre-C22
+    behavior; not caused by this ship; symmetric to the sleep-string
+    bug FIX B closed for submissions. Queued as a small cleanup
+    for the next natural gb touch — substring-first classification
+    for KO/TKO specialty labels would close the class.
+  - **Pre-gen coverage for injury_hook.** `world_init.HistorySimulator`
+    calls `engine_simulate_narrated_fight` at world_init:1441 but
+    does not pass `injury_hook` (world_init doesn't own an
+    `InjurySystem`). Consequence: joint-lock injuries in pre-gen
+    history sim are NOT persisted. Fresh saves start with clean
+    injury registries by design; live-play (post-new_game) is the
+    first firing surface for the hook. Filed as a future design
+    call, not a defect.
+  - **P3-5 calibration inputs added.** Verify.md T4 sensitivity
+    tables + gate_tables.md §5a EP1/POP splits + G3 flags-ON
+    re-measurement are the before/after instruments for P3-5's
+    single calibration pass (sub tap threshold width, refusal
+    band, CHIN_KD_RESIST_SPREAD, COMPOSURE_ROCK_DUR_SPREAD).
+
+  **SCOPE-DOC SYNC INCOMPLETE (owed to architect).**
+  `claude/fight_model_p3_scope_v0_1.md` (disk) does NOT carry the
+  "CUTS1" or "WEIGHTCUT1" post-arc entries or the "P3-5 item-7
+  rate-only wording" the C22 spec referenced. Per architect
+  directive ("if the disk copy lacks them, say so and STOP for the
+  sync block rather than improvising"), only the base "4c SHIPPED
+  as C22" mark landed in the scope doc this ship. The four
+  addenda that were labeled by name in the C22 paste (CUTS1,
+  WEIGHTCUT1, P3-5 item 7 rate-only) need to be paste-synced from
+  wherever the architect's "project copy" lives — no attempt to
+  reconstruct them here.
+
+  **PROCESS RULES ADOPTED (this arc):**
+  (a) No wiring flag flips without a defining-instrument
+      sensitivity reading in a prior verify pass. C22's CHIN + COMP
+      flip is anchored to verify.md T4's direct instrument
+      measurements (kd_mean and mean rock_duration) — the aggregate
+      KO+TKO rates were correctly identified as confounded and NOT
+      used as the flip criterion.
+  (b) When adding a hook socket to a shared engine, the wire in
+      production callers must land in the SAME commit as the
+      socket, unless there's a scoping reason (there wasn't here).
+      C22 lands both together; heat_level's dangling-socket state
+      (per CLAUDE.md P3-4b filing: "ZERO live callers") is the
+      counter-example this arc explicitly avoided repeating.
+
+  Artifacts (under `outputs/sm1/fight_model/p3_4c/verify/`):
+  - `probe_arm_a_heart.py` + `arm_a_heart.csv`
+  - `probe_arm_b_chin.py` + `arm_b_chin.csv`
+  - `probe_arm_c_composure.py` + `arm_c_composure.csv`
+  - `g1_routing_probe.py`
+  - `g2_bridge_smoke.py`
+  - `g3_ep1_flags_on.py` + `g3_ep1_flags_on.csv`
+
+  Companion doc: `outputs/sm1/fight_model/p3_4c/verify.md` (654
+  lines — full verify pass report).
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

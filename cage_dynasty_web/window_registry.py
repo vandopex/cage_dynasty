@@ -40,6 +40,19 @@ WINDOWS_LOG_ENABLED: bool = False
 FI_CUT_WRITER_ENABLED: bool = False
 FI_SPRAWL_PUNISH_ENABLED: bool = False
 
+# ── P3-4c: chin + composure wiring toggles.
+# C22: FLIPPED ON. Van-approved with C22 paste based on verify.md
+# T4 sensitivity readings (kd_mean -18% relative for CHIN;
+# mean rock_duration -32% relative for COMPOSURE at N=1000/cell,
+# seed block 981000+, positive controls proven-discriminating).
+# HEART wiring is not gated (was always alive — direct read at
+# fe:3522/3536 with no flag). §5a submission model is a
+# REPLACEMENT (no toggle) — old renamed
+# _legacy_process_submission_progress and preserved on disk;
+# the entry point uses the new logic.
+FI_CHIN_WIRING_ENABLED: bool = True
+FI_COMPOSURE_WIRING_ENABLED: bool = True
+
 # ── Stage 2c constants ──────────────────────────────────────────
 SPRAWL_PUNISH_DAMAGE_MULT: float = 1.25  # P3-5 calibrates
 

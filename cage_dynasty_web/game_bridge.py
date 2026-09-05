@@ -120,6 +120,7 @@ INJURY_AVAILABLE = False
 try:
     from systems.injury import (
         InjurySystem, InjuryType, generate_fight_injury,
+        generate_injury,  # C22 FIX C — §5a joint-lock injury persistence
         generate_training_injury, calculate_fight_injury_probability,
         calculate_training_injury_probability, RECOVERY_TIMES,
     )
@@ -9944,6 +9945,114 @@ class GameBridge:
         return actual
 
     # =========================================================================
+    # C22 FIX C — §5a JOINT-LOCK INJURY PERSISTENCE HOOK
+    # =========================================================================
+    def _sub_injury_hook(
+        self, fighter_id: str, severity_name: str,
+        sub_name: str, opponent_id: str,
+    ) -> None:
+        """Injury_hook passthrough for fi.NarratedFightSimulator.
+
+        Fires from fi:1757-1777 when a joint-lock submission finishes
+        past the refusal band ("Submission (Injury - <sub>)" method).
+        Severity is determined inside fi from overshoot (MODERATE /
+        SEVERE / CAREER); we translate to InjuryType and persist via
+        the same InjurySystem the generate_fight_injury path uses.
+
+        Wire mirrors the existing Path B fight-injury persistence
+        (:13910-13930) — same InjurySystem, same medical-staff
+        reduction hook, same news-headline shape. Does NOT invent a
+        parallel injury pipeline.
+
+        Silent-guarded: fi wraps this call in try/except Exception:
+        pass, so any failure is opaque. Errors here have zero blast
+        radius on the fight sim.
+        """
+        if not (INJURY_AVAILABLE and self._injury_system and generate_injury):
+            return
+        # Map fi's severity vocabulary to systems.injury.InjuryType.
+        _sev_map = {
+            "MODERATE": InjuryType.MODERATE,
+            "SEVERE":   InjuryType.SEVERE,
+            "CAREER":   InjuryType.CAREER,
+        }
+        _itype = _sev_map.get((severity_name or "").upper())
+        if _itype is None:
+            return
+        try:
+            _inj = generate_injury(
+                fighter_id=fighter_id,
+                injury_type=_itype,
+                # location=None → generate_injury random-picks a
+                # body part appropriate for the severity's
+                # INJURY_DESCRIPTIONS table.
+                source=f"submission:{sub_name}",
+                opponent_id=opponent_id,
+            )
+            if _inj is None:
+                return
+            self._injury_system.add_injury(_inj)
+            # Medical-staff reduction (player fighters only; helper
+            # no-ops when fighter has no medical staff hired).
+            self._apply_medical_recovery_reduction(fighter_id, _inj)
+            # Console diagnostic mirroring the existing 🤕 line.
+            try:
+                _ftr = (self._game_state.get_fighter(fighter_id)
+                        if self._game_state else None)
+                _nm = getattr(_ftr, 'name', fighter_id) if _ftr else fighter_id
+                print(f"  🤕 [SUB INJURY] {_nm} — {_inj.description} "
+                      f"({_inj.severity_name}) · {_inj.recovery_weeks}w "
+                      f"[{sub_name}]")
+            except Exception:
+                pass
+            # News headline for champions or top-15 fighters — same
+            # threshold the existing fight-injury path uses.
+            if self._game_state is None:
+                return
+            try:
+                _ftr_n = self._game_state.get_fighter(fighter_id)
+                _week = self._game_state.week_number
+                if _ftr_n is None:
+                    return
+                _sev_lbl = getattr(_inj, 'severity_name', severity_name)
+                if getattr(_ftr_n, 'is_champion', False):
+                    _hl = (f"🏆 {_ftr_n.name} ({_ftr_n.weight_class} Champion) "
+                           f"suffers {_inj.description} to a {sub_name} — out "
+                           f"{_inj.recovery_weeks} weeks. Title defense delayed.")
+                    self._news_items.append({
+                        "headline":   _hl,
+                        "category":   "injury",
+                        "week":       _week,
+                        "fighter_id": fighter_id,
+                    })
+                else:
+                    _rk = self._get_fighter_rank(_ftr_n) if hasattr(
+                        self, '_get_fighter_rank') else None
+                    _rv = int(_rk) if _rk else 999
+                    _pcid = getattr(self._game_state, 'player_camp_id', None)
+                    _is_player = (getattr(_ftr_n, 'camp_id', None) == _pcid
+                                  and _pcid is not None)
+                    if _is_player or _rv <= 15:
+                        _emoji = {"Moderate": "🤕", "Severe": "🚨",
+                                  "Career-threatening": "💔"}.get(
+                                  _sev_lbl, "🤕")
+                        self._news_items.append({
+                            "headline": (f"{_emoji} {_ftr_n.name} injured — "
+                                         f"{_inj.description} via {sub_name}. "
+                                         f"Out ~{_inj.recovery_weeks}w."),
+                            "category":   "injury",
+                            "week":       _week,
+                            "fighter_id": fighter_id,
+                        })
+            except Exception:
+                # News failure is non-fatal — the injury is already persisted.
+                pass
+        except Exception as _e:
+            # Persistence failed — do NOT crash the fight sim.
+            print(f"⚠️ [SUB INJURY HOOK] persistence failed for "
+                  f"{fighter_id}: {type(_e).__name__}: {_e}")
+
+    # =========================================================================
     # OVERSEAS TRAINING CAMPS (Ship EC1 D)
     # =========================================================================
     def _stat_targets_for_overseas(
@@ -13658,6 +13767,8 @@ class GameBridge:
                         is_main_event=(_slot_cf == "main_event"),
                         intro_f1=_intro_f1_cf,
                         intro_f2=_intro_f2_cf,
+                        # C22 FIX C — persist §5a joint-lock injuries.
+                        injury_hook=self._sub_injury_hook,
                         **({"config": _fight_cfg} if _fight_cfg else {})
                     )
                     # Store commentary for watch_fight page
@@ -13744,8 +13855,17 @@ class GameBridge:
                         winner = f1 if _eng.winner_id in (f1.fighter_id, "fighter_1") else f2
                         loser  = f2 if winner is f1 else f1
                         _raw   = _eng.method or "DEC"
-                        # Engine returns "Submission (xxx)" — normalise to SUB
-                        if _raw.startswith("Submission"):
+                        # C22 FIX B — substring on "Submission" catches all
+                        # three §5a flavors:
+                        #   "Submission (armbar)"           → tap (was OK)
+                        #   "Submission (Injury - armbar)"  → injury (OK by
+                        #                                     accident pre-C22)
+                        #   "Technical Submission (rear_naked_choke)" → sleep
+                        #                (BROKEN pre-C22 — startswith missed
+                        #                 the "Technical" prefix, collapsed
+                        #                 to DEC, sub_wins undercounted).
+                        # All three are submission wins → collapse to "SUB".
+                        if "Submission" in _raw:
                             method = "SUB"
                         elif _raw.startswith("KO"):
                             method = "KO"
@@ -17843,6 +17963,11 @@ class GameBridge:
             card_slot     = _slot_re,
             intro_f1      = _intro_f1_re,
             intro_f2      = _intro_f2_re,
+            # C22 FIX C — persist §5a joint-lock injuries. MC odds
+            # (:17276) intentionally does NOT pass this hook; MC is
+            # a probability estimator that runs many sims per fight,
+            # persistence would multi-count.
+            injury_hook   = self._sub_injury_hook,
             **({"config": _fight_cfg} if _fight_cfg else {})
         )
         _eng_sub_type = getattr(eng_result, 'sub_type', '') or ''
@@ -17907,16 +18032,27 @@ class GameBridge:
             loser  = fighter2 if raw_winner_f1 else fighter1
 
         method_raw = eng_result.method or "DEC"
-        # Normalise method string
-        method_map = {
-            "KO": "KO", "TKO": "TKO",
-            "Submission": "SUB", "SUB": "SUB",
-            "Unanimous Decision": "UNY DEC",
-            "Split Decision":    "SPLIT DEC",
-            "Majority Decision": "MAJ DEC",
-            "Decision": "DEC",
-        }
-        method = method_map.get(method_raw, method_raw[:10] if len(method_raw) > 10 else method_raw)
+        # C22 FIX B — collapse §5a submission vocabulary. All three
+        # forms ("Submission (…)", "Technical Submission (…)",
+        # "Submission (Injury - …)") are submission wins for career-
+        # stats + rankings + template rendering purposes. Pre-C22
+        # the method_map miss fell to method_raw[:10] which for
+        # "Technical Submission (armbar)" produced "Technical "
+        # (trailing space, ugly UX, and sub_wins never incremented
+        # because :17935 checks method in ("SUB",)). Substring check
+        # first — before the map — matches all three forms.
+        if "Submission" in method_raw:
+            method = "SUB"
+        else:
+            method_map = {
+                "KO": "KO", "TKO": "TKO",
+                "SUB": "SUB",  # already-collapsed input from other paths
+                "Unanimous Decision": "UNY DEC",
+                "Split Decision":    "SPLIT DEC",
+                "Majority Decision": "MAJ DEC",
+                "Decision": "DEC",
+            }
+            method = method_map.get(method_raw, method_raw[:10] if len(method_raw) > 10 else method_raw)
 
         round_finished = getattr(eng_result, 'finish_round', None) or total_rounds
         time_str = getattr(eng_result,'finish_time',None) or "5:00"

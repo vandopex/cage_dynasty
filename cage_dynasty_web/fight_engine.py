@@ -343,6 +343,104 @@ SUBMISSION_PROPERTIES = {
 }
 
 
+# P3-4c §5a — SUBMISSION classification (choke | joint_lock). Spine
+# cranks (neck_crank, can_opener, twister) classified as joint_lock
+# per prompt. Complete map for all 23 SubmissionType entries.
+SUBMISSION_KIND = {
+    # Chokes (10)
+    SubmissionType.REAR_NAKED_CHOKE:   "choke",
+    SubmissionType.GUILLOTINE:         "choke",
+    SubmissionType.ARM_TRIANGLE:       "choke",
+    SubmissionType.DARCE_CHOKE:        "choke",
+    SubmissionType.ANACONDA_CHOKE:     "choke",
+    SubmissionType.NORTH_SOUTH_CHOKE:  "choke",
+    SubmissionType.TRIANGLE_CHOKE:     "choke",
+    SubmissionType.GOGOPLATA:          "choke",
+    SubmissionType.BULLDOG_CHOKE:      "choke",
+    SubmissionType.VON_FLUE_CHOKE:     "choke",
+    # Joint locks (13, including 3 spine cranks per prompt)
+    SubmissionType.ARMBAR:             "joint_lock",
+    SubmissionType.KIMURA:             "joint_lock",
+    SubmissionType.AMERICANA:          "joint_lock",
+    SubmissionType.OMOPLATA:           "joint_lock",
+    SubmissionType.WRIST_LOCK:         "joint_lock",
+    SubmissionType.HEEL_HOOK:          "joint_lock",
+    SubmissionType.KNEEBAR:            "joint_lock",
+    SubmissionType.TOE_HOLD:           "joint_lock",
+    SubmissionType.CALF_SLICER:        "joint_lock",
+    SubmissionType.ANKLE_LOCK:         "joint_lock",
+    SubmissionType.NECK_CRANK:         "joint_lock",  # spine crank
+    SubmissionType.CAN_OPENER:         "joint_lock",  # spine crank
+    SubmissionType.TWISTER:            "joint_lock",  # spine crank
+}
+
+
+# ============================================================================
+# P3-4c §5a — SUBMISSION MODEL constants (PROVISIONAL, P3-5 calibrates)
+# ============================================================================
+# Escape composites live in CONTEST_RECIPES/CONTEST_TARGETS above under
+# key "sub_escape" (P_EVEN=0.10, EDGE20_TARGET=0.28 → S ≈ 2.88 derived).
+# CONTEST_P_MIN/MAX auto-derive: min=0.04, max=0.37.
+#
+# Tap threshold: heart-scaled × state-scaled. Base = TAP_BASE, defaulting
+# to config.submission_progress_to_finish so existing config dial still
+# governs. Formula:
+#   effective_tap = TAP_BASE
+#                 × (1 + TAP_HEART_SPREAD × (heart − 60) / 40)
+#                 × state_mult
+# where state_mult = TAP_STATE_FLOOR
+#                    + TAP_STATE_STAMINA_WEIGHT × (stamina/100)
+#                    + TAP_STATE_HEALTH_WEIGHT × (health/max_health)
+# max state_mult = FLOOR + STAM_W + HEALTH_W = 1.0 at fresh/healthy.
+# min state_mult = FLOOR at fully gassed & fully hurt (excl KO).
+TAP_HEART_SPREAD           = 0.30    # heart=100 → +30% threshold, heart=20 → -30%
+TAP_STATE_FLOOR            = 0.70    # min state_mult (gassed+hurt taps early)
+TAP_STATE_STAMINA_WEIGHT   = 0.15
+TAP_STATE_HEALTH_WEIGHT    = 0.15
+
+# Refusal band: progress units past effective_tap. Inside band → still
+# refusing; past band end → sleep (choke) or injury (joint_lock).
+REFUSAL_WIDTH_BASE         = 15.0    # progress units past effective_tap
+REFUSAL_HEART_SPREAD       = 0.60    # heart=100 → band 24; heart=20 → 6
+
+# Joint-lock injury severity buckets (progress overshoot past band).
+# Deeper overshoot → higher severity. All expressed as multiplier
+# of REFUSAL_WIDTH_BASE. Bucketing:
+#   overshoot < 1.0 × WIDTH → MODERATE
+#   overshoot ∈ [1.0, 2.0) × WIDTH → SEVERE
+#   overshoot ≥ 2.0 × WIDTH → CAREER
+# (MINOR reserved for scratch-level; §5a joint-lock finish is always
+# at least a torn-something → MODERATE floor.)
+
+
+# ============================================================================
+# CHIN + COMPOSURE wiring constants (PROVISIONAL, P3-5 calibrates)
+# ============================================================================
+# apply_damage's KD/rock rolls gain a chin modulation factor:
+#   factor = 1 − CHIN_KD_RESIST_SPREAD × (chin − 60) / 40
+# chin=100 → 1 − 0.30 = 0.70 (30% less KD chance); chin=20 → 1.30.
+# Clamped [FLOOR, CAP].
+CHIN_KD_RESIST_SPREAD      = 0.30
+CHIN_KD_RESIST_FLOOR       = 0.50
+CHIN_KD_RESIST_CAP         = 1.50
+CHIN_ROCK_RESIST_SPREAD    = 0.30
+CHIN_ROCK_RESIST_FLOOR     = 0.50
+CHIN_ROCK_RESIST_CAP       = 1.50
+
+# Composure modulates rock_duration (high composure = shorter rock)
+# and the rocked d_eff × 0.5 exploit (high composure = less exploitable).
+#   rock_dur_mult = 1 − COMPOSURE_ROCK_DUR_SPREAD × (composure − 60)/40
+#   rocked_d_eff_mult = 0.5 + COMPOSURE_ROCK_EXPLOIT_SPREAD × (composure − 60)/40
+# composure=100 → dur×0.60, exploit=0.65 (less exploitable);
+# composure=20 → dur×1.40, exploit=0.35 (more exploitable).
+COMPOSURE_ROCK_DUR_SPREAD  = 0.40
+COMPOSURE_ROCK_DUR_FLOOR   = 0.50
+COMPOSURE_ROCK_DUR_CAP     = 1.50
+COMPOSURE_ROCK_EXPLOIT_SPREAD = 0.30
+COMPOSURE_ROCK_EXPLOIT_FLOOR  = 0.30
+COMPOSURE_ROCK_EXPLOIT_CAP    = 0.85
+
+
 # ============================================================================
 # GRAPPLING ACTIONS - Transitions, Sweeps, Escapes
 # ============================================================================
@@ -594,6 +692,13 @@ class FighterState:
     # STAMINA-DRAIN1: cardio at fight time — used by spend_stamina.
     # Default 60 = neutral (g=1 at any S). Callers pass fighter.cardio.
     cardio_rating: int = 60
+    # P3-4c — chin + composure at fight time for the KD/rock/rocked-
+    # exploit wiring. Defaults at 60 = neutral (all resistance mults
+    # collapse to 1.0, all exploit mults collapse to 0.5). Callers
+    # pass fighter.chin / fighter.composure. Byte-inert when
+    # FI_CHIN_WIRING_ENABLED / FI_COMPOSURE_WIRING_ENABLED are False.
+    chin_rating: int = 60
+    composure_rating: int = 60
 
     def apply_damage(self, amount: float, target: str = "head") -> Tuple[bool, bool]:
         """Apply damage and return (is_knockdown, is_finish)."""
@@ -618,13 +723,35 @@ class FighterState:
             # KD + rock chance up to 1.30× at 12 points of erosion.
             _erosion = getattr(self, '_chin_erosion', 0)
             _erosion_mult = 1.0 + min(0.30, _erosion * 0.025)
-            if random.random() < amount * 0.015 * _erosion_mult:
+            # P3-4c — CHIN attribute modulation. Behind flag; default
+            # OFF is byte-identical (factor forced to 1.0). When ON,
+            # per-attribute chin scales KD and rock chances via the
+            # CHIN_KD_RESIST_SPREAD / CHIN_ROCK_RESIST_SPREAD constants.
+            _chin_kd_mult = 1.0
+            _chin_rock_mult = 1.0
+            try:
+                # Access via module attr so runtime flag flips propagate
+                # (`from X import Y` would bind the value at import time
+                # and never see subsequent wreg.FI_CHIN_WIRING_ENABLED
+                # mutations — silent no-op bug on OFF/ON gates).
+                import window_registry as _wreg_kd
+                if _wreg_kd.FI_CHIN_WIRING_ENABLED:
+                    _chin_stat = getattr(self, 'chin_rating', 60)
+                    _kd_delta = CHIN_KD_RESIST_SPREAD * ((_chin_stat - 60) / 40.0)
+                    _rk_delta = CHIN_ROCK_RESIST_SPREAD * ((_chin_stat - 60) / 40.0)
+                    _chin_kd_mult = max(CHIN_KD_RESIST_FLOOR,
+                                        min(CHIN_KD_RESIST_CAP, 1.0 - _kd_delta))
+                    _chin_rock_mult = max(CHIN_ROCK_RESIST_FLOOR,
+                                          min(CHIN_ROCK_RESIST_CAP, 1.0 - _rk_delta))
+            except ImportError:
+                pass
+            if random.random() < amount * 0.015 * _erosion_mult * _chin_kd_mult:
                 is_knockdown = True
                 self.knockdowns_this_round += 1
                 self.knockdowns_total += 1
                 # Cumulative tax — represents real damage.
                 self._chin_erosion = _erosion + 4
-            elif random.random() < amount * 0.025 * _erosion_mult:
+            elif random.random() < amount * 0.025 * _erosion_mult * _chin_rock_mult:
                 self.is_rocked = True
                 # ── Rock stamina drain ────────────────
                 # Absorbing a rocking shot changes breathing —
@@ -632,7 +759,20 @@ class FighterState:
                 self.spend_stamina(4)
                 # HIGH RECOVERY: Shake off cobwebs faster
                 reduction = 1 if self.recovery_rating >= 80 else 0
-                self.rock_duration = max(1, random.randint(1, 3) - reduction)
+                # P3-4c — COMPOSURE modulation of rock_duration. Behind
+                # flag; OFF → byte-identical to pre-wire.
+                _composure_dur_mult = 1.0
+                try:
+                    import window_registry as _wreg_dur
+                    if _wreg_dur.FI_COMPOSURE_WIRING_ENABLED:
+                        _comp_stat = getattr(self, 'composure_rating', 60)
+                        _dur_delta = COMPOSURE_ROCK_DUR_SPREAD * ((_comp_stat - 60) / 40.0)
+                        _composure_dur_mult = max(COMPOSURE_ROCK_DUR_FLOOR,
+                            min(COMPOSURE_ROCK_DUR_CAP, 1.0 - _dur_delta))
+                except ImportError:
+                    pass
+                _raw_dur = random.randint(1, 3) - reduction
+                self.rock_duration = max(1, int(round(_raw_dur * _composure_dur_mult)))
         
         return is_knockdown, is_finish
     
@@ -781,6 +921,10 @@ class FightState:
     submission_attacker_id: Optional[str] = None
     submission_progress: float = 0.0
     submission_escape_progress: float = 0.0
+    # P3-4c §5a — effective tap threshold at the moment of the last tick.
+    # Stashed by process_submission_progress so fi can tier escape drama
+    # by progress-vs-actual-threshold (not raw config threshold).
+    submission_effective_threshold: float = 0.0
     
     last_action: Optional[str] = None
     momentum_fighter_id: Optional[str] = None
@@ -2371,6 +2515,10 @@ CONTEST_RECIPES = {
     "clinch_entry":   {"a": {"clinch_control": 0.6, "takedowns": 0.4}, "d": {"clinch_control": 0.6, "striking_defense": 0.4}},
     "clinch_break":   {"a": {"strength": 1.0},                      "d": {"clinch_control": 0.7, "strength": 0.3}},
     "sub_lockin":     {"a": {"submissions": 1.0},                   "d": {"guard": 0.5, "submissions": 0.5}},
+    # P3-4c §5a — technical-escape per-tick contest. "Attacker" side of the
+    # contest is the DEFENDER-of-sub trying to escape (guard 0.5 + subs 0.5);
+    # "defender" side is the ATTACKER-of-sub trying to hold (submissions 1.0).
+    "sub_escape":     {"a": {"guard": 0.5, "submissions": 0.5},     "d": {"submissions": 1.0}},
 }
 
 # D10 P_EVEN targets + EDGE20 targets (per D10 tier tables; strikes +15pp,
@@ -2388,6 +2536,10 @@ CONTEST_TARGETS = {
     "clinch_entry":  {"P_EVEN": 0.40, "EDGE20_TARGET": 0.55},
     "clinch_break":  {"P_EVEN": 0.45, "EDGE20_TARGET": 0.60},
     "sub_lockin":    {"P_EVEN": 0.35, "EDGE20_TARGET": 0.49},  # F8 preserve
+    # P3-4c §5a — per-tick technical-escape chance. Provisional; P3-5 calibrates.
+    # P_EVEN=0.10 → parity: 10% escape per tick. Steep S so guard/subs advantage
+    # bites. EDGE20=0.28 at +20pt escaper composite edge (derived S ≈ 2.88).
+    "sub_escape":    {"P_EVEN": 0.10, "EDGE20_TARGET": 0.28},
 }
 
 
@@ -2552,9 +2704,24 @@ def calculate_strike_success(
     a_eff *= (attacker_state.stamina / 100)
     d_eff *= (defender_state.stamina / 100)
 
-    # Rocked opponent easier to hit (composite scalar on defender)
+    # Rocked opponent easier to hit (composite scalar on defender).
+    # P3-4c — COMPOSURE modulation. Behind flag; OFF → exploit
+    # stays at 0.5 (byte-identical). ON → composure=100 fighter
+    # gets 0.65 (less exploitable), composure=20 fighter gets 0.35
+    # (more exploitable). Clamped [FLOOR, CAP].
     if defender_state.is_rocked:
-        d_eff *= 0.5
+        _rocked_mult = 0.5
+        try:
+            import window_registry as _wreg_exp
+            if _wreg_exp.FI_COMPOSURE_WIRING_ENABLED:
+                _comp_stat = getattr(defender_state, 'composure_rating', 60)
+                _rocked_mult = 0.5 + COMPOSURE_ROCK_EXPLOIT_SPREAD * (
+                    (_comp_stat - 60) / 40.0)
+                _rocked_mult = max(COMPOSURE_ROCK_EXPLOIT_FLOOR,
+                                   min(COMPOSURE_ROCK_EXPLOIT_CAP, _rocked_mult))
+        except ImportError:
+            pass
+        d_eff *= _rocked_mult
 
     # Symmetric two-sided variance per D13 (both sides get their own draw).
     # The pre-D13 form had offense-only ±25% — F3/F6 traced part of the
@@ -3292,66 +3459,127 @@ def process_submission_progress(
     defender_state: FighterState,
     fight_state: FightState,
     config: FightConfig
-) -> Tuple[bool, bool]:
-    """
-    Process ongoing submission attempt.
-    Returns (escaped, finished)
-    
-    Uses new 17-attribute system:
-    - submissions: Tightening the hold
-    - guard: Escape ability
-    
-    Philosophy: Once locked in, subs should USUALLY finish
-    - Rare to get locked in (handled in attempt_submission)
-    - But once locked in, very hard to escape
+) -> Tuple[bool, bool, Optional[str]]:
+    """P3-4c §5a submission model. Returns (escaped, finished, finish_kind).
+
+    finish_kind ∈ {"tap", "sleep", "injury", None}. Non-None only when
+    finished=True. Old tick mechanics preserved as
+    `_legacy_process_submission_progress` (returned (escaped, finished)).
+
+    Per-tick loop:
+      1. Attacker tightens — same tighten_rate as legacy (skill still bites).
+      2. Defender ESCAPE via P_c contest (new class "sub_escape").
+      3. Stamina drain (attacker 3, defender 5) unchanged.
+      4. TAP threshold = TAP_BASE × HEART_MULT × STATE_MULT. Base takes
+         config.submission_progress_to_finish so the existing config
+         dial still governs the neutral case.
+      5. Refusal band past tap: choke → sleep, joint_lock → injury.
+
+    Callers (fi._process_submission_exchange) unpack the 3-tuple; the
+    finish_kind drives the outcome-string routing (Tap vs
+    Technical Submission vs Submission (Injury)).
     """
     if not fight_state.submission_active:
+        return False, False, None
+    sub_type = fight_state.submission_type
+    if sub_type is None:
+        fight_state.submission_active = False
+        return False, False, None
+
+    danger, escape_diff, _ = SUBMISSION_PROPERTIES[sub_type]
+    kind = SUBMISSION_KIND.get(sub_type, "joint_lock")
+
+    # 1. Attacker tightens — preserve legacy tighten_rate (skill scaling
+    #    remains). progress accumulator unchanged.
+    offense = attacker.submissions * (attacker_state.stamina / 100)
+    tighten_rate = 0.65 if attacker.submissions >= 92 else 0.45
+    fight_state.submission_progress += (
+        offense * tighten_rate * random.uniform(0.75, 1.25))
+
+    # 2. Defender ESCAPE via P_c contest (sub_escape class).
+    #    Assemble composites: escaper (defender) offense = guard 0.5 +
+    #    subs 0.5; opponent (attacker) defense = subs 1.0. Stamina
+    #    scales each side; two-sided variance.
+    a_eff_e, d_eff_e = _assemble_composite(
+        "sub_escape", defender, attacker)
+    a_eff_e *= (defender_state.stamina / 100)
+    d_eff_e *= (attacker_state.stamina / 100)
+    a_eff_e *= random.uniform(0.85, 1.15)
+    d_eff_e *= random.uniform(0.85, 1.15)
+    escape_chance = _p_c("sub_escape", a_eff_e, d_eff_e)
+    _escape_roll = random.random()
+
+    # 3. Stamina drain (matches legacy).
+    attacker_state.spend_stamina(3)
+    defender_state.spend_stamina(5)
+
+    if _escape_roll < escape_chance:
+        fight_state.submission_active = False
+        return True, False, None
+
+    # 4. Tap threshold — heart × state modulation on TAP_BASE.
+    tap_base = float(config.submission_progress_to_finish)
+    _heart = getattr(defender, 'heart', 70)
+    heart_mult = 1.0 + TAP_HEART_SPREAD * ((_heart - 60) / 40.0)
+    _def_stam = getattr(defender_state, 'stamina', 100)
+    _def_hp = getattr(defender_state, 'health', 100.0)
+    _def_max_hp = 100.0 + getattr(defender, 'chin', 70) * 0.3
+    _hp_frac = _def_hp / _def_max_hp if _def_max_hp else 0.0
+    state_mult = (
+        TAP_STATE_FLOOR
+        + TAP_STATE_STAMINA_WEIGHT * min(1.0, max(0.0, _def_stam / 100.0))
+        + TAP_STATE_HEALTH_WEIGHT * min(1.0, max(0.0, _hp_frac)))
+    effective_tap = tap_base * heart_mult * state_mult
+    fight_state.submission_effective_threshold = effective_tap
+
+    # 5. Refusal band width (heart-scaled).
+    refusal_width = REFUSAL_WIDTH_BASE * (
+        1.0 + REFUSAL_HEART_SPREAD * ((_heart - 60) / 40.0))
+    refusal_width = max(0.0, refusal_width)
+
+    if fight_state.submission_progress >= effective_tap + refusal_width:
+        # Past refusal band — the fighter never taps.
+        fight_state.submission_active = False
+        if kind == "choke":
+            return False, True, "sleep"
+        else:
+            return False, True, "injury"
+    if fight_state.submission_progress >= effective_tap:
+        # Inside/at threshold — tap.
+        fight_state.submission_active = False
+        return False, True, "tap"
+
+    return False, False, None
+
+
+def _legacy_process_submission_progress(
+    attacker: FighterAttributes,
+    defender: FighterAttributes,
+    attacker_state: FighterState,
+    defender_state: FighterState,
+    fight_state: FightState,
+    config: FightConfig
+) -> Tuple[bool, bool]:
+    """RETIRED (P3-4c). Pre-§5a tick loop. Preserved for provenance;
+    NOT called by production code. Returns (escaped, finished)."""
+    if not fight_state.submission_active:
         return False, False
-    
     sub_type = fight_state.submission_type
     if sub_type is None:
         fight_state.submission_active = False
         return False, False
-    
     danger, escape_diff, _ = SUBMISSION_PROPERTIES[sub_type]
-    
-    # Attacker tightens - VERY FAST once locked in
     offense = attacker.submissions * (attacker_state.stamina / 100)
-    
-    # PURE SUBMISSION SPECIALIST (92+) tightens MUCH faster.
-    # SUBMISSION-CONVERSION-FIX2: base 0.20 → 0.45, specialist 0.30 → 0.65.
-    # Diagnosis (FIX1 Step 2): 54.5% of locked-in attempts died to
-    # fight_integration._start_new_round line 464 wiping submission_active
-    # before the finish/escape race resolved. Raising tighten_rate is the
-    # skill-scaling lever: per-tick progress = attacker.submissions ×
-    # stamina × tighten_rate × rand, so specialists still tighten faster
-    # per tick than mediocre grapplers (verified 1.77-2.22× ratio held).
-    # Landing point picked on the realistic-stat per-style harness:
-    # BJJ Spec 29→44% (design 55%), Wrestler 7→16% (design 20%), while
-    # strikers stay at 0-2% (no leakage) and KO+TKO stays at 35.9% (was
-    # 36.4%, guardrail intact — DEC drained entirely into SUB).
     tighten_rate = 0.65 if attacker.submissions >= 92 else 0.45
     fight_state.submission_progress += offense * tighten_rate * random.uniform(0.75, 1.25)
-    
-    # Defender fights escape - EXTREMELY HARD to escape
-    # Uses guard (positional escape) + submissions (knowledge to counter)
     defense = ((defender.guard + defender.submissions) // 2) * (defender_state.stamina / 100)
-    defense += defender.heart * 0.03  # REDUCED
+    defense += defender.heart * 0.03
     fight_state.submission_escape_progress += defense * 0.38 * random.uniform(0.75, 1.25)
-    
-    # Stamina drain - submission is exhausting
     attacker_state.spend_stamina(3)
-    defender_state.spend_stamina(5)  # Being submitted is exhausting
-    
-    # Check for finish
+    defender_state.spend_stamina(5)
     if fight_state.submission_progress >= config.submission_progress_to_finish:
         fight_state.submission_active = False
         return False, True
-    
-    # ── Fatigue degrades submission escape ────────────
-    # A tired fighter can't generate the explosive
-    # movement needed to escape. Effective threshold drops
-    # with stamina. Composure resists technique breakdown.
     _def_stamina = getattr(defender_state, 'stamina', 100)
     _composure = getattr(defender, 'composure', 70)
     _composure_bonus = (_composure - 70) * 0.002
@@ -3359,12 +3587,9 @@ def process_submission_progress(
         _def_stamina / 100 + 0.3 + _composure_bonus)
     effective_escape = (
         config.submission_escape_threshold * _fatigue_escape_mult)
-
-    # Check for escape (threshold is now 95, was 80)
     if fight_state.submission_escape_progress >= effective_escape:
         fight_state.submission_active = False
         return True, False
-    
     return False, False
 # ============================================================================
 # EXCHANGE SIMULATION
@@ -3424,10 +3649,16 @@ def simulate_exchange(
         attacker_state = fighter1_state if attacker == fighter1 else fighter2_state
         defender_state = fighter2_state if attacker == fighter1 else fighter1_state
         
-        escaped, finished = process_submission_progress(
+        # C22 FIX A: 3-tuple unpack matches P3-4c §5a
+        # process_submission_progress return shape. finish_kind is
+        # discarded here — this fe.simulate_fight path is retired-not-
+        # deleted (no live web-app caller per verify.md T1) and returns
+        # only the legacy "Submission (<sub>)" form. When a live caller
+        # exists again it should upgrade to the finish_kind vocabulary.
+        escaped, finished, _finish_kind = process_submission_progress(
             attacker, defender, attacker_state, defender_state, fight_state, config
         )
-        
+
         if finished:
             round_stats[attacker.fighter_id].submission_attempts += 1
             sub_name = fight_state.submission_type.value if fight_state.submission_type else "unknown"
@@ -4300,6 +4531,9 @@ def simulate_fight(
     f2_max_health = 100.0 + fighter2.chin * 0.3
     
     # Initialize states with recovery rating for between-round mechanics
+    # P3-4c — chin_rating + composure_rating mirrored from RECOVERY-WIRE1.
+    # Byte-inert until FI_CHIN_WIRING_ENABLED / FI_COMPOSURE_WIRING_ENABLED
+    # are True (defaults False).
     f1_state = FighterState(
         fighter_id=fighter1.fighter_id,
         name=fighter1.name,
@@ -4308,6 +4542,8 @@ def simulate_fight(
         stamina=f1_starting_stamina,
         recovery_rating=fighter1.recovery,
         cardio_rating=fighter1.cardio,
+        chin_rating=fighter1.chin,
+        composure_rating=fighter1.composure,
     )
     f2_state = FighterState(
         fighter_id=fighter2.fighter_id,
@@ -4317,6 +4553,8 @@ def simulate_fight(
         stamina=f2_starting_stamina,
         recovery_rating=fighter2.recovery,
         cardio_rating=fighter2.cardio,
+        chin_rating=fighter2.chin,
+        composure_rating=fighter2.composure,
     )
     
     fight_state = FightState(fighter1=f1_state, fighter2=f2_state)
