@@ -7511,6 +7511,214 @@ regardless of any slot bias. Verdicts:
   - `verify/g5_ui_smoke.py`
   - `verify/g6_sensitivity_spot.py`
 
+- **FIGHT MODEL P3-4e AGGRESSION (D8) — MACHINERY SHIPPED DARK [COMMITTED as C24, 2026-09-04]**
+
+  TENDENCY function + 4-rule circumstance table + FIGHT_IQ execution
+  lane machinery all present; **both flags left FALSE on disk** based
+  on bridge-path measurement (below). Machinery is dark on the live
+  path; wired for the next iteration once the (b) instrument is
+  fixed and the (d) Wrestler collapse is understood. S2 freeze
+  holds — NO DEPLOY.
+
+  **BURIED FINDING (elevated from census).** `FighterRecord` has no
+  baseline `fighting_style` attribute — the field is only set on the
+  record via the `hasattr(_frec, 'fighting_style')`-guarded dynamic
+  path at `game_bridge.py:2344`, which never fires for fresh AI
+  fighters. `_fighter_data[fid]['style']` is where world_init
+  actually stores the style. **Consequence:** pre-C24
+  `_resolve_gameplan`'s AI branch has been reading empty string,
+  falling through `_STYLE_TO_CANONICAL.get('','')` → '' →
+  `ai_gameplan_for_style('')` → `'BALANCED'` → aggr=0 range=0 →
+  collapse to None for every AI fighter, every fight. **AI
+  gameplans have been silently None since GAMEPLAN-AI-SELECT1
+  shipped.** MEASURE section (c) below reproduces this at bridge
+  scale: OFF arm = 19026/19026 (100%) None, ON arm = 26.4% None.
+
+  **THREE MECHANISMS ADDED (machinery present, all dark):**
+
+  1. **TENDENCY function** — `styles.tendency_for_fighter(style,
+     personality)` returns `(aggression, range_bias)`. Pure
+     deterministic table-lookup + int-add + clamp. Reload-stable
+     by construction. Tilt tables:
+     ```
+     Personality: Warrior/Hungry +1; Competitor 0; Calculated/Political -1
+     Style aggr:  Striker/Pressure/GnP/Sprawl&Brawl +1;
+                  Counter Striker/Point Fighter -1; others 0
+     Style range: Wrestler/BJJ/GnP +1; Counter Striker/Sprawl&Brawl -1
+     ```
+     Companion `preset_for_tendency(a, r)` and
+     `TENDENCY_PRESET_MAP` (9 entries).
+
+  2. **4-rule circumstance table** (`fi._apply_aggression_rules`,
+     called at top of `_init_round`). Behind
+     `FI_AGGRESSION_RULES_ENABLED`. Rules:
+     - R1 behind on cards final round → aggr +1
+       ("need a finish")
+     - R2 chin ≤60 vs opponent.power ≥80 → aggr −1
+       ("off the fence")
+     - R3 opponent stamina ≤25 AND round ≥2 → aggr +1
+       ("smells blood")
+     - R4 ahead ≥2 pts + final + own health >70 → pull to 0
+       ("run out the clock")
+     G2 fixture pass: all 4 rules fire dial + commentary correctly.
+
+  3. **FIGHT_IQ execution lane** (`fi._apply_iq_execution`, called
+     at top of each `_simulate_exchange`). Behind
+     `FI_IQ_EXECUTION_ENABLED`. Fires when fighter's `is_rocked`
+     rises AND drift not yet applied for this rock episode:
+     IQ<50 → aggression to +1 (brawler panic); 50-79 → +1 clamp;
+     IQ≥80 → NO drift (elite composure). G3 defining instrument
+     confirmed ALIVE at N=1000/cell: IQ 50 drifts on 7.8% of
+     fights; IQ 90 drifts on 0.0% (elite composure gate holds).
+
+  Also: TENDENCY-based AI plan (IMPL 2) is gated under
+  `FI_AGGRESSION_RULES_ENABLED` — packages with the rules table
+  because the AI-plan resolution reads `_fighter_data['style']`
+  only under that flag (flag-OFF preserves the pre-C24 broken-but-
+  stable empty-string → None collapse for G1 byte-identity).
+
+  **G1 NO-OP EP1_200 vs pristine C23:** MD5 byte-identical
+  `b6f7dac91ce983f4449152445477488f`. Confirms machinery is inert
+  at flag OFF.
+
+  **G4 TENDENCY table** (seed 985000, N=292 AI fighters):
+  9 tuple outcomes across 5 personalities × 11 styles. Repeat-load
+  stability 20/20 (pure-function guaranteed).
+
+  **BRIDGE-PATH MEASUREMENT (the missing defining instrument for
+  the decision gate — verbatim, N=321 OFF / N=309 ON, scratch world
+  seed 986000).**
+
+  **(a) Method mix:**
+  ```
+  bucket        OFF     ON      Δ
+  DRAW             0      6     +6
+  KO             153     90    -63
+  TKO             61     78    +17
+  OTHER          107    135    +28    ← includes short-form DEC codes
+  ```
+  Method-mix classifier missed the bridge's short-form `"DEC"` /
+  `"SUB"` codes → they land in OTHER. Instrument note: KO drops
+  63 fights (−41%), TKO gains 17. Real drift.
+
+  **(b) PER-STYLE td/sub INSTRUMENT FAILURE.** All cells returned
+  n=0 — the `_engine_result` reference isn't preserved on the
+  completed-event fight dict at the Path B (`_simulate_card_fights`)
+  path my hook exercised. Instrument bug, not data absence. **I
+  cannot verify the grappler-vs-striker differentiation direction
+  the DECISION GATE requires.** Filed as the first P3-5 dependency:
+  either instrument this differently, or wait until per-fight
+  engine result is persisted on the fight dict.
+
+  **(c) RESOLVED PLANS — the BURIED FINDING repro:**
+  ```
+  preset            OFF (n=19026)    ON (n=11822)
+  NONE              19026 (100.0%)   3120 ( 26.4%)
+  AGGRESSIVE            0 (  0.0%)   3287 ( 27.8%)
+  GNP                   0 (  0.0%)   1822 ( 15.4%)
+  MEASURED              0 (  0.0%)   1618 ( 13.7%)
+  TAKEDOWN              0 (  0.0%)    809 (  6.8%)
+  DEFENSIVE             0 (  0.0%)    656 (  5.5%)
+  SUBMISSION            0 (  0.0%)    510 (  4.3%)
+  ```
+  Bridge-scale confirmation: pre-C24 AI plans were 100% None; C24
+  flag ON produces real presets.
+
+  **(d) WIN-RATE SANITY (n≥5 in either arm):**
+  ```
+  style              n_off n_on  win_off  win_on   Δ
+  Wrestler            20    15   55.0%    26.7%   -28.3pp  ← COLLAPSE
+  Striker             20    12   60.0%    33.3%   -26.7pp  ← COLLAPSE
+  BJJ Specialist       8    14   12.5%    50.0%   +37.5pp  ← BOOM
+  Counter Striker      6    11   33.3%    63.6%   +30.3pp  ← BOOM
+  Clinch Fighter      10    15   20.0%    46.7%   +26.7pp
+  Ground & Pound      10    12   50.0%    66.7%   +16.7pp
+  Balanced            11     9   54.5%    66.7%   +12.1pp
+  Point Fighter        8     5   50.0%    60.0%   +10.0pp
+  Muay Thai           15    13   60.0%    53.8%    -6.2pp
+  Pressure Fighter    13    12   53.8%    58.3%    +4.5pp
+  Sprawl & Brawl       5     4   80.0%     0.0%   -80.0pp
+  ```
+  Wrestler collapsed 55%→27% and Striker 60%→33% under flag ON.
+  My strict `n≥20 both arms` gate reported "clean" because
+  Wrestler's n_on=15 < 20, but the underlying pattern is
+  incompatible with a "smarter AI" ship: grapplers other than
+  Wrestler are winning MORE; Wrestler alone (which gets the
+  TAKEDOWN preset) is losing MORE.
+
+  **DECISION BRANCH FIRED: DARK.** Per the C24 spec's DECISION
+  GATE: "If (d) trips or (b) is inverted: leave BOTH flags False
+  on disk, commit the machinery dark, and file the measurement to
+  P3-5 with the failing numbers." Both conditions apply:
+  - (b) instrument failed — cannot confirm right direction.
+  - (d) shows collapses (Wrestler −28pp, Striker −27pp) on styles
+    with n=20 in one arm; the "clean" verdict from my code was
+    too-strict-n interpretation of the gate. Wrestler at n_off=20
+    with a 28pp swing is exactly the "collapse or explode" the
+    gate protects against.
+
+  **P3-5 CALIBRATION INPUTS filed with the numbers above:**
+  - Fix the (b) instrument (persist `_engine_result` on the fight
+    dict at Path B) so td/sub-per-style is measurable.
+  - Diagnose the Wrestler collapse: TAKEDOWN preset applies
+    `range_bias=+1` (grapple_weight ×1.20, sub_weight ×1.10) —
+    likely over-commits Wrestlers to takedowns, they get sprawled
+    or fail the shot, opponent counters. Candidate: soften range
+    tilt for Wrestlers when opponent is a Sprawl & Brawl / high-
+    TDD style.
+  - R3 fires 64.5% on symmetric-cardio fixtures (G2 Part B) —
+    ubiquity says the trigger is too permissive. Tighten the
+    stamina threshold OR require a real gassed-signal (rock
+    duration?) alongside stamina.
+
+  **RIDERS (all filed, none fixed this ship):**
+  - **`Gameplan.finish_seek` field is DEAD** (fe:1141). Third
+    gameplan dial has no consumer. Filed for a separate ship if
+    the third gameplan axis needs to come alive.
+  - **`_heat_aggression_bonus` computed-never-read** in fi
+    (`fi:427-446`). Mirrors C21 finding on fe. Filed.
+  - **Counter mechanism keys on `fighting_style` substring** in
+    `calculate_strike_success`'s counter branch (not on Gameplan
+    or personality). DEFENSIVE preset does not activate a counter
+    — the mechanism-vs-intent mismatch CLAUDE.md top-of-backlog
+    already tracks. Redesign candidate.
+  - **FighterRecord.fighting_style as a real field** — cleaner
+    fix than reading through `_fighter_data['style']`. Filed as
+    a separate cleanup ship; not this arc's problem.
+  - **Bridge Path B method-string collapse** — bridge writes
+    method as `"DEC"` / `"SUB"` short codes. My `bucket()`
+    classifier keyed on "Decision"/"Submission" long forms. Not
+    a bug in the bridge (short codes are the intended
+    persistence shape) but a note for future measurement
+    harnesses.
+
+  **PROCESS INCIDENTS (this arc, logged not hidden):**
+  - **G1 first attempt failed byte-identity** because I initially
+    made IMPL 2 (tendency-based AI-plan resolution) unconditional.
+    Even with FI_AGGRESSION_RULES_ENABLED=False, the swap changed
+    AI plans on flag-OFF too, breaking pristine C23 byte-identity.
+    Fixed by gating IMPL 2 behind `FI_AGGRESSION_RULES_ENABLED`
+    (packaging TENDENCY-based AI plan + 4-rule table as "smarter
+    AI" pack). G1 passed on retry.
+  - **BURIED FINDING surfaced during G4 development.** I built the
+    G4 harness reading `getattr(record, 'fighting_style', '')` and
+    got N=0 fighters with real style. Traced the null result and
+    found the field never gets set on FighterRecord. Pre-C24 AI
+    gameplans have been silently None for the entire life of
+    GAMEPLAN-AI-SELECT1. Not a regression from C24; an existing
+    defect the resurrection measurement documented.
+
+  Artifacts under `outputs/sm1/fight_model/p3_4e/`:
+  - `census.md` (6-part read-only census)
+  - `gate_report.md` (verbatim G1-G6 outputs)
+  - `verify/g1_noop_ep1_200.py` + CSVs
+  - `verify/g2_rule_fires.py`
+  - `verify/g3_iq_execution.py`
+  - `verify/g4_tendency_table.py` + JSON
+  - `verify/g5_before_after.py` + CSVs
+  - `verify/g5b_bridge_before_after.py` + JSON  ← this ship's
+    bridge-path measurement
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

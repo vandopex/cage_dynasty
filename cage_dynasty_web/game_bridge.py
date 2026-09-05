@@ -413,13 +413,21 @@ except Exception as _me:
 
 STYLES_AVAILABLE = False
 try:
-    from styles import get_style_matchup_modifier, ai_gameplan_for_style
+    from styles import (
+        get_style_matchup_modifier, ai_gameplan_for_style,
+        # P3-4e — TENDENCY function of (personality, style)
+        tendency_for_fighter, preset_for_tendency,
+    )
     from core.types import FightingStyle as _FightingStyleEnum
     STYLES_AVAILABLE = True
     print("✅ styles loaded")
 except Exception as _se:
     print(f"⚠️ styles not available: {_se}")
     def ai_gameplan_for_style(_s):  # safe stub if styles.py fails
+        return "BALANCED"
+    def tendency_for_fighter(_style, _pers):  # P3-4e safe stub
+        return (0, 0)
+    def preset_for_tendency(_a, _r):  # P3-4e safe stub
         return "BALANCED"
 
 # GAMEPLAN-AI-SELECT1: translate legacy / amateur-graduate style
@@ -17963,15 +17971,56 @@ class GameBridge:
         _fid = getattr(fighter_attrs, 'fighter_id', None)
         if _fid in player_fids:
             _gp_str = fight.get("gameplan", "BALANCED") or "BALANCED"
+            _aggr  = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
+            _range = _GAMEPLAN_RANGE.get(_gp_str, 0)
         else:
-            # AI side — GAMEPLAN-AI-SELECT1
+            # AI side. P3-4e (C24) TENDENCY-based selection is gated
+            # behind FI_AGGRESSION_RULES_ENABLED — packages together
+            # with the 4-rule circumstance table as the "smarter AI"
+            # pack (per-fighter dial derived from personality × style;
+            # rules adjust it in-fight). Flag OFF preserves the C23
+            # style-only behavior (GAMEPLAN-AI-SELECT1) so G1's
+            # byte-inert-OFF discipline holds. Van approved this
+            # coupling at C24 paste.
+            try:
+                import window_registry as _wreg_ar_ai
+                _tend_on = bool(_wreg_ar_ai.FI_AGGRESSION_RULES_ENABLED)
+            except Exception:
+                _tend_on = False
             _record = (self._game_state.get_fighter(_fid)
                        if (self._game_state and _fid) else None)
+            # P3-4e BURIED FINDING: FighterRecord baseline has no
+            # `fighting_style` attribute (only line 2344's dynamic-
+            # attr stamp path sets it, and hasattr-guarded that
+            # never fires for fresh AI fighters). So pre-C24
+            # `_resolve_gameplan` reads '' for every AI fighter,
+            # then _STYLE_TO_CANONICAL.get('', '') is '', then
+            # ai_gameplan_for_style('') is 'BALANCED', then aggr=0
+            # range=0 collapses to None. **AI gameplans have been
+            # dead (None) since GAMEPLAN-AI-SELECT1 shipped.** Not
+            # touched by C24 flag-OFF (preserves G1 byte-identity
+            # vs pristine C23). Under the C24 flag ON, style is
+            # sourced from `_fighter_data[fid]['style']` — where
+            # world_init actually stores it — so tendency-based AI
+            # plan is real, not empty-string collapse.
             _raw = str(getattr(_record, 'fighting_style', '') or '')
+            if _tend_on and not _raw:
+                _fd = (self._game_state._fighter_data.get(_fid, {})
+                       if (self._game_state and _fid) else {})
+                _raw = str(_fd.get('style', '') or '')
             _canonical = _STYLE_TO_CANONICAL.get(_raw, _raw)
-            _gp_str = ai_gameplan_for_style(_canonical)
-        _aggr  = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
-        _range = _GAMEPLAN_RANGE.get(_gp_str, 0)
+            if _tend_on:
+                _pers = str(getattr(_record, 'personality', '') or '')
+                if not _pers:
+                    _fd_p = (self._game_state._fighter_data.get(_fid, {})
+                             if (self._game_state and _fid) else {})
+                    _pers = str(_fd_p.get('personality', '') or '')
+                _aggr, _range = tendency_for_fighter(_canonical, _pers)
+                _gp_str = preset_for_tendency(_aggr, _range)
+            else:
+                _gp_str = ai_gameplan_for_style(_canonical)
+                _aggr  = _GAMEPLAN_AGGRESSION.get(_gp_str, 0)
+                _range = _GAMEPLAN_RANGE.get(_gp_str, 0)
         if _aggr == 0 and _range == 0:
             return None
         return _Gameplan(

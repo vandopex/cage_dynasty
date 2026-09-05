@@ -472,6 +472,19 @@ class NarratedFightSimulator:
         # below either.
         self._gameplan_f1 = gameplan_f1
         self._gameplan_f2 = gameplan_f2
+        # P3-4e — stash BASE tendency (immutable snapshot of the plan
+        # the fighter entered with). Rules table + IQ execution both
+        # need it: rules apply deltas relative to the fight-open dial;
+        # IQ execution's drift-when-rocked target is the base tendency
+        # (fighter reverts to their identity plan under duress).
+        # Non-frozen shallow copy via re-construction — Gameplan is
+        # frozen so we cannot mutate, but we can hold the reference.
+        self._tendency_f1 = gameplan_f1
+        self._tendency_f2 = gameplan_f2
+        # P3-4e — IQ execution drift-applied trackers (one per rock
+        # episode). Reset to False when the fighter stops being rocked.
+        self._iq_drift_applied_f1 = False
+        self._iq_drift_applied_f2 = False
 
         # GAMEPLAN-DIAL-AGGR1 · AGGRESSION pre-fight stat mutation.
         # Applied ONCE at fight start (cannot compound over exchanges —
@@ -676,12 +689,295 @@ class NarratedFightSimulator:
         # line lands after the fighter's stated intent — natural read.
         self.commentary.emit_gameplan_setup()
 
+    def _apply_aggression_rules(self) -> None:
+        """P3-4e — 4-rule circumstance table. Behind
+        FI_AGGRESSION_RULES_ENABLED (default False, byte-inert OFF).
+
+        Called at the top of _init_round (BEFORE the round's first
+        exchange fires). Reads:
+          - self.round_scores (populated by prior rounds' scoring)
+          - self.fighter{1,2}_state (health/stamina/is_rocked)
+          - self._gameplan_f{1,2} (current plan; may be None)
+          - self._tendency_f{1,2}  (base tendency, stashed at
+            __init__; the "sticky" identity plan the fighter drifts
+            back to)
+
+        Rules (all IQ-gated via dial_execution AT R3+ where the rule
+        applies — high-IQ fighters DEPLOY the rule, low-IQ fighters
+        miss the read):
+
+        R1 — BEHIND ON CARDS entering final round
+             (current_round == scheduled_rounds AND behind by ≥1 pt)
+             → aggression up +1 (clamped to +1). Legible: "he knows
+             he needs a finish". Commentary hook: 'rules_r1_press'.
+
+        R2 — POOR CHIN vs BIG-POWER opponent (chin ≤ 60 AND
+             opponent.power ≥ 80) → aggression down -1 (clamped).
+             Legible: "protect the chin, don't trade with the puncher".
+             Commentary hook: 'rules_r2_protect'.
+
+        R3 — OPPONENT VISIBLY GASSED (opponent stamina ≤ 25 AND
+             current_round ≥ 2) → aggression up +1. Legible: "push
+             the pace while they're breathing hard".
+             Commentary hook: 'rules_r3_press_gassed'.
+
+        R4 — BIG FAVORITE CRUISING WITH A LEAD (ahead by ≥2 pts AND
+             current_round == scheduled_rounds AND own health > 70)
+             → aggression down toward 0 (coast, don't take risks).
+             Legible: "run out the clock". Commentary hook:
+             'rules_r4_coast'.
+
+        Order: R2 (chin protect) → R4 (coast) → R1 (need finish) →
+        R3 (press gassed). Multiple rules can fire; final aggression
+        is CLAMPED to [-1, +1] after all applied.
+
+        Byte-inert when the flag is OFF (early return before any
+        mutation or RNG consumption). When ON but no rule triggers,
+        also byte-inert (early return before Gameplan reconstruction).
+        """
+        try:
+            import window_registry as _wreg_ar
+            if not _wreg_ar.FI_AGGRESSION_RULES_ENABLED:
+                return
+        except ImportError:
+            return
+
+        _current = self.current_round
+        _sched = self.config.scheduled_rounds
+        _is_final = (_current == _sched)
+        _rock = getattr(self.fighter1_state, 'is_rocked', False)  # unused; docstring anchor
+
+        # For each fighter, compute a base_delta from R1-R4, then
+        # rebuild Gameplan if delta != 0.
+        for _slot in (1, 2):
+            if _slot == 1:
+                _me_gp = self._gameplan_f1
+                _me_state = self.fighter1_state
+                _opp = self.fighter2
+                _opp_state = self.fighter2_state
+                _tend = getattr(self, '_tendency_f1', None)
+                _me_attrs = self.fighter1
+            else:
+                _me_gp = self._gameplan_f2
+                _me_state = self.fighter2_state
+                _opp = self.fighter1
+                _opp_state = self.fighter1_state
+                _tend = getattr(self, '_tendency_f2', None)
+                _me_attrs = self.fighter2
+
+            if _me_gp is None:
+                # Fighter had no plan (None-collapsed) — rules still
+                # fire from a synthetic (0,0) base so a Balanced
+                # fighter can push when the opponent gasses.
+                _base_aggr = 0
+                _base_range = 0
+                _preset = "BALANCED"
+            else:
+                _base_aggr = int(getattr(_me_gp, 'aggression', 0) or 0)
+                _base_range = int(getattr(_me_gp, 'range_bias', 0) or 0)
+                _preset = getattr(_me_gp, 'preset_name', 'BALANCED')
+
+            _new_aggr = _base_aggr
+            _fired = []  # rule labels that triggered
+
+            # Score totals from prior rounds — R1 + R4 need these.
+            if self.round_scores:
+                if _slot == 1:
+                    _my_total = sum(s[0] for s in self.round_scores)
+                    _opp_total = sum(s[1] for s in self.round_scores)
+                else:
+                    _my_total = sum(s[1] for s in self.round_scores)
+                    _opp_total = sum(s[0] for s in self.round_scores)
+            else:
+                _my_total = 0
+                _opp_total = 0
+
+            # R2 — chin vs power (fires whenever it's true; no round gate).
+            _my_chin = int(getattr(_me_attrs, 'chin', 70) or 70)
+            _opp_power = int(getattr(_opp, 'power', 70) or 70)
+            if _my_chin <= 60 and _opp_power >= 80:
+                _new_aggr -= 1
+                _fired.append('rules_r2_protect')
+
+            # R4 — cruising with lead in final round + healthy.
+            _my_hp_now = getattr(_me_state, 'health', 100.0) or 100.0
+            if (_is_final and (_my_total - _opp_total) >= 2
+                    and _my_hp_now > 70):
+                # Coast — pull aggression toward 0 (not below).
+                if _new_aggr > 0:
+                    _new_aggr = 0
+                    _fired.append('rules_r4_coast')
+
+            # R1 — behind on cards entering final round.
+            if _is_final and (_opp_total - _my_total) >= 1:
+                _new_aggr += 1
+                _fired.append('rules_r1_press')
+
+            # R3 — opponent gassed.
+            _opp_stam = getattr(_opp_state, 'stamina', 100.0) or 100.0
+            if _opp_stam <= 25 and _current >= 2:
+                _new_aggr += 1
+                _fired.append('rules_r3_press_gassed')
+
+            _new_aggr = max(-1, min(+1, _new_aggr))
+            if _new_aggr == _base_aggr:
+                continue
+
+            # Rebuild Gameplan with adjusted aggression.
+            _new_preset = _preset  # keep preset label; only dial swings
+            _new_gp = Gameplan(
+                aggression=_new_aggr,
+                range_bias=_base_range,
+                finish_seek=int(getattr(_me_gp, 'finish_seek', 0)
+                                 if _me_gp else 0),
+                preset_name=_new_preset,
+            )
+            if _slot == 1:
+                self._gameplan_f1 = _new_gp
+            else:
+                self._gameplan_f2 = _new_gp
+
+            # Commentary hook — legible narration. Uses the
+            # commentary_log append pattern to match §5a's escape
+            # drama; commentary system's structured hook not required.
+            try:
+                _fname = getattr(_me_attrs, 'name', 'Fighter')
+                _hook_names = {
+                    'rules_r1_press': f"{_fname} knows they need a finish — turning up the pressure.",
+                    'rules_r2_protect': f"{_fname}'s corner wants them off the fence — power on the other side.",
+                    'rules_r3_press_gassed': f"{_fname} smells blood — pace up while the opponent gases.",
+                    'rules_r4_coast': f"{_fname} settles in to run out the clock with the lead.",
+                }
+                for _hn in _fired:
+                    _line = _hook_names.get(_hn)
+                    if _line and hasattr(self.commentary, 'commentary_log'):
+                        self.commentary.commentary_log.append(_line)
+            except Exception:
+                pass
+
+    def _apply_iq_execution(self) -> None:
+        """P3-4e — plan-adherence lane (FIGHT_IQ). Behind
+        FI_IQ_EXECUTION_ENABLED (default False, byte-inert OFF).
+
+        Called at the top of each exchange. When a fighter's
+        `is_rocked` flag rises to True (rocked event), low-IQ fighters
+        DRIFT their aggression toward the tendency baseline / brawling
+        (+1 forward — panic response), and high-IQ fighters STICK to
+        the current plan.
+
+        Drift trigger: fighter's `is_rocked` state True AND we haven't
+        applied drift yet for THIS rock episode (tracked via
+        self._iq_drift_applied_f{1,2}). Resets to False when the fighter
+        stops being rocked (rock_duration expires or health regens).
+
+        Drift magnitude, IQ-gated:
+          - IQ < 50: full drift to aggression=+1 (blind rage / brawler
+            panic — abandon everything and swing).
+          - IQ 50-79: partial — from patient (-1) drift to 0; from
+            neutral drift to +1; from forward stay forward.
+          - IQ 80+: NO drift (high-IQ fighters stick to the plan;
+            "elite composure under pressure").
+
+        Byte-inert when flag OFF (early return). Byte-inert when
+        no fighter is currently rocked-with-un-applied-drift.
+        """
+        try:
+            import window_registry as _wreg_iqe
+            if not _wreg_iqe.FI_IQ_EXECUTION_ENABLED:
+                return
+        except ImportError:
+            return
+
+        for _slot in (1, 2):
+            if _slot == 1:
+                _me_state = self.fighter1_state
+                _me_attrs = self.fighter1
+                _gp_attr = '_gameplan_f1'
+                _drift_attr = '_iq_drift_applied_f1'
+            else:
+                _me_state = self.fighter2_state
+                _me_attrs = self.fighter2
+                _gp_attr = '_gameplan_f2'
+                _drift_attr = '_iq_drift_applied_f2'
+
+            _is_rocked = bool(getattr(_me_state, 'is_rocked', False))
+
+            # Reset drift-tracker when rock clears — next rock event
+            # gets a fresh drift-attempt.
+            _drifted = getattr(self, _drift_attr, False)
+            if not _is_rocked:
+                if _drifted:
+                    setattr(self, _drift_attr, False)
+                continue
+
+            if _drifted:
+                # Already applied for this rock episode.
+                continue
+
+            # Rock is active + haven't drifted yet — evaluate.
+            _iq = int(getattr(_me_attrs, 'fight_iq', 65) or 65)
+            _me_gp = getattr(self, _gp_attr)
+            if _me_gp is None:
+                # Fighter had no plan — construct a synthetic one to
+                # drift from (only if IQ is low enough to actually drift).
+                if _iq >= 80:
+                    setattr(self, _drift_attr, True)
+                    continue
+                # Synthesize a Gameplan at neutral, then apply drift.
+                _me_gp = Gameplan(aggression=0, range_bias=0,
+                                   preset_name='BALANCED')
+                # Set on the sim so downstream reads see it.
+                setattr(self, _gp_attr, _me_gp)
+
+            _base_aggr = int(getattr(_me_gp, 'aggression', 0) or 0)
+
+            if _iq >= 80:
+                # Elite composure — stick to the plan. Mark drifted so
+                # we don't re-evaluate every exchange for this rock.
+                setattr(self, _drift_attr, True)
+                continue
+
+            # Low- or mid-IQ drift.
+            if _iq < 50:
+                _new_aggr = +1  # full brawler panic
+            else:
+                # Mid IQ 50-79: shift up by +1 (patient → neutral,
+                # neutral → forward, forward stays forward — clamped).
+                _new_aggr = min(+1, _base_aggr + 1)
+
+            if _new_aggr == _base_aggr:
+                setattr(self, _drift_attr, True)
+                continue
+
+            # Rebuild Gameplan with drifted aggression.
+            _new_gp = Gameplan(
+                aggression=_new_aggr,
+                range_bias=int(getattr(_me_gp, 'range_bias', 0) or 0),
+                finish_seek=int(getattr(_me_gp, 'finish_seek', 0) or 0),
+                preset_name=getattr(_me_gp, 'preset_name', 'BALANCED'),
+            )
+            setattr(self, _gp_attr, _new_gp)
+            setattr(self, _drift_attr, True)
+
+            # Commentary hook.
+            try:
+                _fname = getattr(_me_attrs, 'name', 'Fighter')
+                if hasattr(self.commentary, 'commentary_log'):
+                    self.commentary.commentary_log.append(
+                        f"{_fname} is rocked — the plan goes out the window, "
+                        f"they're swinging for the fences.")
+            except Exception:
+                pass
+
     def _init_round(self):
         """Initialize round state"""
         self.round_stats = {
             self.fighter1.fighter_id: RoundStats(),
             self.fighter2.fighter_id: RoundStats()
         }
+        # P3-4e — 4-rule aggression circumstance table. Fires BEFORE
+        # any exchange in this round. Byte-inert when flag is OFF.
+        self._apply_aggression_rules()
         
         # Reset fighter round states (includes base stamina recovery)
         self.fighter1_state._current_round = self.current_round
@@ -801,12 +1097,16 @@ class NarratedFightSimulator:
     def _simulate_exchange(self, exchange_num: int) -> Optional[Tuple[str, str]]:
         """
         Simulate a single exchange with commentary.
-        
+
         Returns (winner_id, method) if fight ends, else None.
         """
         self.fight_state.exchanges_this_round = exchange_num
         self.fight_state.total_exchanges += 1
-        
+
+        # P3-4e — IQ execution drift (rock-triggered plan drift). Fires
+        # once per rock episode; byte-inert when flag is OFF.
+        self._apply_iq_execution()
+
         # Track if there was meaningful ground action this exchange
         # (used to prevent referee standup during active ground fighting)
         self._ground_action_this_exchange = False

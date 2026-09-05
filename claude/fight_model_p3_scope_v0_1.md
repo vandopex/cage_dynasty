@@ -1,9 +1,9 @@
 # FIGHT MODEL P3 — IMPLEMENTATION SCOPE v0.1 (2026-09-03)
 # STATUS: P3-0/1 SHIPPED+DEPLOYED; P3-2 (C18), P3-3 (C19), P3-4a
-# (C20), P3-4b (C21), P3-4c (C22), P3-4d (C23) SHIPPED; next: 4e
-# AGGRESSION. Updated 2026-09-04 (C23 ship — POWER 19th stat +
-# lane split, canonical style-offset in core.types, flag ON per
-# G2 rec).
+# (C20), P3-4b (C21), P3-4c (C22), P3-4d (C23) SHIPPED; P3-4e (C24)
+# SHIPPED DARK (both flags False on disk — bridge measurement (d)
+# tripped, (b) instrument failed); next: 4f/4g remainder + P3-5
+# calibration. Updated 2026-09-04 (C24 dark ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -102,8 +102,31 @@ FLAT; G3 derivation deterministic+no-write-back; G4 zero remaining
 G6 no god-stat). D15 POSITION CENSUS delivered as ride-along at
 outputs/sm1/fight_model/p3_4d/position_census.md.
 
-### 4e AGGRESSION (D8): tendency trait + 4-rule table + fight_iq
-execution; counter-mechanism redesign candidate.
+### 4e AGGRESSION (D8) — SHIPPED DARK as C24 (2026-09-04)
+Machinery present, both flags False on disk. TENDENCY function
+(styles.tendency_for_fighter, pure function of personality × style,
+reload-stable by construction), 4-rule circumstance table (R1
+behind-on-cards / R2 chin-vs-power / R3 opponent-gassed / R4
+cruising), FIGHT_IQ execution lane (rock-triggered drift; ≥80
+elite composure blocks 100%). BURIED FINDING: FighterRecord has
+no baseline `fighting_style` attribute; style lives in
+`_fighter_data['style']`. Pre-C24 AI gameplans were 100% None
+since GAMEPLAN-AI-SELECT1 (bridge-scale measurement: 19026/19026
+None OFF; 26.4% None + 73.6% real presets ON). G1 byte-identical
+OFF (`b6f7dac91ce983f4449152445477488f`); G2 all 4 rules fire
+correctly (dial + commentary); G3 IQ execution ALIVE on defining
+instrument at N=1000 (IQ 50 drift 7.8%, IQ 90 drift 0.0% —
+elite composure gate holds); G4 tendency table 292 fighters
+deterministic 20/20 repeat-load stable. **BRIDGE-PATH DECISION
+GATE (from C24 spec) fired DARK:** (b) instrument failed
+(_engine_result not persisted on Path B fight dict → td/sub per
+style all n=0, cannot verify grappler-vs-striker differentiation
+direction); (d) win-rate swings Wrestler 55%→27% (Δ=−28.3pp) and
+Striker 60%→33% (Δ=−26.7pp) both on n=20 OFF — collapses in the
+strict architect-intent reading. Filed to P3-5 with numbers.
+
+### 4f/4g REMAINDER — SUB MODEL follow-ups, POWER dial follow-ups,
+future POSITION-VALUE rebalance (D15 step 2) — as they arise.
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
 
@@ -136,6 +159,29 @@ FREEZE LIFTS on green. CALIBRATION LIST:
    inversion diagnosis (−17pp via select_action routing).
    Before/after instruments: verify.md T4 + gate_tables.md +
    g3_ep1_flags_on.
+10. POWER DIALS (C23 inputs): unify the TWO generative models —
+    world-gen power = independent tier roll + offset
+    (strength-uncorrelated) vs legacy derivation = strength +
+    offset + noise (strength-correlated); architect lean: seed
+    world-gen from strength like derivation, one model everywhere
+    (Van rules). Tier-confound fix if per-style separation should
+    be world-scan-visible; enum-collapse offsets (collapsed styles
+    derive with the shared enum offset); offset magnitudes.
+11. AGGRESSION DIALS (C24 inputs — machinery is dark on disk;
+    calibration to flip it on). Fix (b) instrument: persist
+    `_engine_result` on the Path B fight dict so per-style
+    td_attempts/sub_attempts are measurable at bridge scale.
+    Diagnose Wrestler collapse: TAKEDOWN preset applies
+    `range_bias=+1` (grapple_weight ×1.20, sub_weight ×1.10) —
+    likely over-commits Wrestlers to takedowns, they get sprawled,
+    opponent counters; candidate softens the range tilt when
+    opponent is a Sprawl & Brawl / high-TDD style. R3 fires
+    64.5% on symmetric-cardio fixtures (fixture-specific but
+    ubiquitous — trigger too permissive); tighten stamina
+    threshold OR require a rock/hurt signal alongside stamina.
+    R2/R4 fire rates measured 0% on their fixtures — need real
+    calibration data. TENDENCY tilt magnitudes (±1 per axis) may
+    be too aggressive when composed with 4-rule adjustments.
 
 ## DOCKET P3-6 — ACCEPTANCE + SHIP
 
@@ -257,9 +303,21 @@ recovered" are north-star beats.
 Then: scouting-ranges, personality, generator-variety, amateur,
 training dockets; PEAK103; PA timing pre-N-lock; A3-b/A3-c.
 
+FIGHTERRECORD-FIGHTING-STYLE (Van, 2026-09-04, from C24 BURIED
+FINDING) — small separate cleanup ship: promote `fighting_style`
+to a real field on `FighterRecord` (`game_state.py`) with proper
+serialization in `to_dict` / `from_dict`. Consequence closes the
+"AI plans have been None since GAMEPLAN-AI-SELECT1" defect at
+its root; makes the C24 `_fighter_data['style']` fallback
+unnecessary. Scope: FighterRecord field + serialization + a
+world_init write-side stamp so fresh AI fighters carry the real
+field. Should ride before P3-5 item 11's calibration lands so
+the AGGRESSION-DIALS work is against a clean lookup.
+
 ## STANDING RULES
 
-Fresh date + HEAD gate (HEAD C23 <sha-to-be-committed>); diagnose read-only
+Fresh date + HEAD gate (HEAD C24 — placeholder, actual sha in
+commit message); diagnose read-only
 first; single-purpose commits on Van's word; stop before commit;
 adjusted instruments prove discrimination; a no-op control cannot
 prove life; instruments match the DEFINING instrument; verbatim

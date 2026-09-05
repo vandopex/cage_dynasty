@@ -634,8 +634,133 @@ def ai_gameplan_for_style(style: str) -> str:
     inputs return "BALANCED" as a safe fallback, but every real style
     in the codebase has an explicit entry so BALANCED is never reached
     by a legitimate call.
+
+    NOTE (P3-4e, C24): pre-4e this was the sole AI-plan source. The
+    4e TENDENCY function (`tendency_for_fighter` below) is the
+    superset — it consumes style + personality and returns a
+    (base_aggression, base_range) tuple that the bridge translates
+    to the same preset vocabulary. This function is preserved for
+    backward-compat callers; the AI branch of `_resolve_gameplan`
+    should call `tendency_for_fighter` going forward.
     """
     return _AI_STYLE_TO_GAMEPLAN.get(style or "", "BALANCED")
+
+
+# ============================================================================
+# P3-4e (C24) — TENDENCY: pure deterministic function of (personality, style)
+# ============================================================================
+
+# ── Personality tilt on the AGGRESSION axis ──
+# Base tendency = style-tilt + personality-tilt (both integers on the
+# same -1/0/+1 scale, summed and clamped to [-1, +1]). Personality
+# distribution (world_init:2594-2599) is Competitor 35 / Calculated 20 /
+# Hungry 20 / Warrior 15 / Political 10.
+#   - Warrior:    +1  (loves the war, presses forward)
+#   - Hungry:     +1  (chases the finish, still-making-name)
+#   - Competitor:  0  (measured, plays the matchup)
+#   - Calculated: -1  (patient, technical, waits for the read)
+#   - Political:  -1  (career-preserving, avoids risk)
+_PERSONALITY_AGGR_TILT = {
+    "Warrior":    +1,
+    "Hungry":     +1,
+    "Competitor":  0,
+    "Calculated": -1,
+    "Political":  -1,
+}
+
+# ── Style tilt on the AGGRESSION axis ──
+# Same -1/0/+1 scale, KO-artist archetypes lean forward, point
+# fighters / counter strikers lean back. Balanced/hybrid = 0.
+_STYLE_AGGR_TILT = {
+    "Striker":          +1,
+    "Counter Striker":  -1,
+    "Pressure Fighter": +1,
+    "Point Fighter":    -1,
+    "Muay Thai":         0,
+    "Wrestler":          0,
+    "Ground & Pound":   +1,
+    "BJJ Specialist":    0,
+    "Clinch Fighter":    0,
+    "Sprawl & Brawl":   +1,
+    "Balanced":          0,
+}
+
+# ── Style tilt on the RANGE axis ──
+# +1 grapple-seek, -1 keep-standing, 0 range-agnostic. Preserves the
+# existing AI-style-plan intent (Wrestler → TAKEDOWN, BJJ → SUBMISSION,
+# Sprawl & Brawl → -1 keep-standing).
+_STYLE_RANGE_TILT = {
+    "Striker":           0,
+    "Counter Striker":  -1,
+    "Pressure Fighter":  0,
+    "Point Fighter":     0,
+    "Muay Thai":         0,
+    "Wrestler":         +1,
+    "Ground & Pound":   +1,
+    "BJJ Specialist":   +1,
+    "Clinch Fighter":    0,
+    "Sprawl & Brawl":   -1,
+    "Balanced":          0,
+}
+
+
+def tendency_for_fighter(
+    fighting_style: str, personality: str
+) -> Tuple[int, int]:
+    """P3-4e — return (aggression_tendency, range_tendency) for a fighter.
+
+    Pure deterministic function of TWO stored fields — same fighter,
+    same tendency on every reload. No RNG, no state, no memoization
+    needed (function is a table lookup + integer add + clamp).
+
+    Aggression = clamp(style_tilt + personality_tilt, -1, +1).
+    Range     = style_tilt only (personality doesn't tilt range —
+                Warrior with BJJ background is still grapple-seek).
+
+    Inputs are display-name strings as stored on FighterRecord.
+    Unknown style falls back to "Balanced"; unknown personality falls
+    back to "Competitor" (world_init's plurality). Both fallbacks
+    give tilt 0 — safe neutral. Fresh-save fighters always have both
+    fields per world_init:2594-2599 + 3138-3139.
+
+    Returned tuple's vocabulary is the same -1/0/+1 dials the
+    Gameplan dataclass consumes today; the bridge maps
+    (aggression, range) → preset name and Gameplan instance.
+    """
+    _sa = _STYLE_AGGR_TILT.get(fighting_style or "", 0)
+    _pa = _PERSONALITY_AGGR_TILT.get(personality or "", 0)
+    _sr = _STYLE_RANGE_TILT.get(fighting_style or "", 0)
+    _aggr = max(-1, min(+1, _sa + _pa))
+    _range = _sr  # personality doesn't tilt range at v0
+    return (_aggr, _range)
+
+
+# Reverse map from (aggression, range) tuple back to preset name — used
+# by the bridge to translate a tendency-computed tuple into the
+# _GAMEPLAN_AGGRESSION / _GAMEPLAN_RANGE preset vocabulary the rest of
+# the pipeline expects. Kept in sync with game_bridge.py:289-315.
+TENDENCY_PRESET_MAP = {
+    ( 1,  0): "AGGRESSIVE",
+    ( 1,  1): "GNP",
+    ( 1, -1): "AGGRESSIVE",   # forward + keep-standing → AGGRESSIVE (no clean preset for +1/-1)
+    ( 0,  0): "BALANCED",
+    ( 0,  1): "TAKEDOWN",
+    ( 0, -1): "MEASURED",     # neutral + keep-standing → MEASURED (patient framing)
+    (-1,  0): "MEASURED",
+    (-1,  1): "SUBMISSION",   # patient + grapple → SUBMISSION (BJJ patience)
+    (-1, -1): "DEFENSIVE",
+}
+
+
+def preset_for_tendency(aggression: int, range_bias: int) -> str:
+    """Map a (aggression, range_bias) tuple to a preset string.
+
+    Bridges the TENDENCY vocabulary to the 8-preset UI vocabulary the
+    rest of the system already consumes (game_bridge._GAMEPLAN_AGGRESSION,
+    _GAMEPLAN_RANGE). Kept as a small helper so future preset-set
+    changes don't require re-editing every caller.
+    """
+    return TENDENCY_PRESET_MAP.get((aggression, range_bias), "BALANCED")
 
 
 __all__ = [
@@ -647,6 +772,8 @@ __all__ = [
     "get_styles_by_category", "get_style_for_attributes",
     "calculate_style_score", "check_secondary_style", "get_style_display_name",
     "ai_gameplan_for_style",
+    # P3-4e — TENDENCY
+    "tendency_for_fighter", "preset_for_tendency", "TENDENCY_PRESET_MAP",
 ]
 
 

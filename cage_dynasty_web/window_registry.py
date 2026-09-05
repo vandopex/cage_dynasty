@@ -66,6 +66,17 @@ FI_COMPOSURE_WIRING_ENABLED: bool = True
 # escape assist).
 FI_POWER_WIRING_ENABLED: bool = True
 
+# ── P3-4e: AGGRESSION rules table + IQ execution lane.
+# Default OFF for byte-identity no-op gate G1. When ON:
+#  - FI_AGGRESSION_RULES_ENABLED: 4-rule circumstance table adjusts
+#    aggression mid-fight (R1 behind on cards → up, R2 chin vs power
+#    → down, R3 opponent gassed → up, R4 cruising with lead → coast).
+#  - FI_IQ_EXECUTION_ENABLED: plan adherence — low-IQ fighters drift
+#    toward tendency when rocked/dropped; high-IQ fighters stick.
+# Van decision post-G2/G3 verify.
+FI_AGGRESSION_RULES_ENABLED: bool = False
+FI_IQ_EXECUTION_ENABLED: bool = False
+
 # ── Stage 2c constants ──────────────────────────────────────────
 SPRAWL_PUNISH_DAMAGE_MULT: float = 1.25  # P3-5 calibrates
 
