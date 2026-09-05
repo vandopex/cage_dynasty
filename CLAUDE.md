@@ -4043,6 +4043,264 @@ JSON (staged + pristine + staged_run2), g4_g5_behavior.py + JSON
 pristine), report.md.
 
 
+### FIGHT MODEL P5-B3 [COMMITTED as C32, 2026-09-05]
+
+Structural flip pack. Four `window_registry.py` flags moved from
+False → True (cuts writer, sprawl-punish, aggression rules, IQ
+execution). No dial moves — magnitudes stay P5-C's per Van
+directive. S2 freeze holds — NO DEPLOY.
+
+**FLAGS ON (rule (a) basis per flag).**
+- `FI_CUT_WRITER_ENABLED: True` — C21 shipped-dark writer + P5-A
+  F11 carve-out at `fight_engine.py:719-722` + fi between-round
+  cut check at `fight_integration.py:2266-2278` + P5-B3 wiring-
+  verify trace end-to-end + cut readings (below).
+- `FI_SPRAWL_PUNISH_ENABLED: True` — C21 shipped-dark
+  `_sprawl_counter` consumer at `fi:1395-1403` + C21 fire-rate
+  measurement (10.5% of fights, Δwin=0 at ×1.25 provisional).
+- `FI_AGGRESSION_RULES_ENABLED: True` — C24 4e Gates G2/G3 + P3-5
+  item 11 STEP 0 measurement + P5-B3 R3 hurt-signal fix + 5
+  collision-proof hook renames + post-flip readings (below).
+- `FI_IQ_EXECUTION_ENABLED: True` — C24 4e Gate G3 ALIVE reading
+  (IQ 50 drifts 7.8% of fights vs IQ 90 drifts 0.0%) + P5-B3
+  post-flip readings.
+
+**WIRING-VERIFY TRACE (cuts, end-to-end).**
+
+1. **WRITER** at `fight_integration.py:1468-1482`:
+   ```python
+   if _wreg.FI_CUT_WRITER_ENABLED and target_area == "head":
+       _st_val = strike.value or str(strike)
+       if _st_val in _CUT_ELBOW_STRIKES:
+           _cut_chance = _CUT_BASE_CHANCE + attacker.strength / _CUT_STR_DIV
+           if random.random() < _cut_chance:
+               defender_state.damage.cuts += 1
+               _win(self, "elbow_cut_writer", "write", ...)
+   ```
+   `CUT_ELBOW_STRIKES` = 6 elbow variants
+   (`window_registry.py:108-112`).
+
+2. **ACCUMULATOR** — `defender_state.damage.cuts: int` on the
+   `BodyPartDamage` dataclass (`fight_engine.py:764`).
+
+3. **TWO CARVE-OUT CONSUMERS**, both flag-gated:
+   - (a) **P5-A F11** at `fight_engine.py:719-722` inside
+     `check_stoppage(is_between_round=True)`:
+     `if cuts >= FINISH_CUT_STOP_THRESHOLD: return "TKO
+     (Doctor Stoppage - Cuts)"`.
+   - (b) **fi between-round check** at
+     `fight_integration.py:2266-2278`: independent probability
+     `min(_CUT_DOC_MAX, (cuts - (thr-1)) * _CUT_DOC_STEP) *
+     max(_CUT_DOC_HEART_FLOOR, 1 - heart/_CUT_DOC_HEART_DIV)`.
+
+**Wired end-to-end.** Both consumers emit
+`"TKO (Doctor Stoppage - Cuts)"`.
+
+**SPRAWL-PUNISH WIRING** at `fight_integration.py:1395-1403`:
+```python
+if (_wreg.FI_SPRAWL_PUNISH_ENABLED
+        and getattr(attacker_state, '_sprawl_counter', 0) > 0):
+    damage *= _SPRAWL_PUNISH_MULT  # = 1.25 provisional
+```
+
+**CUT READINGS (banked, not judged).** EP1_500 fixed-card
+hand-built pairs, seed 998000+, and POP_200 varied-attribute
+fixture, seed 998600+.
+
+| pack | cuts opened mean/fight | cut stoppages (% fights) | cut stoppages (% TKOs) | TKO count |
+|---|---:|---:|---:|---:|
+| EP1_500 staged (flags ON) | **3.638** | **9.20%** (46/500) | 10.48% | 439 |
+| EP1_500 pristine C31 (OFF) | 0.000 | 0.00% | 0.00% | 446 |
+| POP_200 staged (flags ON) | **5.100** | **15.00%** (30/200) | 20.41% | 147 |
+| POP_200 pristine C31 (OFF) | 0.000 | 0.00% | 0.00% | 139 |
+
+**HOT by 3-5× vs Van's P5-C anchor** ("stoppage 1-3% of fights").
+P5-C dials named: `CUT_BASE_CHANCE` (currently 0.25),
+`CUT_STR_DIV`, `FINISH_CUT_STOP_THRESHOLD` (currently 2),
+`_CUT_DOC_MAX`, `_CUT_DOC_STEP`, `doctor_check_cut_threshold`.
+Filed to P5-C. **No dial moves here.**
+
+**R3 HURT-SIGNAL FIX** at `fight_integration.py:827-841`. R3
+(opponent gassed) now requires: `opponent stamina ≤ 25 AND round
+≥ 2 AND (opponent rocked OR opponent knockdowns_this_round > 0)`.
+Pre-fix step0 measured R3 firing at ~45-51% on symmetric-cardio
+fixtures — stamina threshold alone too permissive. Structural
+change only.
+
+**5 COLLISION-PROOF HOOK LINE RENAMES.** Pre-fix R1 "knows they
+need a finish" and R3 "smells blood" collided with
+`narrative/commentary.py` corpus (lines 901, 1589, 1887, 3880).
+All 5 rewritten with grep-verified unique tokens (zero substring
+collisions against `narrative/*.py` + `cage_dynasty_web/*.py`):
+
+| rule | new line (collision-proof) |
+|---|---|
+| R1 | "{name} enters must-win minutes and cranks the output." |
+| R2 | "{name}'s corner calls for tactical distance against the puncher." |
+| R3 | "{name} reads the gas tank and steps up the tempo." |
+| R4 | "{name} banks the scorecard and manages the remaining minutes." |
+| IQ-drift | "{name} discards the game plan on instinct, throwing bombs." |
+
+Step0 Finding #2 ("smells blood false-positives ambient
+commentary") **closed** for these 5 hooks.
+
+**SUB-ATT COMPRESSION — DESIGN-CORRECT ARITHMETIC (NOT WIRING).**
+Traced to `fight_engine.py:2386-2401`:
+```python
+if gameplan is not None:
+    _agg = int(getattr(gameplan, 'aggression', 0) or 0)
+    if _agg > 0:
+        strike_weight = int(strike_weight * (1.0 + 0.08 * _exec))
+    elif _agg < 0:
+        strike_weight = int(strike_weight * (1.0 - 0.05 * _exec))
+```
+
+AGGRESSION dial only modifies `strike_weight`. Comment at
+`fe:2375-2382` confirms design intent: "aggression only shifts
+strike output; grapple/sub bias is RANGE dial's territory". Under
+`aggr=+1`, `strike_weight` scales up ×1.08 → pie total
+(strike+grapple+sub) grows → `P(sub) = sub/total` shrinks as
+arithmetic consequence. **Not a wiring error.** Filed to P5-C
+(magnitude dial: increase RANGE tilt for grapple/sub, OR decrease
+AGGRESSION strike-scale factor). Code UNTOUCHED per Van.
+
+**POST-FLIP READINGS (banked, not judged).** Fixed-card AI-vs-AI,
+N=300, through `bridge.new_game` (production population;
+coherent styles from C31).
+
+Plan preset census (600 fighter-slots — **arm-invariant** because
+`ai_gameplan_for_style` selects preset from style, and both arms
+have coherent styles post-C31; aggression rules layer on top):
+
+| preset | pristine C31 | staged | Δ |
+|---|---:|---:|---:|
+| AGGRESSIVE | 109 | 112 | +3 |
+| SUBMISSION | 49 | 47 | −2 |
+| TAKEDOWN | 46 | 47 | +1 |
+| BALANCED | 43 | 42 | −1 |
+| GNP | 23 | 23 | 0 |
+| CLINCH | 15 | 13 | −2 |
+| MEASURED | 4 | 6 | +2 |
+| DEFENSIVE | 4 | 4 | 0 |
+
+R1-R4 + IQ-drift fire counts (600 slots):
+
+| rule | staged fires | %-slots |
+|---|---:|---:|
+| R1 (behind, final rd) | 53 | **8.83%** |
+| R2 (chin vs power) | 46 | **7.67%** |
+| **R3 (gassed + hurt)** | **0** | **0.00%** |
+| R4 (cruising, lead) | 0 | 0.00% |
+| IQ drift (rocked) | 4 | 0.67% |
+
+**R3 OVERCORRECTION ANALYSIS.** Pre-fix ~45-51% → post-fix 0%.
+Van's spec expected 10-20% band; the AND-composition of stamina
++ round-gate + hurt-signal is too restrictive on symmetric-AI-vs-
+AI 3R fixtures: opponents rarely reach simultaneously
+`stamina ≤ 25` AND `round ≥ 2` AND `(rocked OR knockdowns_this_round
+> 0)`. **Three P5-C loosening candidates (dial choice, no code
+here):**
+1. Loosen stamina threshold to `≤ 35` or `≤ 40` (currently 25).
+2. Broaden hurt signal to `opponent health < critical_line`
+   instead of rocked/KD (more surface area to trip).
+3. **OR** the hurt signal with a lower stamina threshold instead
+   of **AND**-ing (fires on either gas-out OR hurt separately),
+   preserving the "smells blood" narrative on either signal.
+
+**R4 also 0%** — cruising-with-lead needs a lead-building
+fixture (asymmetric-cardio or live-play). R4 mechanism wired;
+fire-rate measurement inconclusive on this fixture.
+
+Method mix (N=300):
+
+| bucket | pristine C31 | staged | Δ |
+|---|---:|---:|---:|
+| KO | 4 | 6 | +2 |
+| TKO | 213 | 231 | +18 |
+| SUB | 37 | 31 | −6 |
+| **DEC** | **45** | **29** | **−16** |
+| DRAW | 1 | 3 | +2 |
+
+DEC drops −16 under staged (more decisive fights); TKO rises +18
+(cuts stoppages + aggression tilt pushing toward finishes); SUB
+drops −6 (compression + earlier TKO endings displacing SUB
+opportunities).
+
+Per-style SUB-attempts/fight (compression visible across grappler-
+side styles as diagnosed above):
+
+| style | pristine | staged |
+|---|---:|---:|
+| BJJ Specialist | 1.51 | **0.86** |
+| Ground & Pound | 0.75 | **0.32** |
+| Wrestler | 0.57 | 0.49 |
+| Balanced | 0.25 | 0.12 |
+| Pressure Fighter | 0.20 | 0.12 |
+| Muay Thai | 0.19 | 0.06 |
+| Sprawl & Brawl | 0.06 | 0.10 |
+| Striker | 0.05 | 0.07 |
+| Counter Striker (n=6) | 0.00 | 0.50 |
+| Point Fighter | 0.00 | 0.00 |
+
+Per-style finish rate (all up under staged):
+
+| style | pristine | staged | Δ |
+|---|---:|---:|---:|
+| Sprawl & Brawl | 83.8% | 94.0% | +10.2pp |
+| BJJ Specialist | 83.3% | 88.9% | +5.6pp |
+| Ground & Pound | 83.3% | 89.4% | +6.1pp |
+| Wrestler | 86.2% | 90.9% | +4.7pp |
+| Muay Thai | 78.4% | 82.4% | +4.0pp |
+| Pressure Fighter | 86.2% | 88.8% | +2.6pp |
+| Balanced | 80.7% | 83.3% | +2.6pp |
+| Striker | 90.1% | 91.9% | +1.8pp |
+| Counter Striker (n=6) | 83.3% | 100.0% | +16.7pp |
+| Point Fighter (n=5→11) | 80.0% | 100.0% | +20.0pp |
+
+**G0 PRE-FLIP SANITY — MD5 IDENTICAL** with all four flags forced
+OFF at runtime on staged tree. EP1_200 (seeds 998000+):
+- pristine C31 (flags OFF on disk): `684a4ce1b5287a87be862fced9e980e4`
+- staged (flags forced OFF at runtime): `684a4ce1b5287a87be862fced9e980e4`
+
+Confirms R3 hurt-signal fix + 5 hook renames byte-inert when
+flags OFF (early-return guards preserve structural inertness).
+
+**RIDERS.**
+- **Sprawl-punish fire-count instrument LIMITED by
+  `WINDOWS_LOG_ENABLED`.** Cuts+sprawl reading arm didn't enable
+  it; aggression arm did enable it but only R1-R4/IQ-drift
+  substring probes were wired. Sprawl-punish `_win()` dispatch
+  requires either `log_window_event` inspection or a monkey-patch
+  on `_win` to capture fire count. P5-C should measure sprawl-
+  punish fire rate + Δwin with a proper probe **before** tuning
+  its magnitude (`SPRAWL_PUNISH_DAMAGE_MULT = 1.25` provisional).
+- **Step0 Finding #2 CLOSED** for the 5 renamed hook lines. Other
+  collision-prone commentary lines elsewhere in the codebase are
+  out of scope; grep audit for future window hooks should stay
+  standard.
+- **Cut anchor 1-3% is a REAL MMA target, not a fixture-artifact
+  overshoot** — the 9-15% observed here is a real magnitude issue
+  that needs dial reduction at P5-C.
+- **R4 mechanism un-measurable on symmetric fixture** — flag ON is
+  safe (fires 0 → no behavior perturbation on this pool), and
+  live-play with asymmetric matchups may produce fire events. Do
+  not conclude R4 is dead — conclude it needs a lead-differential
+  fixture to measure.
+- **Sub-att compression is DESIGN-CORRECT** — not scoped as a
+  wiring fix. If Van wants coherent grapplers to actually attempt
+  more subs, P5-C should either bump RANGE tilt (grapple ×1.20,
+  sub ×1.10 → higher) or damp AGGRESSION strike-scale (×1.08 →
+  smaller).
+
+Full report:
+`outputs/sm1/fight_model/p3_5/p5b3/report.md`. Artifacts under
+`outputs/sm1/fight_model/p3_5/p5b3/`: `g0_flags_off_ep1.py` +
+JSON (staged_flags_off + pristine_c31), `g_cuts_sprawl_readings.py`
++ JSON (staged_flags_on + pristine_c31_flags_off),
+`g_aggression_readings.py` + JSON (staged_agg_on +
+pristine_c31_off), report.md.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

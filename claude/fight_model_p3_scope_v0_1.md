@@ -8,10 +8,11 @@
 # (2026-09-05, machinery only — no calibration); P5-B1 SHIPPED as
 # C30 (2026-09-05, D17 stamina floor + D18 unified power model +
 # BF-2 offset-table aliases); STYLECOHERENCE1 SHIPPED as C31
-# (2026-09-05, born styles reach the play surface; coach selection
-# resurrected; flag-gated style bonuses); next: P5-B3 cuts flip +
-# aggression pack, P5-B4 judge re-weight + D19 plumbing, then
-# P3-5 calibration. Updated 2026-09-05 (C31 docs-and-engine ship).
+# (2026-09-05, born styles reach the play surface); P5-B3 SHIPPED
+# as C32 (2026-09-05, cuts + sprawl-punish + aggression pack + IQ
+# execution ON — structural; magnitudes to P5-C); next: P5-B4
+# judge re-weight + D19 plumbing, then P3-5 calibration.
+# Updated 2026-09-05 (C32 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -135,6 +136,67 @@ strict architect-intent reading. Filed to P3-5 with numbers.
 
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
+
+### P5-B3 CUTS + SPRAWL + AGGRESSION PACK + IQ — SHIPPED as C32 (2026-09-05)
+
+Four `window_registry.py` flags flipped False → True under rule
+(a) with defining-instrument sensitivity readings backing each:
+
+- `FI_CUT_WRITER_ENABLED = True` (elbow-family cut writer at
+  fi:1468-1482 → damage.cuts accumulator → two carve-out
+  consumers: fe:719-722 P5-A F11 + fi:2266-2278 between-round
+  cut check).
+- `FI_SPRAWL_PUNISH_ENABLED = True` (sprawl-punish damage
+  multiplier at fi:1395-1403 reading `_sprawl_counter`).
+- `FI_AGGRESSION_RULES_ENABLED = True` (4-rule circumstance
+  table at fi:703-867; R3 hurt-signal fix in this ship).
+- `FI_IQ_EXECUTION_ENABLED = True` (rocked-drift lane at
+  fi:869-981).
+
+**Structural fixes this ship** (all byte-inert under flags OFF —
+G0 EP1_200 MD5 identical vs pristine C31):
+- **R3 hurt-signal tightening** (fi:827-841): now requires
+  `opp.stamina ≤ 25 AND round ≥ 2 AND (opp.rocked OR
+  opp.knockdowns_this_round > 0)`. Pre-fix step0 measured R3
+  firing at ~45-51% on symmetric fixtures — stamina threshold
+  alone too permissive.
+- **5 collision-proof hook renames** (R1-R4 + IQ-drift):
+  grep-verified zero substring collisions vs narrative/*.py +
+  cage_dynasty_web/*.py. Step0 Finding #2 closed for these.
+
+**READINGS BANKED, NOT JUDGED** (per Van's structural-only
+directive):
+- **Cuts HOT by 3-5×**: EP1_500 = 9.20% cut stoppages of fights
+  (46/500), POP_200 = 15.00% (30/200). Van's P5-C anchor is
+  1-3% of fights. P5-C dials: `CUT_BASE_CHANCE` (0.25),
+  `CUT_STR_DIV`, `FINISH_CUT_STOP_THRESHOLD` (2),
+  `_CUT_DOC_MAX`, `_CUT_DOC_STEP`, `doctor_check_cut_threshold`.
+- **R3 overcorrection**: post-fix 0.00% fires (spec expected
+  10-20% band). Three loosening candidates filed: (1) stamina
+  ≤35 or ≤40, (2) broaden hurt to `health < critical_line`,
+  (3) OR-instead-of-AND the two triggers.
+- **R4 also 0%**: cruising-with-lead needs a lead-building
+  fixture (asymmetric-cardio or live-play). Mechanism wired;
+  fire-rate un-measurable on symmetric AI-vs-AI.
+- **Method mix drift**: DEC −16, TKO +18, KO +2, SUB −6 on
+  N=300 (cuts + aggression tilt push toward decisive endings).
+- **Per-style SUB compression** (design-correct arithmetic, not
+  wiring): AGGRESSION's ×1.08 strike_weight scale grows the
+  action-pie total → P(sub) = sub/total shrinks. Fixed by
+  design intent at fe:2375-2382. Filed to P5-C as dial choice
+  (bump RANGE tilt OR damp AGGRESSION strike scaling).
+- **Per-style finish rate up** across all n≥5 styles (+1.8 to
+  +10.2pp under staged).
+
+**Rider — sprawl-punish fire-count instrument limited by
+`WINDOWS_LOG_ENABLED`**. P5-C should measure sprawl-punish fire
+rate + Δwin with a proper probe **before** tuning
+`SPRAWL_PUNISH_DAMAGE_MULT` (currently 1.25 provisional).
+
+Full filing under CLAUDE.md "FIGHT MODEL P5-B3 [COMMITTED as
+C32, 2026-09-05]".
+
+NO DEPLOY (S2 freeze holds).
 
 ### STYLECOHERENCE1 — SHIPPED as C31 (2026-09-05)
 
@@ -288,6 +350,18 @@ FREEZE LIFTS on green. CALIBRATION LIST:
    often than they stop fights — occurrence and stoppage get
    separate targets. POP stoppage measured ~2× fe baseline at
    C21. Sprawl-punish magnitude rides here too.
+   **P5-B3 (C32) update — cut dials for calibration**:
+   `CUT_BASE_CHANCE` (0.25), `CUT_STR_DIV`,
+   `FINISH_CUT_STOP_THRESHOLD` (2), `_CUT_DOC_MAX`,
+   `_CUT_DOC_STEP`, `doctor_check_cut_threshold`. Post-flip
+   measurement: EP1_500 = 9.20% cut stoppages of fights; POP_200
+   = 15.00%. Hot by 3-5× vs the 1-3% anchor.
+   **Sprawl instrument prerequisite**: sprawl-punish fire count
+   isn't visible via commentary_log without `WINDOWS_LOG_ENABLED`
+   for the sprawl `_win()` call. P5-C sprawl tuning needs either
+   a direct `log_window_event` probe or a monkey-patch on `_win`
+   to capture fire count + Δwin before touching
+   `SPRAWL_PUNISH_DAMAGE_MULT` (currently 1.25 provisional).
 8. Per-class method mixes + finish knobs against §9.
 9. SUB-MODEL DIALS (C22 inputs): tap threshold width, refusal
    band (REFUSAL_WIDTH_BASE — all-MODERATE severity mix today,
@@ -332,6 +406,26 @@ FREEZE LIFTS on green. CALIBRATION LIST:
     R2/R4 fire rates measured 0% on their fixtures — need real
     calibration data. TENDENCY tilt magnitudes (±1 per axis) may
     be too aggressive when composed with 4-rule adjustments.
+
+    **P5-B3 (C32) additions**:
+    - **R3 trigger dial** — post-fix (opp stamina ≤25 AND round
+      ≥2 AND hurt) landed at 0.00% fires on symmetric-AI-vs-AI
+      N=300; expected 10-20% band. Three loosening candidates:
+      (1) stamina ≤35 or ≤40, (2) broaden hurt to
+      `health < critical_line`, (3) OR-instead-of-AND the
+      stamina/hurt triggers.
+    - **R4 trigger dial** — cruising-with-lead 0.00% fires on
+      symmetric fixture; needs asymmetric-cardio or live-play to
+      measure fire rate. Mechanism wired.
+    - **Sub-att compression dial** (DESIGN-CORRECT arithmetic;
+      P5-B3 C32 filed): AGGRESSION dial at fe:2386-2401 scales
+      `strike_weight` ×1.08 when aggr=+1, arithmetically
+      shrinking `P(sub) = sub/total`. Measured cross-style
+      compression on N=300: BJJ Specialist 1.51 → 0.86, Ground
+      & Pound 0.75 → 0.32, Wrestler 0.57 → 0.49. Dial choice:
+      (a) bump RANGE tilt (grapple ×1.20 → higher, sub ×1.10 →
+      higher), OR (b) damp AGGRESSION strike-scale factor
+      (×1.08 → smaller).
 
     STEP 0 VERDICTS (measured 2026-09-05, 720 fixed pairings
     N=120/focal-style, CRN seeds 988100+, disk flags False):
@@ -515,7 +609,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C30 fb3febf. Standing
+Fresh date + HEAD gate (last shipped: C31 0aad27a. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

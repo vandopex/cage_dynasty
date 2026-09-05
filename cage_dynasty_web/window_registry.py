@@ -37,8 +37,8 @@ from typing import Callable, List, Optional
 WINDOWS_LOG_ENABLED: bool = False
 
 # ── Stage 2: per-piece toggles ──────────────────────────────────
-FI_CUT_WRITER_ENABLED: bool = False
-FI_SPRAWL_PUNISH_ENABLED: bool = False
+FI_CUT_WRITER_ENABLED: bool = True   # P5-B3 flip (C21 shipped dark, wired end-to-end at C29 P5-A carve-out; verify.md wiring trace + fresh readings gate flip per rule (a))
+FI_SPRAWL_PUNISH_ENABLED: bool = True  # P5-B3 flip (C21 shipped dark, C21 gate + fresh readings gate flip per rule (a))
 
 # ── P3-4c: chin + composure wiring toggles.
 # C22: FLIPPED ON. Van-approved with C22 paste based on verify.md
@@ -74,8 +74,8 @@ FI_POWER_WIRING_ENABLED: bool = True
 #  - FI_IQ_EXECUTION_ENABLED: plan adherence — low-IQ fighters drift
 #    toward tendency when rocked/dropped; high-IQ fighters stick.
 # Van decision post-G2/G3 verify.
-FI_AGGRESSION_RULES_ENABLED: bool = False
-FI_IQ_EXECUTION_ENABLED: bool = False
+FI_AGGRESSION_RULES_ENABLED: bool = True   # P5-B3 flip (4e G2/G3 + P3-5 item 11 STEP 0 measurement + P5-B3 R3-hurt fix + collision-proof renames + post-flip readings)
+FI_IQ_EXECUTION_ENABLED: bool = True       # P5-B3 flip (same rule (a) gate; C24 4e Gate G3 ALIVE reading + P5-B3 post-flip readings)
 
 # ── STYLECOHERENCE1 (P5-B2, 2026-09-05): world-gen style-based
 # attribute bonuses. Pre-P5-B2 these blocks read

@@ -824,9 +824,19 @@ class NarratedFightSimulator:
                 _new_aggr += 1
                 _fired.append('rules_r1_press')
 
-            # R3 — opponent gassed.
+            # R3 — opponent gassed AND hurt.
+            # P5-B3 fix: pre-fix R3 fired at ~45-51% (step0 measurement) on
+            # symmetric-cardio fixtures because the stamina threshold alone
+            # was too permissive. Real "smells blood" moments require a
+            # hurt signal too — opponent rocked OR they've dropped a
+            # knockdown this round. Structural change only; magnitude for
+            # P5-C.
             _opp_stam = getattr(_opp_state, 'stamina', 100.0) or 100.0
-            if _opp_stam <= 25 and _current >= 2:
+            _opp_rocked = bool(getattr(_opp_state, 'is_rocked', False))
+            _opp_kd_this = int(getattr(_opp_state,
+                                        'knockdowns_this_round', 0) or 0)
+            _opp_hurt = _opp_rocked or _opp_kd_this > 0
+            if _opp_stam <= 25 and _current >= 2 and _opp_hurt:
                 _new_aggr += 1
                 _fired.append('rules_r3_press_gassed')
 
@@ -853,11 +863,17 @@ class NarratedFightSimulator:
             # drama; commentary system's structured hook not required.
             try:
                 _fname = getattr(_me_attrs, 'name', 'Fighter')
+                # P5-B3 rename: collision-proof phrasings. Pre-fix "smells
+                # blood" (R3) and "knows they need a finish" (R1) collided
+                # with ambient commentary corpus (narrative/commentary.py
+                # lines 901, 1589, 1887, 3880). New phrases grep-verified
+                # for zero substring collisions against narrative/*.py and
+                # cage_dynasty_web/*.py.
                 _hook_names = {
-                    'rules_r1_press': f"{_fname} knows they need a finish — turning up the pressure.",
-                    'rules_r2_protect': f"{_fname}'s corner wants them off the fence — power on the other side.",
-                    'rules_r3_press_gassed': f"{_fname} smells blood — pace up while the opponent gases.",
-                    'rules_r4_coast': f"{_fname} settles in to run out the clock with the lead.",
+                    'rules_r1_press': f"{_fname} enters must-win minutes and cranks the output.",
+                    'rules_r2_protect': f"{_fname}'s corner calls for tactical distance against the puncher.",
+                    'rules_r3_press_gassed': f"{_fname} reads the gas tank and steps up the tempo.",
+                    'rules_r4_coast': f"{_fname} banks the scorecard and manages the remaining minutes.",
                 }
                 for _hn in _fired:
                     _line = _hook_names.get(_hn)
@@ -974,9 +990,10 @@ class NarratedFightSimulator:
             try:
                 _fname = getattr(_me_attrs, 'name', 'Fighter')
                 if hasattr(self.commentary, 'commentary_log'):
+                    # P5-B3 rename: collision-proof phrasing.
                     self.commentary.commentary_log.append(
-                        f"{_fname} is rocked — the plan goes out the window, "
-                        f"they're swinging for the fences.")
+                        f"{_fname} discards the game plan on instinct, "
+                        f"throwing bombs.")
             except Exception:
                 pass
 
