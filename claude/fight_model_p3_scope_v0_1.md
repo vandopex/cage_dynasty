@@ -5,8 +5,12 @@
 # field; C26 landed measurement plumbing; C27 measured C25's
 # activation delta on the production population + ruled KEEP; C28
 # ARCHIVE1 (CLAUDE.md split); P5-A FINISH MODEL SHIPPED as C29
-# (2026-09-05, machinery only — no calibration); next: P3-5
-# calibration. Updated 2026-09-05 (C29 docs-and-engine ship).
+# (2026-09-05, machinery only — no calibration); P5-B1 SHIPPED as
+# C30 (2026-09-05, D17 stamina floor + D18 unified power model +
+# BF-2 offset-table aliases; BF-1 filed as STYLECOHERENCE1 to
+# post-arc queue with 10.2% born-vs-played match as entry gate);
+# next: P5-B2 (cuts flip + aggression pack), then P3-5 calibration.
+# Updated 2026-09-05 (C30 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -130,6 +134,54 @@ strict architect-intent reading. Filed to P3-5 with numbers.
 
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
+
+### P5-B1 D17 STAMINA FLOOR + D18 POWER MODEL — SHIPPED as C30 (2026-09-05)
+
+D17 physics: contest composites now floored at 0.5 via
+`fight_engine.py:627 COMPOSITE_STAMINA_FLOOR = 0.5`. Seven LIVE
+composite-scaling sites rewritten (`select_action` stamina_factor
++ `calculate_strike_success` + `calculate_grappling_success` +
+`attempt_submission` sub_lockin/starting-progress +
+`process_submission_progress` tighten/sub_escape). Five LEGACY
+sites SKIPPED (dead-with-parent). DAMAGE-scaling floor untouched
+(already 0.5 by construction). Cardio compression measured
+−17.28pp (73.31% → 56.03% high-vs-low share, N=1000/arm,
+starting_stamina=40); mechanism proven via R1-vs-R4 finish shift
+at starting_stamina=20 (P5-C magnitude input). POP touched-zero at
+natural stamina: 0/400 both arms (null result, honest — fixture
+doesn't reach drain zone on 5R at natural start).
+
+D18 physics: world-gen power unified onto strength-derivation
+shape. Independent tier roll in `world_init.generate_attributes`
+DELETED; persist-time formula becomes `power = clamp(20, 95,
+strength + POWER_STYLE_OFFSET[style] + uniform(-8, +8))`. Per-style
+ordering now follows offsets (Sprawl & Brawl +6 at mean 63.47;
+BJJ Specialist −8 at mean 48.59; 15-point spread in correct
+direction). Corr strength→power 0.73 → 0.91. Clamp pins healthy
+(~1% of 292 fighters). D18 does NOT break D7 (POWER moves KO+TKO
+channel +1.60pp vs baseline; STRENGTH flat +0.10pp — direction
+preserved, saturation caveat filed).
+
+BF-2 fixed in-scope: `core.types.POWER_STYLE_OFFSET` gained
+dispatch-spelling aliases `'Ground & Pound': +3` and `'Striker':
++4`. Every dispatched style string now resolves.
+
+BF-1 filed (STYLECOHERENCE1, post-arc). Four `world_init.py` sites
+use `getattr(fighter, 'fighting_style', ...)` on GeneratedFighter
+whose attribute is `.style` — reads return ''. C25 stamp dead-in-
+write since C25 shipped; sibling clinch_control bonus + training
+modifier + style census also silently inert. Only D18's own site
+fixed here (single-purpose scope). STYLE-COHERENCE MEASUREMENT
+through `bridge.new_game` (production population, seed 995700,
+n=285): **10.2% born-vs-played match rate** (89.8% mismatch,
+consistent with 1/11 uniform-random). Bridge overwrites world-init
+style via per-fid random assignment. STYLECOHERENCE1 inherits this
+as defining problem.
+
+Full filing under CLAUDE.md "FIGHT MODEL P5-B1 — D17 STAMINA FLOOR
++ D18 POWER MODEL [COMMITTED as C30, 2026-09-05]".
+
+NO DEPLOY (S2 freeze holds).
 
 ### P5-A FINISH MODEL — SHIPPED as C29 (2026-09-05)
 
@@ -289,6 +341,25 @@ record shape read-only first. Lands with the D14/P3-6 batch.
 
 ## POST-ARC DOCKET QUEUE (D15)
 
+STYLECOHERENCE1 (Van 2026-09-05) — WORLD-INIT ↔ BRIDGE STYLE
+ALIGNMENT. Fix the four `getattr(fighter, 'fighting_style', '')`
+sites in `world_init.py` (attribute is `.style` on
+GeneratedFighter): (1) C25 `record.fighting_style` stamp at
+world_init:3058-3060 (dead-in-write since C25 shipped); (2) style-
+based clinch_control bonus at world_init:3128 (never applied);
+(3) style-based training modifier at world_init:3142 (never
+applied); (4) style census counter at world_init:2802-2803 (always
+zero). Entry gate MEASURED at P5-B1 (C30): fresh world seed
+995700 through bridge.new_game (production population, n=285),
+world_init.style vs record.fighting_style match rate = 10.2%
+(1/11 uniform-random). 89.8% of AI fighters play under styles
+DIFFERENT from what world_init built them as. Prerequisite:
+consumer census on downstream effects (rankings, matchmaking,
+coach interactions, gameplan resolution rates) BEFORE fix —
+STYLECOHERENCE1 shifts 89.8% of the roster onto their world-init
+styles, real live-behavior change. Instrument-before-fix per
+standing rule.
+
 POSITIONS1: fence/cage → front headlock → standing-over-downed →
 scrambles-as-windows → back-mount quality.
 
@@ -392,7 +463,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C28 cf85a21. Standing
+Fresh date + HEAD gate (last shipped: C29 1e12a0f. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

@@ -145,6 +145,16 @@ POWER_STYLE_OFFSET: dict = {
     'Sambo':             -4,
     'Wrestler':          -6,
     'BJJ Specialist':    -8,
+    # ── Dispatch-spelling aliases (BF-2, P5-B1-BIS) ──
+    # world_init.FighterGenerator dispatches these display strings via
+    # generate_style_for_fighter (and the fallback list at
+    # world_init.py:1078). They differ from the canonical PSO entries
+    # above only by punctuation ("Ground & Pound" vs "Ground and Pound")
+    # or by name-vs-enum ("Striker" the display name isn't in the
+    # display-key block, only "STRIKER" the enum key). Alias entries
+    # inherit the canonical value so any dispatched string resolves.
+    'Ground & Pound':    +3,   # alias of 'Ground and Pound'
+    'Striker':           +4,   # alias of 'STRIKER' enum-key entry
     # ── Enum-key strings (used by game_bridge after _STYLE_MAP) ──
     'STRIKER':           +4,   # 'Boxing'/'Kickboxer' family
     'COUNTER_STRIKER':   -1,

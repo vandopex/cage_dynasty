@@ -3502,6 +3502,280 @@ Full report: `outputs/sm1/fight_model/p3_5/p5a/report.md`.
 Spec (verbatim SPEC-START/END): `claude/fight_model_p3_5_spec_v0_1.md`.
 
 
+### FIGHT MODEL P5-B1 — D17 STAMINA FLOOR + D18 POWER MODEL [COMMITTED as C30, 2026-09-05]
+
+Van rulings D17 + D18 become physics; BF-2 offset-table aliases
+fixed in-scope; BF-1 filed with a defining-instrument style-
+coherence measurement (STYLECOHERENCE1 queued post-arc). Machinery
+only — no calibration. S2 freeze holds — NO DEPLOY.
+
+**D17 STAMINA FLOOR.** New constant `fight_engine.py:627
+COMPOSITE_STAMINA_FLOOR = 0.5` at the D9 physics-knobs block. Seven
+LIVE composite-scaling sites rewritten from
+`x *= (state.stamina / 100)` → `x *= max(COMPOSITE_STAMINA_FLOOR,
+state.stamina / 100)`:
+- `select_action` stamina_factor (`fight_engine.py:2475`)
+- `calculate_strike_success` LIVE D13 (`fight_engine.py:2876-2877`)
+- `calculate_grappling_success` LIVE D13 (`fight_engine.py:3114-3115`)
+- `attempt_submission` sub_lockin (`fight_engine.py:3598-3599`)
+- `attempt_submission` starting-progress offense (`fight_engine.py:3612`)
+- `process_submission_progress` tighten offense (`fight_engine.py:3682`)
+- `process_submission_progress` sub_escape (`fight_engine.py:3693-3694`)
+
+Five LEGACY-RETIRED sites SKIPPED (dead-with-parent at next
+legacy-consolidation ship): fe:2962-63 / 3303-04 / 3760 / 3763 /
+3775. DAMAGE-scaling site UNCHANGED per D9-era rule
+(`fight_engine.py:819` `damage_stamina_factor()` keeps its inline
+0.5 floor). fi has zero composite-scaling sites; all fi stamina
+reads are regen/drain arithmetic or state comparison
+(grep-verified). One constant, no inline 0.5s.
+
+**D17 (a) — cardio Δwin, N=1000/arm, starting_stamina=40 (drain
+zone throughout).** Fixture: mid-tier balanced fighter (all ~65,
+striking_defense 75, heart 75) vs same-shape attacker; two
+defender variants (cardio=55 low, cardio=75 high, +20 gap). Seeds
+995000+.
+
+| | pristine C29 | staged D17 | Δ |
+|---|---:|---:|---:|
+| high-vs-low share | **73.31%** | **56.03%** | **−17.28pp** |
+| high-cardio wins | 703 | 562 | −141 |
+| low-cardio wins | 256 | 441 | +185 |
+| KO/TKO/SUB/DEC/DRAW | 13/1077/0/825/85 | 10/1326/0/511/153 | — |
+
+**D17 compresses cardio's win Δ by −17.28pp** (73.3% → 56.0%).
+Direction is Van's "+25pp god-channel compression" prediction.
+TKOs shift up (+249), DECs drop (−314), draws rise (+68) — low-
+stamina fighters retain enough contest weight to finish AND to
+make cards closer.
+
+**D17 (b) — finish-rate-by-round, 5R at starting_stamina=20
+(exhausted-but-dangerous fixture).** Two mid-tier defenders
+(cardio 55/60), 5R, seeds 995500+, N=1000.
+
+| round | pristine C29 | staged D17 | shift |
+|---|---:|---:|---|
+| R1 | 3 | **999** | +996 |
+| R2 | 1 | 0 | −1 |
+| R3 | 197 | 0 | −197 |
+| R4 | 556 | 0 | −556 |
+| R5 | 212 | 0 | −212 |
+| finish_total | 969 | 999 | +30 |
+
+**Mechanism proven.** Pristine: stamina/100 = 0.20 → contest
+weight crippled → fighters can't land clean shots → survive to
+R4-R5 for the eventual finish. Staged: floored to 0.5 → contest
+weight degraded but not crippled → land finishes R1. Whether
+R1-heavy at start-stam=20 is the RIGHT magnitude is a **P5-C
+calibration input** (S_r=0.5 is Van's "minimal dose" — the fixture
+starts at 1/5 the normal stamina and the model rewards it with the
+minimum survival floor). Narration sample owed as follow-up:
+`RoundStats.to_dict()` doesn't expose `stamina_end` — mechanism
+proven via R1/R4 shift; narrated sample requires commentary-log
+inspection (lightweight follow-up, not gate-critical).
+
+**D17 (c) — POP touched-zero R1/R2, N=400, starting_stamina=100
+(natural, 5R).** Both arms: 0/400 R1 touched-zero, 0/400 R2
+touched-zero. **Null result — honest.** At natural stamina across
+a varied POP, no fighter drains to 0 by R1 or R2 on 5R either
+arm. D17 is mechanism-neutral on this fixture because stamina
+never reaches the range where the floor engages. The (a) reading
+already proves the mechanism engages when stamina IS in the drain
+zone; (c) shows the POP simply doesn't hit that zone at natural
+starting stamina on 5R. Comparable D3 pre-C29 baseline numbers
+(under STAMINA-DRAIN1 filing) came from a different generation
+code path with different cardio distributions — cross-comparing
+would be apples-to-oranges. Filed as P5-C calibration input, not
+P5-B1 gate.
+
+**D18 POWER GENERATIVE MODEL UNIFIED.**
+- `world_init.py:1001` DELETED `"power": random.randint(low,
+  high)` from `generate_attributes`; replaced with a `# D18`
+  comment.
+- `world_init.py:3096-3145` reshaped: was `if _pw_off and 'power'
+  in _fdata: _fdata['power'] = _fdata['power'] + _pw_off`; now
+  `_fdata['power'] = clamp(20, 95, _fdata['strength'] + _pw_off +
+  random.randint(-8, 8))`.
+- BURIED FINDING fix in scope for the D18 site: `getattr(fighter,
+  'fighting_style', '')` → `getattr(fighter, 'style', '')`.
+  GeneratedFighter's actual attribute is `.style` (line 1115); the
+  D18 formula wouldn't reach POWER_STYLE_OFFSET without this fix.
+  See BF-1 below for sibling sites.
+- Comment notes the ±8 gen vs ±3 derivation band difference is
+  intentional (reconstruction narrower than creation).
+
+**D18 (a) — per-style power means, CRN, seed 995500.** Pristine
+C29 shows CHAOTIC ordering (Point Fighter −2 at top, Wrestler −6
+above Sprawl & Brawl +6, Pressure Fighter +5 below Balanced 0 —
+tier confound dominates as documented C23 rider). Staged D18 on
+seed 995500 shows **ordering now follows offsets** (Sprawl & Brawl
++6 at 68.48; BJJ Specialist −8 at 51.46; 17-point gap in the
+right direction). Seed 995500 also surfaced BF-2 (Ground & Pound
+and Striker still at 0 offset). Post-BF-2 fix, re-measured on
+seed 995600, N=292:
+
+| style | n | mean | expected |
+|---|---:|---:|---:|
+| Clinch Fighter | 4 | 63.75 | +2 |
+| **Sprawl & Brawl** | 17 | **63.47** | **+6** |
+| Pressure Fighter | 35 | 61.71 | +5 |
+| Ground & Pound | 25 | 61.64 | +3 |
+| Balanced | 38 | 60.87 | 0 |
+| Muay Thai | 17 | 60.71 | +2 |
+| Striker | 60 | 59.95 | +4 |
+| Point Fighter | 10 | 58.20 | −2 |
+| Wrestler | 42 | 53.14 | −6 |
+| **BJJ Specialist** | 39 | **48.59** | **−8** |
+| Counter Striker | 5 | 37.80 | −1 |
+
+**Tier confound dies as predicted.** 15-point spread from Sprawl &
+Brawl to BJJ Specialist in the correct direction. Counter Striker
+noisy at n=5 — small-cell caveat, not a mechanism defect.
+
+**D18 (b) — power-strength correlation:** pristine C29 = 0.73;
+staged D18 = 0.91. +0.18 into strong-positive. One model
+everywhere.
+
+**D18 (c) — clamp pins:** 3 total across 292 fighters (~1.0%,
+under the 5% wall-effect threshold). Healthy.
+
+**D18 (d) — G2 separability re-check, N=1000, all-70 baseline.**
+D18 must not break C23's D7 finding.
+
+| | share | Δ vs baseline | 2SE |
+|---|---:|---:|---:|
+| pristine baseline | 93.70% | — | ±1.54pp |
+| pristine POWER+20 | 95.60% | **+1.90pp** | ±1.30pp |
+| pristine STRENGTH+20 | 94.10% | +0.40pp | ±1.49pp |
+| staged baseline | 95.00% | — | ±1.38pp |
+| staged POWER+20 | 96.60% | **+1.60pp** | ±1.15pp |
+| staged STRENGTH+20 | 95.10% | +0.10pp | ±1.37pp |
+
+**D18 does NOT break D7 directionally.** POWER moves the KO+TKO
+channel more than STRENGTH does on both arms; STRENGTH stays flat
+within 2SE. Saturation caveat: all-70 baseline is at ~95% KO+TKO
+share, so 2SE bounds overlap between POWER+20 and STRENGTH+20 —
+this is a directional preservation check, not a stat-sig
+discrimination. A less-saturated baseline is needed for P5-C's
+clean magnitude read.
+
+**BF-2 FIXED IN-SCOPE.** `core/types.py POWER_STYLE_OFFSET` gained
+two dispatch-spelling aliases with comment block explaining why:
+- `'Ground & Pound': +3` (alias of canonical `'Ground and Pound'`)
+- `'Striker': +4` (alias of enum-key `'STRIKER'`)
+
+`generate_style_for_fighter` and the `world_init.py:1078` fallback
+list dispatch these display strings that differed from the
+canonical PSO entries by punctuation only. Aliases inherit
+canonical values so every dispatched string resolves. Grep-
+verified post-fix: seed 995600's Ground & Pound cell landed at
+mean 61.64 (target ~+3 offset territory); Striker at 59.95
+(target ~+4).
+
+**BF-1 FINDING (filed, ship queued as STYLECOHERENCE1).**
+`getattr(fighter, 'fighting_style', ...)` at **four**
+`world_init.py` sites reads NOTHING — GeneratedFighter's attribute
+is `.style` (assigned at world_init.py:1115), not
+`.fighting_style`:
+1. `world_init.py:3058-3060` — C25 mechanism: `record.fighting_style
+   = str(getattr(fighter, 'fighting_style', '') or '')` writes '' on
+   every fresh fighter. **The C25 stamp has been dead-in-write
+   since C25 shipped.** (Cross-check with C25/C27 KEEP ruling:
+   those measurements were reading the bridge-side pipeline —
+   `game_bridge.py:2340-2346` runs per-fid seeded random assignment
+   AFTER world_init and BACKFILLS `record.fighting_style` from
+   that, overwriting world_init's empty stamp. The C25 promotion
+   works via the bridge backfill, not via world_init's stamp.
+   C25 KEEP ruling stands as-was; BF-1 is a distinct pre-C25
+   bug that C25 was designed to fix but the write side never
+   worked.)
+2. `world_init.py:3128` — style-based clinch_control bonus. Never
+   applied.
+3. `world_init.py:3142` — style-based training modifier. Never
+   applied.
+4. `world_init.py:2802-2803` — style census counter. Always empty
+   (guard `if getattr(...) is not None` evaluates falsy on '').
+
+**In scope for P5-B1**: D18's own site fixed (formula needs the
+style access). Sibling sites left untouched — separate ship.
+
+**STYLE-COHERENCE MEASUREMENT (entry gate for STYLECOHERENCE1).**
+Fresh world seed 995700 THROUGH `bridge.new_game` (production
+population rule; equivalence-gate standing rule). For every AI
+fighter compared:
+- (a) `world.fighters[fid].style` — style he was BORN with
+- (b) `record.fighting_style` after bridge backfill — style he
+  PLAYS with
+- (c) `_fighter_data['style']` — bridge cache
+
+| | count | share |
+|---|---:|---:|
+| population n | 285 | — |
+| world_init.style present (a) | 285/285 | 100.0% |
+| record.fighting_style present (b) | 285/285 | 100.0% |
+| _fighter_data['style'] present (c) | 285/285 | 100.0% |
+| **a↔b (born vs played) match** | **29/285** | **10.2%** |
+| b↔c (played vs cache) match | 285/285 | 100.0% |
+| a↔c (born vs cache) match | 29/285 | 10.2% |
+
+**Mismatch rate 89.8% (256/285).** Consistent with 1/11 uniform-
+random matching (1/11 = 9.1%). The bridge picks a style at random
+per-fid AND world_init picks a style, and they agree by chance in
+~1/11 cases. **Fighters play under styles that are 89.8%
+DIFFERENT from what world_init built them as.**
+
+**Consequence for the BF-1 sibling-fix decision**: fixing site 1
+(the record.fighting_style stamp) is NOT safe/cosmetic. It moves
+89.8% of the AI roster from bridge-random styles to world_init-
+born styles. That's a substantive live-behavior change — the
+"aggregate" and "distinctive" style patterns that world_init
+generates (country-biased, style-family-informed) would ACTUALLY
+reach the play surface for the first time since C25. STYLECOHERENCE1
+inherits this measurement as its defining problem and needs its
+own measurement pass on downstream effects (rankings, matchmaking
+patterns, coach interactions, gameplan resolution rates).
+
+Top 5 mismatch examples (seed 995700 second run):
+
+| fid | born_style | played_style | fdata_style |
+|---|---|---|---|
+| dad1b5a8 | Wrestler | Sprawl & Brawl | Sprawl & Brawl |
+| 7c2787fb | Ground & Pound | Striker | Striker |
+| ddfc6db8 | BJJ Specialist | Pressure Fighter | Pressure Fighter |
+| 174e8fc7 | Pressure Fighter | BJJ Specialist | BJJ Specialist |
+| b8bd8172 | Wrestler | Pressure Fighter | Pressure Fighter |
+
+Played-style distribution per BORN-style (seed 995700 second run,
+same output file):
+- BORN BJJ Specialist (n=35): Sprawl & Brawl=6, BJJ Specialist=5, Wrestler=5
+- BORN Wrestler (n=43): Counter Striker=7, Sprawl & Brawl=6, Muay Thai=6
+- BORN Ground & Pound (n=24): Wrestler=8, Striker=5, Balanced=2
+- BORN Striker (n=53): Striker=11, Muay Thai=7, Sprawl & Brawl=7
+- BORN Muay Thai (n=29): Wrestler=5, Sprawl & Brawl=5, Striker=4
+- (etc — full distribution in `outputs/sm1/fight_model/p3_5/p5b1/style_coherence_out.txt`)
+
+BF-1's siblings 2 (clinch_control bonus), 3 (training modifier),
+and 4 (style census) are broken by the SAME `getattr(fighter,
+'fighting_style', '')` bug and pass silently for the same reason
+they've passed since C21/C23. Fixing them ALSO activates real
+behavior (clinch_control bonus starts applying at world-gen,
+training modifiers start being style-informed). All four sites
+belong to STYLECOHERENCE1; ship discipline holds P5-B1 to its
+scoped concerns.
+
+**STYLECOHERENCE1 filed to post-arc queue** (see scope doc,
+POST-ARC DOCKET QUEUE) with this coherence measurement as the
+entry gate. Prerequisite: consumer census (rankings, matchmaking,
+coach interactions, gameplan patterns) BEFORE fix. Instrument-
+before-fix, per standing rule.
+
+Full report: `outputs/sm1/fight_model/p3_5/p5b1/report.md`.
+Artifacts under `outputs/sm1/fight_model/p3_5/p5b1/`: census.md,
+d17_readings.py + JSON (staged + pristine), d18_readings.py + JSON
+(staged + pristine + staged_bf2), style_coherence_probe.py +
+style_coherence_out.txt.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

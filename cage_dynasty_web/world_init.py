@@ -998,7 +998,9 @@ class FighterGenerator:
             "boxing": random.randint(low, high),
             "kicks": random.randint(low, high),
             "clinch": _clinch_val,
-            "power": random.randint(low, high),
+            # D18 (2026-09-05): 'power' is derived at persist time
+            # (strength + POWER_STYLE_OFFSET + uniform(-8,+8)) — see
+            # _persist_fighter_to_gs. Not rolled independently here.
             "accuracy": random.randint(low, high),
 
             # Grappling
@@ -3088,19 +3090,37 @@ class WorldInitializer:
                 # 5 remap keys unchanged.
                 _canonical = _canonical_remap.get(_key, _key)
                 _fdata[_canonical] = int(_val)
-            # P3-4d C23: canonical style-power offset lives at
-            # core.types.POWER_STYLE_OFFSET (one dict, keyed by both
-            # display names and enum strings — see docstring there).
-            # World-gen reads by display name; bridge reads by enum
-            # key; both hit the same values.
+            # D18 POWER MODEL (Van 2026-09-05). Single source of the
+            # style offset: world-gen power = strength + PSO[style] +
+            # noise(±8), clamped [20,95]. Was pre-D18: independent
+            # tier roll in generate_attributes + offset add here (C23);
+            # power ended up strength-uncorrelated, so the style offset
+            # was swamped by per-style skill-tier distribution at
+            # aggregate scale (Sprawl & Brawl +6 read below BJJ
+            # Specialist −8; documented C23 rider). D18 unifies onto
+            # the bridge's load-time derivation shape — reconstruction
+            # narrower band (±3 crc32-seeded, deterministic per fid),
+            # generation wider band (±8 uniform, one-time roll). Same
+            # formula everywhere else — one model for the field.
+            # Legacy load-time derivation at
+            # game_bridge._make_fighter_attrs._a_power_derived stays.
+            #
+            # NB: GeneratedFighter's attribute is `.style`, not
+            # `.fighting_style` — the C23 persist-time offset code (and
+            # sibling clinch_control / style-training blocks at :3128
+            # and :3142) uses `getattr(fighter, 'fighting_style', '')`
+            # which returns '' → the offset was inert since C23. P5-B1
+            # filed this as a BURIED FINDING; D18 uses the correct
+            # attribute so the offset actually applies. Sibling sites
+            # left untouched (single-purpose scope).
             try:
                 from core.types import POWER_STYLE_OFFSET as _PSO
             except ImportError:
                 _PSO = {}
-            _pw_off = _PSO.get(
-                getattr(fighter, 'fighting_style', ''), 0)
-            if _pw_off and 'power' in _fdata:
-                _fdata['power'] = max(20, min(95, _fdata['power'] + _pw_off))
+            _pw_off = _PSO.get(getattr(fighter, 'style', ''), 0)
+            _strength_for_power = _fdata.get('strength', 50)
+            _fdata['power'] = max(20, min(95,
+                _strength_for_power + _pw_off + random.randint(-8, 8)))
             # Style-based clinch_control bonus (Ship A — clinch_control as
             # 18th stat). Fighters whose style centers on grip dominance
             # start with above-baseline clinch_control.

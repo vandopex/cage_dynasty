@@ -624,6 +624,16 @@ FINISH_BETWEEN_ROUND_MULT       = 2.5
 FINISH_LEG_KICK_ACCUM_THRESHOLD = 6     # carve-out (D12, private dial)
 FINISH_CUT_STOP_THRESHOLD       = 2     # carve-out (structural cuts)
 
+# D17 STAMINA FLOOR (Van 2026-09-05). Contest composites (strike/grapple/
+# sub/escape effectiveness, action-selection weight) scale by
+# stamina/100. Pre-D17 that scalar went to 0 at stamina=0 — a fighter at
+# empty stamina had zero contest weight, structurally unable to land a
+# clean shot or lock in a sub. D17 floors the SCALAR at 0.5, matching
+# damage's already-floored `damage_stamina_factor` shape ("exhausted but
+# dangerous"). Legacy `_legacy_*` sites keep their raw formulas as
+# dead-with-parent (retire at the next legacy-consolidation ship).
+COMPOSITE_STAMINA_FLOOR         = 0.5
+
 
 def _finish_specialty_label(strike_val: str, target_area: str,
                              health_zero: bool) -> str:
@@ -2461,8 +2471,8 @@ def select_action(
         if _strikes_landed == 0:
             fighter_state._karate_patience = True
 
-    # Stamina factor
-    stamina_factor = fighter_state.stamina / 100
+    # Stamina factor (D17 floored)
+    stamina_factor = max(COMPOSITE_STAMINA_FLOOR, fighter_state.stamina / 100)
     strike_weight = int(strike_weight * stamina_factor)
     sub_weight = int(sub_weight * stamina_factor)
     grapple_weight = int(grapple_weight * stamina_factor)
@@ -2862,9 +2872,9 @@ def calculate_strike_success(
         elif sub_threat >= 20:
             a_eff *= 0.94
 
-    # Stamina (composite scalar)
-    a_eff *= (attacker_state.stamina / 100)
-    d_eff *= (defender_state.stamina / 100)
+    # Stamina (composite scalar, D17 floored)
+    a_eff *= max(COMPOSITE_STAMINA_FLOOR, attacker_state.stamina / 100)
+    d_eff *= max(COMPOSITE_STAMINA_FLOOR, defender_state.stamina / 100)
 
     # Rocked opponent easier to hit (composite scalar on defender).
     # P3-4c — COMPOSURE modulation. Behind flag; OFF → exploit
@@ -3098,10 +3108,11 @@ def calculate_grappling_success(
     cls = _grapple_class(action)
     a_eff, d_eff = _assemble_composite(cls, attacker, defender)
 
-    # Stamina (composite scalar). No pressure/threat scalars here —
-    # grappling has no "you can't commit" penalty analogous to strikes.
-    a_eff *= (attacker_state.stamina / 100)
-    d_eff *= (defender_state.stamina / 100)
+    # Stamina (composite scalar, D17 floored). No pressure/threat
+    # scalars here — grappling has no "you can't commit" penalty
+    # analogous to strikes.
+    a_eff *= max(COMPOSITE_STAMINA_FLOOR, attacker_state.stamina / 100)
+    d_eff *= max(COMPOSITE_STAMINA_FLOOR, defender_state.stamina / 100)
 
     # Symmetric variance (D13)
     a_eff *= random.uniform(0.85, 1.15)
@@ -3584,8 +3595,8 @@ def attempt_submission(
     # additives; and the _sub_cap ceiling (P_MAX in CONTEST_P_MAX handles that
     # structurally). Skill differential is now analytical.
     a_eff_sub, d_eff_sub = _assemble_composite("sub_lockin", attacker, defender)
-    a_eff_sub *= (attacker_state.stamina / 100)
-    d_eff_sub *= (defender_state.stamina / 100)
+    a_eff_sub *= max(COMPOSITE_STAMINA_FLOOR, attacker_state.stamina / 100)
+    d_eff_sub *= max(COMPOSITE_STAMINA_FLOOR, defender_state.stamina / 100)
     a_eff_sub *= random.uniform(0.85, 1.15)
     d_eff_sub *= random.uniform(0.85, 1.15)
     lock_in_chance = _p_c("sub_lockin", a_eff_sub, d_eff_sub)
@@ -3598,7 +3609,7 @@ def attempt_submission(
     sub_diff = attacker.submissions - defender.submissions
     # _tick_offense: pre-D13 stamina-scaled offense used for base_progress.
     # Tick mechanics stay this docket (§5a rebuild is P3-4).
-    offense = (attacker.submissions + (danger / 10)) * (attacker_state.stamina / 100)
+    offense = (attacker.submissions + (danger / 10)) * max(COMPOSITE_STAMINA_FLOOR, attacker_state.stamina / 100)
     
     # Start submission sequence - small starting progress so the race
     # actually plays out over multiple ticks rather than instant finish
@@ -3668,7 +3679,7 @@ def process_submission_progress(
 
     # 1. Attacker tightens — preserve legacy tighten_rate (skill scaling
     #    remains). progress accumulator unchanged.
-    offense = attacker.submissions * (attacker_state.stamina / 100)
+    offense = attacker.submissions * max(COMPOSITE_STAMINA_FLOOR, attacker_state.stamina / 100)
     tighten_rate = 0.65 if attacker.submissions >= 92 else 0.45
     fight_state.submission_progress += (
         offense * tighten_rate * random.uniform(0.75, 1.25))
@@ -3679,8 +3690,8 @@ def process_submission_progress(
     #    scales each side; two-sided variance.
     a_eff_e, d_eff_e = _assemble_composite(
         "sub_escape", defender, attacker)
-    a_eff_e *= (defender_state.stamina / 100)
-    d_eff_e *= (attacker_state.stamina / 100)
+    a_eff_e *= max(COMPOSITE_STAMINA_FLOOR, defender_state.stamina / 100)
+    d_eff_e *= max(COMPOSITE_STAMINA_FLOOR, attacker_state.stamina / 100)
     a_eff_e *= random.uniform(0.85, 1.15)
     d_eff_e *= random.uniform(0.85, 1.15)
     escape_chance = _p_c("sub_escape", a_eff_e, d_eff_e)
