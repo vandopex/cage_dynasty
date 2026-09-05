@@ -2,8 +2,9 @@
 # STATUS: P3-0/1 SHIPPED+DEPLOYED; P3-2 (C18), P3-3 (C19), P3-4a
 # (C20), P3-4b (C21), P3-4c (C22), P3-4d (C23) SHIPPED; P3-4e (C24)
 # SHIPPED DARK; C25 promoted FighterRecord.fighting_style to a real
-# field; C26 landed the P3-5 item 11 measurement plumbing; next:
-# P3-5 calibration. Updated 2026-09-05 (C25/C26 cleanup pass).
+# field; C26 landed measurement plumbing; C27 measured C25's
+# activation delta on the production population + ruled KEEP; next:
+# P3-5 calibration. Updated 2026-09-05 (C27 docs-only ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -192,6 +193,35 @@ FREEZE LIFTS on green. CALIBRATION LIST:
     calibration data. TENDENCY tilt magnitudes (±1 per axis) may
     be too aggressive when composed with 4-rule adjustments.
 
+    STEP 0 VERDICTS (measured 2026-09-05, 720 fixed pairings
+    N=120/focal-style, CRN seeds 988100+, disk flags False):
+    - Wrestler-collapse REFUTED: 49.2%→49.2% (Δ=+0.0pp,
+      ±2SE=12.9pp). C24's ±28pp swing was n=20 noise.
+    - No confirmed >10pp swing on any focal style at n=120/arm.
+    - Grappler-vs-striker td/fight direction correct but small:
+      +0.14 gap (grapplers seek ground more under flag ON).
+    - Sub_att/fight drops slightly for all 6 focal styles under
+      flag ON — TENDENCY aggression tilt likely compresses
+      grapple/sub weights against strike_weight; diagnostic
+      lead for the calibration ship.
+    - R3 fires ~51% of fights (after Finding #2 hook-collision
+      correction: ~45%) — trigger too permissive; needs real
+      gassed-signal (rock duration alongside stamina).
+    - R1/R2/R4 fire rates now measured on realistic pool:
+      R1 16.1%, R2 7.9%, R4 16.7%.
+    - Finding #2 (measurement instrument): "smells blood"
+      substring false-positives ambient commentary lines.
+      Rename R3 (and other collision-prone) hook lines at the
+      next fi touch to collision-proof tokens.
+    - Finding #1 (out of item-11 scope but material): C25
+      silently activated style-based AI plans at flag OFF for
+      live production; ruled KEEP at C27 (measurement in
+      `outputs/sm1/fight_model/p3_5/item11_c27/`); byte-
+      identical MD5 gate on synthetic fixtures did not observe
+      the change. Prompted new standing rule "equivalence gates
+      run on production population when the change touches
+      record shape or bridge lookups."
+
 ## DOCKET P3-6 — ACCEPTANCE + SHIP
 
 Full P2c sweep (19 alive, no god/dead, boxing positive); method-mix
@@ -326,19 +356,22 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C25 5e84d43. New standing
+Fresh date + HEAD gate (last shipped: C26 eef3768. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
-and is updated in the NEXT ship's docs pass. No placeholders); diagnose read-only
-first; single-purpose commits on Van's word; stop before commit;
-adjusted instruments prove discrimination; a no-op control cannot
-prove life; instruments match the DEFINING instrument; verbatim
-over recall; arithmetic sums; docs same turn; never hardcode
-saves/fighters; re-read disk docs after compaction; twin gates
-decided-share, ≥2 blocks; no wiring-flag flips without a
+and is updated in the NEXT ship's docs pass. No placeholders);
+diagnose read-only first; single-purpose commits on Van's word;
+stop before commit; adjusted instruments prove discrimination; a
+no-op control cannot prove life; instruments match the DEFINING
+instrument; verbatim over recall; arithmetic sums; docs same turn;
+never hardcode saves/fighters; re-read disk docs after compaction;
+twin gates decided-share, ≥2 blocks; no wiring-flag flips without a
 defining-instrument sensitivity reading in a prior verify pass
 (C22 rule a); hook sockets land in the same commit as their
 production wire absent a stated scoping reason (C22 rule b —
-heat_level is the standing counter-example).
+heat_level is the standing counter-example); **equivalence gates
+run on the PRODUCTION population when the change touches record
+shape or bridge lookups — a synthetic-fixture MD5 cannot certify
+bridge behavior (C27 rule, from C25 lesson)**.
 
 ## RULED SCOPING DECISIONS
 

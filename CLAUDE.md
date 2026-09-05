@@ -7747,6 +7747,72 @@ regardless of any slot bias. Verdicts:
   this addendum layers the correct framing on top rather than
   rewriting history.
 
+  **C27 addendum (2026-09-05, docs-only correction to C25's
+  byte-identical claim + KEEP ruling).** The C25 filing above
+  claimed byte-identical MD5 vs pristine C24 (Gate 3
+  `b6f7dac91ce983f4449152445477488f`). **That claim held only on
+  the synthetic-fighter instrument** — the C25 G3 gate used the
+  EP1 `gate_worker` whose fighter objects are plain `_F`
+  instances without a `fighting_style` attribute, so both trees
+  resolved to empty-string identically. **On the production
+  path, C25 activated style-based AI plans at flag OFF** because
+  `_resolve_gameplan` reads `getattr(_record, 'fighting_style',
+  '')` and the promoted dataclass field now returns the real
+  style instead of an empty string; the pre-C25 empty-string
+  collapse-to-None that silently protected byte-identity is gone
+  for post-C25 worlds. STEP 0 (P3-5 item 11) surfaced this as
+  Finding #1.
+
+  **C27 measurement.** 720 fixed pairings (120 per focal style ×
+  6), CRN seeds 989100+, both arms at flags OFF; ARM A runtime-
+  blanks `fighting_style` to reproduce the pre-C25 empty-string
+  collapse; ARM B keeps fields as-is (production). Plan census
+  confirmed ARM A = 100% None (1440/1440) and ARM B = 2.6% None
+  (38/1440) + real presets. Per-focal-style win-rate deltas
+  ranged from −7.5pp (BJJ Specialist) to +3.3pp (Pressure
+  Fighter), ALL within ±2SE=12.3-12.9pp; **zero styles show
+  confirmed >10pp swing (Δ>10pp AND |Δ|>2SE)**. Overall method
+  mix moved DEC +3.9pp, DRAW −1.0pp, KO 0.0pp, SUB −2.5pp, TKO
+  −0.4pp — no bucket over the 8pp trigger. Outcome MD5s diverge
+  as expected (ARM A `2725115facd00744dbba8269693422e4` vs ARM B
+  `0fdd0a77c9c7d66e165870b3783a4329`).
+
+  **Decision (Van-approved via C27 paste): KEEP.** The activated
+  behavior is `GAMEPLAN-AI-SELECT1`'s designed intent finally
+  functioning after ~2 months of silent no-op. Docs-only C27;
+  no code change to re-dark.
+
+  Full C27 measurement: `outputs/sm1/fight_model/p3_5/item11_c27/
+  report.md`.
+
+
+### NEW STANDING RULE (C27 lesson, 2026-09-05)
+
+**Equivalence gates must run on the PRODUCTION population when a
+change touches record shape or bridge lookups.** A synthetic-
+fixture MD5 cannot certify bridge behavior. C25's Gate 3 passed
+byte-identical against pristine C24 because the EP1 `gate_worker`
+uses plain `_F` synthetic fighter objects that don't carry the
+promoted `fighting_style` attribute — the gate could not observe
+the very change C25 was making. The C25 change was safe (Van-
+ruled KEEP at C27), but the gate did not certify safety; it
+certified only that the synthetic path was unaffected.
+
+Practical shape of the rule going forward: any commit that
+touches `FighterRecord` / `CampRecord` / other dataclass fields
+consumed by the bridge, or that touches `_resolve_gameplan` /
+`_make_fighter_attrs` / any bridge helper that reads through a
+record, MUST include an equivalence gate that:
+1. Builds a fresh world via `bridge.new_game()` (real
+   FighterRecords, not synthetic fixtures), OR
+2. Loads a real save via `bridge.web_load()`, OR
+3. Explicitly documents "no bridge-lookup change; synthetic
+   fixture certifies engine layer only."
+
+The gate must exercise the code path the change touches on the
+production population. Byte-identical against a synthetic fixture
+is not evidence when the change lives above the engine.
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
