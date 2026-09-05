@@ -10,9 +10,12 @@
 # BF-2 offset-table aliases); STYLECOHERENCE1 SHIPPED as C31
 # (2026-09-05, born styles reach the play surface); P5-B3 SHIPPED
 # as C32 (2026-09-05, cuts + sprawl-punish + aggression pack + IQ
-# execution ON — structural; magnitudes to P5-C); next: P5-B4
-# judge re-weight + D19 plumbing, then P3-5 calibration.
-# Updated 2026-09-05 (C32 docs-and-engine ship).
+# execution ON — structural); P5-B4 SHIPPED as C33 (2026-09-05,
+# judge re-weight CONTROL 1.5→4.0 PROVISIONAL + D19 aggression-
+# drain constants +15%/-10% asymmetric — structural; magnitudes to
+# P5-C); next: GENERATOR1 (variety build, slots between P5-B4 and
+# P5-C per Van ruling), then P5-C calibration, then P3-6 ship.
+# Updated 2026-09-05 (C33 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -136,6 +139,55 @@ strict architect-intent reading. Filed to P3-5 with numbers.
 
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
+
+### P5-B4 JUDGE RE-WEIGHT + D19 PLUMBING — SHIPPED as C33 (2026-09-05)
+
+Two structural changes; magnitudes stay P5-C's per Van directive.
+
+**Judge re-weight (item 4).** Six inline scoring weights at
+`fight_engine.py:4537-4551` extracted to `SCORE_WEIGHT_*` named
+constants at fe:638-643. `SCORE_WEIGHT_CONTROL` moved 1.5 → 4.0;
+other five weights unchanged. **PROVISIONAL — P5-C certifies.**
+
+**BASELINE INVERSION (unattributed).** Van's spec cited "baseline
+99-100% wrestler share per phase0-bis T4"; measured on current
+tree found **44.1% at strike_diff≥3** (production population, N=500
+fights). Inversion happened somewhere between phase0-bis and C32 —
+predates C29, C30, C31, C32 alike; **unattributed**. Fix direction
+REVERSES from spec-as-written (target 65-80% requires INCREASING
+grappling weights).
+
+**Gate (a) BOTH ARMS FILED**:
+- **Pristine C32 arm (clean instrument)**: same-rounds re-score
+  OLD 46.3% → NEW 75.6% (31/41). In band on point estimate;
+  Wilson CI ~±13pp at n=41 so "in band" cannot be certified.
+- **Staged live-play**: OLD 22.4% → NEW 61.2% (30/49). Marginally
+  BELOW band. Compound of (i) D19 asymmetry, (ii) CRN divergence,
+  (iii) judge feedback via R1/R4 rules reading `self.round_scores`
+  mid-fight at fi:797-803.
+Gate (b) non-split flip 0.91% staged / 1.15% pristine (both under
+5% threshold). Gate (c) method mix nearly unchanged (DEC −0.80pp,
+draws +3).
+
+**D19 plumbing.** Census found NO speed→stamina-cost surcharge in
+the codebase; speed's stamina disadvantage is entirely emergent
+action frequency. D19 as landed = named constants + Van's
+asymmetric provisional. Nothing removed from speed. Aggression
+drain magnitudes now at `AGGRESSION_DRAIN_SCALE_FWD = 0.15` +
+`AGGRESSION_DRAIN_SCALE_PATIENT = 0.10`. Formula at fi:1747-1770.
+Speed's K_SPEED_INIT and contest-composite roles untouched.
+
+**Readings**: (a) speed+20 Δwin −18.50pp both arms (identical) —
+D19 doesn't touch speed's frequency-drain net-win problem; filed
+to P5-C. (b) Aggression-drain measurable: measured − aggressive
+gap +8.96pp staged vs +11.25pp pristine — Van's ×0.90 patient
+adopted exactly. (c) D17 cardio compression preserved (54.10%
+staged / 53.82% pristine, no regression from P5-B1's ~56%).
+
+Full filing under CLAUDE.md "FIGHT MODEL P5-B4 [COMMITTED as C33,
+2026-09-05]".
+
+NO DEPLOY (S2 freeze holds).
 
 ### P5-B3 CUTS + SPRAWL + AGGRESSION PACK + IQ — SHIPPED as C32 (2026-09-05)
 
@@ -332,7 +384,31 @@ as C29, 2026-09-05]".
 ### P5-C — CALIBRATION LIST
 
 §6 five parts + leg-kick dial (~1%). One pass, final physics, §9.
-FREEZE LIFTS on green. CALIBRATION LIST:
+FREEZE LIFTS on green.
+
+**P5-B4 (C33) additions**:
+- **Judge wrestler-share certification** (item 4 follow-up):
+  measure at LARGE N (≥300 split rounds per strike-diff threshold)
+  across MULTIPLE thresholds (diff≥3, ≥5, ≥8, ≥10 at minimum).
+  P5-B4 gate (a) landed at n=41 (pristine arm) / n=49 (staged) —
+  Wilson CI ~±13pp, wider than the 15pp target band, so "in band"
+  cannot be certified at that n. Filter sensitivity at baseline
+  weights (P5-B4 measurement): 40.8% at diff≥3 → 18.2% at diff≥10.
+  P5-C picks the target threshold or reports the whole curve.
+  `SCORE_WEIGHT_CONTROL` (currently 4.0 provisional) is the
+  primary lever; TD in the 5-15 range barely moves share at
+  fixed CONTROL.
+- **Speed net-win fix** (D19 follow-up): D19 formalized aggression
+  drain but the census confirmed there is no speed→stamina-cost
+  surcharge to remove. Speed's −18.50pp net-win rate on the P5-B4
+  no-gameplan fixture is unchanged from baseline (C20's −16.5pp).
+  P5-C candidates: (a) K_SPEED_INIT retune (currently the initiative
+  damper), (b) speed↔cardio interaction (speed above threshold
+  triggers cardio-scaled recovery bonus), (c) speed reduces
+  per-action stamina cost directly (would be a new mechanism, not
+  a retune). Van picks.
+
+CALIBRATION LIST:
 1. Contest constants (P_EVEN/S), K_SPEED_INIT, speed-worth.
 2. T2 remainder (touched-zero; drain-side/activity economy).
 3. STAMINA FLOOR question (Van rules): contest composites → 0 at
@@ -465,6 +541,33 @@ Cuts)" AND C22 "Technical Submission"/"Submission (Injury -" —
 G1/G2 proved the three known consumers; sweep the rest); live
 playtest on fresh save; deploy on proof. Post-deploy owed: PA
 violence monitoring, tierA re-vintage, live-roster check.
+
+**PRE-GEN INPUT PARITY check** (Van, 2026-09-05): pre-gen fights
+via `world_init._simulate_single_fight` → `engine_simulate_narrated_fight`
+carry **no gameplans / no injury_hook** by design (world_init.py:1441
+site does not thread either). Live-play fights via bridge pass
+gameplans (STYLECOHERENCE1 populates them from born style) and
+injury_hook (bridge `_sub_injury_hook`). At acceptance: measure
+pre-gen vs live-path method mix on the same population (fresh
+world seed X → pre-gen fight_history bucket rates; then N=300
+bridge AI-vs-AI on the SAME roster → live-path method mix). Confirm
+parity, or rule the divergence deliberate (aggregate direction of
+pre-gen coin-flip-fallback → real engine at C29 P5-A means pre-gen
+now runs the same engine but with different inputs — expect some
+divergence in finish types since AGGRESSION and IQ execution can't
+fire pre-gen). Landed here so acceptance doesn't discover the
+divergence at deploy time.
+
+**Sequencing note** (Van ruling via architect rec, 2026-09-05):
+**GENERATOR1 slots between P5-B4 and P5-C**. Order: P5-B4 lands
+structural engine (judge weights + D19 plumbing) → GENERATOR1
+lands the variety build (August rulings from the generation arc
+— wiring census first, then the actual variety) → P5-C
+calibrates ONCE against the final population (post-generator
+distributions differ from current fresh-world distributions) →
+P3-6 ships. Rationale: calibrating P5-C against pre-GENERATOR1
+distributions would require re-tuning after GENERATOR1 lands,
+duplicating work. One calibration pass, right population.
 
 D14 UI (Van): attribute-display redesign — fingerprint cards (~5
 grouped axes) + STANDOUT/FLAW; full 19-sheet on profile (note: the
@@ -609,7 +712,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C31 0aad27a. Standing
+Fresh date + HEAD gate (last shipped: C32 35834ec. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

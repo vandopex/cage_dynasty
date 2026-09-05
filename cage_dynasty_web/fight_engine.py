@@ -624,6 +624,58 @@ FINISH_BETWEEN_ROUND_MULT       = 2.5
 FINISH_LEG_KICK_ACCUM_THRESHOLD = 6     # carve-out (D12, private dial)
 FINISH_CUT_STOP_THRESHOLD       = 2     # carve-out (structural cuts)
 
+# P5-B4 JUDGE SCORING WEIGHTS (2026-09-05, item 4, sibling of #22).
+# Van's stated target: wrestler share on split rounds (one fighter
+# out-struck, other landed >=1 TD) lands in 65-80% band. Van's spec
+# anticipated baseline 99-100% needing REDUCTION; on-tree measurement
+# on the CURRENT tree (N=500 fights, production population) found
+# baseline ~44% — direction REVERSED (baseline inversion occurred
+# somewhere between the phase0-bis T4 reading and the current tree;
+# unattributed here). Landed at SCORE_WEIGHT_CONTROL 1.5 → 4.0
+# (keeps TD unchanged at 8.0). Pre-P5-B4 values were inline literals
+# at fe:4537-4551; extracted to named constants so P5-C can sweep
+# without re-hunting them.
+#
+# GATE READINGS (see outputs/sm1/fight_model/p3_5/p5b4/report.md for
+# full detail):
+#   - Gate (a) pristine-arm same-rounds re-score (clean instrument):
+#     OLD share 46.3% → NEW share 75.6% (31/41). In target band.
+#   - Gate (a) staged-arm live-play: OLD share 22.4% → NEW share
+#     61.2% (30/49). MARGINALLY BELOW band — compound of D19
+#     asymmetry + CRN divergence + judge feedback via R1/R4 rules
+#     (fi:797-803 reads self.round_scores mid-fight; changed weights
+#     shift R1/R4 fire pattern → downstream action selection).
+#   - Gate (b) non-split safety: flips 0.91% (staged) / 1.15%
+#     (pristine). Well below the 5% threshold on both arms.
+# SCORE_WEIGHT_CONTROL=4.0 IS PROVISIONAL. n=41/49 split rounds ⇒
+# ~±13pp Wilson CI on the share; the 65-80% band is 15pp wide, so
+# "in band" cannot be certified at this n. P5-C certifies at large
+# N across multiple strike-diff thresholds (filter sensitivity is
+# real: baseline share ranges 40.8% at diff≥3 down to 18.2% at
+# diff≥10). Same treatment as SPRAWL_PUNISH_DAMAGE_MULT (1.25
+# provisional at C21).
+SCORE_WEIGHT_DAMAGE          = 1.5
+SCORE_WEIGHT_STRIKE          = 1.0
+SCORE_WEIGHT_TAKEDOWN        = 8.0   # unchanged from pre-P5-B4
+SCORE_WEIGHT_CONTROL         = 4.0   # was 1.5 pre-P5-B4 — PROVISIONAL, P5-C certifies
+SCORE_WEIGHT_KNOCKDOWN       = 20.0
+SCORE_WEIGHT_SUBMISSION_ATT  = 4.0
+
+# D19 ACTIVITY-TAX ROUTING (Van 2026-09-05, P5-B4). "Route activity
+# cost through AGGRESSION, not speed." Census (P5-B4 §2) confirms
+# NO direct speed → stamina-cost surcharge exists in fe or fi;
+# speed's stamina disadvantage under F10 (P3-3 filing) is entirely
+# emergent from initiative-driven action frequency — whoever wins
+# initiative acts more, therefore spends more. Aggression drain is
+# already the primary intentional cost lever at fi:1747-1757. D19
+# formalizes the two magnitudes into named constants and adopts
+# Van's asymmetric provisional (+15% forward pace, -10% patient
+# conservation vs the pre-D19 symmetric ±0.15). Speed keeps
+# K_SPEED_INIT (initiative) and its contest-composite roles; it
+# stops implicitly carrying an intentional-pace cost.
+AGGRESSION_DRAIN_SCALE_FWD     = 0.15   # aggr>0: cost *= 1 + K*aggr*exec (unchanged from pre-D19 symmetric)
+AGGRESSION_DRAIN_SCALE_PATIENT = 0.10   # aggr<0: cost *= 1 - K*|aggr|*exec (was 0.15 symmetric; Van's spec: ×0.90 patient)
+
 # D17 STAMINA FLOOR (Van 2026-09-05). Contest composites (strike/grapple/
 # sub/escape effectiveness, action-selection weight) scale by
 # stamina/100. Pre-D17 that scalar went to 0 at stamina=0 — a fighter at
@@ -4497,23 +4549,26 @@ def score_round(
     Callers must pass INFLICTED counts (KDs delivered BY that fighter),
     not the defender_state.knockdowns_this_round SUFFERED counters.
     """
-    # Scoring weights - grappling valued more
+    # Scoring weights — grappling valued more. Extracted to named
+    # constants at top-of-file (SCORE_WEIGHT_*) at P5-B4 (item 4)
+    # so calibration can sweep without hunting inline literals.
+    # P5-B4 landed SCORE_WEIGHT_CONTROL 1.5 → 4.0 (see block above).
     score1 = (
-        stats1.damage_dealt * 1.5 +
-        stats1.significant_strikes_landed * 1.0 +
-        stats1.takedowns_landed * 8.0 +      # Increased from 5
-        stats1.control_time * 1.5 +           # Increased from 0.5
-        stats1.knockdowns * 20.0 +
-        stats1.submission_attempts * 4.0      # Increased from 3
+        stats1.damage_dealt * SCORE_WEIGHT_DAMAGE +
+        stats1.significant_strikes_landed * SCORE_WEIGHT_STRIKE +
+        stats1.takedowns_landed * SCORE_WEIGHT_TAKEDOWN +
+        stats1.control_time * SCORE_WEIGHT_CONTROL +
+        stats1.knockdowns * SCORE_WEIGHT_KNOCKDOWN +
+        stats1.submission_attempts * SCORE_WEIGHT_SUBMISSION_ATT
     )
 
     score2 = (
-        stats2.damage_dealt * 1.5 +
-        stats2.significant_strikes_landed * 1.0 +
-        stats2.takedowns_landed * 8.0 +
-        stats2.control_time * 1.5 +
-        stats2.knockdowns * 20.0 +
-        stats2.submission_attempts * 4.0
+        stats2.damage_dealt * SCORE_WEIGHT_DAMAGE +
+        stats2.significant_strikes_landed * SCORE_WEIGHT_STRIKE +
+        stats2.takedowns_landed * SCORE_WEIGHT_TAKEDOWN +
+        stats2.control_time * SCORE_WEIGHT_CONTROL +
+        stats2.knockdowns * SCORE_WEIGHT_KNOCKDOWN +
+        stats2.submission_attempts * SCORE_WEIGHT_SUBMISSION_ATT
     )
 
     # Multiple knockdowns = automatic 10-8 or worse

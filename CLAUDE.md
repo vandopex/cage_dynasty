@@ -4301,6 +4301,193 @@ JSON (staged_flags_off + pristine_c31), `g_cuts_sprawl_readings.py`
 pristine_c31_off), report.md.
 
 
+### FIGHT MODEL P5-B4 [COMMITTED as C33, 2026-09-05]
+
+Two structural changes:
+- **Judge re-weight**: 6 inline scoring weights in
+  `fight_engine.py:4537-4551` extracted to named constants
+  `SCORE_WEIGHT_*` at fe:638-643. `SCORE_WEIGHT_CONTROL` moved
+  from 1.5 → 4.0. Other five weights unchanged.
+  **PROVISIONAL — P5-C certifies.**
+- **D19 activity-tax routing**: aggression drain magnitudes
+  formalized to named constants at fe:657-658
+  (`AGGRESSION_DRAIN_SCALE_FWD = 0.15`,
+  `AGGRESSION_DRAIN_SCALE_PATIENT = 0.10`); formula at
+  `fight_integration.py:1747-1770` rewritten asymmetric per Van's
+  provisional (+15% forward, −10% patient; was symmetric ±0.15).
+  Speed's K_SPEED_INIT and contest-composite roles UNTOUCHED.
+
+S2 freeze holds — NO DEPLOY.
+
+**PART 1 — JUDGE RE-WEIGHT.**
+
+*Baseline inversion (unattributed).* Van's spec cited "baseline
+99-100% wrestler share per phase0-bis T4." Measured on the current
+tree (N=500 fights, production population, coherent styles from
+C31, all P5-B3 flags ON): baseline wrestler share is **44.1% on
+split rounds** (sig-strike diff ≥3, TD ≥1). The inversion happened
+somewhere between the phase0-bis T4 reading and the current tree —
+the phase0-bis reading predates C29 / C30 / C31 / C32 alike.
+**Unattributed here** — the arc chain is complex enough that
+naming a single cause without measurement would be speculation.
+Direction of the fix therefore REVERSES from the spec-as-written
+(target 65-80% requires INCREASING grappling weights, not
+reducing).
+
+*Filter sensitivity at baseline weights:*
+| strike_diff_thr | n_split | wrestler_share |
+|---:|---:|---:|
+| ≥3 | 49 | 40.8% |
+| ≥5 | 37 | 32.4% |
+| ≥8 | 19 | 21.1% |
+| ≥10 | 11 | 18.2% |
+
+The filter definition is load-bearing: tighter "out-struck"
+threshold → lower wrestler share. Filed to P5-C: certify wrestler
+share at large N across MULTIPLE strike-diff thresholds before
+locking calibration.
+
+*Sweep* (`outputs/sm1/fight_model/p3_5/p5b4/sweep_v2_expand.py`,
+seed 999100, 806-809 round-pairs from N=500 fights, 47-49 split
+rounds at strike_diff≥3): CONTROL is the load-bearing dial; TD in
+5-15 range barely moves share at fixed CONTROL. Landed
+CONTROL=4.0 (target center 72.5%; pristine-arm same-rounds
+re-score at 75.6% — in band; staged-arm live-play at 61.2% —
+marginally below band; see Gate (a) below).
+
+**GATE (a) — same-rounds proof, BOTH arms filed:**
+
+| arm | n_split | OLD share | NEW share | flips_split | in 65-80%? |
+|---|---:|---:|---:|---:|:---:|
+| **PRISTINE C32 (clean instrument)** | 41 | 46.3% | **75.6%** (31/41) | 12 | in-band |
+| STAGED (P5-B4 live) | 49 | 22.4% | 61.2% (30/49) | 19 | **below (61.2%)** |
+
+- **Never "target hit" unqualified.** With n=41 and n=49 split
+  rounds respectively, Wilson 95% CI on the share is ~±13pp per
+  arm. The 65-80% target band is 15pp wide, so "in band" cannot
+  be certified at this n. Same statistical treatment as
+  SPRAWL_PUNISH_DAMAGE_MULT (1.25 provisional at C21).
+- **Pristine arm** = clean instrument (LIVE simulation used OLD
+  weights, so round composition matches "same rounds" contract);
+  point estimate 75.6%.
+- **Staged arm** = shows real second-order effects: fights
+  re-simulated under NEW weights produce different split
+  composition. Compound of (i) D19 asymmetry changing patient-
+  fighter behavior, (ii) CRN divergence, (iii) judge feedback via
+  R1/R4 aggression rules reading `self.round_scores` mid-fight
+  at `fight_integration.py:797-803` — changed weights shift R1/R4
+  fire patterns → downstream action selection → different
+  split-round pool. Third channel measured by STEP 0(a)
+  attribution check this session.
+
+**GATE (b) — non-split safety** (dominance rounds shouldn't change
+hands):
+
+| arm | flips | flip_pct | under 5%? |
+|---|---:|---:|:---:|
+| STAGED | 7/769 | 0.91% | ★ |
+| PRISTINE C32 | 9/785 | 1.15% | ★ |
+
+**PASS both arms.**
+
+**GATE (c) — method mix + DEC** (N=500 same-code AI-vs-AI):
+
+| bucket | pristine C32 | staged P5-B4 | Δ |
+|---|---:|---:|---:|
+| KO | 7 | 4 | −3 |
+| TKO | 365 | 375 | +10 |
+| SUB | 69 | 63 | −6 |
+| DEC | 58 | 54 | −4 |
+| DRAW | 1 | 4 | +3 |
+| DEC % | 11.60% | 10.80% | −0.80pp |
+
+Small shift; draws +3 (closer scorecards under wrestler-friendlier
+rounds → more 10-10s). Banked, not judged.
+
+**PART 2 — D19 PLUMBING.**
+
+*Census finding (READ THIS BEFORE INTERPRETING D19).*
+`grep -nE "speed.*stamina|stamina.*speed"` across fi + fe returns
+comments and initiative reads only. **No direct speed →
+stamina-cost surcharge exists in the codebase.** Speed's stamina
+disadvantage under F10 (P3-3 filing) is entirely EMERGENT from
+action frequency — whoever wins initiative acts more, therefore
+spends more per-action cost.
+
+**D19 AS LANDED = named constants + Van's asymmetric provisional.**
+Nothing was removed from speed. The aggression drain that was
+already at `fight_integration.py:1747-1757` (inline 0.15
+symmetric) is now at `AGGRESSION_DRAIN_SCALE_FWD = 0.15` +
+`AGGRESSION_DRAIN_SCALE_PATIENT = 0.10` with an asymmetric
+formula (aggr>0 → ×1.15, aggr<0 → ×0.90). Van's
+provisional ×0.90 patient adopted; aggressive fighters unchanged.
+
+*Reading (a) — speed+20 Δwin* (fixture: symmetric all-70,
+attacker speed 70 vs 90, N=1000, no gameplans threaded):
+
+| arm | baseline Δwin | speed+20 Δwin | speed effect |
+|---|---:|---:|---:|
+| STAGED (P5-B4) | −1.00pp | −19.50pp | **−18.50pp** |
+| PRISTINE C32 | −1.00pp | −19.50pp | **−18.50pp** |
+
+**IDENTICAL both arms.** Speed's net-win problem (baseline
+−16.5pp per C20 STAMINA-LEVER2, now −18.50pp on this fixture) is
+**UNCHANGED by D19**. This is expected — the fixture doesn't
+thread gameplans, and D19's aggression-drain asymmetry only
+engages when gameplans fire. **Speed's −18.5pp net-win problem
+remains a P5-C decision** (K_SPEED_INIT tune, or speed↔cardio
+interaction, or some other lever). Filed.
+
+*Reading (b) — aggression-drain differential* (scheduled_rounds=1,
+same gameplan both fighters, N=400 samples/arm):
+
+| gameplan | STAGED P5-B4 | PRISTINE C32 |
+|---|---|---|
+| AGGRESSIVE (aggr=+1) | 45.20 ±30.23 | 45.20 ±30.23 |
+| MEASURED (aggr=−1) | 54.15 ±28.44 | 56.45 ±27.67 |
+| NEUTRAL (None) | 50.41 ±28.82 | 50.41 ±28.82 |
+| MEASURED − AGGRESSIVE gap | **+8.96pp** | +11.25pp |
+
+Aggression drain measurably real; D19's ×0.90 patient adopted
+exactly (gap shrunk 11.25 → 8.96). Aggressive unchanged
+(symmetric on aggr>0 side).
+
+*Reading (c) — cardio+20 D17 preservation spot-check*:
+STAGED 54.10% high-vs-low share; PRISTINE 53.82%. D17 compression
+preserved (pre-D17 pristine was 73.31%; P5-B1 D17(a) landed at
+56.03%; drop to ~54% within noise).
+
+**RIDERS.**
+- **Baseline-inversion is UNATTRIBUTED** — filed as observation,
+  not causal claim.
+- **CONTROL is the load-bearing dial**, not TD. Sweep confirmed
+  TD in 5-15 range barely moves split share at fixed CONTROL.
+- **Wilson CI wide on n=41/49**. "In band" cannot be certified at
+  this n; P5-C measures at large N (≥300 split rounds per
+  strike_diff threshold) across multiple thresholds.
+- **Judge feedback via R1/R4 rules is REAL** —
+  `fight_integration.py:797-803` reads `self.round_scores` inside
+  `_apply_aggression_rules` to check R1 (behind-on-cards) and R4
+  (cruising-with-lead) trigger conditions. Judge weight changes
+  therefore feed mid-fight aggression dials → downstream action
+  selection. Filed here as attribution for the staged-arm
+  composition shift.
+- **D19 as landed removes NOTHING from speed.** The census
+  couldn't find a speed→cost surcharge to remove; speed's tax is
+  frequency-emergent, not a direct scaling. Speed net-win problem
+  filed to P5-C.
+- **Filter definition matters.** Wrestler share at diff≥3 (40.8%)
+  vs diff≥10 (18.2%) at baseline. P5-C should certify across
+  multiple thresholds.
+
+Full report: `outputs/sm1/fight_model/p3_5/p5b4/report.md`.
+Artifacts under `outputs/sm1/fight_model/p3_5/p5b4/`:
+sweep_judge_weights.py + sweep_out.json, sweep_v2_expand.py +
+sweep_v2_out.json, split_round_inspection.py, g_judge_gates.py +
+JSON (staged + pristine), g_d19_readings.py + JSON (staged +
+pristine), report.md.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

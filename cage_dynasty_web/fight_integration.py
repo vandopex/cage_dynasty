@@ -46,6 +46,8 @@ from fight_engine import (
     # `check_stoppage` docstring for the naming table.
     check_stoppage,
     FINISH_CRITICAL_LINE_BASE, FINISH_LEG_KICK_ACCUM_THRESHOLD,
+    # P5-B4 D19 — activity-tax scaling constants (fi:1747-1770).
+    AGGRESSION_DRAIN_SCALE_FWD, AGGRESSION_DRAIN_SCALE_PATIENT,
     # V7 Balance Constants (centralized in fight_engine)
     # ENGINE-DEAD-KNOBS1 (2026-07-11): DAMAGE_MULTIPLIER import removed.
     # STAGE 0d (2026-07-12): FI_DAMAGE_MULTIPLIER module const also deleted.
@@ -1744,16 +1746,26 @@ class NarratedFightSimulator:
         # Spend stamina
         props = STRIKE_PROPERTIES.get(strike, (5, 0.02, 4, "head"))
         _stamina_cost = float(props[2])
-        # GAMEPLAN-DIAL-AGGR1: forward aggression drains stamina faster
-        # (higher output pace), patient conserves. IQ-gated: elite
-        # cardio-aware fighters execute the pace target; dim fighters
-        # slip toward their default. None / neutral aggression → no-op.
+        # GAMEPLAN-DIAL-AGGR1 + P5-B4 D19: forward aggression drains
+        # stamina faster (higher output pace), patient conserves.
+        # IQ-gated via dial_execution: elite cardio-aware fighters
+        # execute the pace target; dim fighters slip toward their
+        # default. None / neutral aggression → no-op. D19 formalized
+        # the magnitudes to named constants and adopts Van's
+        # asymmetric provisional: +15% forward vs -10% patient (was
+        # symmetric ±0.15). Speed no longer implicitly carries an
+        # intentional-pace cost — the intentional cost routes here.
         _att_gp_s = getattr(attacker_state, '_gameplan', None)
         if _att_gp_s is not None:
             _att_agg_s = int(getattr(_att_gp_s, 'aggression', 0) or 0)
-            if _att_agg_s != 0:
+            if _att_agg_s > 0:
                 _exec_s = dial_execution(attacker, attacker_state)
-                _stamina_cost *= (1.0 + 0.15 * _att_agg_s * _exec_s)
+                _stamina_cost *= (
+                    1.0 + AGGRESSION_DRAIN_SCALE_FWD * _att_agg_s * _exec_s)
+            elif _att_agg_s < 0:
+                _exec_s = dial_execution(attacker, attacker_state)
+                _stamina_cost *= (
+                    1.0 - AGGRESSION_DRAIN_SCALE_PATIENT * abs(_att_agg_s) * _exec_s)
         attacker_state.spend_stamina(_stamina_cost)
 
         # Update momentum
