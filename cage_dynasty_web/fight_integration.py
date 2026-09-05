@@ -55,6 +55,22 @@ from fight_engine import (
     _assert_sanctioned_config,
 )
 
+# P3-4b — WINDOW MECHANISM registry (Stage 1 + Stage 2 flags).
+# See cage_dynasty_web/window_registry.py for the row spec. The
+# dispatch call is a no-op when WINDOWS_LOG_ENABLED is False.
+import window_registry as _wreg
+from window_registry import (
+    dispatch_window_event as _win,
+    CUT_ELBOW_STRIKE_VALUES as _CUT_ELBOW_STRIKES,
+    CUT_BASE_CHANCE as _CUT_BASE_CHANCE,
+    CUT_STRENGTH_DIVISOR as _CUT_STR_DIV,
+    CUT_DOCTOR_STOP_STEP as _CUT_DOC_STEP,
+    CUT_DOCTOR_STOP_MAX as _CUT_DOC_MAX,
+    CUT_DOCTOR_HEART_DIVISOR as _CUT_DOC_HEART_DIV,
+    CUT_DOCTOR_HEART_FLOOR as _CUT_DOC_HEART_FLOOR,
+    SPRAWL_PUNISH_DAMAGE_MULT as _SPRAWL_PUNISH_MULT,
+)
+
 
 def _tko_durability_mult(defender):
     """GROUND-STOPPAGE-FIX1: shared durability multiplier for the
@@ -373,6 +389,7 @@ class NarratedFightSimulator:
         is_main_event: bool = False,
         intro_f1: Optional[dict] = None,
         intro_f2: Optional[dict] = None,
+        heat_level: int = 0,
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
@@ -389,6 +406,48 @@ class NarratedFightSimulator:
             damage_multiplier=0.48,
             standup_threshold=6,
         )
+        # P3-4b Stage 2b — heat wiring, ported from fe:4243-4263.
+        # At heat_level=0 all tiered branches are False → all mults=1.0
+        # and bonuses=0.0 → byte-inert. Only the damage multiplier is
+        # actually consumed downstream (matches fe's ONLY wired
+        # channel; composure and aggression bonuses are dead-in-fe as
+        # of C20 — filed in census.md Part B, item 10). Composite/
+        # damage scaler applied per D13 discipline via config.replace.
+        self.heat_level = int(heat_level or 0)
+        _heat_damage_mult = 1.0
+        _heat_composure_penalty = 0
+        _heat_aggression_bonus = 0.0
+        if self.heat_level > 80:
+            _heat_damage_mult = 1.20
+            _heat_composure_penalty = 12
+            _heat_aggression_bonus = 0.20
+        elif self.heat_level > 60:
+            _heat_damage_mult = 1.15
+            _heat_composure_penalty = 8
+            _heat_aggression_bonus = 0.15
+        elif self.heat_level > 40:
+            _heat_damage_mult = 1.10
+            _heat_composure_penalty = 5
+            _heat_aggression_bonus = 0.10
+        elif self.heat_level > 20:
+            _heat_damage_mult = 1.05
+            _heat_composure_penalty = 3
+            _heat_aggression_bonus = 0.05
+        self._heat_damage_mult = _heat_damage_mult
+        self._heat_composure_penalty = _heat_composure_penalty
+        self._heat_aggression_bonus = _heat_aggression_bonus
+        # NOTE: fe applies heat_damage_mult via config.replace at
+        # fe:4335-4338. That path collides with fi's atomic config
+        # invariant assertion (_assert_sanctioned_config at fi:572)
+        # because the replaced damage_multiplier no longer sits in
+        # _SANCTIONED_TRIPLES. To port heat WITHOUT retuning the
+        # sanctioned allowlist (out of P3-4b scope), the multiplier
+        # is applied inline at the fi damage-read site (fi:~924)
+        # where `damage * self.config.damage_multiplier` is computed.
+        # Composite discipline preserved: heat multiplies the damage
+        # AFTER the config damage_multiplier lands, before all other
+        # damage mults compose on top. At heat_level=0 the mult is
+        # 1.0 and the inline branch is a byte-inert *= 1.0.
         self.verbose = verbose
 
         # COMMENTARY-ENTRANCES1: fight-open surface data. Stored and
@@ -765,6 +824,7 @@ class NarratedFightSimulator:
         )
 
         # ── Sambo chain — force immediate sub attempt ─────
+        # WINDOW: sambo_chain [CONSUME] — see window_registry.WINDOW_TABLE
         # When sambo set _sambo_chain on last exchange, the
         # NEXT exchange auto-routes into a position-appropriate
         # submission attempt before guard recovery fires.
@@ -781,6 +841,10 @@ class NarratedFightSimulator:
             if _forced_sub is not None:
                 action_type = "submission"
                 action_data = _forced_sub
+                _win(self, "sambo_chain", "fire",
+                     actor_name=actor.name, target_name=defender.name,
+                     exchange_num=exchange_num,
+                     extra={"forced_sub": _forced_sub.value})
 
         # Execute action
         if action_type == "strike":
@@ -813,6 +877,7 @@ class NarratedFightSimulator:
     ) -> Optional[Tuple[str, str]]:
         """Execute a strike and generate commentary"""
         # ── Adrenaline surge window decrement ─────────────
+        # WINDOW: adrenaline_surge [DECREMENT] — see registry.
         # Survived-the-rock window: 3-exchange momentum burst,
         # decays back to 50 when the window closes.
         if getattr(attacker_state, '_surge_exchanges', 0) > 0:
@@ -820,16 +885,23 @@ class NarratedFightSimulator:
             if attacker_state._surge_exchanges == 0:
                 attacker_state.momentum = max(
                     50, attacker_state.momentum - 25)
+                _win(self, "adrenaline_surge", "expire",
+                     actor_name=attacker.name,
+                     exchange_num=exchange_num)
 
         # ── Sprawl counter window decrement ───────────────
+        # WINDOW: sprawl_counter_momentum [DECREMENT] — see registry.
         # Sprawl-and-brawl just defended a takedown; brief
         # momentum boost on the counter strike.
+        # NOTE: Stage 2c adds a DAMAGE-side consumer (sprawl_punish
+        # window) that piggybacks the same counter — read post-CSS.
         if getattr(attacker_state, '_sprawl_counter', 0) > 0:
             attacker_state._sprawl_counter -= 1
             attacker_state.momentum = min(
                 100, attacker_state.momentum + 20)
 
         # ── Counter Striker window — apply ───────────────
+        # WINDOW: counter_striker [CONSUME] — see registry.
         # fight_iq = timing quality; speed = execution quality.
         # Both needed for elite counter striking.
         _counter_mult = 1.0
@@ -846,14 +918,23 @@ class NarratedFightSimulator:
                 0.90 if _spd >= 65 else
                 0.80)
             _counter_mult = _iq_mult * _spd_mod
+            _win(self, "counter_striker", "consume",
+                 actor_name=attacker.name, target_name=defender.name,
+                 exchange_num=exchange_num,
+                 extra={"mult": _counter_mult})
 
         # ── Brawler counter — consume pending power ──────
+        # WINDOW: brawler_walkthrough [CONSUME] — see registry.
         # Brawler just walked through a head strike; the
         # return shot carries extra power.
         _brawler_mult = getattr(
             attacker_state, '_brawler_counter', 1.0)
         if _brawler_mult > 1.0:
             attacker_state._brawler_counter = 1.0
+            _win(self, "brawler_walkthrough", "consume",
+                 actor_name=attacker.name, target_name=defender.name,
+                 exchange_num=exchange_num,
+                 extra={"mult": _brawler_mult})
 
         # Calculate success
         landed, was_counter = calculate_strike_success(
@@ -887,6 +968,11 @@ class NarratedFightSimulator:
                 _counter_set = random.random() < 0.10
             if _counter_set:
                 defender_state._counter_window = 1
+                # WINDOW: counter_striker [WRITE] — see registry.
+                _win(self, "counter_striker", "write",
+                     actor_name=defender.name,
+                     target_name=attacker.name,
+                     exchange_num=exchange_num)
 
         if landed:
             # GNP-DAMAGE-BUFF1: flag applies only when this attacker is
@@ -914,6 +1000,16 @@ class NarratedFightSimulator:
             # (FI_FALLBACK, passed explicitly by the fallback constructors
             # below). Byte-identical to the pre-0d FI_DAMAGE_MULTIPLIER=0.48.
             damage = damage * self.config.damage_multiplier
+
+            # P3-4b Stage 2b — heat damage mult (ported from
+            # fe:4335-4338). Applied inline instead of via
+            # config.replace to preserve the atomic config
+            # invariant assertion (see __init__ block). Gated by
+            # inequality so heat_level=0 is exactly a no-op — the
+            # branch itself does not execute, guaranteeing
+            # byte-identity with pre-wire on the no-op gate.
+            if self._heat_damage_mult != 1.0:
+                damage *= self._heat_damage_mult
 
             # ── Strength KO amplification ─────────────────
             # Hard hitters punch through defense more.
@@ -946,20 +1042,50 @@ class NarratedFightSimulator:
                 damage *= _brawler_mult
 
             # ── Karate patience power bonus ────────────────
+            # WINDOW: karate_patience [CONSUME] — see registry.
             if (getattr(attacker_state,
                         '_karate_patience', False)
                     and target_area == 'head'):
                 damage *= 1.40
                 attacker_state._karate_patience = False
+                _win(self, "karate_patience", "consume",
+                     actor_name=attacker.name,
+                     target_name=defender.name,
+                     exchange_num=exchange_num)
+
+            # P3-4b Stage 2c — SPRAWL-PUNISH damage consumer.
+            # WINDOW: sprawl_punish_attack [CONSUME] (new). Reuses
+            # the existing _sprawl_counter state written at
+            # _execute_grappling (~:1444-1451). When flag OFF the
+            # branch does not execute → byte-identical to Stage 1.
+            # When ON, sprawl-and-brawl fighter's strike gains a
+            # modest damage bump while their counter is live.
+            # Position: after karate patience, before point-fighter
+            # movement — same style-mult tier.
+            if (_wreg.FI_SPRAWL_PUNISH_ENABLED
+                    and getattr(attacker_state,
+                                '_sprawl_counter', 0) > 0):
+                damage *= _SPRAWL_PUNISH_MULT
+                _win(self, "sprawl_punish_attack", "consume",
+                     actor_name=attacker.name,
+                     target_name=defender.name,
+                     exchange_num=exchange_num,
+                     extra={"mult": _SPRAWL_PUNISH_MULT})
 
             # ── Point Fighter off the line — defender ──────
+            # WINDOW: point_fighter_movement [CONSUME] — see registry.
             # Defender moving on angles takes reduced damage.
             if getattr(defender_state,
                        '_movement_window', 0) > 0:
                 defender_state._movement_window -= 1
                 damage *= 0.80
+                _win(self, "point_fighter_movement", "consume",
+                     actor_name=defender.name,
+                     target_name=attacker.name,
+                     exchange_num=exchange_num)
 
             # ── Brawler walk-through — defender rolls with it ──
+            # WINDOW: brawler_walkthrough [WRITE] — see registry.
             _def_brawl_style = str(getattr(
                 defender.fighting_style, 'name', '')
                 or defender.fighting_style or '').upper()
@@ -977,18 +1103,53 @@ class NarratedFightSimulator:
                         1.3 if _b_chin >= 70 else
                         1.2)
                     defender_state._brawler_counter = _b_power
+                    _win(self, "brawler_walkthrough", "write",
+                         actor_name=defender.name,
+                         target_name=attacker.name,
+                         exchange_num=exchange_num,
+                         extra={"chin": _b_chin, "power": _b_power})
 
             # ── Point Fighter — set movement window on land ──
+            # WINDOW: point_fighter_movement [WRITE] — see registry.
             _att_style_pf = str(getattr(
                 attacker.fighting_style, 'name', '')
                 or attacker.fighting_style or '').upper()
             if 'POINT' in _att_style_pf:
                 attacker_state._movement_window = 2
+                _win(self, "point_fighter_movement", "write",
+                     actor_name=attacker.name,
+                     target_name=defender.name,
+                     exchange_num=exchange_num)
 
             # Apply damage
             caused_knockdown, is_finish = defender_state.apply_damage(
                 damage, target_area
             )
+
+            # P3-4b Stage 2a — CUT WRITER, port of fe:3625-3634.
+            # WINDOW: elbow_cut_writer [WRITE] (new). Fires on
+            # elbow-family head strike when the flag is ON. Position
+            # matches fe: after apply_damage, before body-shot
+            # stamina drain. Consumer: between-round doctor-cut
+            # check at _simulate_round's stoppage block (Stage 2a
+            # sibling edit). When flag OFF the branch does not
+            # execute → no random.random() consumed → byte-identical
+            # to Stage 1.
+            if _wreg.FI_CUT_WRITER_ENABLED and target_area == "head":
+                _st_val = (strike.value if hasattr(strike, 'value')
+                           else str(strike))
+                if _st_val in _CUT_ELBOW_STRIKES:
+                    _cut_chance = _CUT_BASE_CHANCE + (
+                        getattr(attacker, 'strength', 70)
+                        / _CUT_STR_DIV)
+                    if random.random() < _cut_chance:
+                        defender_state.damage.cuts += 1
+                        _win(self, "elbow_cut_writer", "write",
+                             actor_name=attacker.name,
+                             target_name=defender.name,
+                             exchange_num=exchange_num,
+                             extra={"strike": _st_val,
+                                    "cuts_now": defender_state.damage.cuts})
 
             # ── Body shot stamina drain ───────────────
             # Body work steals the opponent's breath.
@@ -1808,6 +1969,34 @@ class NarratedFightSimulator:
                 # working cut mechanism can be tuned against a real target
                 # (~5-10% of TKOs) instead of bolted on. See
                 # outputs/two_engine_consolidation_diag1.md.
+                #
+                # P3-4b Stage 2a — RESTORED behind FI_CUT_WRITER_ENABLED.
+                # WINDOW: doctor_cut_stoppage [FIRE] (new). Port of
+                # fe:4422-4434. Writer lives at _execute_strike; this is
+                # the consumer. When flag OFF the branch does not execute
+                # → no random.random() consumed → byte-identical to
+                # Stage 1. Order matches fe: cut check BEFORE health-
+                # based doctor stoppage BEFORE corner stoppage.
+                if _wreg.FI_CUT_WRITER_ENABLED:
+                    _cut_thr = self.config.doctor_check_cut_threshold
+                    if (_ftr_state.damage.cuts >= _cut_thr
+                            and not _stop):
+                        _cut_stop_chance = min(
+                            _CUT_DOC_MAX,
+                            (_ftr_state.damage.cuts - (_cut_thr - 1))
+                            * _CUT_DOC_STEP)
+                        _cut_stop_chance *= max(
+                            _CUT_DOC_HEART_FLOOR,
+                            1 - (getattr(_ftr, 'heart', 70)
+                                 / _CUT_DOC_HEART_DIV))
+                        if random.random() < _cut_stop_chance:
+                            _stop = "TKO (Doctor Stoppage - Cuts)"
+                            _win(self, "doctor_cut_stoppage", "fire",
+                                 actor_name="Doctor",
+                                 target_name=_ftr.name,
+                                 exchange_num=None,
+                                 extra={"cuts": _ftr_state.damage.cuts,
+                                        "chance": _cut_stop_chance})
 
                 # Doctor stoppage
                 if (not _stop
@@ -2083,6 +2272,7 @@ def simulate_narrated_fight(
     card_slot: str = "prelim",
     intro_f1: Optional[dict] = None,
     intro_f2: Optional[dict] = None,
+    heat_level: int = 0,
 ) -> NarratedFightResult:
     """
     Simulate a fight with full commentary.
@@ -2139,6 +2329,7 @@ def simulate_narrated_fight(
         is_main_event=is_main_event,
         intro_f1=intro_f1,
         intro_f2=intro_f2,
+        heat_level=heat_level,
     )
     return simulator.simulate()
 

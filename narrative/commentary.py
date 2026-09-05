@@ -3725,9 +3725,61 @@ class FightCommentarySystem:
         
         # Update round stats
         self._update_round_stats(actor, action_type, success, damage)
-        
+
         return event
-    
+
+    def log_window_event(self, name: str, phase: str,
+                         actor: Optional[str] = None,
+                         target: Optional[str] = None,
+                         exchange_num: Optional[int] = None,
+                         extra: Optional[dict] = None) -> None:
+        """P3-4b — WINDOW event hook (Stage 5).
+
+        Called by fi's dispatch_window_event when WINDOWS_LOG_ENABLED
+        is True. Emits a short bracketed beat into commentary_log so
+        window firings surface in the fight text. Silent when the
+        window has no hook text mapped, or when the mapped text is
+        None. Never asserts an outcome; observation prose only.
+        """
+        hook_map = {
+            ("karate_patience", "consume"):
+                lambda a, t: f"    [WINDOW · karate_patience] {a}'s patience pays — power comes through the head.",
+            ("point_fighter_movement", "write"):
+                lambda a, t: f"    [WINDOW · point_movement] {a} moves off the line — angle set for the next exchange.",
+            ("point_fighter_movement", "consume"):
+                lambda a, t: f"    [WINDOW · point_movement] {a} slips off the angle, {t}'s shot lands soft.",
+            ("brawler_walkthrough", "write"):
+                lambda a, t: f"    [WINDOW · brawler_walkthrough] {a} eats it and grins — return shot is loaded.",
+            ("brawler_walkthrough", "consume"):
+                lambda a, t: f"    [WINDOW · brawler_walkthrough] {a} answers with the loaded shot.",
+            ("counter_striker", "write"):
+                lambda a, t: f"    [WINDOW · counter] {a} reads {t}'s miss — window open.",
+            ("counter_striker", "consume"):
+                lambda a, t: f"    [WINDOW · counter] {a} times the counter.",
+            ("adrenaline_surge", "expire"):
+                lambda a, t: f"    [WINDOW · adrenaline_surge] {a}'s surge fades — settles back.",
+            ("sambo_chain", "fire"):
+                lambda a, t: f"    [WINDOW · sambo_chain] {a} chains the sub off the throw.",
+            ("sprawl_counter_momentum", "expire"):
+                lambda a, t: f"    [WINDOW · sprawl_counter] {a}'s counter window closes.",
+            ("elbow_cut_writer", "write"):
+                lambda a, t: f"    [WINDOW · cut] {a} opens {t} up — the blood is real.",
+            ("doctor_cut_stoppage", "fire"):
+                lambda a, t: f"    [WINDOW · cut_stoppage] Doctor waves it off — cuts too deep on {t}.",
+            ("sprawl_punish_attack", "consume"):
+                lambda a, t: f"    [WINDOW · sprawl_punish] {a} punishes the failed shot — clean strike on {t}.",
+        }
+        _fn = hook_map.get((name, phase))
+        if _fn is None:
+            return
+        try:
+            line = _fn(actor or "The fighter",
+                      target or "the opponent")
+        except Exception:
+            return
+        if line:
+            self.commentary_log.append(line)
+
     def _generate_position_announcement(
         self,
         actor: str,

@@ -7019,6 +7019,72 @@ regardless of any slot bias. Verdicts:
   parity_rebind.csv, parity_file.csv, frontier_table.csv,
   discrimination_probe.csv, p3_4a_bis_out.txt).
 
+- **FIGHT MODEL P3-4b WINDOWS + CARRY-OVERS [COMMITTED as C21, 2026-09-04]**
+  WINDOW mechanism (`cage_dynasty_web/window_registry.py`): 10 rows —
+  7 existing style mechanics restated through one dispatch path
+  (karate_patience, point_fighter_movement, brawler_walkthrough,
+  counter_striker, adrenaline_surge, sambo_chain,
+  sprawl_counter_momentum) + 3 new (elbow_cut_writer,
+  doctor_cut_stoppage, sprawl_punish_attack).
+
+  BYTE-EQUIVALENCE GATE: 700/700 (EP1-500 + POP-200) winner+method+
+  round identical vs a pristine C20 worktree — restatement changed
+  nothing. Data MD5s: EP1 `f9b4126e114f1602ac0fb2ea45112df2`, POP
+  `33178973796446aa6a4c129d16fb1144` (same both trees, zero diff
+  lines). No-op proofs: every new flag OFF → MD5-identical full
+  file on POP-200 (`dae3732b6470373d59a57a4220e69c8b`).
+
+  MEASURED ON:
+  - Cuts RETURN to fi: **43 cut TKOs / 700 fights** across 2 worlds
+    (POP 30/200 = 15%, EP1 13/500 = 2.6%). fe baseline reference
+    ~52/world (103/2W). POP rate is ~2× fe baseline AND above the
+    ~5-10%-of-TKOs design note — **CUT-RATE flagged to P3-5
+    calibration** (dial `CUT_BASE_CHANCE=0.25` and/or the doctor
+    constants). Two of five sample fights end on the new stoppage
+    string `"TKO (Doctor Stoppage - Cuts)"`.
+  - Sprawl-punish window: fires **41 times / 21 fights (10.5%)** on
+    POP-200. Δwin +0.0pp on the current pool at ×1.25 — mechanism
+    is live but sub-threshold at this magnitude. P3-5 dials
+    `SPRAWL_PUNISH_DAMAGE_MULT` or extends window duration.
+  - Heat: `heat_level` param wired ready on fi (`simulate_narrated_fight`
+    + `NarratedFightSimulator.__init__`). Level 0 byte-inert
+    (MD5 matches baseline). Level 80 → **+15pp finish rate**
+    (46% → 61%, 25 decisions displaced). **ZERO live callers** —
+    grep-verified (`heat_level` returns 5 hits in fe = the block
+    itself, 2 in `narrative/rivalry.py` = Rivalry record field +
+    serialize, 0 in `game_bridge.py`). Socket only; no heat
+    source invented.
+
+  Commentary layer: `log_window_event()` added to
+  `FightCommentarySystem` in **`narrative/commentary.py`** (the
+  LIVE file per PA sys.path — NOT the dead repo-root fork).
+  12 hook lines mapped; window beats surface in
+  `commentary.commentary_log` when `WINDOWS_LOG_ENABLED=True`
+  (default False — no live rendering yet, opt-in only).
+
+  Filed for architect review (in gate_tables.md):
+  1. `_karate_patience` write site lives in fe (fe:2148-2156) and
+     reaches fi via the `select_action` import at fi:38. Load-
+     bearing cross-module dep not consolidated by P3-3; not broken
+     but noted.
+  2. `heat_composure_penalty` + `heat_aggression_bonus` are dead in
+     fe (computed, never read); ported the shape to fi for parity;
+     only `heat_damage_mult` wires downstream in either engine.
+  3. Sprawl-punish Δwin=0.0pp on POP-200 → P3-5 dials.
+  4. `"TKO (Doctor Stoppage - Cuts)"` is a new method string —
+     downstream renderers/analytics keying on method may need
+     pattern-matching updates (already handle the
+     `"TKO (Doctor Stoppage)"` family).
+  5. Draws vanish at heat=80 (5 → 0). Not a bug; scorecard
+     separation cleans up when damage multiplies.
+
+  No deploy per S2 freeze.
+
+  Census (verbatim source sites for every mechanic):
+  `outputs/sm1/fight_model/p3_4b/census.md` (436 lines).
+  Artifacts: `outputs/sm1/fight_model/p3_4b/` (gate_tables.md,
+  staged.patch, gate_worker.py, method_mix.txt).
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
