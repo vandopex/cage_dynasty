@@ -356,7 +356,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C26 eef3768. Standing
+Fresh date + HEAD gate (last shipped: C27 c507b4f. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;
@@ -384,3 +384,17 @@ reality audit (post-arc; consumer census first, foldable as a
 ride-along) · INJURY1 injury-system reality audit (post-arc;
 filed from C22 measurement) · C22 flag-flip approved on T4
 defining instruments.
+
+D17 (Van, 2026-09-05) — STAMINA FLOOR: contest-composite
+stamina scalar floors at 0.5, matching damage's floor
+("exhausted but dangerous"); lands in the P3-5 pass.
+D18 (Van, 2026-09-05) — POWER GENERATIVE MODEL UNIFIED:
+world-gen power = strength + style offset + noise (~±8 band),
+same shape as legacy derivation; replaces the independent tier
+roll; one model everywhere; forward-only.
+D19 (Van, 2026-09-05) — SPEED-WORTH: target ≈ +6pp per +20
+(in family with other single stats); activity cost routes via
+AGGRESSION, not speed; K_SPEED_INIT + assist lanes calibrate
+to target.
+ARCHIVE1 — SHIPPED as C28 <sha> (CLAUDE.md split; archive at
+claude/claude_md_archive_2026a.md; hash-verified verbatim).
