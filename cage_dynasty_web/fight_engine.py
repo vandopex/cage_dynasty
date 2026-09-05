@@ -593,6 +593,152 @@ KICK_GAP_DAMAGE_K            = 1.0
 KICK_GAP_DAMAGE_FLOOR        = 0.5
 KICK_GAP_DAMAGE_CEIL         = 1.5
 
+# ============================================================================
+# P5-A FINISH MODEL — health as stoppage pressure (D9, structural)
+# ============================================================================
+# ONE central helper (`check_stoppage`) replaces the twelve scattered
+# accumulator-driven stoppage rolls (F1-F7, F11-F13 in the P5-A census).
+# ~8 knobs replace ~55. Old constants stay as damage-input dials only;
+# their stoppage-decision roles are RETIRED. See the P5-A filing for
+# the mapping and the wrong-numbers rule application.
+#
+# Model:
+#   - HEALTH is the stoppage pressure meter (D1 promoted).
+#   - Effective critical line = BASE - HEART_LINE_SHIFT * ((heart-50)/50)
+#     + rocked-unanswered bump - safe-in-guard damp.
+#   - Once per exchange + once per between-round gap, roll a quadratic
+#     curve on the slack below the critical line. No cliffs.
+#   - Between-round check gets BETWEEN_ROUND_MULT so cornermen and
+#     doctors have real teeth.
+# Provisional values chosen to APPROXIMATE current behavior — P5-C
+# calibrates. Reference: current TKO_GNP fires when health<18 with
+# 15-45% roll; new curve fires when health<critical_line with
+# CURVE_STEEPNESS * (slack/critical)^2 — at health=10, heart=70,
+# critical=~34, p = 0.9 * (24/34)^2 = 0.45 (in the same range).
+FINISH_CRITICAL_LINE_BASE       = 40.0
+FINISH_CURVE_STEEPNESS          = 0.90
+FINISH_HEART_LINE_SHIFT         = 20.0
+FINISH_CONTEXT_ROCKED_BUMP      = 8.0
+FINISH_CONTEXT_GUARD_DAMP       = 5.0
+FINISH_BETWEEN_ROUND_MULT       = 2.5
+FINISH_LEG_KICK_ACCUM_THRESHOLD = 6     # carve-out (D12, private dial)
+FINISH_CUT_STOP_THRESHOLD       = 2     # carve-out (structural cuts)
+
+
+def _finish_specialty_label(strike_val: str, target_area: str,
+                             health_zero: bool) -> str:
+    """Strike-specialty label routing (F8 preserved from old model)."""
+    _specialty_map = {
+        "flying_knee":        "KO (Flying Knee)",
+        "wheel_kick":         "KO (Wheel Kick)",
+        "elbow_spinning":     "KO (Spinning Elbow)",
+        "head_kick":          "KO (Head Kick)",
+        "knee_head":          "KO (Knee)",
+        "spinning_back_kick": "KO (Spinning Back Kick)",
+        "superman_punch":     "KO (Superman Punch)",
+        "body_kick":          "TKO (Body Shot)",
+        "knee_body":          "TKO (Body Shot)",
+        "front_kick":         "TKO (Body Shot)",
+    }
+    if health_zero:
+        return _specialty_map.get(strike_val, "KO")
+    if target_area == "body":
+        return _specialty_map.get(strike_val, "TKO (Body Shot)")
+    return "TKO"
+
+
+def check_stoppage(defender_state, defender, context: dict) -> Optional[str]:
+    """
+    THE ONE CHECK. Returns method string if fight stops, else None.
+
+    Args:
+        defender_state: FighterState of the fighter under pressure.
+        defender: FighterAttributes of same.
+        context: dict carrying label + probability inputs. Keys read:
+            - 'is_between_round' (bool): between-round check
+            - 'current_round' (int): for corner-stoppage eligibility
+            - 'attacker_is_top' (bool): dominant-position label routing
+            - 'position' (str): position enum name for label routing
+            - 'target_area' (str): 'head'|'body'|'legs' — label routing
+            - 'strike_value' (str): strike enum value — specialty map
+            - 'rocked_unanswered' (bool): context bump
+            - 'safe_in_guard' (bool): context damp
+            - 'unanswered_streak' (int): for referee-stoppage label routing
+
+    Naming table:
+        health <= 0                              → KO (specialty or fallback)
+        between_round + cuts >= threshold        → TKO (Doctor Stoppage - Cuts)
+        between_round + KDs >= 2 + round >= 2    → TKO (Corner Stoppage)
+        between_round otherwise                  → TKO (Doctor Stoppage)
+        in_exchange + dominant + top             → TKO (Ground and Pound)
+        in_exchange + clinch + body              → TKO (Body Shots)
+        in_exchange + body                       → TKO (Body Shot)  (specialty for body_kick)
+        in_exchange + rocked + unanswered >= 2   → TKO (Referee Stoppage)
+        otherwise                                → TKO
+    """
+    strike_val = context.get('strike_value', '') or ''
+    target_area = context.get('target_area', '') or ''
+
+    # Health <= 0 is the KO trigger. Label from strike specialty.
+    if defender_state.health <= 0:
+        return _finish_specialty_label(strike_val, target_area, health_zero=True)
+
+    # Effective critical line: heart shifts it down, context nudges.
+    heart = getattr(defender, 'heart', 70)
+    heart_shift = FINISH_HEART_LINE_SHIFT * ((heart - 50) / 50.0)
+    critical_line = FINISH_CRITICAL_LINE_BASE - heart_shift
+    if context.get('rocked_unanswered', False):
+        critical_line += FINISH_CONTEXT_ROCKED_BUMP
+    if context.get('safe_in_guard', False):
+        critical_line -= FINISH_CONTEXT_GUARD_DAMP
+    critical_line = max(5.0, critical_line)
+
+    if defender_state.health >= critical_line:
+        return None
+
+    slack = critical_line - defender_state.health
+    p = FINISH_CURVE_STEEPNESS * (slack / critical_line) ** 2
+    if context.get('is_between_round', False):
+        p *= FINISH_BETWEEN_ROUND_MULT
+    p = min(0.95, p)
+
+    if random.random() >= p:
+        return None
+
+    # FIRED — pick label from circumstances.
+    if context.get('is_between_round', False):
+        cuts = getattr(defender_state.damage, 'cuts', 0)
+        if cuts >= FINISH_CUT_STOP_THRESHOLD:
+            return "TKO (Doctor Stoppage - Cuts)"
+        kds = getattr(defender_state, 'knockdowns_total', 0)
+        cur_round = context.get('current_round', 1)
+        if kds >= 2 and cur_round >= 2:
+            return "TKO (Corner Stoppage)"
+        return "TKO (Doctor Stoppage)"
+
+    # In-exchange labels.
+    position = context.get('position', '')
+    pos_upper = str(position).upper() if position else ''
+    is_top = context.get('attacker_is_top', False)
+
+    if is_top and any(p2 in pos_upper for p2 in
+                       ('MOUNT', 'BACK_MOUNT', 'SIDE_CONTROL')):
+        return "TKO (Ground and Pound)"
+
+    in_clinch = any(p2 in pos_upper for p2 in
+                     ('CLINCH', 'DIRTY_BOXING', 'THAI_PLUM',
+                      'OVER_UNDER', 'PLUM'))
+    if target_area == 'body' and in_clinch:
+        return "TKO (Body Shots)"
+
+    if target_area == 'body':
+        return _finish_specialty_label(strike_val, target_area, health_zero=False)
+
+    if defender_state.is_rocked and context.get('unanswered_streak', 0) >= 2:
+        return "TKO (Referee Stoppage)"
+
+    return _finish_specialty_label(strike_val, target_area, health_zero=False)
+
 
 # ============================================================================
 # DAMAGE & HEALTH SYSTEM

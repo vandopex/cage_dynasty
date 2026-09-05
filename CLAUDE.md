@@ -3251,6 +3251,257 @@ production population. Byte-identical against a synthetic fixture
 is not evidence when the change lives above the engine.
 
 
+### FIGHT MODEL P5-A FINISH MODEL [COMMITTED as C29, 2026-09-05]
+
+D9 build shipped: **health as stoppage pressure, one check, naming
+table** (fight_model_v1_0 §9). fi's ~55 scattered stoppage
+constants collapse to 8 named globals in fe.py, plus §5a's already-
+named submission set and two structural carve-out thresholds (F3
+leg-kick D12 carve-out; F11 doctor-cut writer flag-gated).
+Machinery only — **no calibration**; P5-C is the single tuning
+pass. S2 freeze holds — NO DEPLOY.
+
+**D9 BUILD.**
+- New `fe.check_stoppage()` helper: single choke-point that reads
+  post-damage health against a heart-adjusted critical line, with
+  context bumps (rocked +8 / dominant-position guard damp −5) and
+  a between-round multiplier (×2.5). Emits KO / TKO (specialty) /
+  TKO (Referee Stoppage) / TKO (Doctor Stoppage) / TKO (Corner
+  Stoppage) via `_finish_specialty_label()` naming table.
+- fi call-site: one `check_stoppage(...)` at the end of
+  `_execute_strike` (in-exchange path), one
+  `check_stoppage(is_between_round=True)` in the between-round
+  block of `_simulate_round`. Rolls in F1/F2/F4/F5/F6/F7/F12/F13
+  **removed**; accumulator state (`_clinch_body_acc`,
+  `_gnp_accumulation`, `_rocked_shots`) **kept** for context.
+- Carve-outs preserved per D12 spec: F3 leg-kick TKO
+  (private-dial), F11 doctor-cut writer (`FI_CUT_WRITER_ENABLED`
+  flag-gated, dark on disk today), F10 §5a submissions
+  (untouched), F16 decision scoring (untouched), F0 `apply_damage`
+  body-cumulative TKO branch (preserved as damage-input
+  fallthrough).
+
+**THE 8 KNOBS** (fe.py new module-level constants, provisional
+values — magnitude calibration deferred to P5-C):
+- `FINISH_CRITICAL_LINE_BASE = 40.0` — health level below which
+  check_stoppage begins rolling. Approximation: legacy F6/F7's
+  TKO_GNP_HEALTH_THRESHOLD/TKO_STANDING_HEALTH_THRESHOLD were 18
+  and 15 with rocked/KD gates layered on; new base sits higher
+  because it applies uniformly and context bumps carry the
+  differentiation.
+- `FINISH_CURVE_STEEPNESS = 0.90` — steepness of the pressure
+  curve below the line. Higher = sharper cliff. Approximation:
+  chosen so the aggregate finish rate lands near legacy
+  behavior at the fixture level; P5-C sweeps this against
+  target §9 40% DEC.
+- `FINISH_HEART_LINE_SHIFT = 20.0` — critical-line reduction at
+  HEART=100 (linear from 50). At HEART=90: line = 40 − 20*(90−50)/50
+  = 24; at HEART=50: line = 40 (no shift). Direction confirmed by
+  G6 defining instrument (Δ mean HP at stoppage = +6.28pp per
+  40-point heart gap, elite heart takes ~6pp more damage before
+  stoppage).
+- `FINISH_CONTEXT_ROCKED_BUMP = 8.0` — added to effective critical
+  line when defender is rocked (rocked fighters stop earlier).
+  Approximation: legacy F4 rocked-shots gate had a 0.05 per-shot
+  ramp; +8 line-shift chosen to reproduce roughly the same "rocked
+  amplifies finish" magnitude.
+- `FINISH_CONTEXT_GUARD_DAMP = 5.0` — subtracted from effective
+  critical line when defender is in a defensive/guarded position
+  (dampens stoppage pressure). Approximation: mirrors the direction
+  legacy F6's `top_control >= 85` boost implied (elite grapplers
+  finish faster in dominant, defenders survive longer in guarded).
+- `FINISH_BETWEEN_ROUND_MULT = 2.5` — multiplier applied to
+  stoppage pressure at round breaks (doctor + corner windows).
+  Approximation: legacy F12 doctor gate compressed ~30 in-round
+  ticks worth of pressure into one between-round check; ×2.5
+  chosen so a defender at critical-line health has meaningful
+  stoppage probability at the round bell.
+- `FINISH_LEG_KICK_ACCUM_THRESHOLD = 6` — F3 D12 carve-out.
+  Legacy hard-coded `6` at fi:1553-1565 promoted to named constant;
+  value unchanged (~1% target rate per D12).
+- `FINISH_CUT_STOP_THRESHOLD = 2` — F11 D12 carve-out. Legacy
+  `doctor_check_cut_threshold` (config) promoted to named constant;
+  value unchanged. Flag-dark today per `FI_CUT_WRITER_ENABLED`.
+
+**RETIRED CONSTANTS** (documented-superseded; retained as module-
+level constants in fe.py and re-imported by fi.py for provenance
+grep — flagged as retired-as-decision-dials, no longer read by any
+production stoppage path):
+- `FLASH_KO_DAMAGE_THRESHOLD` (70.0), `FLASH_KO_BASE_CHANCE`
+  (0.03), `FLASH_KO_MAX_CHANCE` (0.12) — F5 flash-KO roll removed.
+- `TKO_GNP_HEALTH_THRESHOLD` (18.0), `TKO_GNP_BASE_CHANCE` (0.15),
+  `TKO_GNP_MAX_CHANCE` (0.45) — F6 V7 TKO GnP roll removed.
+- `TKO_STANDING_HEALTH_THRESHOLD` (15.0), `TKO_STANDING_BASE_CHANCE`
+  (0.10) — F7 V7 TKO Standing roll removed.
+- `TKO_DURABILITY_FLOOR` (0.35), `TKO_DURABILITY_CHIN_DIVISOR`
+  (300.0), `TKO_DURABILITY_HEART_DIVISOR` (350.0),
+  `TKO_DURABILITY_COMPOSURE_DIVISOR` (450.0) — GROUND-STOPPAGE-FIX1
+  durability multiplier for F6/F7 (dependent — dead-with-parent).
+- In-fi hardcoded constants retired inline (bodies removed):
+  - F1 clinch-body: threshold 30, cap 0.22, step 0.025, offset 25,
+    floor 0.4, heart div 320, composure div 450, muay-thai rate
+    1.4 (accumulator increment KEPT).
+  - F2 GnP: threshold 75, cap 0.22, step 0.025, offset 70, floor
+    0.35, heart div 300, composure div 450, style rate 1.2, mount
+    rate 1.1 (accumulator increment KEPT).
+  - F4 ref stoppage: cap 0.22, step 0.05, floor 0.35, fight_iq div
+    250, heart div 350, composure div 400 (`_rocked_shots` counter
+    KEPT for context).
+  - F12 doctor-health: health thr 28, damage.head thr 55, cap 0.14,
+    step 0.003, offset 55, floor 0.5, heart div 250,
+    chin-compromised mult 1.35.
+  - F13 corner: round gate 2, health thr 22, KD thr 2, cap 0.18,
+    step 0.06, offset 1, floor 0.3, heart div 300.
+
+Approximate count: ~55 (~40 inline + ~11 named + ~4 GROUND-
+STOPPAGE-FIX1) → **8 named globals**. Van's "~40 to ~8" spec
+target met on order of magnitude.
+
+**GATES (all MEASURED, artifacts under
+`outputs/sm1/fight_model/p3_5/p5a/`).**
+
+**G1 LABEL REACHABILITY: PASS.** Old-label set = 25 distinct
+method strings. New naming-table output set covers every one via
+one of: `check_stoppage._finish_specialty_label` health-zero
+branch, `check_stoppage` between-round branch, `check_stoppage`
+in-exchange branch, F3 inline carve-out, F11 inline flag-gated cut
+path, F10 §5a untouched, F16 scored decision untouched.
+**Newly minted labels: 0.** Full mapping at
+`g1_label_reachability.md`.
+
+**G2 BEFORE/AFTER METHOD MIX** (fixed-card CRN, seeds 992000+,
+N=500 EP1 pairs, pristine C28 worktree at `/tmp/p5a_pristine_c28`
+vs staged P5-A). **CRN paired agreement, N=500: winner 88.2%,
+method 35.6%.**
+
+| bucket | pristine C28 | staged P5-A | Δ |
+|---|---:|---:|---:|
+| KO | 228 (45.6%) | 29 (5.8%) | −39.8pp |
+| SUB_tap | 120 (24.0%) | 102 (20.4%) | −3.6pp |
+| SUB_injury | 41 (8.2%) | 35 (7.0%) | −1.2pp |
+| TKO (bare) | 33 (6.6%) | 138 (27.6%) | +21.0pp |
+| TKO_doc | 17 (3.4%) | 32 (6.4%) | +3.0pp |
+| DEC | 17 (3.4%) | 11 (2.2%) | −1.2pp |
+| TKO_gnp | 17 (3.4%) | 115 (23.0%) | +19.6pp |
+| TKO_body | 15 (3.0%) | 26 (5.2%) | +2.2pp |
+| SUB_sleep | 9 (1.8%) | 9 (1.8%) | 0 |
+| TKO_legs | 3 (0.6%) | 3 (0.6%) | 0 |
+| TKO_ref | 0 (0.0%) | 0 (0.0%) | 0 |
+| TKO_corner | 0 (0.0%) | 0 (0.0%) | 0 |
+
+Drift explanation: pristine's F5 flash-KO explicitly set
+`health = 0` on fire → "KO" label. Staged's flash-KO scenarios
+flow through apply_damage's normal damage → health drops →
+check_stoppage catches while health is still > 0 → "TKO" label.
+Same class of finish, different name. Overall finish rate ≈ 97-98%
+both arms. Method drift is EXPECTED per §5a precedent; **not
+judged here** — banked for P5-C.
+
+Raw: `g2_pristine_c28.json`, `g2_staged_p5a.json`.
+
+**G3 STORY SAMPLES.** Three located empirically + one filed as
+reachable-but-not-firing.
+
+| tag | pi | method | round | fighters | verdict |
+|---|---:|---|---:|---|---|
+| KO | 7 | `KO` | R2 2:27 | w0_116e6ffd (81) vs w1_3eb4b485 (82) | ✓ narrated |
+| REF | 1115 | `TKO (Referee Stoppage)` | R1 2:38 | w2_2ef9e9ec (83) vs w7_f9a03859 (82) | ✓ narrated |
+| DOC | 5 | `TKO (Doctor Stoppage)` | R1 5:00 | w0_116e6ffd (81) vs w0_f97b69e0 (81) | ✓ narrated |
+| CORNER | — | `TKO (Corner Stoppage)` | — | — | 0/3000 EP1 fights; reachable per G1 but empirical rate is P5-C tuning input |
+
+Full samples: `g3_story_samples.md`, `g3_story_samples.json`.
+
+**G4 NEW-STRING PATTERN CHECK: PASS.** Newly minted labels = 0
+(from G1). Every emittable label ({KO*, TKO*, TKO (specialty)},
+plus untouched Submission*/Decision*/Draw* families) is a
+pre-existing string that survives Path A `_run_real_engine`
+collapse, Path B `_simulate_card_fights` collapse, and
+`awards.canonical_specialty_method`. No consumer code required.
+
+**G5 SYNTAX + IMPORT: PASS.** `python3 -c "import ast; ast.parse(...)"`
+on both touched files: OK. End-to-end
+`import fight_engine, fight_integration`: OK. `check_stoppage`
+binding is the same function object on `fe.check_stoppage` and
+`fi.check_stoppage` (same-module import).
+
+**G6 HEART READING (defining instrument).** Fixture: same attacker
+(OVR mid-70s, boxing 85, power 85), defender heart=50 vs heart=90,
+all other defender attributes matched at 70. N=1000/arm, seeds
+993000+.
+
+Stoppage rate:
+- HEART=50 → 99.8% (998/1000) ±0.3pp (2SE)
+- HEART=90 → 99.3% (993/1000) ±0.5pp (2SE)
+- Δ = +0.5pp ±0.60pp (2SE) — not distinguishable from 0 at this
+  fixture. Both arms ~99% finish rate.
+
+Health-at-stoppage distribution (loser HP at fight end):
+- HEART=50 → mean = 16.4, sd = 11.0, p50 = 16.1, p75 = 22.0
+- HEART=90 → mean = 10.2, sd = 10.8, p50 = 8.4, p75 = 13.3
+- **Δ mean (H50 − H90) = +6.28 ±0.98 (2SE) — SIGNIFICANT.**
+
+**Verdict: elite heart takes MORE damage before stopping (goes
+measurably deeper).** Van's spec target confirmed. Arithmetic:
+HEART=90 fighter's effective critical line = 40 − 20*(90−50)/50 =
+24; HEART=50's = 40; six-point average gap in stoppage-health
+matches the direction.
+
+Method-mix side-effect at HEART=90: `KO` label 9.3% vs 3.5% at
+HEART=50 — lower critical line means defenders more often reach
+health=0 (KO label) instead of stopping earlier at TKO. Same
+finish rate, different naming — consistent with the model.
+
+Full data: `g6_heart_reading.json`.
+
+**V1 PRE-GEN ROUTING VERIFICATION** (session addition,
+`v1_routing_probe.py` + `v1_routing_out.txt`). Instrumented both
+`fight_engine.simulate_fight` and
+`fight_integration.simulate_narrated_fight`, then generated one
+fresh world at seed 994000 (120-week history sim, 286 fighters, 40
+camps, 120 events, 1606 pre-gen fights, 9 champions).
+
+Call counts:
+- `fe.simulate_fight`: **0**
+- `fi.simulate_narrated_fight`: **1606**
+
+**Verdict: fe entry NEVER fired.** C18's "fe retained as fallback"
+path has not fired in this measurement — pre-gen routes 100%
+through fi. Census.md's "fe finish machines still LIVE for pre-gen"
+line was a doc error and has been corrected in the same commit;
+the census now reads "DEAD post-C18, C29 V1 verified — deletion
+candidate at the next legacy-consolidation ship."
+
+**RIDERS FILED (docs-only, C29 carries):**
+- **Corner stoppage 0/3000 in EP1** — reachable per G1, empirical
+  rate = 0 at the fixture. Between-round KD gate + health
+  threshold + round-gate combo is too rare on EP1 elite-peer pool
+  (~80 OVR) where back-to-back KDs are rare and fights end
+  earlier. **P5-C tuning input** — knob to move if the label
+  needs a real live rate.
+- **Winner agreement 88.2% at CRN, N=500** — 12% of paired fights
+  flip winner between pristine C28 and staged P5-A. Stoppage
+  timing legitimately changes outcomes: a fight that ended R2
+  under flash-KO explicit-health-zero mechanics can now end R3
+  under critical-line pressure with a different scoring cascade.
+  Not a defect; measured drift and expected.
+- **True-KO share ~7% at HEART=90 vs ~3.5% at HEART=50** —
+  critical-line lever. When P5-C tunes
+  `FINISH_CRITICAL_LINE_BASE`, expect KO share to move inversely
+  (lower critical line → fewer TKOs / more KOs at the same
+  underlying finish rate).
+- **Method-mix reshape banked** — the full G2 table above is the
+  before/after instrument for P5-C's single calibration pass. §9
+  target 40% DEC not addressed here (fixture is 97-98% finish
+  rate; population-level DEC calibration is a per-pool sweep, not
+  this 1v1 fixture).
+- **V1 verdict** — fe.simulate_fight is dead code as of C18;
+  filed as deletion candidate at the next legacy-consolidation
+  ship (not this commit; keeps C29 scope tight).
+
+Full report: `outputs/sm1/fight_model/p3_5/p5a/report.md`.
+Spec (verbatim SPEC-START/END): `claude/fight_model_p3_5_spec_v0_1.md`.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

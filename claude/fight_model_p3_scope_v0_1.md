@@ -3,8 +3,10 @@
 # (C20), P3-4b (C21), P3-4c (C22), P3-4d (C23) SHIPPED; P3-4e (C24)
 # SHIPPED DARK; C25 promoted FighterRecord.fighting_style to a real
 # field; C26 landed measurement plumbing; C27 measured C25's
-# activation delta on the production population + ruled KEEP; next:
-# P3-5 calibration. Updated 2026-09-05 (C27 docs-only ship).
+# activation delta on the production population + ruled KEEP; C28
+# ARCHIVE1 (CLAUDE.md split); P5-A FINISH MODEL SHIPPED as C29
+# (2026-09-05, machinery only — no calibration); next: P3-5
+# calibration. Updated 2026-09-05 (C29 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -128,6 +130,40 @@ strict architect-intent reading. Filed to P3-5 with numbers.
 
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
+
+### P5-A FINISH MODEL — SHIPPED as C29 (2026-09-05)
+
+D9 build: health as stoppage pressure, one check
+(`fe.check_stoppage`), naming table
+(`fe._finish_specialty_label`). fi's ~55 scattered stoppage
+constants collapse to **8 named globals in fe.py** + §5a
+already-named subs + 2 D12 carve-out thresholds (F3 leg-kick,
+F11 doctor-cut writer). Rolls in F1/F2/F4/F5/F6/F7/F12/F13
+removed; accumulator state kept for context; F3/F11 carve-outs
+preserved; F10/F16/F0 body-cumulative untouched. New knobs:
+`FINISH_CRITICAL_LINE_BASE=40.0`, `FINISH_CURVE_STEEPNESS=0.90`,
+`FINISH_HEART_LINE_SHIFT=20.0`, `FINISH_CONTEXT_ROCKED_BUMP=8.0`,
+`FINISH_CONTEXT_GUARD_DAMP=5.0`, `FINISH_BETWEEN_ROUND_MULT=2.5`,
+`FINISH_LEG_KICK_ACCUM_THRESHOLD=6`, `FINISH_CUT_STOP_THRESHOLD=2`.
+Machinery only — magnitude calibration deferred to P5-C (single
+pass, item 8 below). Gates PASS: G1 label reachability (25 old
+labels covered, 0 newly minted); G2 method-mix drift measured
+(N=500 EP1 CRN, winner agreement 88.2%, method 35.6%; drift
+expected per §5a precedent, not judged); G3 story samples
+(KO/REF/DOC narrated; CORNER 0/3000 on EP1, filed as P5-C
+tuning input); G4 new-string pattern check (0 newly minted);
+G5 syntax + import; G6 heart defining instrument (Δ mean HP at
+stoppage = +6.28pp per 40-heart-point gap, direction confirmed).
+V1 pre-gen routing verification: seed 994000 fresh world, fe.
+simulate_fight call count **0**, fi.simulate_narrated_fight call
+count **1606**; census.md's "fe finish machines still LIVE for
+pre-gen" corrected to "DEAD post-C18, deletion candidate at next
+legacy-consolidation ship." NO DEPLOY (S2 freeze holds). Full
+report: `outputs/sm1/fight_model/p3_5/p5a/report.md`. Full
+filing under CLAUDE.md "FIGHT MODEL P5-A FINISH MODEL [COMMITTED
+as C29, 2026-09-05]".
+
+### P5-C — CALIBRATION LIST
 
 §6 five parts + leg-kick dial (~1%). One pass, final physics, §9.
 FREEZE LIFTS on green. CALIBRATION LIST:
@@ -356,7 +392,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C27 c507b4f. Standing
+Fresh date + HEAD gate (last shipped: C28 cf85a21. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;
@@ -396,5 +432,5 @@ D19 (Van, 2026-09-05) — SPEED-WORTH: target ≈ +6pp per +20
 (in family with other single stats); activity cost routes via
 AGGRESSION, not speed; K_SPEED_INIT + assist lanes calibrate
 to target.
-ARCHIVE1 — SHIPPED as C28 <sha> (CLAUDE.md split; archive at
+ARCHIVE1 — SHIPPED as C28 cf85a21 (CLAUDE.md split; archive at
 claude/claude_md_archive_2026a.md; hash-verified verbatim).

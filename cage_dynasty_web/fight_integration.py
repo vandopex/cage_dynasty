@@ -40,11 +40,22 @@ from fight_engine import (
     calculate_grappling_success, apply_position_change,
     attempt_submission, process_submission_progress,
     score_round,
+    # P5-A FINISH MODEL — one central stoppage check + naming table.
+    # Replaces the twelve scattered accumulator-driven stoppage rolls
+    # (F1-F7, F11-F13 in the P5-A census). See fight_engine.py
+    # `check_stoppage` docstring for the naming table.
+    check_stoppage,
+    FINISH_CRITICAL_LINE_BASE, FINISH_LEG_KICK_ACCUM_THRESHOLD,
     # V7 Balance Constants (centralized in fight_engine)
     # ENGINE-DEAD-KNOBS1 (2026-07-11): DAMAGE_MULTIPLIER import removed.
     # STAGE 0d (2026-07-12): FI_DAMAGE_MULTIPLIER module const also deleted.
     # FI reads config.damage_multiplier via the atomic config invariant
     # contract (see fight_engine.FightConfig docstring).
+    # P5-A NOTE: FLASH_KO_* and TKO_GNP_* / TKO_STANDING_* constants
+    # RETIRED as stoppage-decision dials. Kept as imports (harmless)
+    # so downstream comments and references still resolve; the code
+    # that ROLLED on them is now deleted, and check_stoppage does
+    # the deciding. Names retained for provenance grepping.
     FLASH_KO_DAMAGE_THRESHOLD, FLASH_KO_BASE_CHANCE, FLASH_KO_MAX_CHANCE,
     TKO_GNP_HEALTH_THRESHOLD, TKO_GNP_BASE_CHANCE, TKO_GNP_MAX_CHANCE,
     TKO_STANDING_HEALTH_THRESHOLD, TKO_STANDING_BASE_CHANCE,
@@ -1483,6 +1494,13 @@ class NarratedFightSimulator:
                 self.fight_state.position
                 in CLINCH_POSITIONS)
             if target_area == 'body' and _in_clinch_pos:
+                # P5-A: clinch-body accumulator KEPT as passive state
+                # (future damage-input candidate); the stoppage-roll
+                # branch that lived here has been REPLACED by the
+                # central `check_stoppage()` call below the stats
+                # update. Label "TKO (Body Shots)" is now emitted by
+                # the naming table when the ONE CHECK fires with
+                # target_area='body' and position in clinch.
                 _prev_cb = getattr(
                     defender_state, '_clinch_body_acc', 0)
                 _cb_rate = (
@@ -1490,21 +1508,6 @@ class NarratedFightSimulator:
                     else 1.0)
                 defender_state._clinch_body_acc = (
                     _prev_cb + damage * _cb_rate)
-                if defender_state._clinch_body_acc >= 30:
-                    _cb_tko = min(0.22,
-                        (defender_state._clinch_body_acc
-                         - 25) * 0.025)
-                    _cb_tko *= max(0.4,
-                        1 - getattr(defender,
-                            'heart', 70) / 320
-                        - getattr(defender,
-                            'composure', 70) / 450)
-                    if random.random() < _cb_tko:
-                        method = "TKO (Body Shots)"
-                        self._log_finish(
-                            attacker.fighter_id,
-                            method, exchange_num)
-                        return (attacker.fighter_id, method)
             if self.fight_state.position not in CLINCH_POSITIONS:
                 defender_state._clinch_body_acc = 0
 
@@ -1527,6 +1530,13 @@ class NarratedFightSimulator:
             if (not is_finish
                     and _in_gnp_pos
                     and target_area == 'head'):
+                # P5-A: GnP accumulator KEPT as passive state
+                # (future damage-input candidate); the stoppage-roll
+                # branch that lived here has been REPLACED by the
+                # central `check_stoppage()` call below the stats
+                # update. Label "TKO (Ground and Pound)" is emitted
+                # by the naming table when the ONE CHECK fires with
+                # attacker_is_top=True and position in dominant.
                 _rate = 1.2 if _is_gnp else 1.0
                 if 'MOUNT' in _gnp_pos_check:
                     _rate *= 1.1
@@ -1534,27 +1544,20 @@ class NarratedFightSimulator:
                     defender_state, '_gnp_accumulation', 0)
                 defender_state._gnp_accumulation = (
                     _prev_gnp + damage * _rate)
-                if defender_state._gnp_accumulation >= 75:
-                    _gnp_tko = min(0.22,
-                        (defender_state._gnp_accumulation
-                         - 70) * 0.025)
-                    _gnp_tko *= max(0.35,
-                        1 - getattr(defender, 'heart', 70) / 300
-                        - getattr(defender, 'composure', 70) / 450)
-                    if random.random() < _gnp_tko:
-                        method = "TKO (Ground and Pound)"
-                        self._log_finish(
-                            attacker.fighter_id,
-                            method, exchange_num)
-                        return (attacker.fighter_id, method)
             if self.fight_state.position in STANDING_POSITIONS:
                 defender_state._gnp_accumulation = 0
 
             # ── Leg kick TKO — accumulated leg damage ──────
+            # P5-A CARVE-OUT (D12): leg-kick keeps its private dial,
+            # ~1% target of fights. Reads FINISH_LEG_KICK_ACCUM_THRESHOLD
+            # (was hardcoded 6). Not routed through check_stoppage —
+            # structural finish path for leg damage that health-line
+            # never touches.
             if (not is_finish and target_area == "legs"
                     and defender_state.damage.is_compromised_legs):
                 _leg_tko_chance = min(0.15,
-                    (defender_state.damage.leg_kicks_absorbed - 6) * 0.02)
+                    (defender_state.damage.leg_kicks_absorbed
+                     - FINISH_LEG_KICK_ACCUM_THRESHOLD) * 0.02)
                 if defender_state.stamina < 50:
                     _leg_tko_chance *= 1.4
                 if random.random() < _leg_tko_chance:
@@ -1564,24 +1567,20 @@ class NarratedFightSimulator:
                                      method, exchange_num)
                     return (attacker.fighter_id, method)
 
-            # ── Referee stoppage — unanswered shots while rocked ──
+            # ── Rocked-shots counter (feeds check_stoppage context) ──
+            # P5-A: the ROLL that lived here (F4 ref-stoppage per
+            # census) has been REPLACED by the central check_stoppage()
+            # call below. Keep the counter increment so
+            # `rocked_unanswered` context is available for the ONE
+            # CHECK. Label "TKO (Referee Stoppage)" is emitted by the
+            # naming table when the defender is rocked and this counter
+            # >= 2.
             if (not is_finish
                     and defender_state.is_rocked
                     and target_area == "head"):
                 if not hasattr(defender_state, '_rocked_shots'):
                     defender_state._rocked_shots = 0
                 defender_state._rocked_shots += 1
-                _ref_chance = min(0.22,
-                    defender_state._rocked_shots * 0.05)
-                _ref_chance *= max(0.35,
-                    1 - (defender.fight_iq / 250)
-                      - (defender.heart / 350)
-                      - (defender.composure / 400))
-                if random.random() < _ref_chance:
-                    method = "TKO (Referee Stoppage)"
-                    self._log_finish(attacker.fighter_id,
-                                     method, exchange_num)
-                    return (attacker.fighter_id, method)
 
             # ── Rocked fighter in standup — grappler exploits ──
             if (not is_finish
@@ -1613,152 +1612,70 @@ class NarratedFightSimulator:
                         self.fight_state.top_fighter_id = (
                             attacker.fighter_id)
 
-            # === V7 FLASH KO SYSTEM ===
-            # Big head shots can cause sudden KOs even without accumulating damage
-            if (not is_finish and target_area == "head" and 
-                damage >= FLASH_KO_DAMAGE_THRESHOLD):
-                
-                flash_ko_chance = (damage - FLASH_KO_DAMAGE_THRESHOLD) * FLASH_KO_BASE_CHANCE
-                
-                # Striker bonus (elite boxing or kicks)
-                if attacker.boxing >= 85 or attacker.kicks >= 85:
-                    flash_ko_chance += 0.022
-                
-                # P3-4d: POWER bonus (was: "Power bonus (high strength)").
-                # Flag OFF reads strength (byte-identical to pre-C23);
-                # flag ON reads power. See window_registry.
-                _fkw_stat = attacker.strength
-                try:
-                    import window_registry as _wreg_fko
-                    if _wreg_fko.FI_POWER_WIRING_ENABLED:
-                        _fkw_stat = getattr(attacker, 'power',
-                                            attacker.strength)
-                except ImportError:
-                    pass
-                if _fkw_stat >= 85:
-                    flash_ko_chance += 0.015
-                
-                # Hurt bonus (defender already rocked)
-                if defender_state.is_rocked or defender_state.health < 40:
-                    flash_ko_chance += 0.035
-                
-                # Cap the chance
-                flash_ko_chance = min(flash_ko_chance, FLASH_KO_MAX_CHANCE)
+            # === P5-A FINISH MODEL — REPLACEMENT ===
+            # The V7 FLASH-KO, TKO GnP, and TKO Standing stoppage
+            # rolls that lived here are RETIRED. Health-under-line +
+            # one smooth curve now decides all in-exchange stoppages
+            # via check_stoppage(). See P5-A census.md for the mapping
+            # (F5/F6/F7 all → central check). Constants FLASH_KO_*,
+            # TKO_GNP_*, TKO_STANDING_* are documented-superseded
+            # (kept as imports for provenance grep, no longer read).
 
-                if random.random() < flash_ko_chance:
-                    # Flash KO!
-                    caused_knockdown = True
-                    is_finish = True
-                    defender_state.health = 0
-
-            # === V7 TKO GNP SYSTEM ===
-            # Referee stops fight when defender takes sustained damage from dominant position
-            if (not is_finish and
-                self.fight_state.top_fighter_id == attacker.fighter_id and
-                defender_state.health < TKO_GNP_HEALTH_THRESHOLD and
-                self.fight_state.position in DOMINANT_POSITIONS):
-
-                tko_chance = TKO_GNP_BASE_CHANCE
-
-                # Rocked bonus
-                if defender_state.is_rocked:
-                    tko_chance += 0.03
-
-                # Multiple knockdowns bonus
-                if defender_state.knockdowns_this_round >= 2:
-                    tko_chance += 0.04
-
-                # GnP specialist bonus
-                if attacker.top_control >= 85:
-                    tko_chance += 0.02
-
-                # Cap the chance
-                tko_chance = min(tko_chance, TKO_GNP_MAX_CHANCE)
-
-                # GROUND-STOPPAGE-FIX1: apply defender durability multiplier.
-                # Elite chin+heart+composure roughly halves the stoppage
-                # roll; poor durability leaves it near base. Preserves the
-                # "fragile fighter under sustained GnP still gets finished"
-                # case while letting granite chins weather it.
-                tko_chance *= _tko_durability_mult(defender)
-
-                if random.random() < tko_chance:
-                    # TKO by GnP!
-                    is_finish = True
-            
-            # === V7 TKO STANDING SYSTEM ===
-            # Referee stops fight when fighter is badly hurt on the feet
-            if (not is_finish and
-                defender_state.is_rocked and
-                defender_state.health < TKO_STANDING_HEALTH_THRESHOLD and
-                self.fight_state.position in STANDING_POSITIONS):
-
-                tko_standing_chance = TKO_STANDING_BASE_CHANCE
-
-                # Very low health bonus
-                if defender_state.health < 20:
-                    tko_standing_chance += 0.05
-
-                # Multiple knockdowns in round
-                if defender_state.knockdowns_this_round >= 1:
-                    tko_standing_chance += 0.04
-
-                # GROUND-STOPPAGE-FIX1: apply defender durability multiplier.
-                # Symmetric to the TKO_GNP path — same durability language
-                # applies whether the accumulated damage came from top
-                # position or standing volume.
-                tko_standing_chance *= _tko_durability_mult(defender)
-
-                if random.random() < tko_standing_chance:
-                    # Standing TKO!
-                    is_finish = True
-            
             # Mark ground action if strike landed on the ground
             # (prevents referee standup during active GNP)
             if (self.fight_state.position not in STANDING_POSITIONS and
                 self.fight_state.position not in CLINCH_POSITIONS):
                 self._ground_action_this_exchange = True
-            
+
             # Update stats
             stats = self.round_stats[attacker.fighter_id]
             stats.significant_strikes_attempted += 1
             stats.significant_strikes_landed += 1
             stats.damage_dealt += damage
-            
+
             if target_area == "head":
                 stats.head_strikes_landed += 1
             elif target_area == "body":
                 stats.body_strikes_landed += 1
             elif target_area == "legs":
                 stats.leg_strikes_landed += 1
-            
+
             # NOTE: rocked/knockdown is already handled inside FighterState.apply_damage()
             # in fight_engine.py — no duplicate check needed here.
 
-            # Check for finish
+            # --- P5-A THE ONE CHECK -----------------------------
+            # One central call replaces F5/F6/F7 (flash-KO, TKO GnP,
+            # TKO Standing) plus F1/F2/F4 (clinch-body / GnP-accum /
+            # ref-stoppage rolls that lived above). Also catches the
+            # apply_damage → health<=0 KO path via specialty labels.
+            _unanswered_streak = getattr(defender_state, '_rocked_shots', 0)
+            _pos_str = str(getattr(self.fight_state, 'position', ''))
+            _ctx = {
+                'is_between_round': False,
+                'current_round': self.current_round,
+                'attacker_is_top': (
+                    self.fight_state.top_fighter_id == attacker.fighter_id),
+                'position': _pos_str,
+                'target_area': target_area,
+                'strike_value': (
+                    strike.value if hasattr(strike, 'value') else str(strike)),
+                'rocked_unanswered': (
+                    defender_state.is_rocked and _unanswered_streak >= 1),
+                'unanswered_streak': _unanswered_streak,
+            }
+            _stop = check_stoppage(defender_state, defender, _ctx)
+            if _stop is not None:
+                method = _stop
+                self._log_finish(attacker.fighter_id, method, exchange_num)
+                return (attacker.fighter_id, method)
+
+            # Rare fallthrough: apply_damage's internal body-cumulative
+            # TKO branch set is_finish without dropping health under
+            # the critical line (F0 second trigger; ~65+ body damage).
+            # Route through a generic TKO label so the naming table's
+            # reachability rules still hold.
             if is_finish:
-                # Named specialty finishes — specific strike logged
-                # so records and commentary surface the exact KO type
-                _sv = strike.value if hasattr(strike, 'value') else str(strike)
-                _specialty_map = {
-                    "flying_knee":        "KO (Flying Knee)",
-                    "wheel_kick":         "KO (Wheel Kick)",
-                    "elbow_spinning":     "KO (Spinning Elbow)",
-                    "head_kick":          "KO (Head Kick)",
-                    "knee_head":          "KO (Knee)",
-                    "spinning_back_kick": "KO (Spinning Back Kick)",
-                    "superman_punch":     "KO (Superman Punch)",
-                    "body_kick":          "TKO (Body Shot)",
-                    "knee_body":          "TKO (Body Shot)",
-                    "front_kick":         "TKO (Body Shot)",
-                }
-                if defender_state.health <= 0:
-                    method = _specialty_map.get(_sv, "KO")
-                else:
-                    if target_area == "body":
-                        method = _specialty_map.get(_sv, "TKO (Body Shot)")
-                    else:
-                        method = "TKO"
+                method = "TKO (Body Shot)" if target_area == "body" else "TKO"
                 self._log_finish(attacker.fighter_id, method, exchange_num)
                 return (attacker.fighter_id, method)
             
@@ -2327,7 +2244,12 @@ class NarratedFightSimulator:
                         self.fight_state.ground_inactivity = 0
         
         # ── Between-round stoppages ──────────────────────
-        # Doctor, corner, cut stoppages. Rare by design.
+        # P5-A: Doctor + corner stoppages routed through the
+        # central check_stoppage() call with is_between_round=True.
+        # The cut carve-out (F11 per census) is preserved behind
+        # FI_CUT_WRITER_ENABLED because it reads a separate
+        # accumulator (damage.cuts) that the health line does not
+        # consume — see census.md and P5-A spec §4 (carve-outs).
         # Only fires if another round remains.
         if self.current_round < self.config.scheduled_rounds:
             for _ftr, _ftr_state, _opp in [
@@ -2336,23 +2258,11 @@ class NarratedFightSimulator:
             ]:
                 _stop = None
 
-                # ENGINE-DEAD-KNOBS1 (2026-07-11): the cut-stoppage branch that
-                # used to sit here was unreachable — fight_integration never
-                # writes damage.cuts. The elbow-to-head cut writer lives only
-                # in fight_engine.simulate_fight at :3234. Removing the dead
-                # check rather than adding a cut mechanic to live-play — the
-                # add belongs to the TWO-ENGINE CONSOLIDATION arc, where a
-                # working cut mechanism can be tuned against a real target
-                # (~5-10% of TKOs) instead of bolted on. See
-                # outputs/two_engine_consolidation_diag1.md.
-                #
-                # P3-4b Stage 2a — RESTORED behind FI_CUT_WRITER_ENABLED.
-                # WINDOW: doctor_cut_stoppage [FIRE] (new). Port of
-                # fe:4422-4434. Writer lives at _execute_strike; this is
-                # the consumer. When flag OFF the branch does not execute
-                # → no random.random() consumed → byte-identical to
-                # Stage 1. Order matches fe: cut check BEFORE health-
-                # based doctor stoppage BEFORE corner stoppage.
+                # ── Cut carve-out (F11) — private accumulator + threshold ──
+                # P5-A CARVE-OUT: structural cuts read damage.cuts with
+                # one plain threshold. Not routed through check_stoppage
+                # because the health line doesn't consume cut damage.
+                # Flag currently False on disk (C21 dark). P5-B flips.
                 if _wreg.FI_CUT_WRITER_ENABLED:
                     _cut_thr = self.config.doctor_check_cut_threshold
                     if (_ftr_state.damage.cuts >= _cut_thr
@@ -2374,29 +2284,23 @@ class NarratedFightSimulator:
                                  extra={"cuts": _ftr_state.damage.cuts,
                                         "chance": _cut_stop_chance})
 
-                # Doctor stoppage
-                if (not _stop
-                        and _ftr_state.health < 28
-                        and _ftr_state.damage.head > 55):
-                    _dc = min(0.14,
-                        (55 - _ftr_state.health) * 0.003)
-                    _dc *= max(0.5, 1 - (_ftr.heart / 250))
-                    if getattr(_ftr_state, 'chin_compromised', False):
-                        _dc *= 1.35
-                    if random.random() < _dc:
-                        _stop = "TKO (Doctor Stoppage)"
-
-                # Corner stoppage (round 2+, 2+ knockdowns)
-                if (not _stop
-                        and self.current_round >= 2
-                        and _ftr_state.health < 22
-                        and getattr(_ftr_state, 'knockdowns_total', 0) >= 2):
-                    _corn = min(0.18,
-                        (getattr(_ftr_state, 'knockdowns_total', 0) - 1)
-                        * 0.06)
-                    _corn *= max(0.3, 1 - (_ftr.heart / 300))
-                    if random.random() < _corn:
-                        _stop = "TKO (Corner Stoppage)"
+                # --- P5-A CENTRAL BETWEEN-ROUND CHECK ---------------
+                # Health as stoppage pressure. Naming table picks
+                # TKO (Doctor Stoppage) / TKO (Corner Stoppage) /
+                # TKO (Doctor Stoppage - Cuts) based on circumstances
+                # at fire time. Replaces the F12 + F13 rolls.
+                if not _stop:
+                    _ctx = {
+                        'is_between_round': True,
+                        'current_round': self.current_round,
+                        'attacker_is_top': False,
+                        'position': '',
+                        'target_area': '',
+                        'strike_value': '',
+                        'rocked_unanswered': False,
+                        'unanswered_streak': 0,
+                    }
+                    _stop = check_stoppage(_ftr_state, _ftr, _ctx)
 
                 if _stop:
                     self._log_finish(
