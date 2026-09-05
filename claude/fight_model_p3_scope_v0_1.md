@@ -1,9 +1,9 @@
 # FIGHT MODEL P3 — IMPLEMENTATION SCOPE v0.1 (2026-09-03)
 # STATUS: P3-0/1 SHIPPED+DEPLOYED; P3-2 (C18), P3-3 (C19), P3-4a
 # (C20), P3-4b (C21), P3-4c (C22), P3-4d (C23) SHIPPED; P3-4e (C24)
-# SHIPPED DARK (both flags False on disk — bridge measurement (d)
-# tripped, (b) instrument failed); next: 4f/4g remainder + P3-5
-# calibration. Updated 2026-09-04 (C24 dark ship).
+# SHIPPED DARK; C25 promoted FighterRecord.fighting_style to a real
+# field; C26 landed the P3-5 item 11 measurement plumbing; next:
+# P3-5 calibration. Updated 2026-09-05 (C25/C26 cleanup pass).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -125,8 +125,6 @@ direction); (d) win-rate swings Wrestler 55%→27% (Δ=−28.3pp) and
 Striker 60%→33% (Δ=−26.7pp) both on n=20 OFF — collapses in the
 strict architect-intent reading. Filed to P3-5 with numbers.
 
-### 4f/4g REMAINDER — SUB MODEL follow-ups, POWER dial follow-ups,
-future POSITION-VALUE rebalance (D15 step 2) — as they arise.
 
 ## DOCKET P3-5 — FINISH MODEL + SINGLE CALIBRATION (LAST)
 
@@ -168,9 +166,20 @@ FREEZE LIFTS on green. CALIBRATION LIST:
     be world-scan-visible; enum-collapse offsets (collapsed styles
     derive with the shared enum offset); offset magnitudes.
 11. AGGRESSION DIALS (C24 inputs — machinery is dark on disk;
-    calibration to flip it on). Fix (b) instrument: persist
-    `_engine_result` on the Path B fight dict so per-style
-    td_attempts/sub_attempts are measurable at bridge scale.
+    calibration to flip it on).
+    STEP 0 — RE-MEASURE on FIXED card sets (same pairings both
+    arms, N≥100 per style of interest, CRN seeds): C24's (d)
+    swings were n≤20 per style across two structurally divergent
+    worlds — noise-level; no dial moves until a collapse is
+    CONFIRMED. Also explain the 19026-vs-11822 plan-resolution
+    count asymmetry between arms (structurally divergent worlds
+    schedule fights differently under different AI plans, so
+    the resolve_gameplan call counts diverge; not a per-fight
+    discrepancy).
+    Then: fix (b) instrument (C26 shipped this — per-fighter
+    td_att / td_landed / sub_att aggregates now on the Path B
+    fight dict; harness reads these directly instead of a
+    nonexistent `_engine_result` key).
     Diagnose Wrestler collapse: TAKEDOWN preset applies
     `range_bias=+1` (grapple_weight ×1.20, sub_weight ×1.10) —
     likely over-commits Wrestlers to takedowns, they get sprawled,
@@ -303,21 +312,23 @@ recovered" are north-star beats.
 Then: scouting-ranges, personality, generator-variety, amateur,
 training dockets; PEAK103; PA timing pre-N-lock; A3-b/A3-c.
 
-FIGHTERRECORD-FIGHTING-STYLE (Van, 2026-09-04, from C24 BURIED
-FINDING) — small separate cleanup ship: promote `fighting_style`
-to a real field on `FighterRecord` (`game_state.py`) with proper
-serialization in `to_dict` / `from_dict`. Consequence closes the
-"AI plans have been None since GAMEPLAN-AI-SELECT1" defect at
-its root; makes the C24 `_fighter_data['style']` fallback
-unnecessary. Scope: FighterRecord field + serialization + a
-world_init write-side stamp so fresh AI fighters carry the real
-field. Should ride before P3-5 item 11's calibration lands so
-the AGGRESSION-DIALS work is against a clean lookup.
+FIGHTERRECORD-FIGHTING-STYLE — SHIPPED as C25 5e84d43
+(2026-09-05, C24 buried finding, architect-filed). Promoted
+`fighting_style` to a real field on `FighterRecord`
+(`game_state.py`) with `to_dict` / `from_dict` serialization;
+world_init stamps it at fresh-fighter creation. Legacy saves
+without the field default to `''` and continue to resolve style
+via the C24 `_fighter_data['style']` fallback in
+`_resolve_gameplan` — kept as dead-code-for-post-C25-universes /
+live-for-legacy. Gates PASS: legacy load smoke; fresh world
+289/289 records match `_fighter_data['style']`; EP1_200 MD5
+byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (HEAD C24 — placeholder, actual sha in
-commit message); diagnose read-only
+Fresh date + HEAD gate (last shipped: C25 5e84d43. New standing
+convention as of C26: the HEAD line names the LAST SHIPPED commit
+and is updated in the NEXT ship's docs pass. No placeholders); diagnose read-only
 first; single-purpose commits on Van's word; stop before commit;
 adjusted instruments prove discrimination; a no-op control cannot
 prove life; instruments match the DEFINING instrument; verbatim

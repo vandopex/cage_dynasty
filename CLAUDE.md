@@ -7719,6 +7719,34 @@ regardless of any slot bias. Verdicts:
   - `verify/g5b_bridge_before_after.py` + JSON  ← this ship's
     bridge-path measurement
 
+  **C25/C26 addendum (2026-09-05, docs-only correction to C24's
+  measurement framing).** The C24 filing above reports the
+  bridge-path (d) win-rate swings — Wrestler 55%→27%
+  (Δ=−28.3pp) and Striker 60%→33% (Δ=−26.7pp) — as evidence that
+  the machinery must ship dark. **Those swings are hypotheses,
+  not findings.** Both style's n_off = 20 and n_on = 15/12; at
+  those sample sizes the Wilson 95% CI on a proportion is roughly
+  ±22pp per arm, so the observed ±28pp deltas are within noise.
+  The two arms also ran on structurally divergent worlds
+  (different fight matchups per week — 19026 plan-resolution
+  calls OFF vs 11822 ON reflects the world's own AI-plan-driven
+  scheduling divergence, not a per-fight discrepancy), so
+  per-style paired comparison isn't even the correct instrument
+  for this data.
+
+  The correct re-measurement is fixed-card sets: identical
+  pairings both arms, CRN seeds, N≥100 per style of interest.
+  Filed as P3-5 item 11 STEP 0 in the scope doc. The DECISION
+  to keep the flags dark still stands — but on the softer basis
+  that (b) instrument was broken and (d) was inconclusive
+  rather than "collapse confirmed." No dial moves until the
+  re-measurement gives a real signal.
+
+  Wrong-numbers rule applied: the C24 filing text above is
+  preserved as-written (with the swing numbers as recorded);
+  this addendum layers the correct framing on top rather than
+  rewriting history.
+
 
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 

@@ -13939,6 +13939,24 @@ class GameBridge:
                 _f2_ps = getattr(_eng, 'fighter2_stats', []) or []
             except NameError:
                 pass
+            # C26: aggregate per-fighter td/sub attempt counts for P3-5
+            # item 11 measurement plumbing. C24's (b) instrument
+            # failed because it read a nonexistent `_engine_result`
+            # key; the per-round data has always been on the fight
+            # dict as `fighter{1,2}_stats`. These top-level aggregates
+            # make measurement legible without per-round-stats
+            # knowledge. Strictly additive bookkeeping — no RNG,
+            # no state mutation, no engine call. Zero on the
+            # score-based fallback path (where per-round stats are
+            # empty lists).
+            def _sum_stat(_ps, _key):
+                return sum(int(r.get(_key, 0) or 0) for r in (_ps or []))
+            _f1_td_att = _sum_stat(_f1_ps, 'td_att')
+            _f2_td_att = _sum_stat(_f2_ps, 'td_att')
+            _f1_td_landed = _sum_stat(_f1_ps, 'td_landed')
+            _f2_td_landed = _sum_stat(_f2_ps, 'td_landed')
+            _f1_sub_att = _sum_stat(_f1_ps, 'sub_att')
+            _f2_sub_att = _sum_stat(_f2_ps, 'sub_att')
 
             # Ship DR2: draw short-circuit. Increment draws on both fighters,
             # build a draw-shape result dict, append, and skip the rest of the
@@ -13975,6 +13993,14 @@ class GameBridge:
                     # FOTN-FIDELITY: per-round stats for scorer
                     "fighter1_stats":         _f1_ps,
                     "fighter2_stats":         _f2_ps,
+                    # C26 measurement plumbing (P3-5 item 11) —
+                    # per-fighter aggregate td/sub attempt counts.
+                    "fighter1_td_att":        _f1_td_att,
+                    "fighter2_td_att":        _f2_td_att,
+                    "fighter1_td_landed":     _f1_td_landed,
+                    "fighter2_td_landed":     _f2_td_landed,
+                    "fighter1_sub_att":       _f1_sub_att,
+                    "fighter2_sub_att":       _f2_sub_att,
                     # MC ODDS — pre-fight win probabilities (Phase 3 step 2)
                     "mc_odds":                fight.get("mc_odds"),
                 }
@@ -14141,6 +14167,14 @@ class GameBridge:
                 # FOTN-FIDELITY: per-round stats for scorer
                 "fighter1_stats":         _f1_ps,
                 "fighter2_stats":         _f2_ps,
+                # C26 measurement plumbing (P3-5 item 11) —
+                # per-fighter aggregate td/sub attempt counts.
+                "fighter1_td_att":        _f1_td_att,
+                "fighter2_td_att":        _f2_td_att,
+                "fighter1_td_landed":     _f1_td_landed,
+                "fighter2_td_landed":     _f2_td_landed,
+                "fighter1_sub_att":       _f1_sub_att,
+                "fighter2_sub_att":       _f2_sub_att,
                 # MC ODDS — pre-fight win probabilities (Phase 3 step 2)
                 "mc_odds":                fight.get("mc_odds"),
             }
