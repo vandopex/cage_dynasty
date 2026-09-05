@@ -4488,6 +4488,41 @@ JSON (staged + pristine), g_d19_readings.py + JSON (staged +
 pristine), report.md.
 
 
+### GENERATOR1 DOCS INTO GIT [COMMITTED as C34, 2026-09-05, docs-only]
+
+Two design docs landed in git; nothing else touched. Both existed
+only in the Claude project until this commit.
+
+- `claude/generator1_variety_spec_v0_1.md` — ratified GENERATOR1
+  variety build spec (266 lines). Status: RATIFIED by Van
+  2026-09-05, all §9 decision points accepted as ruled. Layered
+  generation (3-layer variance decomposition with tier/family/stat
+  offsets + template layer), 8 specialist templates, weight-class
+  tendencies on 3 physical stats, style derived from build,
+  4-kind trait system (kinds 1-2 ship in GENERATOR1, kinds 3-4
+  deferred to GENERATOR2). Sequencing already ruled: GENERATOR1
+  lands between P5-B4 (shipped C33) and P5-C so calibration runs
+  once against the final population. Phasing: Phase A (amateur
+  graduation transfer, first) → Phase B (pro generator rebuild)
+  → Phase C (amateur generator unification) → Phase D (badges +
+  display).
+- `claude/generator_variety_notes_2026-08-30.md` — August design
+  notes from Van (142 lines). Status: DESIGN NOTES, Van-initiated,
+  the historical record. FILE 2's own "not ratified" status line
+  stays as-written (history) — ratification lives in FILE 1 and
+  this filing. Contains the measured basis for the arc (Gate 1
+  session cardio×recovery r=0.7531), the 5-problem chain that
+  motivates the rework, the weight-class-tendencies design shape,
+  and the 4-kind trait taxonomy.
+
+Census that measured Phase 1 findings this arc consumes:
+`outputs/sm1/generator1/census/report.md` (run at C33 2dfb847,
+2026-09-05). 3 🚨 findings surface: amateur graduation discards
+15 attrs (Phase A target), style independent of stats (Phase B
+§4 target), all attribute pairs correlate 0.69-0.90 (Phase B §1
+target).
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
