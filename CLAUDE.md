@@ -4594,24 +4594,31 @@ graduation then becomes a pure transfer (no derivation).
 gates OR expect this cluster on the graduate sub-population.**
 Same-arc downstream Phase C closes this by construction.
 
-**🚨 GRADUATE-QUALITY INCOHERENCE (open, pending Van ruling).**
-Under Phase A, graduates land on the pro pool with combat stats
-5-8pp BELOW the pool mean while their `overall_rating` is set at
-`int(amateur.overall_rating)` (mean of amateur's raw attributes).
-The rating stat is coherent with the amateur's earned attributes;
-what's incoherent is that the rating never gets recomputed from
-the transferred (remapped + derived) stat set. Two related but
-distinct incoherences:
-1. Graduate `overall_rating` = mean of amateur's 15 pre-remap
-   attrs (not the 19-attr canonical set that lands on `_fdata`).
-   Missing recovery/power/top_control/submissions in the mean.
-2. Downstream OVR readers (matchmaking, contracts, rankings,
-   UI) see one number; the fight-engine sees a different stat
-   pool. The gap becomes visible on graduate matchmaking
-   (rating implies competitive; stats are 5-8pp below actual
-   pool).
-Filed plainly, NOT resolved by Phase A. Ruling deferred to Van
-via STEP 3 report. See STEP 3(b) rating-flow census below.
+**GRADUATE-QUALITY INCOHERENCE — RESOLVED at C37 (option ii, Van 2026-09-05).**
+Was open at C35. C37 added a `_compute_ovr(rec)` call at
+`game_bridge.py:22062` (right after the `_fdata` splat + camp-sign
+call), and updates `ovr_at_signing` to the recomputed value. Graduate
+OVR now matches the engine-visible 19-stat set from day one; no
+cosmetic drift on the OVR badge; no jump on first fight/training
+tick. C37 gate: 10/10 graduates OVR == _compute_ovr exactly;
+0/10 silent jumps on first advance_week (every OVR change ties to
+a training stat gain). Legacy graduates untouched by construction
+(C37 fires only inside sign_amateur for new graduations).
+
+**🚨 UI POWER RENDER GAP — RESOLVED at C36 (this session).**
+Was open at C35 STEP 3(a) as a pre-existing D18 template-layer
+bug. C36 added `power: int` to WebFighter (as 6th physical stat),
+populated at all 3 `_convert_real_fighter` sites (mock via
+getattr-fallback-to-strength; amateur via `_a('power')` default;
+real via `_attr("power")` — Phase A graduates + post-D18 world-gen
+populate `_fdata['power']`, legacy hits md5 fallback with offset 0),
+and added `"power": wf.power` to the tale-of-tape stats dict at
+gb:13087. Gate: 3 fighter types (fresh-world AI, Phase A graduate,
+legacy pre-D18 wiped-fdata) all get int power; all 5 render surfaces
+trace clean int values (profile bar width, compare, tale-of-tape,
+training CSV token). Rider: `recovery` also missing from
+tale-of-tape stats dict (same C23-era gap) — filed for a small
+ride-along, not C36's scope.
 
 **Census reconciliation.** GENERATOR1 Phase 1 census T5 stated
 "5 canonical stats missing" from the amateur generator; Phase A

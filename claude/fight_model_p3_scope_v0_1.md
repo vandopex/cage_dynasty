@@ -15,10 +15,12 @@
 # drain constants +15%/-10% asymmetric — structural; magnitudes to
 # P5-C); C34 GENERATOR1 docs (ratified spec v0.1 + August notes
 # enter git); C35 GENERATOR1 Phase A (amateur graduation transfers
-# real stats, 15 remapped + 4 derived, forward-only); next:
-# GENERATOR1 Phase B (pro generator rebuild) → Phase C (amateur
-# unification) → P5-C calibration → P3-6 ship.
-# Updated 2026-09-05 (C35 docs-and-engine ship).
+# real stats, 15 remapped + 4 derived, forward-only); C36
+# WebFighter.power wired (C23-era D18 template-layer bug closed);
+# C37 graduate OVR recomputed at signing via _compute_ovr (Van
+# option ii); next: GENERATOR1 Phase B (pro generator rebuild) →
+# Phase C (amateur unification) → P5-C calibration → P3-6 ship.
+# Updated 2026-09-05 (C37 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -425,16 +427,13 @@ FREEZE LIFTS on green.
   becomes a pure transfer, no derivation). P5-C's correlation
   gates must filter graduates-generated-pre-Phase-C out, or
   expect this cluster on that sub-population.
-- **Graduate-quality incoherence** (pending Van ruling per
-  C35 STEP 3): graduates carry combat stats 5-8pp below the pro
-  pool while `overall_rating` is set independently from
-  `amateur.overall_rating` (mean of amateur's 15 pre-remap
-  attrs — misses recovery/power/top_control/submissions). Downstream
-  OVR readers see one number; the engine sees a different stat
-  pool. Not resolved by Phase A. If Van rules recompute-at-
-  graduation, P5-C inherits a consistent OVR-vs-stats relationship;
-  if Van rules keep-as-is, P5-C measures the visible pool skew on
-  graduated fighters and calibrates matchmaking around it.
+- **Graduate-quality incoherence** — RESOLVED at C37 (option ii,
+  Van 2026-09-05). `_compute_ovr` recomputes at graduation over
+  the transferred 19-stat canonical set; `ovr_at_signing` captures
+  the recomputed value. Graduate OVR matches engine-visible stats
+  from day one; C37 gate 10/10 signing OVR == _compute_ovr, 0/10
+  silent jumps on first training tick. P5-C inherits a consistent
+  OVR-vs-stats relationship on graduates.
 
 CALIBRATION LIST:
 1. Contest constants (P_EVEN/S), K_SPEED_INIT, speed-worth.

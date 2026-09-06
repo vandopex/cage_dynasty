@@ -22055,10 +22055,25 @@ class GameBridge:
                 self._game_state.free_agents.discard(fid)
                 self._game_state._sign_fighter_to_camp(fid, self._game_state.player_camp_id)
 
-                # Store signing OVR for career development summary
+                # C37 (Van 2026-09-05, option ii): recompute
+                # overall_rating from the just-transferred 19-stat
+                # canonical set via _compute_ovr. Pre-C37, sign_amateur
+                # passed amateur.overall_rating (mean of 15 pre-remap
+                # amateur attrs — misses recovery/power/top_control/
+                # submissions) verbatim, then _compute_ovr fired on the
+                # first fight/train and quietly re-based OVR against
+                # 19 stats — small cosmetic drift on the OVR badge.
+                # C37 recomputes at signing so the graduate's OVR
+                # matches their engine-visible stats from day one.
+                # ovr_at_signing captures the RECOMPUTED value so the
+                # career-development summary shows the actual pro rating.
+                # _compute_ovr reads via _read_stat which pulls from
+                # _fdata, so the 19 canonical stats (15 remapped + 4
+                # derived) are all present at this point.
+                rec.overall_rating = self._compute_ovr(rec)
                 if fid not in self._game_state._fighter_data:
                     self._game_state._fighter_data[fid] = {}
-                self._game_state._fighter_data[fid]['ovr_at_signing'] = int(getattr(amateur, 'overall_rating', 0))
+                self._game_state._fighter_data[fid]['ovr_at_signing'] = int(rec.overall_rating)
                 self._game_state._fighter_data[fid]['week_signed'] = self._game_state.week_number
 
             self._camp_balance -= signing_cost
