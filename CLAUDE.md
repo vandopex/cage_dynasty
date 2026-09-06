@@ -5286,6 +5286,71 @@ Diff-stat: `claude/life_sim_notes_2026-09-05.md` +87 (new),
 CLAUDE.md filing.
 
 
+### C43 [COMMITTED as C43, 2026-09-05] — P5-C calibration spec ratified + list reconciliation
+
+Docs-only ship. Van FILE 5 enters git verbatim as
+`claude/p5c_calibration_spec_v0_1.md` (153 lines, RATIFIED by Van
+2026-09-05, §5 all four items accepted). Disk scope doc's
+accumulated P5-C calibration list reconciled against the spec's
+Groups A-E per §source-of-truth note. Freak Athlete 8.32%
+observation closed. Scope doc marks P5-C **OPEN**; HEAD advances
+to C42.
+
+**Reconciliation table (every item in disk `P5-C — CALIBRATION
+LIST` → spec Group A/B/C/D/E). Nothing silently dropped.**
+
+| # | Disk item | Group | Note |
+|---|---|:---:|---|
+| 1 | Contest constants (P_EVEN/S), K_SPEED_INIT, speed-worth | **D** | Attribute worth — spec §2 Group D core |
+| 2 | T2 remainder (touched-zero; drain-side / activity economy) | **D** | Stamina economy + activity magnitudes; pairs with Group D COMPOSITE_STAMINA_FLOOR |
+| 3 | STAMINA FLOOR question (0 vs 0.5) | **D** | Van revisits COMPOSITE_STAMINA_FLOOR after Phase 0 stamina economy reading |
+| 4 | JUDGE-WEIGHT AUDIT (TD 8.0 vs strike 1.0, new-TDs measurement) | **B** | Spec §2 Group B — judge score weights, decision quality |
+| 5 | td_distance flat-slope diagnostic | **E** | Read-only diagnostic; if it surfaces a dial, that dial moves into A/D at that time |
+| 6 | POSITION-VALUE DIFFERENTIATION (D15 step 2: per-position damage mults, initiative bonus, control nuance) | **E** | **Mechanism ADD, not dial tune** — Spec §PRINCIPLE forbids mid-calibration mechanism adds. Filed as E DEFERRED with note; Van decides post-P5-C |
+| 7 | CUT-RATE + FREQUENCY (CUT_BASE_CHANCE, CUT_STR_DIV, FINISH_CUT_STOP_THRESHOLD, `_CUT_DOC_MAX`, `_CUT_DOC_STEP`, `doctor_check_cut_threshold`); sprawl-punish magnitude | **A** | Spec §2 Group A — finish economy; sprawl-punish `SPRAWL_PUNISH_DAMAGE_MULT` (1.25 provisional) rides here per spec |
+| 8 | Per-class method mixes + finish knobs against §9 | **A** | Spec §2 Group A — core finish economy targets |
+| 9 | SUB-MODEL DIALS (C22 inputs: tap threshold width, refusal band, CHIN_KD_RESIST_SPREAD, COMPOSURE_ROCK_DUR_SPREAD, sub_escape S convention, chin damage-threshold, guard+20 inversion) | **A + D** | Tap threshold + refusal band + escape S + finish-side chin/composure dials → A (finish mix); guard+20 inversion diagnostic + sub-attempt weight scale → D (attribute worth) |
+| 10 | POWER DIALS (C23 inputs) — unify two generative models | **E — MOSTLY CLOSED at C30** | D18 unified world_init `generate_attributes` power roll onto `strength + PSO[style] + noise` (world_init.py:1001-3145). Main ask closed. Sub-items surviving: tier-confound fix if per-style separation should be world-scan-visible (C23 rider — filed as measurement, Van rules); enum-collapse offsets on collapsed styles. **DEFERRED** — post-P5-C generator polish, not a tuning item |
+| 11 | AGGRESSION DIALS (C24 inputs — R1-R4 machinery, TENDENCY tilt magnitudes, IQ-drift scale) + P5-B3 R3 loosening candidates (3 filed) + R4 conditions + sub-att compression dial | **C** | Spec §2 Group C — rule fire rates; R3 loosening + R4 conditions + IQ-drift + D19 aggression-drain magnitudes if pacing distorts |
+| C33 add: Judge wrestler-share certification at large N across thresholds | **B** | Spec §2 Group B — judge certification |
+| C33 add: Speed net-win fix (K_SPEED_INIT retune / cardio interaction / new mechanism) | **D** | Spec §2 Group D — speed's -18.5pp Van picks among 3 filed options when Phase 0 ladder is in hand (spec §5.3) |
+| C35 add: Pre-Phase-C graduate correlation cluster | **METHOD RULE** | Spec §3 last bullet: "Pre-Phase-C graduate exclusion honored in every correlation-based reading." Not a dial; a filter rule |
+| C35 add: Graduate-quality incoherence | **CLOSED at C37** | option ii, Van 2026-09-05. `_compute_ovr` recomputes at graduation. Not a P5-C item |
+
+**Every item covered.** No orphans. Items 10 and 5/6 land in E
+because they're not tuning items in the strict sense (10 is
+already-closed model unification with a residual generator-polish
+question; 5 is read-only diagnostic; 6 is a mechanism add that
+spec §PRINCIPLE forbids mid-calibration).
+
+**FREAK ATHLETE 8.32% — ACCEPTED (Van 2026-09-05, closes the C41
+observation).** C41 dedupe brought Freak Athlete from 9.02% →
+8.32%. Van's C41 target expectation was ~7.5%; landed ~0.3pp
+above the 8% band. Filed as observation, not iterating further —
+Van explicitly ACCEPTS at 8.32%. Composite predicate over
+tier-correlated stats naturally hits higher than single-stat by
+arithmetic; if a future ship wants tighter, the three C41 options
+(push delta +20/+22, accept as composite ceiling, or percentile-
+based threshold) remain on the shelf. **Not a P5-C dial** —
+generator-polish territory.
+
+**Scope-doc changes** (this ship):
+- `P5-C — CALIBRATION LIST` header re-annotated: STATUS: OPEN;
+  spec pointer to `claude/p5c_calibration_spec_v0_1.md`.
+- HEAD line advances to C42 per convention.
+
+**Local playtest command reminder** (C40 section above, still
+verified valid at HEAD C43):
+
+```
+PYTHONPATH="/Users/vandope/Desktop/Games/cage_dynasty/narrative:/Users/vandope/Desktop/Games/cage_dynasty/systems:/Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty_web" python3 /Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty_web/app.py
+```
+
+Diff-stat: `claude/p5c_calibration_spec_v0_1.md` +153 (new),
+`claude/fight_model_p3_scope_v0_1.md` +7/-1 (P5-C header +
+HEAD), this CLAUDE.md filing.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

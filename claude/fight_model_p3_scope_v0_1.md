@@ -405,6 +405,12 @@ as C29, 2026-09-05]".
 
 ### P5-C — CALIBRATION LIST
 
+**P5-C STATUS: OPEN.** Ratified exec spec at
+`claude/p5c_calibration_spec_v0_1.md` (v0.1, RATIFIED by Van
+2026-09-05, C43). Reconciliation table below maps every item in
+this list to a dial group A-E per the spec. Nothing silently
+dropped.
+
 §6 five parts + leg-kick dial (~1%). One pass, final physics, §9.
 FREEZE LIFTS on green.
 
@@ -894,7 +900,7 @@ new styles / etc.); nothing here ships mid-arc.
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C40 d834774. Standing
+Fresh date + HEAD gate (last shipped: C42 63ea7a1. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;
