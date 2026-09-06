@@ -1455,12 +1455,19 @@ class WebFighter:
     height: str
     reach: str
 
-    # Attributes (17 total)
+    # Attributes (19 total after C36 — power added as 6th physical
+    # to close C23-era D18 template-layer gap. D18 landed `power` on
+    # FighterAttributes but the WebFighter dataclass was never
+    # updated → getattr(wf,'power',None) returned None for ALL
+    # fighters. C23's G5 UI smoke gate was source-level and couldn't
+    # see the missing field; caught by GENERATOR1 Phase A's G3
+    # measurement, fixed here.)
     strength: int
     speed: int
     cardio: int
     chin: int
     recovery: int
+    power: int
     boxing: int
     kicks: int
     clinch_striking: int
@@ -6902,6 +6909,7 @@ class GameBridge:
             cardio=f.cardio,
             chin=f.chin,
             recovery=f.recovery,
+            power=getattr(f, 'power', f.strength),  # C36 — mock Fighter may lack power; fall back to strength (D18 shape)
             boxing=f.boxing,
             kicks=f.kicks,
             clinch_striking=f.clinch_striking,
@@ -7095,6 +7103,7 @@ class GameBridge:
             cardio=_a('cardio'),
             chin=_a('chin'),
             recovery=_a('recovery'),
+            power=_a('power'),  # C36 — amateur.attributes has no 'power', _a fallback to default=50
             boxing=_a('boxing'),
             kicks=_a('kicks'),
             clinch_striking=_a('clinch_striking'),
@@ -7375,6 +7384,7 @@ class GameBridge:
             cardio=_attr("cardio",     +2),
             chin=_attr("chin",         -2),
             recovery=_attr("recovery"),
+            power=_attr("power"),  # C36 — Phase A graduates + post-D18 world-gen populate _fdata['power']; legacy fighters hit md5 fallback with default offset 0
             boxing=_attr("boxing"),
             kicks=_attr("kicks",       -4),
             clinch_striking=_attr("clinch_striking", -3),
@@ -13083,6 +13093,7 @@ class GameBridge:
                             "cardio":            wf.cardio,
                             "strength":          wf.strength,
                             "speed":             wf.speed,
+                            "power":             wf.power,     # C36 — closes the tale-of-tape power gap surfaced in Phase A STEP 3(a)
                             "fight_iq":          wf.fight_iq,
                             "composure":         wf.composure,
                             "top_control":       wf.top_control,
