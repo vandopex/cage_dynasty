@@ -21944,9 +21944,50 @@ class GameBridge:
                 # the record so STYLECOHERENCE1's bridge preference picks
                 # up the amateur's born style (parallels world_init:3070
                 # C31 fix — hasattr-guarded for legacy record shapes).
+                #
+                # PHASE C (C39): legacy amateur style labels ('Boxer',
+                # 'Kickboxer', 'Sambo', 'BJJ', 'Athlete', 'MMA',
+                # 'Technical') are NOT in the canonical 11 styles the
+                # engine/gameplan/counter/POWER_STYLE_OFFSET tables
+                # know about. Remap at graduation so a pre-Phase-C
+                # amateur doesn't put a dead label on the live play
+                # surface (silent-default trap). Van RATIFIED mapping
+                # 2026-09-05. Canonical labels (BJJ Specialist,
+                # Wrestler, Striker, Muay Thai, Counter Striker,
+                # Balanced, ...) pass through unchanged.
+                _LEGACY_STYLE_REMAP = {
+                    'Boxer':       'Striker',
+                    'Kickboxer':   'Muay Thai',
+                    'Muay Thai':   'Muay Thai',
+                    'Sambo':       'Wrestler',
+                    'BJJ':         'BJJ Specialist',
+                    'Wrestler':    'Wrestler',
+                    'Striker':     'Striker',
+                    'Athlete':     'Balanced',
+                    'MMA':         'Balanced',
+                    'Technical':   'Counter Striker',
+                    'Balanced':    'Balanced',
+                }
+                _raw_style = str(
+                    getattr(amateur, 'fighting_style', '') or '')
+                _canonical_style = _LEGACY_STYLE_REMAP.get(
+                    _raw_style, _raw_style if _raw_style else 'Balanced')
+                # Post-Phase-C amateurs come in with canonical styles
+                # already; the remap is a no-op for them (canonical
+                # labels aren't in _LEGACY_STYLE_REMAP so they hit the
+                # `_raw_style` fallback). Post-Phase-C amateur styles
+                # like 'Ground & Pound', 'Point Fighter', 'Sprawl &
+                # Brawl', 'Clinch Fighter', 'Pressure Fighter' pass
+                # through unchanged. Unknown labels (e.g. legacy '')
+                # → Balanced (safe default rather than empty string).
                 if hasattr(rec, 'fighting_style'):
-                    rec.fighting_style = str(
-                        getattr(amateur, 'fighting_style', '') or '')
+                    rec.fighting_style = _canonical_style
+                # Also correct the amateur object so subsequent
+                # _fighter_data['style'] reads (down below) get the
+                # canonical label too. Amateur registry stays keyed
+                # on the same object.
+                if hasattr(amateur, 'fighting_style'):
+                    amateur.fighting_style = _canonical_style
                 self._game_state.fighters[fid] = rec
 
                 # GENERATOR1 PHASE A — combat-attribute transfer.
@@ -21967,72 +22008,106 @@ class GameBridge:
                 # legacy graduates.
                 _amateur_attrs = getattr(amateur, 'attributes', None) or {}
 
-                # Canonical remap table — mirrors world_init.py:3090-3096.
-                # Amateur uses `wrestling`/`bjj`; canonical is
-                # `takedowns`/`guard`. Other three (clinch/iq/accuracy)
-                # exist in the table for symmetry but amateur uses
-                # canonical names for them directly.
-                _AMA_CANONICAL_REMAP = {
-                    'clinch':    'clinch_striking',
-                    'wrestling': 'takedowns',
-                    'bjj':       'guard',
-                    'iq':        'fight_iq',
-                    'accuracy':  'striking_defense',
-                }
+                # PHASE C — canonical-19 detection. Post-Phase-C
+                # amateurs roll all 19 canonical stats at generation;
+                # graduation is a PURE TRANSFER (no derivation).
+                # Pre-Phase-C amateurs (already in saves) still hit
+                # the derivation bridge below.
+                _CANONICAL_19 = (
+                    'strength', 'speed', 'cardio', 'chin', 'recovery',
+                    'power', 'boxing', 'kicks', 'clinch_striking',
+                    'striking_defense', 'takedowns', 'takedown_defense',
+                    'top_control', 'submissions', 'guard',
+                    'clinch_control', 'heart', 'fight_iq', 'composure',
+                )
+                _phase_c_pure_transfer = all(
+                    k in _amateur_attrs for k in _CANONICAL_19)
 
-                import hashlib as _hl
+                if _phase_c_pure_transfer:
+                    # PHASE C pure-transfer: amateur carries canonical
+                    # names for all 19 stats; copy them verbatim.
+                    # No remap, no _seeded_noise call.
+                    _remapped_attrs = {
+                        k: int(_amateur_attrs[k]) for k in _CANONICAL_19
+                    }
+                    # Announce which path fired (for G3/G4 assertions).
+                    setattr(self, '_last_sign_amateur_path',
+                            'phase_c_pure_transfer')
+                else:
+                    # PHASE A LEGACY DERIVATION BRIDGE — retained for
+                    # pre-Phase-C amateurs in saves. Detects missing
+                    # canonical stats via _phase_c_pure_transfer guard
+                    # above; fires only when the guard is False.
 
-                def _seeded_noise(seed_key: str,
-                                   half_range: int) -> int:
-                    """md5-seeded ±half_range int, deterministic per
-                    amateur fid + stat name. Same shape as Ship #32
-                    _convert_real_fighter._attr fallback."""
-                    _seed = int.from_bytes(
-                        _hl.md5(
-                            (fid + seed_key).encode('utf-8')
-                        ).digest()[:4], 'big',
-                    )
-                    import random as _rng_mod
-                    _rng = _rng_mod.Random(_seed)
-                    return _rng.randint(-half_range, half_range)
+                    # Canonical remap table — mirrors world_init.py:3090-3096.
+                    # Amateur uses `wrestling`/`bjj`; canonical is
+                    # `takedowns`/`guard`. Other three (clinch/iq/accuracy)
+                    # exist in the table for symmetry but amateur uses
+                    # canonical names for them directly.
+                    _AMA_CANONICAL_REMAP = {
+                        'clinch':    'clinch_striking',
+                        'wrestling': 'takedowns',
+                        'bjj':       'guard',
+                        'iq':        'fight_iq',
+                        'accuracy':  'striking_defense',
+                    }
 
-                # Apply remap for the 15 amateur-source stats
-                _remapped_attrs: Dict[str, int] = {}
-                for _key, _val in _amateur_attrs.items():
-                    _canon = _AMA_CANONICAL_REMAP.get(_key, _key)
-                    _remapped_attrs[_canon] = int(_val)
+                    import hashlib as _hl
 
-                # Derive the 4 missing canonical stats (see Phase A
-                # STEP 1(c) rationale in outputs/sm1/generator1/
-                # phase_a/step1_diagnose.md).
-                _strength = int(_remapped_attrs.get('strength', 50))
-                _cardio   = int(_remapped_attrs.get('cardio', 50))
-                _takedowns = int(_remapped_attrs.get('takedowns', 50))
-                _guard     = int(_remapped_attrs.get('guard', 50))
+                    def _seeded_noise(seed_key: str,
+                                       half_range: int) -> int:
+                        """md5-seeded ±half_range int, deterministic per
+                        amateur fid + stat name. Same shape as Ship #32
+                        _convert_real_fighter._attr fallback."""
+                        _seed = int.from_bytes(
+                            _hl.md5(
+                                (fid + seed_key).encode('utf-8')
+                            ).digest()[:4], 'big',
+                        )
+                        import random as _rng_mod
+                        _rng = _rng_mod.Random(_seed)
+                        return _rng.randint(-half_range, half_range)
 
-                # Rule 1: recovery = cardio + noise(±8)
-                _remapped_attrs['recovery'] = max(20, min(95,
-                    _cardio + _seeded_noise('recovery', 8)))
+                    # Apply remap for the 15 amateur-source stats
+                    _remapped_attrs: Dict[str, int] = {}
+                    for _key, _val in _amateur_attrs.items():
+                        _canon = _AMA_CANONICAL_REMAP.get(_key, _key)
+                        _remapped_attrs[_canon] = int(_val)
 
-                # Rule 2: power = D18 formula (strength + PSO[style]
-                # + noise(±8)). Same shape as world_init.py:3131-3134
-                # but fid-seeded rather than module-level RNG.
-                try:
-                    from core.types import POWER_STYLE_OFFSET as _PSO
-                except ImportError:
-                    _PSO = {}
-                _pw_off = _PSO.get(
-                    str(getattr(amateur, 'fighting_style', '') or ''), 0)
-                _remapped_attrs['power'] = max(20, min(95,
-                    _strength + _pw_off + _seeded_noise('power', 8)))
+                    # Derive the 4 missing canonical stats (see Phase A
+                    # STEP 1(c) rationale in outputs/sm1/generator1/
+                    # phase_a/step1_diagnose.md).
+                    _strength = int(_remapped_attrs.get('strength', 50))
+                    _cardio   = int(_remapped_attrs.get('cardio', 50))
+                    _takedowns = int(_remapped_attrs.get('takedowns', 50))
+                    _guard     = int(_remapped_attrs.get('guard', 50))
 
-                # Rule 3: top_control = takedowns + noise(±10)
-                _remapped_attrs['top_control'] = max(20, min(95,
-                    _takedowns + _seeded_noise('top_control', 10)))
+                    # Rule 1: recovery = cardio + noise(±8)
+                    _remapped_attrs['recovery'] = max(20, min(95,
+                        _cardio + _seeded_noise('recovery', 8)))
 
-                # Rule 4: submissions = guard + noise(±12)
-                _remapped_attrs['submissions'] = max(20, min(95,
-                    _guard + _seeded_noise('submissions', 12)))
+                    # Rule 2: power = D18 formula (strength + PSO[style]
+                    # + noise(±8)). Same shape as world_init.py:3131-3134
+                    # but fid-seeded rather than module-level RNG.
+                    try:
+                        from core.types import POWER_STYLE_OFFSET as _PSO
+                    except ImportError:
+                        _PSO = {}
+                    _pw_off = _PSO.get(
+                        str(getattr(amateur, 'fighting_style', '') or ''), 0)
+                    _remapped_attrs['power'] = max(20, min(95,
+                        _strength + _pw_off + _seeded_noise('power', 8)))
+
+                    # Rule 3: top_control = takedowns + noise(±10)
+                    _remapped_attrs['top_control'] = max(20, min(95,
+                        _takedowns + _seeded_noise('top_control', 10)))
+
+                    # Rule 4: submissions = guard + noise(±12)
+                    _remapped_attrs['submissions'] = max(20, min(95,
+                        _guard + _seeded_noise('submissions', 12)))
+
+                    setattr(self, '_last_sign_amateur_path',
+                            'legacy_phase_a_derivation')
 
                 self._game_state._fighter_data[fid] = {
                     "id":      fid,
@@ -22052,6 +22127,24 @@ class GameBridge:
                     # any future added attr auto-flows.
                     **_remapped_attrs,
                 }
+                # PHASE C rider (b): transfer amateur personality to
+                # FighterRecord.personality. Pre-Phase-C amateurs
+                # don't carry personality — fall back to Competitor
+                # so pro-side reads never see empty string.
+                _ama_personality = str(
+                    getattr(amateur, 'personality', 'Competitor')
+                    or 'Competitor')
+                if hasattr(rec, 'personality'):
+                    rec.personality = _ama_personality
+                self._game_state._fighter_data[fid]['personality'] = (
+                    _ama_personality)
+
+                # PHASE C rider (b): transfer template_name to
+                # FighterRecord.fighting_style-adjacent state (via
+                # traits list, which already carries it — see
+                # amateur.generate_amateur_fighter). No separate
+                # field on the pro record; template_name lives in
+                # traits.
                 self._game_state.free_agents.discard(fid)
                 self._game_state._sign_fighter_to_camp(fid, self._game_state.player_camp_id)
 

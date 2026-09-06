@@ -4805,6 +4805,195 @@ gate0_mapping.md, g7_measurements.py, census.md, report.md
 Van rulings), f6_finish_rates.py + JSON both arms.
 
 
+### GENERATOR1 PHASE C [COMMITTED as C39, 2026-09-05]
+
+Amateur generator moves onto the layered engine. Canonical names
+at the source, pure-transfer graduation, dedup'd core (fe/fi lesson
+applied to generators). Docs ride-along:
+`claude/scheduling_notes_2026-09-05.md` (89 lines) captures Van's
+SCHEDULING1 design + session backlog appended to scope doc. S2
+freeze holds — NO DEPLOY.
+
+**Van rulings baked in (2026-09-05):**
+
+- **Amateur tier centers RATIFIED** (amateurs sit below pro tiers):
+  Elite 52.5 (≈ pro average) / High 45.0 / Average 38.0 / Limited
+  32.0 / Low 27.0. Elite grade **unreachable-by-construction** at
+  the amateur layer today — `calculate_potential_grade` requires
+  ceiling ≥ 90 but amateur `potential_ceiling` maxes at 82. Pre-
+  existing amateur design fact; not a Phase C fix. If Van wants
+  Elite amateurs reachable, expand the ceiling band as its own
+  tuning ship.
+
+- **C39 DEDUP (FIX 1) — one source of truth for generator tables.**
+  Original Phase C shipped a CLONED copy of Phase B's 8 templates,
+  template applicator, style scorer, and Balanced gap-detection —
+  ~300 duplicated lines. **The clone was already diverging: pro
+  Glass Cannon 'style' = Striker; amateur Glass Cannon 'style' =
+  Point Fighter (a one-day-old clone error, no ruling behind it).**
+  C39 collapses to derived tables:
+  - `_LEGACY_TO_CANONICAL` map (5 entries, single source of truth)
+  - `_PHASE_C_FAMILY_ASSIGN` — mechanically derived from
+    `_PHASE_B_FAMILY_ASSIGN` at class-init via the map
+  - `_PHASE_C_TEMPLATES` — mechanically derived from
+    `_PHASE_B_TEMPLATES` at class-init; only stat_mods/stat_dumps
+    KEYS get remapped; magnitudes, family spikes, style labels
+    all byte-identical to pro-side
+  - `_phase_b_apply_template` and `_phase_b_derive_style` now take
+    `templates` + `family_map`/`key_map` parameters (defaults
+    preserve Phase B callers unchanged); Phase C is a thin
+    delegate
+  - `_phase_c_pick_template` delegates to `_phase_b_pick_template`
+  - Personality distribution single-sourced via same weighted list
+    Van already used at world_init
+  Post-dedup verification: 8/8 template style labels MATCH between
+  Phase B and Phase C. **The Glass Cannon divergence is dead by
+  construction** — one place to change means both sides move
+  together. (fe/fi lesson: two engines that were supposed to be
+  the same and weren't, took months to kill. Cloning generators
+  would have been the same class of bug in a different corner.)
+
+- **C39 LEGACY STYLE-LABEL REMAP (FIX 2).** Pre-Phase-C amateur
+  generator handed out 12 style labels not in the canonical 11
+  (Boxer, Kickboxer, Sambo, Athlete, MMA, Technical, BJJ,
+  Balanced, Wrestler, Striker, Muay Thai, '' unknown). C31 made
+  the bridge prefer `record.fighting_style` — so a pre-Phase-C
+  amateur graduating tomorrow would put "Sambo" or "MMA" on the
+  live play surface where gameplan / STYLE_THREATS /
+  POWER_STYLE_OFFSET have never heard of it → all silent-defaults.
+  Van RATIFIED mapping 2026-09-05 (applied in
+  `game_bridge.sign_amateur` before `rec.fighting_style` write):
+  ```
+  Boxer→Striker; Kickboxer→Muay Thai; Muay Thai→Muay Thai;
+  Sambo→Wrestler; BJJ→BJJ Specialist; Wrestler→Wrestler;
+  Striker→Striker; Athlete→Balanced; MMA→Balanced;
+  Technical→Counter Striker; Balanced→Balanced;
+  unknown→Balanced.
+  ```
+  Post-Phase-C amateurs pass through unchanged (canonical labels
+  aren't in the remap table). **Forward-only both directions:**
+  existing saves may already hold graduates stamped with dead
+  labels via the Phase A → C39 window (C35→pre-C39); filed as
+  observation, no backfill. Path-forward for those characters:
+  next natural touch to the fighter record (e.g. any bridge
+  operation that re-writes `fighting_style`) can pick them up.
+
+**Coverage table (G7 gate, VERIFIED all 23 labels ★):**
+
+| raw amateur label | canonical after remap | gameplan | STYLE_THREATS | PSO |
+|---|---|---|---|---|
+| BJJ (legacy) | BJJ Specialist | SUBMISSION | ✓ | ✓ |
+| Wrestler (legacy+canonical) | Wrestler | TAKEDOWN | ✓ | ✓ |
+| Sambo (legacy) | Wrestler | TAKEDOWN | ✓ | ✓ |
+| Boxer (legacy) | Striker | AGGRESSIVE | ✓ | ✓ |
+| Striker (legacy+canonical) | Striker | AGGRESSIVE | ✓ | ✓ |
+| Kickboxer (legacy) | Muay Thai | CLINCH | ✓ | ✓ |
+| Muay Thai (legacy+canonical) | Muay Thai | CLINCH | ✓ | ✓ |
+| Athlete (legacy) | Balanced | BALANCED | ✓ | ✓ |
+| MMA (legacy) | Balanced | BALANCED | ✓ | ✓ |
+| Balanced (legacy+canonical) | Balanced | BALANCED | ✓ | ✓ |
+| Technical (legacy) | Counter Striker | DEFENSIVE | ✓ | ✓ |
+| '' (unknown) | Balanced | BALANCED | ✓ | ✓ |
+| BJJ Specialist (post-C) | BJJ Specialist | SUBMISSION | ✓ | ✓ |
+| Pressure Fighter (post-C) | Pressure Fighter | AGGRESSIVE | ✓ | ✓ |
+| Ground & Pound (post-C) | Ground & Pound | GNP | ✓ | ✓ |
+| Sprawl & Brawl (post-C) | Sprawl & Brawl | AGGRESSIVE | ✓ | ✓ |
+| Counter Striker (post-C) | Counter Striker | DEFENSIVE | ✓ | ✓ |
+| Point Fighter (post-C) | Point Fighter | MEASURED | ✓ | ✓ |
+| Clinch Fighter (post-C) | Clinch Fighter | CLINCH | ✓ | ✓ |
+
+23/23 ★ every label reaches downstream tables. Silent-default trap
+closed at graduation.
+
+**GATES (all N=900 amateurs, 3 seeds × 300):**
+
+| Gate | Target | Result | Verdict |
+|---|---|---|---|
+| RIDER canonical-name | 19/19 canonical, 0 old-key uses at source | 19/19, 0 | ★ census-finding-#7 closed |
+| G1 cross-family r | 0.25-0.40 | mean 0.331 | ★ IN BAND |
+| G1 within-family r | 0.50-0.65 | mean 0.594 | ★ IN BAND |
+| G1 lottery max \|r\| | <0.20 | 0.085 | ★ IN BAND |
+| G1 recovery × cardio r | 0.30-0.40 | 0.392 | ★ IN BAND |
+| G2 OVR per grade | banked baseline | see table | ★ banked |
+| G3 pure-transfer | ≥20 grads, 100% field-by-field | 24/24 | ★ 100% |
+| G4 legacy bridge | pre-Phase-C amateur → legacy_phase_a_derivation | ✓ path fired, 4 derived | ★ |
+| G5 template invariant | 100% pass | 0/114 | ★ 100% PASS |
+| G5 template fraction | 12±2pp | 12.67% | ★ IN BAND |
+| G6 amateur vs pro OVR gap | banked | ama 38.11 / pro 57.05 / gap 18.95 | ★ banked |
+| G7 style-label remap | 23/23 canonical + covered | 23/23 | ★ |
+
+**G2 amateur OVR per potential grade (banked baseline):**
+
+| grade | n | mean OVR |
+|---|---:|---:|
+| Elite | 0 | (unreachable — ceiling cap 82 < 90 threshold) |
+| High | 35 | 47.70 |
+| Average | 304 | 41.34 |
+| Limited | 279 | 37.03 |
+| Low | 282 | 34.50 |
+
+**G3 pure-transfer proof:** 24 graduates signed (roster capped at
+ELITE tier's 25; 1 slot player-fighter). All 24 hit
+`path=phase_c_pure_transfer`. Field-by-field match for all 19
+canonical stats across all 24. Zero `_seeded_noise` calls fired
+(legacy branch never taken). Personality transferred (sample:
+Warrior / Calculated / Hungry).
+
+**G4 legacy bridge proof:** synthetic pre-Phase-C-shaped amateur
+(15 keys, BJJ Specialist style, missing recovery/power/top_control/
+submissions/takedowns/guard) → path=`legacy_phase_a_derivation` ★.
+Derivations fired correctly (takedowns=65 from wrestling=65,
+guard=70 from bjj=70, power=55 D18, recovery=57, top_control=73,
+submissions=63).
+
+**FIX 3 caller-proof.** `grep -rn "generate_amateur_attributes\b"`
+across `cage_dynasty_web/` returns exactly 2 hits: the definition
+at `amateur.py:697` and the single caller at `amateur.py:827`
+inside `generate_amateur_fighter`. Zero other callers; no hidden
+crash surface from the 3-tuple → 4-tuple signature change.
+
+**Rider observations:**
+
+- **Legacy graduate window observation.** Between C35 (Phase A
+  ship) and C39 (Phase C ship), any amateur who graduated on
+  live-play would have written a dead-style label
+  (`Boxer`/`Kickboxer`/`Sambo`/`Athlete`/`MMA`/`Technical`) to
+  `record.fighting_style`. Small window in practice — S2 freeze
+  means no deploy went out — but production saves that started
+  a game after C35 and signed amateurs before C39 carry this
+  drift. Forward-only fix: any bridge operation that re-writes
+  `fighting_style` will refresh through the remap next time it
+  fires. If Van wants a one-time reconcile at load, that's a
+  separate small ship.
+- **`translate_attrs_to_pro` at `amateur.py:1677` is dead code**
+  (only caller at `:1764` inside `amateur.sign_amateur` which
+  routes.py bypasses in favor of `game_bridge.sign_amateur`).
+  Left in place; natural-cleanup candidate on next amateur.py
+  touch.
+- **`amateur.sign_amateur` itself is dead code.** Same natural-
+  cleanup candidate.
+
+**DOCS RIDE-ALONG (STEP 0):**
+
+- `claude/scheduling_notes_2026-09-05.md` (Van FILE 3, 89 lines,
+  first line `# Scheduling / career-agent model — design notes (2026-09-05)`,
+  last line `  fight often — that is their development).`) —
+  Van-initiated design notes for SCHEDULING1 (post-P3-6 arc:
+  offer patience by personality, fight camps as pacing law, loss
+  lockouts, smart AI healing). Van's original words preserved
+  verbatim; architect context around them explicit. Status:
+  DESIGN NOTES, not scoped.
+- `claude/fight_model_p3_scope_v0_1.md` post-arc queue extended
+  with SESSION 2026-09-05 BACKLOG block: 8 items (STYLE-OUTPUT1,
+  COUNTER-MATRIX HARDENING, BASE×APPROACH DISPLAY, WATCHLIST1,
+  MATCHMAKING1, CHAMPIONS1, ROSTER1, UX-LOADING1) + SCHEDULING1
+  pointer.
+
+Full report: `outputs/sm1/generator1/phase_c/report.md`.
+Artifacts under `outputs/sm1/generator1/phase_c/`:
+step1_diagnose.md, gates.py, gates_out.json, report.md.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

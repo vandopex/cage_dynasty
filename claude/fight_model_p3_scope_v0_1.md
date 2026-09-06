@@ -22,10 +22,17 @@
 # 8 templates, class tendencies, style-from-body; F1-F8 fix pass
 # folded — F1 elite drift accepted structural + baseline
 # re-banked, F2 6/8 predicate weak accepted per Phase D badge
-# argument, F8 PF cardio re-key tried+reverted); next: GENERATOR1
-# Phase C (amateur unification, retires Phase A derivation bridge)
-# → Phase D (badges) → P5-C calibration → P3-6 ship.
-# Updated 2026-09-05 (C38 Phase B ship).
+# argument, F8 PF cardio re-key tried+reverted); C39 GENERATOR1
+# Phase C SHIPPED (amateur generator on the layered engine —
+# canonical stat names at source, pure-transfer graduation +
+# legacy Phase A derivation for pre-Phase-C amateurs, C39 DEDUP
+# collapses Phase C tables to derivations from Phase B via
+# _LEGACY_TO_CANONICAL, Glass Cannon divergence killed, legacy
+# style-label remap at graduation closes the silent-default trap
+# on Boxer/Kickboxer/Sambo/etc. + docs ride-along
+# scheduling_notes_2026-09-05.md + session backlog appended);
+# next: Phase D (badges) → P5-C calibration → P3-6 ship.
+# Updated 2026-09-05 (C39 Phase C ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -742,9 +749,75 @@ live-for-legacy. Gates PASS: legacy load smoke; fresh world
 289/289 records match `_fighter_data['style']`; EP1_200 MD5
 byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
+## SESSION 2026-09-05 BACKLOG (architect-filed, Van-approved)
+
+Filed with C38+C39 as the docs ride-along for the Phase C ship.
+Each item is a post-P5-C candidate ship (some gate SCHEDULING1 /
+new styles / etc.); nothing here ships mid-arc.
+
+- **STYLE-OUTPUT1.** Per-style fight-output census on the
+  post-P5-C population: method mix, TD/sub attempt rates, pace.
+  Styles that come out indistinguishable get a merge-or-
+  differentiate ruling from Van (Balanced vs. under-differentiated
+  hybrids is the risk after STYLECOHERENCE1 opens the flow).
+  **Any new style ships behind STYLE-OUTPUT1 + counter-matrix
+  hardening as prerequisites** — no additive style before the
+  measurement exists. **Point Fighter signature rework**
+  (iq / accuracy / speed re-tune, following the failed F8 cardio
+  attempt on Pressure Fighter) rides here. `STYLE_CLINCH_BONUS_ENABLED`
+  and `STYLE_TDD_BONUS_ENABLED` flag flips FOLD into this
+  measurement — before any flip, verify the world-gen bonus
+  actually shows on the fight-output surface.
+- **COUNTER-MATRIX HARDENING.** The counter mechanism at
+  `styles.STRIKER_FAMILY` today keys on `fighting_style` **substrings**
+  — a code shape that breaks quietly when new styles are added.
+  Convert to an explicit table before any style is added, so
+  additivity has one place to be reviewed.
+- **BASE×APPROACH DISPLAY.** Surface tendency as a second axis
+  alongside the style label — profile / tape / roster all read
+  something like "BJJ Specialist · pressure". D14-era work;
+  belongs to the same session that adds real per-fight visibility
+  of gameplan choices.
+- **WATCHLIST1.** Flag colors as categories (rivals / prospects /
+  belts / interest); shared **name-render macro** across every
+  surface so a watched name is colored **everywhere**, top-3
+  surfaces first (roster / ladder / event card). Per-watch note.
+  Weekly digest lines. Card-level "★ N watched" indicator.
+  Post-loss "add to rivalry" flag offer. **Hard guardrail: zero
+  weekly management burden** — watchlist is passive tagging,
+  never a chore.
+- **MATCHMAKING1.** Read-only audit of matchmaking / card-building
+  / scheduling on the post-GENERATOR1 population. Three measurements:
+  (a) matchup-score vs actual-win-rate by style pairing;
+  (b) rivalry & title-stakes usage in card building;
+  (c) booking census over a simulated year — fights/fighter/year
+  by tier, empty-card rate. **The zero-fight events already seen
+  in harness logs (`📅 Cage Dynasty NN (Wk NN) — 0 fights`, unexplained)
+  are the entry symptom.** GATE 0 for SCHEDULING1.
+- **CHAMPIONS1.** Two sub-tasks: (a) **defense-counter wiring
+  check** — advance a test world through a real title defense,
+  verify the champions-page counter AND record-book "Most Defenses"
+  both increment. `week-0` on PA/C17 is correct-by-design (no fights
+  yet), but the increment path itself has never been measured
+  end-to-end. (b) Design question, Van rules later: born belt
+  lineage from pre-gen history (surface the champion's title
+  history the way real MMA belt lines carry weight).
+- **ROSTER1.** Next-fight / idle-weeks status per fighter on the
+  roster card + a **Find Fight** button; one actionable line per
+  card; D14 fingerprint chips named to the roster card;
+  empty roster slots rendered with **scout CTAs** (channel players
+  into the scouting mechanic on any open slot).
+- **UX-LOADING1.** Tier 1+2 ships **in the P3-6 UI batch**:
+  shared submit-overlay + button-lock (double-submit on Advance
+  Week is a **data hazard**, not cosmetics) + rotating flavor
+  lines. **Tier 3 (real progress-bar tied to server state)
+  is parked behind the owed PA endpoint-latency measurement.**
+- **SCHEDULING1** pointer → `claude/scheduling_notes_2026-09-05.md`
+  (Van FILE 3, verbatim-preserved this ship).
+
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C37 3b26414. Standing
+Fresh date + HEAD gate (last shipped: C38 acfabf4. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

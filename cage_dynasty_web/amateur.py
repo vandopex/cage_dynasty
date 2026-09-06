@@ -348,9 +348,18 @@ class AmateurFighter:
     # Style info
     fighting_style: str = "Balanced"
     primary_skill: str = ""
-    
+
     # Traits (can have amateur traits)
     traits: List[str] = field(default_factory=list)
+
+    # PHASE C — personality rolled at amateur creation; transfers to
+    # FighterRecord.personality at graduation (Phase A rider (b)).
+    # Distribution matches world_init pro personality distribution.
+    personality: str = "Competitor"
+    # PHASE C — KIND-1 identity trait if 12% template layer applied
+    # at generation. Persisted for the "scouted Knockout Artist"
+    # story surface (matches pro-side template_name field).
+    template_name: Optional[str] = None
     
     @property
     def record(self) -> str:
@@ -689,101 +698,56 @@ def generate_amateur_attributes(
     age: int,
     potential_ceiling: int,
     nationality: str,
-) -> Tuple[Dict[str, int], str, str]:
+    weight_class: str = "Lightweight",
+) -> Tuple[Dict[str, int], str, str, Optional[str]]:
     """
-    Generate attributes for an amateur fighter based on nationality.
-    
+    PHASE C — amateur generation on the layered engine.
+
+    Rolls all 19 CANONICAL stats at the source (no remap debt).
+    Reuses Phase B's 3-layer variance decomposition, class offsets,
+    lotteries, recovery×cardio coupling, D18 power derivation, and
+    12% specialist template layer — via canonical-name variants
+    (`generate_amateur_attributes_canonical` on FighterGenerator).
+
+    Amateur tier center comes from `potential_grade`
+    (see `_PHASE_C_AMATEUR_TIER_CENTERS`) — the potential ceiling
+    the fighter can grow toward maps to a starting quality band.
+    "Elite grade" amateurs sit ~= average pros; "Low grade" sit
+    well below the pro developing tier.
+
     Returns:
-        Tuple of (attributes dict, fighting_style, primary_skill)
+        Tuple of (attributes dict [19 canonical stats],
+                  fighting_style, primary_skill, template_name).
     """
-    
-    # Base attributes lower than pros
-    base_min = 30
-    base_max = 57
-    
-    # Younger fighters start lower but have more room to grow
-    age_modifier = min(14, max(0, int((age - 18) * 1.5)))  # +1.5/yr, capped at +14
-    
-    # Generate base attributes
-    attrs = {
-        "boxing": random.randint(base_min, base_max) + age_modifier,
-        "kicks": random.randint(base_min, base_max) + age_modifier,
-        "wrestling": random.randint(base_min, base_max) + age_modifier,
-        "bjj": random.randint(base_min, base_max) + age_modifier,
-        "clinch_striking": random.randint(base_min, base_max) + age_modifier,
-        "clinch_control": random.randint(base_min, base_max) + age_modifier,
-        "striking_defense": random.randint(base_min, base_max) + age_modifier,
-        "takedown_defense": random.randint(base_min, base_max) + age_modifier,
-        "strength": random.randint(base_min + 5, base_max + 10) + age_modifier,
-        "speed": random.randint(base_min + 5, base_max + 10) + age_modifier,
-        "cardio": random.randint(base_min + 5, base_max + 10) + age_modifier,
-        "chin": random.randint(base_min, base_max + 5) + age_modifier,
-        "heart": random.randint(base_min, base_max + 10) + age_modifier,
-        "fight_iq": random.randint(base_min - 5, base_max) + age_modifier,  # Lower for amateurs
-        "composure": random.randint(base_min - 5, base_max) + age_modifier,
-    }
-    
-    # Apply nationality-based style modifiers
-    nat_data = NATIONALITY_STYLE_TENDENCIES.get(nationality, {})
-    style_name = nat_data.get("style", "balanced")
-    mods = nat_data.get("mods", {})
-    
-    for attr, mod in mods.items():
-        if attr in attrs:
-            attrs[attr] = attrs[attr] + mod
-    
-    # Additional style-specific boosts
-    if style_name in ["bjj_specialist", "grappler"]:
-        attrs["bjj"] += random.randint(3, 8)
-        attrs["wrestling"] += random.randint(1, 4)
-    elif style_name in ["wrestler", "sambo"]:
-        attrs["wrestling"] += random.randint(5, 10)
-        attrs["takedown_defense"] += random.randint(3, 6)
-    elif style_name in ["boxer", "technical_striker"]:
-        attrs["boxing"] += random.randint(4, 8)
-        attrs["striking_defense"] += random.randint(2, 5)
-    elif style_name in ["kickboxer", "muay_thai"]:
-        attrs["kicks"] += random.randint(4, 8)
-        attrs["clinch_striking"] += random.randint(2, 5)
-        attrs["clinch_control"] += random.randint(3, 6)
-    # Style bonus: dedicated clinch and grappling-with-clinch styles
-    if style_name in ["wrestler", "sambo"]:
-        attrs["clinch_control"] += random.randint(3, 6)
-    elif style_name == "athletic_striker":
-        attrs["speed"] += random.randint(3, 6)
-        attrs["boxing"] += random.randint(2, 5)
-    
-    # Clamp all values (amateurs capped at 75)
-    for key in attrs:
-        attrs[key] = max(28, min(72, attrs[key]))
-    
-    # Determine primary skill
+    # Grade from potential ceiling (calculate_potential_grade is the
+    # canonical mapping already used by the profile display).
+    potential_grade = calculate_potential_grade(potential_ceiling)
+
+    # Lazy import to avoid a hard world_init dep at module load time
+    # (amateur.py is imported very early in the shim path).
+    from world_init import FighterGenerator
+
+    # Roll under canonical family map + templates + style derivation.
+    attrs, fighting_style, template_name = (
+        FighterGenerator.generate_amateur_attributes_canonical(
+            potential_grade=potential_grade,
+            weight_class=weight_class,
+            country=nationality,
+        )
+    )
+
+    # Primary skill — canonical family argmax. Boxing/kicks/takedowns/
+    # guard are the 4 skill families' signature stats (matches profile
+    # display convention).
     skill_attrs = {
-        "boxing": attrs["boxing"],
-        "wrestling": attrs["wrestling"],
-        "bjj": attrs["bjj"],
-        "kicks": attrs["kicks"],
+        "boxing":    attrs.get("boxing", 50),
+        "takedowns": attrs.get("takedowns", 50),
+        "guard":     attrs.get("guard", 50),
+        "kicks":     attrs.get("kicks", 50),
     }
     primary_skill = max(skill_attrs, key=skill_attrs.get)
-    
-    # Map to fighting style label
-    style_labels = {
-        "bjj_specialist": "BJJ",
-        "wrestler": "Wrestler",
-        "sambo": "Sambo",
-        "boxer": "Boxer",
-        "technical_striker": "Striker",
-        "kickboxer": "Kickboxer",
-        "muay_thai": "Muay Thai",
-        "athletic_striker": "Athlete",
-        "mma_hybrid": "MMA",
-        "well_rounded": "Balanced",
-        "technical": "Technical",
-        "athletic": "Athlete",
-    }
-    fighting_style = style_labels.get(style_name, "Balanced")
-    
-    return attrs, fighting_style, primary_skill
+
+    return attrs, fighting_style, primary_skill, template_name
 
 
 def calculate_potential_grade(ceiling: int) -> str:
@@ -855,22 +819,40 @@ def generate_amateur_fighter(
         potential_ceiling = random.randint(42, 68)
     
     potential_grade = calculate_potential_grade(potential_ceiling)
-    
-    # Attributes based on nationality
-    attributes, fighting_style, primary_skill = generate_amateur_attributes(
-        age, potential_ceiling, nationality
+
+    # PHASE C — attributes now roll under canonical names via
+    # FighterGenerator.generate_amateur_attributes_canonical.
+    # Amateur tier center derived from potential_grade internally.
+    attributes, fighting_style, primary_skill, template_name = (
+        generate_amateur_attributes(
+            age, potential_ceiling, nationality, weight_class
+        )
     )
-    
+
     # Calculate overall
     overall = sum(attributes.values()) // len(attributes)
-    
-    # Possible traits (amateurs have fewer)
-    traits = []
+
+    # PHASE C — personality rolled at creation, transfers at
+    # graduation (rider (b)). Distribution matches
+    # world_init._simulate_history_and_populate.
+    _personalities = (["Competitor"] * 35 + ["Calculated"] * 20 +
+                      ["Hungry"] * 20 + ["Warrior"] * 15 +
+                      ["Political"] * 10)
+    personality = random.choice(_personalities)
+
+    # Possible traits (amateurs have fewer). If the layered engine
+    # assigned a template, prepend the template_name — Phase D
+    # promotes template_name to the display badge system.
+    traits: List[str] = []
+    if template_name:
+        traits.append(template_name)
     if random.random() < 0.15:
-        amateur_traits = ["Fast Starter", "Slow Starter", "Iron Chin", "Glass Cannon", 
+        amateur_traits = ["Fast Starter", "Slow Starter", "Iron Chin",
                          "Cardio Machine", "Gym Rat"]
-        traits.append(random.choice(amateur_traits))
-    
+        _t = random.choice(amateur_traits)
+        if _t not in traits:
+            traits.append(_t)
+
     return AmateurFighter(
         fighter_id=str(uuid.uuid4())[:8],
         name=name,
@@ -885,6 +867,8 @@ def generate_amateur_fighter(
         fighting_style=fighting_style,
         primary_skill=primary_skill,
         traits=traits,
+        personality=personality,
+        template_name=template_name,
     )
 
 
@@ -1191,13 +1175,21 @@ class AmateurSystem:
         """
         Break a fighter into four composite dimensions.
         Returns (striking, grappling, physical, mental).
+
+        PHASE C — reads canonical stat names FIRST, falls back to
+        legacy amateur names (wrestling/bjj) for pre-Phase-C amateurs
+        already in saves. `_grap(canonical, legacy)` returns
+        canonical if present, else legacy, else 50.
         """
         a = fighter.attributes
+        def _grap(canon: str, legacy: str) -> int:
+            return a.get(canon, a.get(legacy, 50))
         striking  = (a.get("boxing", 50) * 2 + a.get("kicks", 50) +
                      a.get("clinch_striking", 50) + a.get("striking_defense", 50) +
                      a.get("clinch_control", 50) * 0.5) / 5.5
-        grappling = (a.get("wrestling", 50) * 2 + a.get("bjj", 50) +
-                     a.get("takedown_defense", 50)) / 4
+        grappling = (_grap("takedowns", "wrestling") * 2
+                     + _grap("guard", "bjj")
+                     + a.get("takedown_defense", 50)) / 4
         physical  = (a.get("strength", 50) + a.get("speed", 50) +
                      a.get("cardio", 50) + a.get("chin", 50)) / 4
         mental    = (a.get("heart", 50) + a.get("fight_iq", 50) +

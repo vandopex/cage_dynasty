@@ -1159,14 +1159,24 @@ class FighterGenerator:
     @classmethod
     def _phase_b_apply_template(cls, attrs: Dict[str, int],
                                  template_name: str,
-                                 tier_center: float) -> None:
+                                 tier_center: float,
+                                 templates: Optional[Dict] = None,
+                                 family_map: Optional[Dict] = None
+                                 ) -> None:
         """Apply template mods in place BEFORE clamp. F2 tier-relative
         anchoring: spike stats ≥ tier_center + 15; dump stats ≤
         tier_center - 8. Additive mods layer on top where they exceed
         the anchor. Van August ruling: templates respect tier caps —
         a novice-tier Knockout Artist doesn't punch like an elite one.
+
+        C39 DEDUP: `templates` and `family_map` parameters let Phase C
+        (canonical-name amateur path) reuse this exact code with the
+        canonical template dict + canonical family map. Defaults keep
+        Phase B (pro-side) callers unchanged.
         """
-        t = cls._PHASE_B_TEMPLATES[template_name]
+        _templates = templates if templates is not None else cls._PHASE_B_TEMPLATES
+        _family_map = family_map if family_map is not None else cls._PHASE_B_FAMILY_ASSIGN
+        t = _templates[template_name]
 
         # Tier-relative anchors
         spike_floor = max(20, min(95, int(round(
@@ -1190,7 +1200,7 @@ class FighterGenerator:
 
         # Family spikes — every stat in family
         for family, mod in t.get('family_mods', {}).items():
-            for stat, fam in cls._PHASE_B_FAMILY_ASSIGN.items():
+            for stat, fam in _family_map.items():
                 if fam == family and stat in attrs:
                     new_val = attrs[stat] + mod
                     if mod > 0:
@@ -1199,7 +1209,7 @@ class FighterGenerator:
 
         # Family dumps
         for family, mod in t.get('family_dumps', {}).items():
-            for stat, fam in cls._PHASE_B_FAMILY_ASSIGN.items():
+            for stat, fam in _family_map.items():
                 if fam == family and stat in attrs:
                     new_val = attrs[stat] + mod
                     if mod < 0:
@@ -1369,32 +1379,56 @@ class FighterGenerator:
     @classmethod
     def _phase_b_derive_style(cls, attrs: Dict[str, int],
                                template_name: Optional[str],
-                               country: str) -> str:
+                               country: str,
+                               templates: Optional[Dict] = None,
+                               key_map: Optional[Dict] = None) -> str:
         """Style comes from the body. Template fighters get the
         template's implied style; others get argmax over family
-        scores + signature stats. Country/camp are tiebreak only."""
-        if template_name and template_name in cls._PHASE_B_TEMPLATES:
-            return cls._PHASE_B_TEMPLATES[template_name]['style']
+        scores + signature stats. Country/camp are tiebreak only.
+
+        C39 DEDUP: `templates` + `key_map` parameters let Phase C
+        (canonical-name amateur path) reuse this exact code with the
+        canonical template dict + a legacy→canonical stat-name map.
+        Defaults keep Phase B (pro-side) callers unchanged.
+        `_r(logical)` is the read helper: it consults key_map to
+        translate legacy stat names to canonical, falling back to the
+        legacy name if the canonical isn't present. One source of
+        truth for style scoring coefficients, signature stats,
+        country-bias table, and Balanced gap-detection thresholds.
+        """
+        _templates = templates if templates is not None else cls._PHASE_B_TEMPLATES
+        _key_map = key_map or {}
+        if template_name and template_name in _templates:
+            return _templates[template_name]['style']
+
+        def _r(logical: str, default: int = 50) -> int:
+            """Read `logical` stat. If key_map maps it to canonical,
+            try canonical first, then fall through to the legacy
+            name so Phase B keeps working with default `_key_map={}`."""
+            canonical = _key_map.get(logical)
+            if canonical is not None:
+                return attrs.get(canonical, attrs.get(logical, default))
+            return attrs.get(logical, default)
 
         # Non-template: score each style by its signature stats.
         # Style→signature-attr mapping mirrors GENERATOR1 Phase 1
         # census T3's style_signature dict (extended with more
         # granularity for tie-breaking).
-        wrestling = attrs.get('wrestling', 50)
-        bjj = attrs.get('bjj', 50)
-        subs = attrs.get('submissions', 50)
-        top = attrs.get('top_control', 50)
-        boxing = attrs.get('boxing', 50)
-        kicks = attrs.get('kicks', 50)
-        clinch_str = attrs.get('clinch', 50)
-        clinch_ctrl = attrs.get('clinch_control', 50)
-        accuracy = attrs.get('accuracy', 50)  # striking_defense post-remap
-        td_def = attrs.get('takedown_defense', 50)
-        cardio = attrs.get('cardio', 50)
-        strength = attrs.get('strength', 50)
-        speed = attrs.get('speed', 50)
-        iq = attrs.get('iq', 50)
-        composure = attrs.get('composure', 50)
+        wrestling = _r('wrestling')
+        bjj = _r('bjj')
+        subs = _r('submissions')
+        top = _r('top_control')
+        boxing = _r('boxing')
+        kicks = _r('kicks')
+        clinch_str = _r('clinch')
+        clinch_ctrl = _r('clinch_control')
+        accuracy = _r('accuracy')  # striking_defense post-remap
+        td_def = _r('takedown_defense')
+        cardio = _r('cardio')
+        strength = _r('strength')
+        speed = _r('speed')
+        iq = _r('iq')
+        composure = _r('composure')
 
         # Style score = signature-stat×3 + supporting stats.
         # Signature stat gets 3x weight so a fighter with a spike on
@@ -1571,6 +1605,187 @@ class FighterGenerator:
         if not pred(gf.attributes, tc):
             # Non-fatal: harness inspects the flag rather than crash
             setattr(gf, '_phase_b_invariant_violated', True)
+
+    # ========================================================================
+    # GENERATOR1 PHASE C — AMATEUR LAYERED GENERATION (canonical names)
+    # ========================================================================
+    # Amateur pipeline reuses Phase B's 3-layer variance decomposition
+    # under CANONICAL pro-side stat names (no remap debt). All 19
+    # canonical stats produced by generation; pure transfer at
+    # graduation for post-Phase-C amateurs.
+    #
+    # C39 DEDUP (Van fe/fi-lesson ruling): NO cloned tables. Amateur
+    # templates + family map are DERIVED programmatically from Phase B
+    # via _LEGACY_TO_CANONICAL. `_phase_b_apply_template` and
+    # `_phase_b_derive_style` take `templates`/`family_map`/`key_map`
+    # parameters; Phase C is a thin delegate — template magnitudes,
+    # style scorer coefficients, and Balanced thresholds all defined
+    # exactly once in Phase B. Personality distribution single-sourced
+    # from _PERSONALITIES_WEIGHTED at world_init._simulate_history_and_populate.
+
+    # LEGACY→CANONICAL stat-name translation (single source of truth).
+    # Phase B uses non-canonical names for 5 stats (wrestling, bjj,
+    # clinch, accuracy, iq); the pro persist path applies this same
+    # remap at world_init:3090 `_canonical_remap`.
+    _LEGACY_TO_CANONICAL = {
+        'wrestling': 'takedowns',
+        'bjj':       'guard',
+        'clinch':    'clinch_striking',
+        'accuracy':  'striking_defense',
+        'iq':        'fight_iq',
+    }
+
+    # Canonical family map — mechanically DERIVED from _PHASE_B_FAMILY_ASSIGN
+    # via _LEGACY_TO_CANONICAL. Only the KEY changes; family membership
+    # stays byte-identical to Phase B. Built with imperative for-loop
+    # because Python dict-comp class-scope doesn't see sibling attrs.
+    _PHASE_C_FAMILY_ASSIGN = {}
+    for _stat, _fam in _PHASE_B_FAMILY_ASSIGN.items():
+        _PHASE_C_FAMILY_ASSIGN[_LEGACY_TO_CANONICAL.get(_stat, _stat)] = _fam
+    del _stat, _fam
+    _PHASE_C_LOTTERY_STATS = _PHASE_B_LOTTERY_STATS
+
+    # Amateur tier centers per potential grade. Van RATIFIED
+    # 2026-09-05: amateurs sit below pro tiers.
+    _PHASE_C_AMATEUR_TIER_CENTERS = {
+        "Elite":   52.5,  # top amateur ≈ average pro
+        "High":    45.0,
+        "Average": 38.0,
+        "Limited": 32.0,
+        "Low":     27.0,
+    }
+
+    # Canonical templates DERIVED mechanically from _PHASE_B_TEMPLATES
+    # via _LEGACY_TO_CANONICAL. Style label, magnitudes, and family
+    # spikes are byte-identical to pro-side; only stat_mods/stat_dumps
+    # KEYS get remapped. This kills the class of drift where a Phase B
+    # template tune wouldn't reach amateurs (or vice versa) — one
+    # place to change means both sides move together.
+    _PHASE_C_TEMPLATES = {}
+    for _tname, _t in _PHASE_B_TEMPLATES.items():
+        _new_stat_mods = {}
+        for _k, _v in _t.get('stat_mods', {}).items():
+            _new_stat_mods[_LEGACY_TO_CANONICAL.get(_k, _k)] = _v
+        _new_stat_dumps = {}
+        for _k, _v in _t.get('stat_dumps', {}).items():
+            _new_stat_dumps[_LEGACY_TO_CANONICAL.get(_k, _k)] = _v
+        _PHASE_C_TEMPLATES[_tname] = {
+            'stat_mods':    _new_stat_mods,
+            'stat_dumps':   _new_stat_dumps,
+            'family_mods':  dict(_t.get('family_mods', {})),
+            'family_dumps': dict(_t.get('family_dumps', {})),
+            'style':        _t['style'],  # <-- same style label both sides
+        }
+    del _tname, _t, _new_stat_mods, _new_stat_dumps, _k, _v
+
+    @classmethod
+    def _phase_c_pick_template(cls, weight_class: str) -> Optional[str]:
+        """Delegate to Phase B's pick logic — the template names are
+        identical (derived from same Phase B dict), so pick weighting
+        is single-sourced too."""
+        return cls._phase_b_pick_template(weight_class)
+
+    @classmethod
+    def _phase_c_apply_template(cls, attrs: Dict[str, int],
+                                template_name: str,
+                                tier_center: float) -> None:
+        """C39 DEDUP: thin delegate to _phase_b_apply_template, passing
+        the canonical templates + canonical family map. All template
+        magnitudes and anchor deltas defined exactly once in Phase B."""
+        cls._phase_b_apply_template(
+            attrs, template_name, tier_center,
+            templates=cls._PHASE_C_TEMPLATES,
+            family_map=cls._PHASE_C_FAMILY_ASSIGN,
+        )
+
+    @classmethod
+    def _phase_c_derive_style(cls, attrs: Dict[str, int],
+                              template_name: Optional[str],
+                              country: str) -> str:
+        """C39 DEDUP: thin delegate to _phase_b_derive_style. Passes
+        the canonical templates + _LEGACY_TO_CANONICAL key_map so the
+        Phase B scorer reads amateur canonical stat names. Style
+        coefficients + country-bias table + Balanced thresholds all
+        defined exactly once in Phase B."""
+        return cls._phase_b_derive_style(
+            attrs, template_name, country,
+            templates=cls._PHASE_C_TEMPLATES,
+            key_map=cls._LEGACY_TO_CANONICAL,
+        )
+
+    @classmethod
+    def generate_amateur_attributes_canonical(
+            cls, potential_grade: str, weight_class: str,
+            country: str = "United States"
+    ) -> Tuple[Dict[str, int], str, Optional[str]]:
+        """PHASE C — amateur roll under canonical names.
+
+        3-layer variance decomposition (tier center + family offset +
+        stat offset), class offsets (speed/cardio/strength linear),
+        chin+heart lottery, recovery×cardio coupling, power via D18.
+        12% specialist template layer. Style derived from body.
+
+        Returns (attrs_19, style, template_name).
+        """
+        # Layer 1 — tier center. potential_grade → tier center.
+        # Same gaussian-vs-uniform shape as Phase B (drift accepted
+        # per Phase B F1 ruling).
+        tier_mean = cls._PHASE_C_AMATEUR_TIER_CENTERS.get(
+            potential_grade, 42.0)
+        tier_center = tier_mean + random.gauss(0, cls._PHASE_B_SIGMA_TIER)
+
+        # Layer 2 — one family offset draw per family (shared across
+        # stats in that family).
+        fam_offsets = {
+            f: random.gauss(0, cls._PHASE_B_SIGMA_FAM)
+            for f in cls._PHASE_B_FAMILIES
+        }
+        # Class offsets on physical stats (speed/cardio/strength).
+        class_offsets = cls._phase_b_class_offsets(weight_class)
+
+        # Layer 3 — per-stat offset. Rolled once per stat.
+        attrs: Dict[str, int] = {}
+        def _clamp(v):
+            return max(20, min(95, int(round(v))))
+        for stat, family in cls._PHASE_C_FAMILY_ASSIGN.items():
+            base = (tier_center
+                    + fam_offsets[family]
+                    + class_offsets.get(stat, 0)
+                    + random.gauss(0, cls._PHASE_B_SIGMA_STAT))
+            attrs[stat] = _clamp(base)
+
+        # Lotteries — chin, heart independent of tier
+        for stat in cls._PHASE_C_LOTTERY_STATS:
+            base = (cls._PHASE_B_POOL_MEAN
+                    + random.gauss(0, cls._PHASE_B_SIGMA_STAT))
+            attrs[stat] = _clamp(base)
+
+        # Recovery — coupled to cardio (r ≈ 0.37)
+        rec_base = (tier_center * 0.5 + cls._PHASE_B_POOL_MEAN * 0.5
+                    + cls._PHASE_B_RECOVERY_COUPLING_K
+                    * (attrs['cardio'] - tier_center)
+                    + random.gauss(0, cls._PHASE_B_SIGMA_STAT))
+        attrs['recovery'] = _clamp(rec_base)
+
+        # Template layer — 12% chance
+        template_name = cls._phase_c_pick_template(weight_class)
+        if template_name:
+            cls._phase_c_apply_template(attrs, template_name, tier_mean)
+
+        # Power inherits from strength via D18 offset (populated at
+        # generation time here, not deferred to persist as in Phase B).
+        try:
+            from core.types import POWER_STYLE_OFFSET  # type: ignore
+        except Exception:
+            POWER_STYLE_OFFSET = {}
+        # Style derived from body — needed before power for the
+        # POWER_STYLE_OFFSET lookup.
+        style = cls._phase_c_derive_style(attrs, template_name, country)
+        pw_off = int(POWER_STYLE_OFFSET.get(style, 0))
+        attrs['power'] = _clamp(
+            attrs['strength'] + pw_off + random.randint(-8, 8))
+
+        return attrs, style, template_name
 
 
 # ============================================================================
