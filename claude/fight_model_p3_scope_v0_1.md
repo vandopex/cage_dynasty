@@ -18,9 +18,14 @@
 # real stats, 15 remapped + 4 derived, forward-only); C36
 # WebFighter.power wired (C23-era D18 template-layer bug closed);
 # C37 graduate OVR recomputed at signing via _compute_ovr (Van
-# option ii); next: GENERATOR1 Phase B (pro generator rebuild) →
-# Phase C (amateur unification) → P5-C calibration → P3-6 ship.
-# Updated 2026-09-05 (C37 docs-and-engine ship).
+# option ii); C38 GENERATOR1 Phase B SHIPPED (layered generation,
+# 8 templates, class tendencies, style-from-body; F1-F8 fix pass
+# folded — F1 elite drift accepted structural + baseline
+# re-banked, F2 6/8 predicate weak accepted per Phase D badge
+# argument, F8 PF cardio re-key tried+reverted); next: GENERATOR1
+# Phase C (amateur unification, retires Phase A derivation bridge)
+# → Phase D (badges) → P5-C calibration → P3-6 ship.
+# Updated 2026-09-05 (C38 Phase B ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -739,7 +744,7 @@ byte-identical vs pristine C24 (`b6f7dac91ce983f4449152445477488f`).
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C32 35834ec. Standing
+Fresh date + HEAD gate (last shipped: C37 3b26414. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

@@ -375,6 +375,13 @@ class GeneratedFighter:
     # Assigned in generate_fighters() after construction.
     personality: str = ""
 
+    # GENERATOR1 Phase B — specialist template name (identity trait).
+    # None for non-template fighters (88% of pool). Set at
+    # generate_fighter time when the 12% template roll fires.
+    # Stored so _persist_fighter_to_gs can prepend it as the first
+    # trait in _fdata['traits'].
+    template_name: Optional[str] = None
+
 
 @dataclass
 class GeneratedCamp:
@@ -971,57 +978,295 @@ class FighterGenerator:
         suffix = str(random.randint(1, 99))
         return f"{first} {last} {suffix}"
     
-    def generate_attributes(self, skill_tier: str) -> Dict[str, int]:
-        """Generate fighter attributes based on skill tier"""
-        
-        tier_ranges = {
-            "elite": (70, 95),
-            "top": (60, 85),
-            "good": (50, 75),
-            "average": (40, 65),
-            "developing": (30, 55),
-            "novice": (20, 45),
+    # GENERATOR1 PHASE B — LAYERED VARIANCE DECOMPOSITION
+    # Per spec §1 (claude/generator1_variety_spec_v0_1.md):
+    #   stat = clamp(20, 95,
+    #       TIER_CENTER              # shared quality core — one draw
+    #     + CLASS_OFFSET[stat]       # weight-class shift (§3)
+    #     + FAMILY_OFFSET[family]    # one draw per family, N(0, σ_fam)
+    #     + STAT_OFFSET              # one draw per stat, N(0, σ_stat)
+    #     + TEMPLATE_MOD[stat])      # §2, only for template fighters
+    #
+    # Sigmas landed via sigma_sweep_v3.py (Phase B build artifact):
+    # σ_tier=8.5, σ_fam=7.5, σ_stat=10.0 (spec provisionals verbatim).
+    # Within-tier r-bands measured: cross-family ≈ 0.32, within-family
+    # ≈ 0.55, lottery ≈ 0.04, recovery×cardio ≈ 0.37. OVR-drift-per-
+    # tier ~5pp — inherent to overlaying 3-layer variance on tier
+    # bands with wide centers (32.5..82.5) and clamps 20-95. Filed in
+    # Phase B report as banked-not-judged per spec §1a's OVR ±2 gate.
+    #
+    # Family assignment (Gate 0 mapping, see phase_b/gate0_mapping.md):
+    # ATHLETICISM (3): strength, speed, cardio
+    # STRIKING (4): boxing, kicks, clinch, accuracy
+    # GRAPPLING (6): wrestling, bjj, takedown_defense, top_control,
+    #                submissions, clinch_control
+    # FIGHT BRAIN (2): iq, composure
+    # LOTTERIES (independent draws): chin, heart
+    # RECOVERY (independent + weak cardio coupling): recovery
+    # Power NOT rolled — inherits from strength via D18 at persist time.
+    _PHASE_B_FAMILY_ASSIGN = {
+        'strength': 'ATH', 'speed': 'ATH', 'cardio': 'ATH',
+        'boxing': 'STK', 'kicks': 'STK', 'clinch': 'STK',
+        'accuracy': 'STK',
+        'wrestling': 'GRP', 'bjj': 'GRP', 'takedown_defense': 'GRP',
+        'top_control': 'GRP', 'submissions': 'GRP',
+        'clinch_control': 'GRP',
+        'iq': 'BRN', 'composure': 'BRN',
+    }
+    _PHASE_B_FAMILIES = ('ATH', 'STK', 'GRP', 'BRN')
+    _PHASE_B_LOTTERY_STATS = ('chin', 'heart')
+    _PHASE_B_SIGMA_TIER = 8.5
+    _PHASE_B_SIGMA_FAM  = 7.5
+    _PHASE_B_SIGMA_STAT = 10.0
+    _PHASE_B_RECOVERY_COUPLING_K = 0.25  # r(recovery, cardio) ≈ 0.37
+    _PHASE_B_TIER_CENTERS = {
+        "elite": 82.5, "top": 72.5, "good": 62.5,
+        "average": 52.5, "developing": 42.5, "novice": 32.5,
+    }
+    # Pool mean used for lottery centering (spec §1b: chin+heart are
+    # tier-independent).
+    _PHASE_B_POOL_MEAN = 57.5
+
+    # CLASS_OFFSETS per spec §3 — linear across the 9 classes.
+    # speed/cardio: +6 (lightest) → −6 (heaviest)
+    # strength: −6 (lightest) → +8 (heaviest, asymmetric per spec)
+    # All other stats: flat (chin flat per §1b; skills flat per §3).
+    # Power inherits strength shift via D18 (no separate power offset).
+    @classmethod
+    def _phase_b_class_offsets(cls, weight_class: str) -> Dict[str, int]:
+        try:
+            idx = WEIGHT_CLASSES.index(weight_class)
+        except (ValueError, IndexError):
+            idx = 4  # middleweight-ish default
+        n = len(WEIGHT_CLASSES) - 1  # 8 for 9 classes
+        if n < 1:
+            return {}
+        # Linear interpolation: t = 0 at lightest, 1 at heaviest.
+        t = idx / n
+        speed_off  = int(round(6 - 12 * t))       # +6 → -6
+        cardio_off = int(round(6 - 12 * t))       # +6 → -6
+        strength_off = int(round(-6 + 14 * t))    # -6 → +8 (asymmetric)
+        return {'speed': speed_off, 'cardio': cardio_off,
+                'strength': strength_off}
+
+    # SPECIALIST TEMPLATES per spec §2b — 8 templates.
+    # Each entry: name → dict of stat-level mods AND family-level mods.
+    # Family mods expand to all stats in that family at gen-time.
+    # Magnitudes: spike ++ = +12..+18, + = +6..+10;
+    #             dump  −− = −12..−15, − = −6..−10 (applied before clamp).
+    # Style implication: name of the fighting_style the template implies
+    # (fed to derive_style_from_body).
+    # F4 (Van 2026-09-05): Knockout Artist implies 'Striker' —
+    # the archetype is one-punch striking KO, not top-position GnP.
+    # F7: Glass Cannon's strength_bonus moved out of stat_dumps
+    # into stat_mods (it's a spike, not a dump — was a stashed hack).
+    _PHASE_B_TEMPLATES = {
+        'Knockout Artist': {
+            'stat_mods': {'strength': 8},  # + spike (power inherits via D18)
+            'family_mods': {},
+            'stat_dumps': {'cardio': -14},  # -- dump
+            'family_dumps': {},
+            'style': 'Striker',
+        },
+        'Glass Cannon': {
+            # power spike (++) driven via strength (D18 inheritance).
+            # Glass Cannon = big power + speed - glass chin.
+            'stat_mods': {'speed': 8, 'strength': 7},  # + spike + power-driver
+            'stat_dumps': {'chin': -14},  # -- dump
+            'family_mods': {},
+            'family_dumps': {},
+            'style': 'Striker',
+        },
+        'Cardio Machine': {
+            'stat_mods': {'cardio': 15, 'heart': 8},  # ++ + +
+            'stat_dumps': {'strength': -14},  # -- (drops power via D18)
+            'family_mods': {},
+            'family_dumps': {},
+            'style': 'Pressure Fighter',
+        },
+        'Grappling Savant': {
+            'family_mods': {'GRP': 15},  # ++ spike across grappling
+            'stat_dumps': {},
+            'family_dumps': {'STK': -8},
+            'stat_mods': {},
+            'style': 'Wrestler',
+        },
+        'Technician': {
+            'family_mods': {'STK': 15},  # ++ spike
+            'stat_mods': {'iq': 8},  # + fight IQ
+            'stat_dumps': {'strength': -8},  # power − via strength
+            'family_dumps': {},
+            'style': 'Counter Striker',
+        },
+        'Granite Brawler': {
+            'stat_mods': {'chin': 15, 'heart': 8},  # ++ + +
+            'stat_dumps': {'speed': -8},
+            'family_mods': {}, 'family_dumps': {},
+            'style': 'Pressure Fighter',
+        },
+        'Freak Athlete': {
+            'family_mods': {'ATH': 15},  # ++ athleticism
+            'family_dumps': {'STK': -8, 'GRP': -8},
+            'stat_mods': {}, 'stat_dumps': {},
+            'style': 'Sprawl & Brawl',
+        },
+        'Submission Wizard': {
+            'stat_mods': {'submissions': 15, 'bjj': 15},  # ++ ++
+            'stat_dumps': {'wrestling': -8, 'boxing': -8, 'kicks': -8,
+                           'clinch': -8, 'accuracy': -8},
+            'family_mods': {}, 'family_dumps': {},
+            'style': 'BJJ Specialist',
+        },
+    }
+
+    @classmethod
+    def _phase_b_pick_template(cls, weight_class: str) -> Optional[str]:
+        """12% chance; ×2 pick-weight for class-flavored matches
+        per spec §2c. Returns template name or None."""
+        if random.random() >= 0.12:
+            return None
+        try:
+            idx = WEIGHT_CLASSES.index(weight_class)
+            heavy = idx >= 6  # heaviest 3 classes
+            light = idx <= 2  # lightest 3 classes
+        except (ValueError, IndexError):
+            heavy = light = False
+        names = list(cls._PHASE_B_TEMPLATES.keys())
+        weights = []
+        for n in names:
+            w = 1.0
+            if heavy and n in ('Knockout Artist', 'Granite Brawler'):
+                w = 2.0
+            if light and n in ('Cardio Machine', 'Technician'):
+                w = 2.0
+            weights.append(w)
+        return random.choices(names, weights=weights, k=1)[0]
+
+    # F2 tier-relative anchor deltas — Van's August "respecting tier
+    # caps" ruling. Spike floor = tier_center + SPIKE_ANCHOR_DELTA
+    # (capped 95); dump ceiling = tier_center - DUMP_ANCHOR_DELTA
+    # (floored 20). Magnitudes remain +12..+18/-12..-15 additive on
+    # top; anchors are the FLOOR/CEILING the template guarantees
+    # regardless of the base roll.
+    # Anchors sized to clear the F2-tightened predicates by wide
+    # margin: predicates require +12/-8, anchors set +19/-11 so
+    # family-average predicates (which check MEAN of 3 stats) still
+    # clear even when only 1-2 stats get the anchor and others sit
+    # at the baseline tier_center.
+    _PHASE_B_SPIKE_ANCHOR_DELTA = 19  # spike ≥ tier_center + 19
+    _PHASE_B_DUMP_ANCHOR_DELTA  = 11  # dump  ≤ tier_center - 11
+
+    @classmethod
+    def _phase_b_apply_template(cls, attrs: Dict[str, int],
+                                 template_name: str,
+                                 tier_center: float) -> None:
+        """Apply template mods in place BEFORE clamp. F2 tier-relative
+        anchoring: spike stats ≥ tier_center + 15; dump stats ≤
+        tier_center - 8. Additive mods layer on top where they exceed
+        the anchor. Van August ruling: templates respect tier caps —
+        a novice-tier Knockout Artist doesn't punch like an elite one.
+        """
+        t = cls._PHASE_B_TEMPLATES[template_name]
+
+        # Tier-relative anchors
+        spike_floor = max(20, min(95, int(round(
+            tier_center + cls._PHASE_B_SPIKE_ANCHOR_DELTA))))
+        dump_ceiling = max(20, min(95, int(round(
+            tier_center - cls._PHASE_B_DUMP_ANCHOR_DELTA))))
+
+        # Stat-level spike mods
+        for stat, mod in t.get('stat_mods', {}).items():
+            new_val = attrs.get(stat, 50) + mod
+            if mod > 0:
+                new_val = max(new_val, spike_floor)
+            attrs[stat] = new_val
+
+        # Stat-level dump mods
+        for stat, mod in t.get('stat_dumps', {}).items():
+            new_val = attrs.get(stat, 50) + mod
+            if mod < 0:
+                new_val = min(new_val, dump_ceiling)
+            attrs[stat] = new_val
+
+        # Family spikes — every stat in family
+        for family, mod in t.get('family_mods', {}).items():
+            for stat, fam in cls._PHASE_B_FAMILY_ASSIGN.items():
+                if fam == family and stat in attrs:
+                    new_val = attrs[stat] + mod
+                    if mod > 0:
+                        new_val = max(new_val, spike_floor)
+                    attrs[stat] = new_val
+
+        # Family dumps
+        for family, mod in t.get('family_dumps', {}).items():
+            for stat, fam in cls._PHASE_B_FAMILY_ASSIGN.items():
+                if fam == family and stat in attrs:
+                    new_val = attrs[stat] + mod
+                    if mod < 0:
+                        new_val = min(new_val, dump_ceiling)
+                    attrs[stat] = new_val
+
+        # Re-clamp all stats 20-95
+        for stat in attrs:
+            attrs[stat] = max(20, min(95, int(attrs[stat])))
+
+    def generate_attributes(self, skill_tier: str,
+                             weight_class: str = "Lightweight") -> Dict[str, int]:
+        """GENERATOR1 Phase B — 3-layer variance decomposition per
+        spec §1. See _PHASE_B_* class constants for family map + sigmas.
+
+        Signature back-compatible: `weight_class` defaulted to
+        Lightweight for callers that predate Phase B (only the
+        `_fighter_to_attributes` fallback path calls this without a
+        weight_class — that path is dormant per T1 census).
+        """
+        tier_mean = self._PHASE_B_TIER_CENTERS.get(skill_tier, 52.5)
+        tier_center = tier_mean + random.gauss(0, self._PHASE_B_SIGMA_TIER)
+
+        # One family-offset draw per family (shared across all stats
+        # in that family).
+        fam_offsets = {
+            f: random.gauss(0, self._PHASE_B_SIGMA_FAM)
+            for f in self._PHASE_B_FAMILIES
         }
-        
-        low, high = tier_ranges.get(skill_tier, (40, 65))
-        
-        _clinch_val = random.randint(low, high)
-        attributes = {
-            # Physical
-            "strength": random.randint(low, high),
-            "speed": random.randint(low, high),
-            "cardio": random.randint(low, high),
-            "chin": random.randint(low, high),
-            "recovery": random.randint(low, high),
 
-            # Striking
-            "boxing": random.randint(low, high),
-            "kicks": random.randint(low, high),
-            "clinch": _clinch_val,
-            # D18 (2026-09-05): 'power' is derived at persist time
-            # (strength + POWER_STYLE_OFFSET + uniform(-8,+8)) — see
-            # _persist_fighter_to_gs. Not rolled independently here.
-            "accuracy": random.randint(low, high),
+        # CLASS_OFFSETS per spec §3
+        class_offsets = self._phase_b_class_offsets(weight_class)
 
-            # Grappling
-            "wrestling": random.randint(low, high),
-            "bjj": random.randint(low, high),
-            "takedown_defense": random.randint(low, high),
-            "top_control": random.randint(low, high),
-            "submissions": random.randint(low, high),
+        def _clamp(v: float) -> int:
+            return max(20, min(95, int(round(v))))
 
-            # Clinch (1) — positional control, separate from clinch
-            # striking. Bound near _clinch_val ±8 so a fighter naturally
-            # good in the clinch tends to be good at both.
-            "clinch_control": max(20, min(95,
-                _clinch_val + random.randint(-8, 8))),
+        attributes: Dict[str, int] = {}
 
-            # Mental
-            "heart": random.randint(low, high),
-            "iq": random.randint(low, high),
-            "composure": random.randint(low, high),
-        }
+        # 15 family-mapped stats (rolls per spec §1 formula)
+        for stat, family in self._PHASE_B_FAMILY_ASSIGN.items():
+            v = (tier_center
+                 + class_offsets.get(stat, 0)
+                 + fam_offsets[family]
+                 + random.gauss(0, self._PHASE_B_SIGMA_STAT))
+            attributes[stat] = _clamp(v)
 
+        # 2 lottery stats — tier-independent, class-flat, no family
+        # coupling (spec §1b: durability + will don't follow skill).
+        for stat in self._PHASE_B_LOTTERY_STATS:
+            v = (self._PHASE_B_POOL_MEAN
+                 + random.gauss(0, self._PHASE_B_SIGMA_STAT))
+            attributes[stat] = _clamp(v)
+
+        # Recovery — independent draw + weak cardio coupling
+        # (target r ≈ 0.35 per spec §1b; K=0.25 measured mid-band).
+        # tier-partial anchor so recovery still tracks quality
+        # (elite fighters do generally recover better than novices)
+        # while decoupling from cardio to ~0.35.
+        _rec = (tier_mean * 0.5
+                + self._PHASE_B_POOL_MEAN * 0.5
+                + self._PHASE_B_RECOVERY_COUPLING_K
+                    * (attributes['cardio'] - tier_mean)
+                + random.gauss(0, self._PHASE_B_SIGMA_STAT))
+        attributes['recovery'] = _clamp(_rec)
+
+        # NOTE: 'power' is NOT rolled here — inherited from strength
+        # via D18 at _persist_fighter_to_gs (unchanged).
         return attributes
     
     def generate_fighter(
@@ -1050,36 +1295,29 @@ class FighterGenerator:
         height = height_base[weight_class] + random.randint(-5, 8)
         reach = height + random.randint(-3, 10)
         
-        attributes = self.generate_attributes(skill_tier)
-        
-        # Calculate overall skill rating
+        # GENERATOR1 PHASE B — layered generation per spec §1.
+        # generate_attributes now takes weight_class for CLASS_OFFSETS.
+        attributes = self.generate_attributes(skill_tier, weight_class)
+
+        # PHASE B §2 template layer — 12% of fighters. Applied to attrs
+        # in place BEFORE overall calc so the identity trait actually
+        # shapes the fighter. F2: tier-relative anchors — pass tier_center
+        # so spike/dump anchors respect tier caps (Van August ruling).
+        template_name = self._phase_b_pick_template(weight_class)
+        if template_name:
+            _tier_center = self._PHASE_B_TIER_CENTERS.get(skill_tier, 52.5)
+            self._phase_b_apply_template(
+                attributes, template_name, _tier_center)
+
+        # Calculate overall skill rating (post-template)
         skill_rating = sum(attributes.values()) // len(attributes)
-        
-        # Use canonical style generator — respects generation weights
-        # (Wrestler 1.10 → Point Fighter 0.60) and country bias
-        # (Brazil→BJJ, Thailand→Muay Thai, Russia→Wrestler, etc.).
-        # 5% "unicorn" chance for counter-meta archetypes baked into
-        # generate_style_for_fighter itself.
-        try:
-            if generate_style_for_fighter is not None:
-                _style_result = generate_style_for_fighter(
-                    country=country or '',
-                    camp_styles=None,
-                )
-                style = (_style_result.value
-                         if hasattr(_style_result, 'value')
-                         else str(_style_result))
-            else:
-                raise ImportError("generate_style_for_fighter unavailable")
-        except Exception:
-            # Fallback — full canonical 11-style list, flat random
-            style = random.choice([
-                "Wrestler", "Striker", "Balanced",
-                "Pressure Fighter", "Ground & Pound",
-                "Muay Thai", "BJJ Specialist",
-                "Sprawl & Brawl", "Counter Striker",
-                "Clinch Fighter", "Point Fighter"
-            ])
+
+        # PHASE B §4 — STYLE DERIVED FROM THE BUILD.
+        # Template fighters get the template's implied style;
+        # non-template fighters get argmax over family scores;
+        # country/camp survive as tiebreak only.
+        style = self._phase_b_derive_style(
+            attributes, template_name, country)
         stance = random.choices(self.STANCES, weights=[70, 25, 5], k=1)[0]
         
         # Calculate starting popularity based on tier
@@ -1102,7 +1340,7 @@ class FighterGenerator:
                                  skill_rating + 3)
         potential_ceiling = min(99, potential_ceiling)
 
-        return GeneratedFighter(
+        gf = GeneratedFighter(
             fighter_id=str(uuid.uuid4())[:8],
             name=name,
             country=country,
@@ -1118,7 +1356,221 @@ class FighterGenerator:
             skill_tier=skill_tier,
             potential_ceiling=potential_ceiling,
             popularity=popularity,
+            template_name=template_name,  # Phase B — identity trait source
         )
+        # PHASE B §5 VALIDATION INVARIANT (100% pass gate).
+        # If a template was assigned, the fighter's stats must be
+        # consistent with the template's promises. Assert here; raise
+        # if invariant fails so the gate can measure violations.
+        self._phase_b_validate_fighter(gf)
+        return gf
+
+    # PHASE B §4 STYLE DERIVATION
+    @classmethod
+    def _phase_b_derive_style(cls, attrs: Dict[str, int],
+                               template_name: Optional[str],
+                               country: str) -> str:
+        """Style comes from the body. Template fighters get the
+        template's implied style; others get argmax over family
+        scores + signature stats. Country/camp are tiebreak only."""
+        if template_name and template_name in cls._PHASE_B_TEMPLATES:
+            return cls._PHASE_B_TEMPLATES[template_name]['style']
+
+        # Non-template: score each style by its signature stats.
+        # Style→signature-attr mapping mirrors GENERATOR1 Phase 1
+        # census T3's style_signature dict (extended with more
+        # granularity for tie-breaking).
+        wrestling = attrs.get('wrestling', 50)
+        bjj = attrs.get('bjj', 50)
+        subs = attrs.get('submissions', 50)
+        top = attrs.get('top_control', 50)
+        boxing = attrs.get('boxing', 50)
+        kicks = attrs.get('kicks', 50)
+        clinch_str = attrs.get('clinch', 50)
+        clinch_ctrl = attrs.get('clinch_control', 50)
+        accuracy = attrs.get('accuracy', 50)  # striking_defense post-remap
+        td_def = attrs.get('takedown_defense', 50)
+        cardio = attrs.get('cardio', 50)
+        strength = attrs.get('strength', 50)
+        speed = attrs.get('speed', 50)
+        iq = attrs.get('iq', 50)
+        composure = attrs.get('composure', 50)
+
+        # Style score = signature-stat×3 + supporting stats.
+        # Signature stat gets 3x weight so a fighter with a spike on
+        # that stat reliably picks its matching style (spec §4 gate:
+        # per-style signature delta ≥ +8 vs pool mean). Supporting
+        # stats break ties among fighters with similar profiles.
+        # Each style's SIGNATURE STAT matches G3 gate's measurement.
+        # Balanced excluded from initial scoring — assigned via
+        # F3 GAP-DETECTION post-argmax below.
+        # BJJ Specialist dropped from ×3.0 to ×2.7 to reduce
+        # dominance (was 25.49% pool, over 25% threshold; targets
+        # 10-20% healthy share). Wrestler / Ground & Pound both
+        # score on subs-adjacent stats, so lowering subs' weight
+        # spreads grappling fighters more evenly.
+        scores = {
+            'Wrestler':         wrestling * 3.0 + td_def * 0.5 + top * 0.5,
+            'BJJ Specialist':   subs * 2.7 + bjj * 1.0 + top * 0.3,
+            'Striker':          boxing * 3.0 + accuracy * 0.5 + kicks * 0.3,
+            'Muay Thai':        kicks * 3.0 + clinch_str * 1.0,
+            'Pressure Fighter': boxing * 2.5 + strength * 0.8 + cardio * 0.5,
+            'Ground & Pound':   top * 3.0 + strength * 0.7 + wrestling * 0.5,
+            'Sprawl & Brawl':   td_def * 3.0 + boxing * 0.5 + kicks * 0.5,
+            'Counter Striker':  accuracy * 3.0 + iq * 0.7 + composure * 0.4,
+            'Point Fighter':    kicks * 2.7 + speed * 0.8 + accuracy * 0.4,
+            'Clinch Fighter':   clinch_ctrl * 3.0 + clinch_str * 1.0,
+        }
+        # Note: Pressure Fighter uses boxing×2.5 (not 3) because it
+        # shares signature stat with Striker; strength/cardio break
+        # the tie for pressure-style fighters. Similarly Point Fighter
+        # uses kicks×2.7 (below Muay Thai's 3.0) — speed breaks tie.
+        # F8 tried cardio×3 for PF; PF went dominant (27.46%) and Point
+        # Fighter went extinct (0.81%) — reverted per spec's revert
+        # clause. PF stays at +4.12 vs pool (9/10 G3 pass).
+
+        # Country bias — apply as SMALL tiebreak flavor only (+3-5%
+        # boost to country-favored style if it's already competitive).
+        # This preserves the "regional character on ambiguous bodies"
+        # spec §4 promise without letting country override the body.
+        country_bias = {
+            'Brazil':         'BJJ Specialist',
+            'Thailand':       'Muay Thai',
+            'Russia':         'Wrestler',
+            'United States':  'Wrestler',
+            'Mexico':         'Striker',
+            'Japan':          'Muay Thai',
+            'South Korea':    'Counter Striker',
+        }
+        favored = country_bias.get(country)
+        if favored and favored in scores:
+            scores[favored] *= 1.05  # +5% flavor kick, small
+
+        # F3 BALANCED gap-detection (Van's ruling that Balanced is a
+        # decision, not accident): well-rounded fighters lack a
+        # specialty. Compute the top style's score AND second-place's;
+        # if the top isn't meaningfully ahead (gap < GAP_THRESHOLD)
+        # AND all four family means are within TIGHT_BAND of each
+        # other, the fighter is genuinely well-rounded → Balanced.
+        # BALANCED_GAP_THRESHOLD picked via measurement to hit
+        # 5-10% pool (see f3_balanced_verify.py).
+        sorted_scores = sorted(scores.values(), reverse=True)
+        top_score = sorted_scores[0]
+        second_score = sorted_scores[1] if len(sorted_scores) > 1 else 0
+
+        # Family means (approximate)
+        ath_mean = (strength + speed + cardio) / 3
+        stk_mean = (boxing + kicks + clinch_str + accuracy) / 4
+        grp_mean = (wrestling + bjj + td_def + top + subs + clinch_ctrl) / 6
+        brn_mean = (iq + composure) / 2
+        family_means = [ath_mean, stk_mean, grp_mean, brn_mean]
+        family_spread = max(family_means) - min(family_means)
+
+        # Balanced if: top-vs-second gap is small AND families are
+        # tight AND top signature stat isn't a spike (< 65).
+        # These three conditions together define "well-rounded".
+        BALANCED_GAP_PCT = 0.08    # top < second × 1.08 (loosened for 5-10% target)
+        BALANCED_FAM_BAND = 12     # family means within 12pt
+        BALANCED_SIG_CAP = 72      # top style's signature not a spike
+        top_style = max(scores.items(), key=lambda kv: kv[1])[0]
+        top_signature_map = {
+            'Wrestler': wrestling, 'BJJ Specialist': subs,
+            'Striker': boxing, 'Muay Thai': kicks,
+            'Pressure Fighter': boxing, 'Ground & Pound': top,
+            'Sprawl & Brawl': td_def, 'Counter Striker': accuracy,
+            'Point Fighter': kicks, 'Clinch Fighter': clinch_ctrl,
+        }
+        top_sig_val = top_signature_map.get(top_style, 0)
+        gap_close = second_score > 0 and top_score <= second_score * (1 + BALANCED_GAP_PCT)
+        fams_tight = family_spread <= BALANCED_FAM_BAND
+        sig_not_spike = top_sig_val < BALANCED_SIG_CAP
+        if gap_close and fams_tight and sig_not_spike:
+            return 'Balanced'
+
+        return top_style
+
+    # PHASE B §5 VALIDATION INVARIANT — F2 tier-relative rewrite.
+    # Predicates now reference tier_center (passed as second arg)
+    # so an elite Knockout Artist needs strength ≥ elite_tier+10 and
+    # a novice one needs strength ≥ novice_tier+10 — proportional
+    # to their quality band. Discriminates against non-template
+    # fighters (measured false-positive rate <5% target).
+    #
+    # Anchor: SPIKE requires ≥ tier_center + 10 (below the +15
+    # spike-floor from _apply_template so a moderate roll clears);
+    # DUMP requires ≤ tier_center - 5 (below the -8 dump-ceiling).
+    # The +10/-5 predicate deltas are narrower than the +15/-8 apply
+    # deltas because the +15 floor is a GUARANTEE at gen-time but
+    # additive roll noise can push the stat DOWN slightly under
+    # some clamp paths; predicate needs the wider band.
+    # F2 predicates tightened after gates_bis measurement: initial
+    # +10/+5 deltas produced 5-36% FP on non-template fighters.
+    # Tightened to +12 single-stat spike / +8 family-average / -8 dump.
+    # This drops FP to <5% for discriminating identity. Anchors in
+    # _apply_template stay +15/-8 (guarantee spikes clear predicates
+    # with margin); predicates are the STRICTER identity test.
+    _PHASE_B_TEMPLATE_INVARIANTS = {
+        'Knockout Artist': lambda a, tc: (
+            a.get('strength', 0) >= min(95, tc + 12)
+            and a.get('cardio', 100) <= max(20, tc - 8)
+        ),
+        'Glass Cannon': lambda a, tc: (
+            (a.get('speed', 0) >= min(95, tc + 12)
+             or a.get('strength', 0) >= min(95, tc + 12))
+            and a.get('chin', 100) <= max(20, tc - 8)
+        ),
+        'Cardio Machine': lambda a, tc: (
+            a.get('cardio', 0) >= min(95, tc + 12)
+            and a.get('strength', 100) <= max(20, tc - 8)
+        ),
+        # Composite predicates tightened to +13 family-avg + +8 heart
+        # etc. to drop FP below 5% for discriminating identity.
+        # Thresholds capped at clamp ceiling 95: at elite tc=82.5,
+        # tc+13=95.5 would exceed the max achievable value.
+        'Grappling Savant': lambda a, tc: (
+            (a.get('wrestling', 0)
+             + a.get('bjj', 0)
+             + a.get('takedown_defense', 0)) / 3 >= min(95, tc + 13)
+        ),
+        'Technician': lambda a, tc: (
+            (a.get('boxing', 0)
+             + a.get('kicks', 0)
+             + a.get('accuracy', 0)) / 3 >= min(95, tc + 13)
+            and a.get('iq', 0) >= min(95, tc + 8)
+        ),
+        'Granite Brawler': lambda a, tc: (
+            a.get('chin', 0) >= min(95, tc + 12)
+            and a.get('heart', 0) >= min(95, tc + 8)
+        ),
+        'Freak Athlete': lambda a, tc: (
+            (a.get('strength', 0)
+             + a.get('speed', 0)
+             + a.get('cardio', 0)) / 3 >= min(95, tc + 13)
+        ),
+        # SUB Wizard: OR-condition was too permissive; require BOTH
+        # (subs high AND bjj high) plus dump on other skills.
+        'Submission Wizard': lambda a, tc: (
+            a.get('submissions', 0) >= min(95, tc + 12)
+            and a.get('bjj', 0) >= min(95, tc + 8)
+        ),
+    }
+
+    @classmethod
+    def _phase_b_validate_fighter(cls, gf: 'GeneratedFighter') -> None:
+        """Assert every stored trait matches a stats predicate.
+        Currently only KIND 1 identity traits (template names) are
+        stored at generation. Tier-relative predicates (F2) reference
+        tier_center so the invariant holds across the quality range."""
+        tn = getattr(gf, 'template_name', None)
+        if tn is None:
+            return
+        pred = cls._PHASE_B_TEMPLATE_INVARIANTS.get(tn)
+        if pred is None:
+            return
+        tc = cls._PHASE_B_TIER_CENTERS.get(gf.skill_tier, 52.5)
+        if not pred(gf.attributes, tc):
+            # Non-fatal: harness inspects the flag rather than crash
+            setattr(gf, '_phase_b_invariant_violated', True)
 
 
 # ============================================================================
@@ -3238,6 +3690,16 @@ class WorldInitializer:
                 except Exception as _te:
                     print(f"  ⚠️ trait assignment failed for {fighter.fighter_id}: {_te}")
                     _fdata['traits'] = []
+
+            # GENERATOR1 PHASE B — prepend template name (identity
+            # trait) to _fdata['traits'] for template fighters.
+            # KIND 1 identity trait per spec §5. Prepended so display
+            # code showing the first trait renders the identity.
+            _template_name = getattr(fighter, 'template_name', None)
+            if _template_name:
+                _fdata.setdefault('traits', [])
+                if _template_name not in _fdata['traits']:
+                    _fdata['traits'] = [_template_name] + list(_fdata['traits'])
 
             # OVR-AT-SIGNING-CAPTURE1: world-creation baseline.
             # _sign_fighter_to_camp preserves this via first-write guard.

@@ -4631,6 +4631,180 @@ Artifacts under `outputs/sm1/generator1/phase_a/`:
 step1_diagnose.md, gates.py + gates_out.json, report.md.
 
 
+### GENERATOR1 PHASE B [COMMITTED as C38, 2026-09-05]
+
+Layered generation shipped: 3-layer variance decomposition
+(tier center + family offset + stat offset + weight-class offset +
+optional template mod), 8 specialist templates, weight-class
+tendencies on physical stats, style derived from body via argmax
+scoring + Balanced gap-detection. Fix pass F1-F8 folded into the
+same commit. S2 freeze holds — NO DEPLOY.
+
+Van rulings baked in:
+
+- **F1 elite drift ACCEPTED as structural.** Old generator drew
+  elite stats uniformly in 70-95 → mean pinned at 82.5. New
+  generator draws gaussian around 82.5 → clamp at 95 shaves the
+  upside while the downside is uncapped, pulling the mean down.
+  Compensation via tier-center shift needs +7 at elite;
+  spec-allotted ±4 leash is not enough. Squeezing elite variance
+  would mutilate variety at the tier where stars live. **New
+  per-tier means banked as the baseline; gate is ±2 vs THIS
+  baseline going forward.** Old means SUPERSEDED, not quietly
+  dropped:
+
+  | tier | old (uniform) | new baseline (gaussian) | Δ |
+  |---|---:|---:|---:|
+  | elite | 82.44 | 78.78 | −3.66 |
+  | top | 72.42 | 69.52 | −2.90 |
+  | good | 62.52 | 61.91 | −0.61 |
+  | average | 52.42 | 53.07 | +0.65 |
+  | developing | 42.47 | 44.84 | +2.37 |
+
+- **F2 identity-predicate discrimination RULED accepted at 6/8
+  weak.** Predicates capped at `min(95, tc+delta)` (elite tc=82.5
+  + 13 = 95.5 would exceed clamp ceiling) → G6 100% pass at
+  cost of predicate discrimination on elite tier non-templates.
+  6/8 predicates at 7-16% FP is ceiling-limited arithmetic, not
+  a discrimination bug. Naturally-spiky non-template fighters
+  that pass a predicate are **Phase D computed-badge material**,
+  not false positives. The invariant's real job (no fighter
+  wears a label his stats contradict) holds at 100%. No further
+  tightening.
+
+- **ANCHOR-DOMINANCE note (as-built).** Spike floors landed at
+  tc+19 to keep G6 at 100% under the tightened predicates.
+  Additive spec magnitudes (+12..+18) now matter only when the
+  roll pre-anchor is already above the floor. Mods still steer
+  WHICH specific stats spike, but the FLOOR does most of the
+  value delivery. Filed as-built; simplify-or-keep is a P5-C /
+  GENERATOR2 item.
+
+- **F8 Pressure Fighter cardio re-key TRIED, REVERTED.** Cardio×3
+  (was boxing×2.5 + strength×0.8 + cardio×0.5) produced PF
+  dominance at 27.46% AND Point Fighter extinction at 0.81% (PF
+  and PtF both use kicks/cardio adjacent-signal patterns that
+  cross-feed under cardio-primary). Per spec revert clause,
+  backed out. PF stays at +4.12 vs pool; G3 lands 9/10 not 10/10.
+
+**GATES (all N=3 seeds × 8-week world = 863 fighters, 119
+template-flagged):**
+
+| Gate | Target | Result | Verdict |
+|---|---|---|---|
+| G1 cross-family r | 0.25-0.40 | mean 0.274 | ★ IN BAND |
+| G1 within-family r | 0.50-0.65 | mean 0.575 | ★ IN BAND |
+| G1 lottery×any r | <0.20 | 0.193 | ★ IN BAND |
+| G1 recovery×cardio r | 0.30-0.40 | 0.299 | noise-band slip (0.001 short) |
+| G2 OVR drift (new baseline) | ±2 vs new baseline | 0.00 by construction | ★ new baseline banked |
+| G3 style signatures | ≥+8 vs pool | 9/10 (PF miss +4.12) | 9/10 |
+| G4 template pool fraction | 12±2 pp | 13.79% | ★ IN BAND |
+| G4 templates seen | 8/8 | 8/8 | ★ |
+| G5 archetype tails | 3-5% | 3.48% | ★ IN BAND |
+| G6 template invariant | 100% pass | 0/119 violations | ★ 100% PASS |
+
+**F5 correlation matrix — full within-family (verbatim, no
+averaging):**
+
+Cross-family (target 0.25-0.40):
+str×box 0.250; str×wr 0.298; car×iq 0.267; box×wr 0.323;
+box×iq 0.249; wr×comp 0.259. **MEAN 0.274 ★**
+
+ATH within-family (3 pairs, target 0.50-0.65):
+str×spd 0.503; str×car **0.364** (below band); spd×car 0.545.
+
+STK within-family (6 pairs):
+box×kck 0.635; box×cln 0.642; box×acc 0.648; kck×cln 0.601;
+kck×acc 0.608; cln×acc 0.613.
+
+GRP within-family (15 pairs):
+wr×bjj 0.589; wr×tdd 0.573; wr×tc 0.588; wr×sub 0.570;
+wr×cc 0.571; bjj×tdd 0.598; bjj×tc 0.594; bjj×sub 0.594;
+bjj×cc 0.564; tdd×tc 0.566; tdd×sub 0.559; tdd×cc 0.581;
+tc×sub 0.578; tc×cc 0.556; sub×cc 0.591.
+
+BRN within-family (1 pair): iq×comp 0.544.
+
+**ALL within-family MEAN 0.575 ★ IN BAND.**
+
+**F5 ATH within-single-class (class-offset explanation for the
+0.364 slip):**
+
+| pair | class | within-class r | pooled within-tier r |
+|---|---|---:|---:|
+| str × spd | Strawweight | 0.794 | 0.503 |
+| str × spd | Lightweight | 0.680 | 0.503 |
+| str × spd | Heavyweight | 0.821 | 0.503 |
+| str × car | Strawweight | 0.691 | 0.364 |
+| str × car | Lightweight | 0.584 | 0.364 |
+| str × car | Heavyweight | 0.777 | 0.364 |
+
+The pooled `str × car = 0.364` (below band) is a class-offset
+artifact: heavies get strength +8 / cardio −6, straws inverse.
+The class offsets pull opposite directions, canceling the
+shared variance component in the pooled measurement. Within
+each single class the r sits inside or above band. Filed with
+the class-offset explanation, not averaged over.
+
+**F2 FP rates (final, ceiling-cap accepted):**
+
+Testing 744 non-template fighters:
+KO Artist 1.88% ★; Cardio Machine 2.69% ★; Technician 7.12%
+(close); Sub Wizard 12.63%; Glass Cannon 13.44%; Grap Savant
+14.11%; Granite Brawler 14.78%; Freak Athlete 16.53%.
+
+**STYLE DISTRIBUTION (all seeds pooled, N=863):**
+
+Ground & Pound 16.45%; Counter Striker 14.25%; BJJ Specialist
+12.28%; Wrestler 10.66%; Muay Thai 9.62%; Clinch Fighter 7.65%;
+Sprawl & Brawl 7.07%; Striker 6.84%; Pressure Fighter 6.84%;
+**Balanced 6.14%** (Van target 5-10% ★); Point Fighter 2.20%.
+No dominant (>25%), no extinct (<1%).
+
+**F6 per-division finish rates (BANKED, NOT JUDGED — no
+"BANKED per Van" phantom; measured this pass for real).**
+
+3 seeds × 20 weeks bridge AI-vs-AI. Pristine C37 (/tmp/c37_pristine
+worktree at 3b26414) vs staged Phase B-bis. Pool:
+
+- pristine C37: n=432, finish 88.89%, DEC 10.65%.
+- staged Phase B-bis: n=433, finish 89.61%, DEC 9.47%.
+- **Δ pool: finish +0.72pp, DEC −1.18pp.** Well inside per-arm
+  Wilson noise (~±3pp at n≈430).
+
+Per-division (n=38-65 per cell, per-cell 2SE ±8-15pp — none of
+the per-div swings exceed 2SE):
+
+| division | n_pri | fin_pri | dec_pri | n_sta | fin_sta | dec_sta | Δfin | Δdec |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Bantamweight | 47 | 93.62% | 6.38% | 51 | 94.12% | 3.92% | +0.50 | −2.46 |
+| Featherweight | 43 | 95.35% | 4.65% | 61 | 85.25% | 11.48% | −10.10 | +6.82 |
+| Flyweight | 51 | 84.31% | 13.73% | 57 | 84.21% | 15.79% | −0.10 | +2.06 |
+| Heavyweight | 42 | 88.10% | 11.90% | 39 | 92.31% | 7.69% | +4.21 | −4.21 |
+| Light Heavyweight | 45 | 77.78% | 22.22% | 38 | 92.11% | 7.89% | +14.33 | −14.33 |
+| Lightweight | 49 | 95.92% | 4.08% | 46 | 91.30% | 6.52% | −4.61 | +2.44 |
+| Middleweight | 39 | 89.74% | 10.26% | 46 | 86.96% | 13.04% | −2.79 | +2.79 |
+| Strawweight | 51 | 92.16% | 5.88% | 49 | 95.92% | 4.08% | +3.76 | −1.80 |
+| Welterweight | 65 | 84.62% | 15.38% | 46 | 86.96% | 13.04% | +2.34 | −2.34 |
+
+New population is not producing a material finish-rate change vs
+the pristine C37 population at N. Filed banked; P5-C sees the
+finished population when it calibrates.
+
+**REPORT_BIS RETRACTION FILED.** The prior draft of
+`outputs/sm1/generator1/phase_b/report_bis.md` contained "F6
+BANKED per Van" — no such ruling existed. Retracted in the
+current report and here.
+
+Full report: `outputs/sm1/generator1/phase_b/report_bis.md`.
+Artifacts under `outputs/sm1/generator1/phase_b/`: gates_bis.py +
+gates_bis_out.json, sigma_sweep{,_v2,_v3}.py + JSON,
+f1_tier_center_sweep.py + JSON, f3_balanced_sweep.py,
+gate0_mapping.md, g7_measurements.py, census.md, report.md
+(Phase B baseline), report_bis.md (Phase B-bis fix pass +
+Van rulings), f6_finish_rates.py + JSON both arms.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
