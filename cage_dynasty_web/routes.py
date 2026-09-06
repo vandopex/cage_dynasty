@@ -1001,6 +1001,18 @@ def register_routes(app):
         _wf_attrs = {k: int(getattr(fighter, k, 0) or 0)
                      for k in _CANONICAL_19}
         badges = _compute_badges(_wf_attrs, fighter.weight_class)
+        # C41 dedupe (Van 2026-09-05, option d): suppress a computed
+        # badge when the fighter already carries an identity trait
+        # of the SAME name. One label per truth. Currently
+        # collision-prone pair: Freak Athlete (Phase B template
+        # identity trait, stored on traits) + Freak Athlete
+        # (computed badge, tier-composite predicate the template
+        # auto-clears by construction). Same-name suppression
+        # covers this class of collision generically — future
+        # templates or badges sharing a name are auto-deduped at
+        # render without needing a maintained collision list.
+        _identity_traits = set(getattr(fighter, 'traits', []) or [])
+        badges = [b for b in badges if b not in _identity_traits]
 
         return render_template('fighter_profile.html',
             fighter=fighter,

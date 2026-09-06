@@ -846,9 +846,18 @@ def generate_amateur_fighter(
     traits: List[str] = []
     if template_name:
         traits.append(template_name)
+    # C41 (Van 2026-09-05): stat-claiming labels removed from the
+    # random pool — 'Iron Chin' and 'Cardio Machine' both make
+    # promises about stats without any predicate behind them (a
+    # random 'Iron Chin' amateur with chin 51 would graduate with
+    # a label the badge system visibly disagrees with). Stat-
+    # claiming labels may only come from Phase B/C templates
+    # (predicated + tier-anchored) or from the Phase D badge
+    # system (computed at render). The three below are KIND-4
+    # behavioral quirks — they claim nothing about stats, only
+    # about tendencies, so the random roll is fine.
     if random.random() < 0.15:
-        amateur_traits = ["Fast Starter", "Slow Starter", "Iron Chin",
-                         "Cardio Machine", "Gym Rat"]
+        amateur_traits = ["Fast Starter", "Slow Starter", "Gym Rat"]
         _t = random.choice(amateur_traits)
         if _t not in traits:
             traits.append(_t)
