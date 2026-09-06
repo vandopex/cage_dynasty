@@ -898,9 +898,55 @@ new styles / etc.); nothing here ships mid-arc.
   breed (STYLE-DEAD1 shape). One canonical derivation table
   applied at the read site.
 
+- **GAMEPLAN1** (new, C44 filed) — pointer to
+  `claude/gameplan_notes_2026-09-05.md` (Van FILE 6, verbatim
+  design notes). Aggression axis is LIVE post-C24; range and
+  finish-seek dials are FILED but not measured for reachability
+  (from CLAUDE.md gameplan filings). **Gate-0 inventory census**
+  before any gameplan work per Van's "more written than you
+  think": grep-map every existing gameplan-related dial, hook,
+  and consumer; measure which fires at all in production
+  before proposing any new mechanic. **Two gates for any
+  gameplan ship**:
+  - **Placebo-button gate**: any plan the player can pick MUST
+    produce a measurable in-fight difference from another plan
+    on a neutral fighter (fixed-card CRN, N≥1000, T9
+    convention). A plan that doesn't move outcomes is a
+    placebo button; strip or wire.
+  - **No-dominant-plan gate**: no single plan wins above some
+    threshold pool-wide against random opponents; would collapse
+    tactical choice. Threshold **NOT YET RULED** — architect-
+    proposed provisional ≥55% (cc-proposed, awaiting Van
+    ratification when GAMEPLAN1 opens for spec). Van rules if a
+    plan lands out-of-band on the actual measurement.
+  Sequencing: post-P5-C; GAMEPLAN1 is a design layer that
+  reads the finished physics.
+
+- **PROTRAIT1** (new, C44 filed) — pro-side random-fill trait
+  bug (C41 analog for pros). `systems/traits.py:823-839`'s
+  weighted-random-fill pass fills traits with ZERO stat
+  predicate; a chin=45 pro CAN receive "Iron Chin" via that
+  branch (attribute-triggered path IS predicated at line 797,
+  but random-fill fallback isn't). C41 fixed amateur side
+  (`amateur.py` random pool stripped of `Iron Chin` /
+  `Cardio Machine`); pro-side same shape needs same fix.
+  **Scope**: strip stat-claiming names from the
+  weighted-random-fill fallback (keep attribute-triggered
+  path unchanged, keep behavioral quirks freely rollable).
+  Small ship, forward-only. Post-P5-C.
+
+- **FATIGUE-SHAPE1** (new, C44 filed, Van addendum) —
+  per-channel stamina floors making "exhausted but dangerous"
+  literal. Provisional shape: power floors HIGH (~0.75, the
+  puncher's chance never dies), speed/defense LOW (~0.35),
+  grappling in between. **MECHANISM CHANGE — forbidden
+  mid-calibration** per spec §PRINCIPLE; gated on the Group D
+  all-in measurement (gassed-fighter vs fresh) showing room for
+  differentiation. Post-P5-C, own ratification arc.
+
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C42 63ea7a1. Standing
+Fresh date + HEAD gate (last shipped: C43 ddb9a47. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

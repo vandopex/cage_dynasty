@@ -5351,6 +5351,194 @@ Diff-stat: `claude/p5c_calibration_spec_v0_1.md` +153 (new),
 HEAD), this CLAUDE.md filing.
 
 
+### C44 [COMMITTED as C44, 2026-09-05] — P5-C Phase 0 COMPLETE (baseline of record + Van rulings + GAMEPLAN1 / PROTRAIT1)
+
+Docs-only ship. Consolidates Phase 0 + Phase 0-bis + Phase 0-ter
+into ONE baseline-of-record. Van FILE 6 enters git verbatim as
+`claude/gameplan_notes_2026-09-05.md` (64 lines; first/last-line
+anchors verified). Van's three P5-C rulings recorded. GAMEPLAN1
+and PROTRAIT1 filed to scope-doc backlog. Scope-doc HEAD advances
+to C43.
+
+**BASELINE OF RECORD (post-corrections).** Phase 0's dashboard was
+run three times: first pass produced the numbers, second pass
+(0-bis) caught instrument problems, third pass (0-ter) reconciled
+them. The corrected values below supersede Phase 0's original
+report where they differ.
+
+**METHOD MIX (bridge-completed pool, N=429, 3 seeds × 20 wks):**
+
+| bucket | pct | Van §0 target ±5pp | gap |
+|---|---:|---:|---:|
+| KO | 1.40% | ~22% | −20.6pp |
+| TKO | 67.76% | ~16% | +51.8pp |
+| SUB | 17.99% | ~20% | ★ IN BAND (−2.0pp) |
+| DEC | 12.38% | ~40% | −27.6pp |
+
+Finish rate 87.15% vs target 60%. Per-division direction confirmed
+(heavies finish, lightweights decide). R1 = 50% of finishes; R2 =
+34%; R3 = 15%.
+
+**CUT-STOPPAGE (Van T1 ruling: sim-layer 11.17% is Group A's
+target).** Cut rate via NarratedFightResult.method sim-layer read
+= 270/2417 = **11.17% of sim results**. Target 1-3% per Van §0 →
+HOT by 3-11×. Group A tunes CUT_BASE_CHANCE / CUT_STRENGTH_DIVISOR
+/ CUT_DOCTOR_STOP_STEP / CUT_DOCTOR_STOP_MAX / FINISH_CUT_STOP_
+THRESHOLD against this reading. **One post-hoc join attempt permitted
+(wrap `_simulate_card_fights` to inject per-fight fire counter into
+the fight dict); NO further `_win`-based monkey-patching** — that
+approach failed twice.
+
+**SENSITIVITY LADDER (T9 convention: Δp × 100 in pp, fresh
+fighters per iteration, N ≥ 1000 CRN, all-70 mirror):**
+
+| attribute | Δp | verdict |
+|---|---:|---|
+| speed+20 | −10pp (both fixtures) | 🚨 known pathology (Van ruling below) |
+| cardio+20 | +38 to +42pp (both fixtures) | 🚨 god channel |
+| chin+20 | +0.10pp (channel-owning; KD reduction ~15%) | Group D deferred |
+| power+20 | +10.50pp ★ | HEALTHY bounded band (1st post-D18 reading) |
+| heart+20 | +3.40pp | positive, small |
+
+**RULE FIRES (pre-gen contamination corrected)** — Phase 0's
+counts were ~80% pregen (2417 sim total, 429 bridge fights). T6
+proved pregen sims CAN fire R1-R4 (9 fires per 50 no-gameplan
+sims). Rough bridge-only rate: R1 ~0.21/fight, R2 ~0.25/fight,
+R3 ~0.0002/fight, R4 = 0. Even the corrected R3 rate is
+essentially never — three C32 loosening candidates viable.
+
+**JUDGE (T5 via C33 harness, N=500 fights = 774 round-pairs):**
+Wrestler share at CONTROL=4.0:
+- diff≥3: **75.0%** ★ IN Van's 65-80% band
+- diff≥5: **70.4%** ★ IN BAND
+- diff≥8: 55.6% (n=18)
+- diff≥10: 53.9% (n=13)
+CONTROL=4.0 provisional certified DIRECTIONALLY at low n; Group B
+needs Van's ≥300 split-round threshold for full certification.
+
+**STAMINA (T8: C12 during-zero adopted as canonical definition):**
+On the same pool of 500 bridge-extracted fights:
+
+| round | n | (a) T5 end≤0.001 | (b) C12 during=0 |
+|---|---:|---:|---:|
+| R1 | 286 | 0.00% | **38.46%** |
+| R2 | 227 | 1.32% | **39.86%** |
+| R3 | 140 | 4.29% | 25.61% |
+
+**C12 during-zero is the canonical definition** (reproduces the
+STAMINA-DRAIN1 baseline shape). R2 landed at 39.86%, down from
+STAMINA-DRAIN1 C11's 52.1% baseline — **~12pp drop is
+POPULATION**, not engine. Filed as expected consequence of
+GENERATOR1 (Phase C amateur unification + Phase B power model
++ D17 stamina floor).
+
+**T7 MC-ODDS MUTATION VERDICT: NOT a live bug.** The aggression
+buff at `fi:502-522` mutates FighterAttributes in place by
+design; MC odds at `game_bridge._compute_mc_odds_for_fight:17612`
+constructs FRESH `_bundle["fa1"]/["fa2"]` per sim (docstring at
+:17563 explicitly documents this). **HARNESS-ONLY FOOTGUN** —
+Phase 0's reused-fighter baseline was the ONLY caller that hit
+the accumulation.
+
+**Documented FALSE, superseded not deleted** (Phase 0 → 0-ter
+corrections):
+
+1. **"42.66% of bridge fights" cut rate** → superseded by
+   **11.17% sim-layer raw-label reading** (T1 instrument was a
+   category error; second instrument attempt also failed;
+   sim-layer reading is the truth denominator).
+2. **"44.8% baseline noise-band"** → wrong. Was a ~5pp
+   slot-symmetric bias from the DASHBOARD FIXTURE's reused
+   fighter objects accumulating the fi:502-522 aggression buff.
+   C33's fresh-per-iter fixture reads 49.5/50.5 (parity).
+3. **"14pp speed discrepancy vs C33"** → reconciled. C33's
+   `-18.50pp` = `(wins_atk-wins_def)/N × 100`; my `-4.70pp` =
+   `Δp × 100`. Same sim data, byte-identical wins_atk=402/N.
+   ~9pp metric-unit + ~5pp fixture. **T9 convention retires
+   the C33 metric** (Δp × 100 in pp only, going forward).
+4. **"Chin +0.10pp = flat = artifact"** → chin's KD-resistance
+   mechanic WORKS (156 → 133 KDs, −15%). It just doesn't route
+   through Δwin at this fixture because most striker wins are
+   non-KD paths (GnP TKO, body TKO, cuts). Chin is a KD-tank
+   stat; verdict on the Δwin flatness DEFERRED until Group A
+   lands (post-TKO-wall the KD path share should rise).
+
+## Van P5-C RULINGS (2026-09-05, filed)
+
+1. **STAMINA FLOOR stays 0.5.** T8 during-zero at R2 = 39.86%
+   is already under POP target <40% on the GENERATOR1 population.
+   Cardio worth is Group D dial work, not a floor adjustment.
+2. **R3 band: 5-15% of eligible rounds.** R4 band: 5-20% of
+   ahead-entering-final rounds. Group C presents the three C32
+   loosening candidates WITH measurements + **explicit
+   eligible-denominator definitions**; Van picks from data.
+3. **SPEED = option (a) K_SPEED_INIT retune ONLY.** Spec
+   §PRINCIPLE forbids mechanism adds mid-calibration. If the
+   dial cannot land speed non-negative, **file the finding** —
+   option (b) speed↔cardio interaction becomes a post-arc ship.
+4. **CHIN verdict DEFERRED.** Re-ladder chin after Group A lands
+   (its flatness is a TKO-wall symptom until proven otherwise).
+
+## Scope-doc backlog additions (this ship)
+
+- **GAMEPLAN1** — pointer to `claude/gameplan_notes_2026-09-05.md`
+  (Van FILE 6, verbatim). Gate-0 inventory census per Van's
+  "more written than you think" — before touching gameplans,
+  measure what's already wired (aggression axis is live post-
+  C24; range/finish-seek dials filed but not measured for
+  reachability). Two gates for any gameplan work:
+  **placebo-button gate** (a plan the player picks must produce
+  a measurable in-fight difference from another plan on a
+  neutral fighter; if not, it's placebo) + **no-dominant-plan
+  gate** (no single plan wins ≥55% of the pool against random
+  opponents; would collapse tactical choice).
+- **PROTRAIT1** — pro-side random-fill trait bug (C41 analog
+  for pros). `systems/traits.py:823-839` weighted-random-fill
+  pass fills traits with ZERO stat predicate; a chin=45 pro
+  CAN get "Iron Chin" via this branch. C41 fixed amateur side;
+  pro-side same shape. Fix: strip stat-claiming names from the
+  random-fill fallback (keep attribute-triggered path).
+  Post-P5-C, forward-only, small ship.
+
+Scope-doc HEAD line advances to C43 per convention.
+
+**Corrections closed (from this filing forward, always cite
+against the corrected numbers):**
+- Cut rate = 11.17% sim-layer, NOT 42.66% bridge-fights.
+- Baseline p(win) = 49.5/50.5 fresh-per-iter, NOT 44.8/55.2.
+- Speed Δwin in Δp × 100 pp = −10pp, NOT −20pp (that's C33
+  metric, retired).
+- R2 touched-zero = 39.86% (C12 during-zero definition), NOT
+  1.32% (T5 end-of-round) NOR 52.1% (that was C11 baseline;
+  ~12pp drop attributed to GENERATOR1 population).
+
+Diff-stat: `claude/gameplan_notes_2026-09-05.md` +64 (NEW),
+`claude/fight_model_p3_scope_v0_1.md` +N (GAMEPLAN1 + PROTRAIT1
++ HEAD → C43), this CLAUDE.md filing.
+
+**C44 ADDENDUM (Van rulings, 2026-09-05, from the stamina-floor
+discussion):**
+1. **GROUP D gains a required reading — "gassed-fighter all-in
+   penalty":** win rate + output for a fighter entering a round
+   near-empty vs fresh, so the floor debate happens against the
+   TOTAL stacked degradation, not the single 0.5 scalar. Group
+   D measures this before the stamina-floor 0.5 ratification is
+   final.
+2. **FATIGUE-SHAPE1 filed** to the post-P5-C backlog: per-channel
+   stamina floors (power floors HIGH ~0.75 — the puncher's
+   chance never dies; speed/defense LOW ~0.35; grappling
+   between) — **"exhausted but dangerous" made literal**.
+   Mechanism change, **forbidden mid-calibration** per spec
+   §PRINCIPLE; gated on the Group D all-in measurement showing
+   room for it.
+
+**Attribution correction filed inline** (scope-doc GAMEPLAN1
+entry): the "≥55% dominant-plan threshold" surfaced in this
+ship's scope-doc addition is **cc-proposed, not Van-ruled** — Van's
+FILE 6 deliberately left the threshold unset. Softened to
+"awaiting Van ratification when GAMEPLAN1 opens for spec".
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
