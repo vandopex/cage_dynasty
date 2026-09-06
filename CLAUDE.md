@@ -4523,6 +4523,107 @@ Census that measured Phase 1 findings this arc consumes:
 target).
 
 
+### GENERATOR1 PHASE A [COMMITTED as C35, 2026-09-05]
+
+Amateur → pro graduation transfers real stats. Kills the census
+🚨 finding #1: pre-Phase-A graduates carried md5-seeded random
+combat stats; post-Phase-A they carry the amateur's earned stats
+via canonical remap + 4 derived fills. Forward-only: already-
+graduated fighters keep their existing (md5-derived) stats.
+
+**FIX SITE.** `sign_amateur` at `game_bridge.py:21916-22050`
+(post-fix line range). Three additions inside the existing
+FighterRecord + _fdata write block:
+1. `rec.fighting_style = amateur.fighting_style` — STYLECOHERENCE1
+   parallel to `world_init.py:3070`; hasattr-guarded for legacy
+   record shapes.
+2. `_AMA_CANONICAL_REMAP` dict (5 entries — clinch/wrestling/bjj/
+   iq/accuracy → clinch_striking/takedowns/guard/fight_iq/
+   striking_defense) — character-for-character identical to
+   `world_init.py:3090-3096` `_canonical_remap`. Remaps all 15
+   amateur attrs into their canonical destinations.
+3. 4 derived-stat fills via `_seeded_noise(seed_key, half)`
+   helper (`md5(fid + seed_key)`-seeded rng — same shape as
+   `_convert_real_fighter._attr` fallback at gb:7265-7280):
+   - `recovery = clamp(20, 95, cardio + noise(±8))`
+   - `power = clamp(20, 95, strength + POWER_STYLE_OFFSET[style] + noise(±8))` (D18 formula)
+   - `top_control = clamp(20, 95, takedowns + noise(±10))`
+   - `submissions = clamp(20, 95, guard + noise(±12))`
+   Traits fix: `_fdata['traits'] = list(amateur.traits or [])`
+   (was literal `[]`).
+
+**GATES (n=25 graduates on fresh world seed 1001000).**
+- G1 TRANSFER FIDELITY: 25/25 graduated; **25/25 all-19-stats
+  match expected** (field-by-field, zero tolerance); style match
+  25/25; traits match 25/25; record.fighting_style set 25/25.
+- G1-bis DETERMINISM: same amateur → same derived stats
+  reproducible. 0/40 mismatches across 10 amateurs × 4 derived
+  stats.
+- G2 OFF-PATH EQUIVALENCE: fresh world seed 1001500, AI
+  attribute distributions (n=282) sit at means 57.78-59.06,
+  sd 14.11-15.27 — within the T6 baseline tolerance band per
+  the C27 production-population rule + uuid4 rule. World-init
+  untouched.
+- G3 NO ORPHANED READS: engine attrs flow correctly for both
+  new graduates (persisted `_fdata` values) and legacy fighters
+  (md5 fallback lives). **One anomaly PRE-EXISTING to Phase A
+  surfaced**: WebFighter dataclass has no `power` field despite
+  D18 landing power as canonical. See STEP 3(a) UI truth check
+  filed below.
+- G4 BANKED (not judged): graduate stat means 2-9pp BELOW the
+  T6 pro-pool baseline (cardio −8.08, heart −8.53, recovery
+  −8.05; strength −4.80, submissions −2.49 the smallest).
+  Amateur pool skews lower by design; Phase A carries that
+  forward instead of md5-scrambling to pro-OVR level.
+
+**🚨 TEMPORARY-BRIDGE NOTE — DERIVATION CORRELATIONS.**
+The four Phase A derivation formulas produce graduate-only
+correlations near **r ≈ 0.85** on the derived pairs
+(recovery×cardio, power×strength, top_control×takedowns,
+submissions×guard). This **INTENTIONALLY violates the ratified
+spec §1b r-targets** (recovery×cardio target 0.30-0.40; other
+family pairs target 0.50-0.65). The derivation is a Phase A
+BRIDGE: it uses cardio/strength/takedowns/guard as the seed base
+because those are the only signals available at graduation time
+under the pre-Phase-C amateur schema (amateur generator lacks
+`recovery` / `power` / `top_control` / `submissions`).
+**Retired when Phase C makes the amateur generator roll all 19
+canonical stats independently** at amateur-creation time —
+graduation then becomes a pure transfer (no derivation).
+**P5-C must EXCLUDE pre-Phase-C graduates from correlation
+gates OR expect this cluster on the graduate sub-population.**
+Same-arc downstream Phase C closes this by construction.
+
+**🚨 GRADUATE-QUALITY INCOHERENCE (open, pending Van ruling).**
+Under Phase A, graduates land on the pro pool with combat stats
+5-8pp BELOW the pool mean while their `overall_rating` is set at
+`int(amateur.overall_rating)` (mean of amateur's raw attributes).
+The rating stat is coherent with the amateur's earned attributes;
+what's incoherent is that the rating never gets recomputed from
+the transferred (remapped + derived) stat set. Two related but
+distinct incoherences:
+1. Graduate `overall_rating` = mean of amateur's 15 pre-remap
+   attrs (not the 19-attr canonical set that lands on `_fdata`).
+   Missing recovery/power/top_control/submissions in the mean.
+2. Downstream OVR readers (matchmaking, contracts, rankings,
+   UI) see one number; the fight-engine sees a different stat
+   pool. The gap becomes visible on graduate matchmaking
+   (rating implies competitive; stats are 5-8pp below actual
+   pool).
+Filed plainly, NOT resolved by Phase A. Ruling deferred to Van
+via STEP 3 report. See STEP 3(b) rating-flow census below.
+
+**Census reconciliation.** GENERATOR1 Phase 1 census T5 stated
+"5 canonical stats missing" from the amateur generator; Phase A
+found 4. The apparent 5th was `guard` — amateur DOES roll it, as
+`bjj` (the canonical remap converts it). Name gap, not a roll
+gap. Census stands corrected here.
+
+Full report: `outputs/sm1/generator1/phase_a/report.md`.
+Artifacts under `outputs/sm1/generator1/phase_a/`:
+step1_diagnose.md, gates.py + gates_out.json, report.md.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

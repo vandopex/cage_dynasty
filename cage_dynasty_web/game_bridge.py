@@ -21929,18 +21929,117 @@ class GameBridge:
                     is_active=True,
                     popularity=5,
                 )
+                # GENERATOR1 PHASE A (2026-09-05): stamp fighting_style on
+                # the record so STYLECOHERENCE1's bridge preference picks
+                # up the amateur's born style (parallels world_init:3070
+                # C31 fix — hasattr-guarded for legacy record shapes).
+                if hasattr(rec, 'fighting_style'):
+                    rec.fighting_style = str(
+                        getattr(amateur, 'fighting_style', '') or '')
                 self._game_state.fighters[fid] = rec
+
+                # GENERATOR1 PHASE A — combat-attribute transfer.
+                # Pre-Phase-A, _fdata got zero combat attrs, so every
+                # fight-engine read fell through to
+                # _convert_real_fighter._attr's md5(fid+key)-seeded
+                # random. The amateur's actual training-earned attributes
+                # were discarded. Phase A transfers all 15 rolled
+                # attributes via the world_init canonical remap and
+                # derives the 4 missing canonical stats (recovery, power,
+                # top_control, submissions) via family-adjacent formulas,
+                # md5-seeded per amateur fid for cross-session
+                # determinism.
+                #
+                # Forward-only: already-graduated fighters keep their
+                # existing (md5-derived) stats untouched. The `_a` /
+                # `_attr` fallback path stays live in game_bridge for
+                # legacy graduates.
+                _amateur_attrs = getattr(amateur, 'attributes', None) or {}
+
+                # Canonical remap table — mirrors world_init.py:3090-3096.
+                # Amateur uses `wrestling`/`bjj`; canonical is
+                # `takedowns`/`guard`. Other three (clinch/iq/accuracy)
+                # exist in the table for symmetry but amateur uses
+                # canonical names for them directly.
+                _AMA_CANONICAL_REMAP = {
+                    'clinch':    'clinch_striking',
+                    'wrestling': 'takedowns',
+                    'bjj':       'guard',
+                    'iq':        'fight_iq',
+                    'accuracy':  'striking_defense',
+                }
+
+                import hashlib as _hl
+
+                def _seeded_noise(seed_key: str,
+                                   half_range: int) -> int:
+                    """md5-seeded ±half_range int, deterministic per
+                    amateur fid + stat name. Same shape as Ship #32
+                    _convert_real_fighter._attr fallback."""
+                    _seed = int.from_bytes(
+                        _hl.md5(
+                            (fid + seed_key).encode('utf-8')
+                        ).digest()[:4], 'big',
+                    )
+                    import random as _rng_mod
+                    _rng = _rng_mod.Random(_seed)
+                    return _rng.randint(-half_range, half_range)
+
+                # Apply remap for the 15 amateur-source stats
+                _remapped_attrs: Dict[str, int] = {}
+                for _key, _val in _amateur_attrs.items():
+                    _canon = _AMA_CANONICAL_REMAP.get(_key, _key)
+                    _remapped_attrs[_canon] = int(_val)
+
+                # Derive the 4 missing canonical stats (see Phase A
+                # STEP 1(c) rationale in outputs/sm1/generator1/
+                # phase_a/step1_diagnose.md).
+                _strength = int(_remapped_attrs.get('strength', 50))
+                _cardio   = int(_remapped_attrs.get('cardio', 50))
+                _takedowns = int(_remapped_attrs.get('takedowns', 50))
+                _guard     = int(_remapped_attrs.get('guard', 50))
+
+                # Rule 1: recovery = cardio + noise(±8)
+                _remapped_attrs['recovery'] = max(20, min(95,
+                    _cardio + _seeded_noise('recovery', 8)))
+
+                # Rule 2: power = D18 formula (strength + PSO[style]
+                # + noise(±8)). Same shape as world_init.py:3131-3134
+                # but fid-seeded rather than module-level RNG.
+                try:
+                    from core.types import POWER_STYLE_OFFSET as _PSO
+                except ImportError:
+                    _PSO = {}
+                _pw_off = _PSO.get(
+                    str(getattr(amateur, 'fighting_style', '') or ''), 0)
+                _remapped_attrs['power'] = max(20, min(95,
+                    _strength + _pw_off + _seeded_noise('power', 8)))
+
+                # Rule 3: top_control = takedowns + noise(±10)
+                _remapped_attrs['top_control'] = max(20, min(95,
+                    _takedowns + _seeded_noise('top_control', 10)))
+
+                # Rule 4: submissions = guard + noise(±12)
+                _remapped_attrs['submissions'] = max(20, min(95,
+                    _guard + _seeded_noise('submissions', 12)))
+
                 self._game_state._fighter_data[fid] = {
                     "id":      fid,
                     "name":    amateur.name,
                     "age":     getattr(amateur, 'age', 20),
                     "country": getattr(amateur, 'nationality', 'USA'),
                     "style":   getattr(amateur, 'fighting_style', 'Balanced'),
-                    "traits":  [],
+                    # GENERATOR1 PHASE A: transfer amateur traits
+                    # verbatim (was literal `[]` pre-Phase-A).
+                    "traits":  list(getattr(amateur, 'traits', []) or []),
                     "weight_class": getattr(amateur, 'weight_class', 'Lightweight'),
                     "potential": getattr(amateur, 'potential_ceiling', 75),
                         "display_grade": ceiling_to_display_grade(getattr(amateur, 'potential_ceiling', 75)),
                         "grade_color":   grade_color(ceiling_to_display_grade(getattr(amateur, 'potential_ceiling', 75))),
+                    # GENERATOR1 PHASE A: 15 transferred + 4 derived
+                    # canonical combat attributes. Splat inline so
+                    # any future added attr auto-flows.
+                    **_remapped_attrs,
                 }
                 self._game_state.free_agents.discard(fid)
                 self._game_state._sign_fighter_to_camp(fid, self._game_state.player_camp_id)

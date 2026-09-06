@@ -13,9 +13,12 @@
 # execution ON — structural); P5-B4 SHIPPED as C33 (2026-09-05,
 # judge re-weight CONTROL 1.5→4.0 PROVISIONAL + D19 aggression-
 # drain constants +15%/-10% asymmetric — structural; magnitudes to
-# P5-C); next: GENERATOR1 (variety build, slots between P5-B4 and
-# P5-C per Van ruling), then P5-C calibration, then P3-6 ship.
-# Updated 2026-09-05 (C33 docs-and-engine ship).
+# P5-C); C34 GENERATOR1 docs (ratified spec v0.1 + August notes
+# enter git); C35 GENERATOR1 Phase A (amateur graduation transfers
+# real stats, 15 remapped + 4 derived, forward-only); next:
+# GENERATOR1 Phase B (pro generator rebuild) → Phase C (amateur
+# unification) → P5-C calibration → P3-6 ship.
+# Updated 2026-09-05 (C35 docs-and-engine ship).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -407,6 +410,31 @@ FREEZE LIFTS on green.
   triggers cardio-scaled recovery bonus), (c) speed reduces
   per-action stamina cost directly (would be a new mechanism, not
   a retune). Van picks.
+
+**GENERATOR1 Phase A (C35) additions**:
+- **Pre-Phase-C graduate correlation cluster** — EXCLUDE from
+  correlation-gate calibration OR expect. Phase A derives 4
+  missing canonical stats (recovery/power/top_control/submissions)
+  at graduation via family-adjacent formulas seeded from cardio/
+  strength/takedowns/guard respectively. Those derivations
+  produce graduate-only r ≈ 0.85 on the derived pairs —
+  **intentionally violates the ratified variety spec §1b r-targets**
+  (recovery×cardio 0.30-0.40; other family pairs 0.50-0.65).
+  Bridge only: retired when Phase C makes the amateur generator
+  roll all 19 canonical stats independently (graduation then
+  becomes a pure transfer, no derivation). P5-C's correlation
+  gates must filter graduates-generated-pre-Phase-C out, or
+  expect this cluster on that sub-population.
+- **Graduate-quality incoherence** (pending Van ruling per
+  C35 STEP 3): graduates carry combat stats 5-8pp below the pro
+  pool while `overall_rating` is set independently from
+  `amateur.overall_rating` (mean of amateur's 15 pre-remap
+  attrs — misses recovery/power/top_control/submissions). Downstream
+  OVR readers see one number; the engine sees a different stat
+  pool. Not resolved by Phase A. If Van rules recompute-at-
+  graduation, P5-C inherits a consistent OVR-vs-stats relationship;
+  if Van rules keep-as-is, P5-C measures the visible pool skew on
+  graduated fighters and calibrates matchmaking around it.
 
 CALIBRATION LIST:
 1. Contest constants (P_EVEN/S), K_SPEED_INIT, speed-worth.
