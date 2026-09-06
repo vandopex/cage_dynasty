@@ -986,9 +986,26 @@ def register_routes(app):
         except Exception:
             is_hof = False
 
+        # GENERATOR1 PHASE D — computed badges (KIND 2 traits).
+        # PURE + NEVER STORED: called at render only. Templates get
+        # a plain list; template can render chips without knowing
+        # about the compute logic.
+        from game_bridge import compute_badges as _compute_badges
+        _CANONICAL_19 = ('strength', 'speed', 'cardio', 'chin',
+                          'recovery', 'power', 'boxing', 'kicks',
+                          'clinch_striking', 'striking_defense',
+                          'takedowns', 'takedown_defense',
+                          'top_control', 'submissions', 'guard',
+                          'clinch_control', 'heart', 'fight_iq',
+                          'composure')
+        _wf_attrs = {k: int(getattr(fighter, k, 0) or 0)
+                     for k in _CANONICAL_19}
+        badges = _compute_badges(_wf_attrs, fighter.weight_class)
+
         return render_template('fighter_profile.html',
             fighter=fighter,
             attributes=attributes,
+            badges=badges,
             camp=camp,
             division_rankings=division_rankings[:10],
             belt_history=belt_history,

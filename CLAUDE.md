@@ -4994,6 +4994,160 @@ Artifacts under `outputs/sm1/generator1/phase_c/`:
 step1_diagnose.md, gates.py, gates_out.json, report.md.
 
 
+### GENERATOR1 PHASE D [COMMITTED as C40, 2026-09-05]
+
+Six computed badges land at fighter profile: **Iron Chin, Heavy
+Hands, Gas Tank, Warrior Heart, Freak Athlete, Complete Fighter**.
+**PURE function, NEVER stored, LOSABLE by construction** — computed
+at render time from canonical stats; zero writes to _fighter_data
+or save payloads; a fighter who loses the qualifying stat (aging,
+cardio drain, chin decay) loses the badge next render without any
+dedicated aging code. **GENERATOR1 arc COMPLETE at this ship**
+(Phases A-D committed as C35 → C40). S2 freeze holds — NO DEPLOY.
+
+**Van rulings applied:**
+
+- **Badge system RATIFIED** (spec §5 KIND 2). Six badges as listed
+  above. `compute_badges(attrs, weight_class) -> List[str]` at
+  `game_bridge.py:1633-1720` (pure function, module-level, near
+  WebFighter dataclass for future-reader sight-line). Called from
+  `routes.py:fighter_profile()` at `:989`, passed as `badges`
+  kwarg to `render_template('fighter_profile.html', ...)`. Chips
+  render above the traits block; `data-badge=""` HTML attribute
+  is the machine-readable anchor.
+- **Thresholds tuned per Van C40 ruling.** Initial 85-threshold
+  Heavy Hands hit 11.33% pool prevalence (elite KO Artist +10
+  offset on strength ~82.5 → power 90+ common); Freak Athlete at
+  +15 class-adjusted-mean hit 10.87%. Van bumped:
+  - `power ≥ 85` → **`≥ 90`** (Heavy Hands)
+  - `class_mean + 15` → **`+18`** (Freak Athlete)
+- **Amateur profiles get badges via the shared `/fighter/<fid>`
+  route.** `bridge.get_fighter` falls through to
+  `_convert_amateur_fighter` for amateur fids; both pros and
+  amateurs render via `fighter_profile.html`; badges compute in
+  the route handler on both paths. No separate amateur profile
+  page exists; adding badges to the pro route auto-served
+  amateurs. Verified via test-client GET on an amateur fid with
+  forced chin=90 → `data-badge="Iron Chin"` in returned HTML.
+
+**Rarity table — POST-TUNE (N=865, 3 seeds pooled):**
+
+| badge | count | pct | pool basis |
+|---|---:|---:|---|
+| Iron Chin | 9 | **1.04%** | ★ lottery band (chin ≥ 85, tier-independent) |
+| Heavy Hands | 64 | **7.40%** | ★ tier-coupled band (power ≥ 90 via D18) |
+| Gas Tank | 35 | **4.05%** | ★ single-stat band (cardio ≥ 85 AND recovery ≥ 75) |
+| Warrior Heart | 13 | **1.50%** | ★ lottery band (heart ≥ 85, tier-independent) |
+| Freak Athlete | 78 | **9.02%** | ↑ composite band — see filing |
+| Complete Fighter | 48 | **5.55%** | ★ composite band |
+
+**Lottery-vs-tier note.** Chin/heart are LOTTERY stats (tier-
+independent, centered on pool_mean 57.5), so their 85+ tail is a
+true top-4% of a normal distribution → ~1-1.5% pool. Power is
+TIER-COUPLED via D18 (`power = strength + POWER_STYLE_OFFSET[style]
++ noise(±8)`), so an elite Striker with KO Artist offset routinely
+crosses any single-stat threshold; the 90 cutoff (vs 85) restores
+population-level rarity to the single-stat band while preserving
+the per-style concentration among elite KO archetypes that IS the
+design speaking. **Thresholds are DISPLAY KNOBS** — the underlying
+Phase B/C stat distributions are unchanged.
+
+**Freak Athlete 9.02% — REPORT, do not tune (per Van C40 clause):**
+after the +15 → +18 bump, Freak Athlete is at 9.02% — still 1pp
+above the 8% band Van named. Composite predicate (all three of
+str/spd/car ≥ class-mean + 18) is coupled to elite tier's gaussian-
+around-82.5 shape: even at +18 above class-adjusted-mean, Elite
+Freak-Athlete-template fighters clear easily because the template
+itself spikes ATH family. Van's clause explicitly said "if either
+still exceeds 8%, report — do not iterate further without Van", so
+filed as-is for architect ruling. Options if Van wants further
+tightening: (a) push delta to +20 or +22; (b) accept 9% as
+composite-band ceiling (composite predicates naturally hit higher
+than single-stat because they're conjunctive over tier-correlated
+stats); (c) revise "class-adjusted mean + N" to a percentile-based
+threshold (top 4% of class-normalized ATH mean).
+
+**Heavy Hands class-concentration** — filed as design-correct
+realism, not a defect. Elite Strikers with Knockout Artist template
+(+10 power offset) SHOULD wear Heavy Hands; that's the archetype
+speaking. The 90 threshold restores POPULATION-level rarity
+(7.40%) while the per-style concentration among elite KO archetypes
+persists. If a future scouting redesign wants to surface "Heavy
+Hands prevalence by weight class" as scouting flavor, the badge
+mechanic already supports it.
+
+**GATES (Van authorized commit at G1/G3/G4 pass):**
+
+| Gate | Method | Result |
+|---|---|---|
+| G1 rarity census | 3 fresh worlds, N=865 pro pool | ★ (Heavy Hands + all lottery/GT bands ★; Freak Athlete 9.02% filed) |
+| G2 never-stored | source grep + save round-trip | ★ zero badge literals in save/load/to_dict/from_dict/_fighter_data[; 237KB save has zero badge strings |
+| G3 losability | chin=86 → Iron Chin; chin=84 → [] | ★ badge disappears on stat decrement |
+| G4 REAL RENDER | Flask test client HTTP GET `/fighter/<fid>` + HTML parse for `data-badge=""` | ★ (a) badged fighter chip present; (b) unbadged fighter zero chips; (c) template-identity renders OK, chips + traits coexist |
+
+**REAL-RENDER GATE STANDARD (C40, closes C23 lesson).**
+Van's C40 ruling promotes the G4 methodology to the **NEW
+STANDARD for UI gates where template-data mismatch is the risk
+class**. Source-level render checks (grep the template for
+`{{ x }}`, confirm route passes `x`) are **no longer acceptable
+alone** for surfaces where the risk is "data reaches the template
+namespace but not the object the template actually iterates" —
+that was the exact failure mode of C23's WebFighter.power gap
+(power was in _fighter_data but WebFighter dataclass had no
+`power` field, so template's `fighter.power` rendered as 0/None
+and the source-level check couldn't see it). C40's G4 method:
+1. Import the Flask app.
+2. Boot a real bridge, populate it with test fighters, register
+   under a session user_id in `app.game_bridges`.
+3. `client = flask_app.test_client()`; set the same user_id on
+   `client.session_transaction()`.
+4. Issue `client.get('/fighter/<fid>')` for each test case.
+5. Assert HTTP 200 AND the expected chip/data-attribute pattern
+   appears (or is absent) in the returned HTML text.
+
+Multi-user session-routing trap documented so future gates don't
+have to rediscover it: routes look up bridges via
+`_get_bridge_for_session()` which reads `session['user_id']`; the
+harness must inject BOTH `app.game_bridges[uid] = configured_bridge`
+AND `session['user_id'] = uid` on the test client, or every GET
+redirects to `/new-game` (HTTP 302) and the "chips absent" check
+passes for the wrong reason.
+
+**Diff-stat (Phase D total, 3 files):**
+- `cage_dynasty_web/game_bridge.py` +82 (compute_badges + docstring)
+- `cage_dynasty_web/routes.py` +17 (badges kwarg wire)
+- `cage_dynasty_web/templates/fighter_profile.html` +38 (chips block)
+
+Full report: `outputs/sm1/generator1/phase_d/report.md`. Artifacts
+under `outputs/sm1/generator1/phase_d/`: gates.py, gates_out.json,
+report.md.
+
+**GENERATOR1 arc COMPLETE. Next: P5-C single calibration pass.**
+
+
+### LOCAL PLAYTEST COMMAND (verified C40, 2026-09-05)
+
+```
+PYTHONPATH="/Users/vandope/Desktop/Games/cage_dynasty/narrative:/Users/vandope/Desktop/Games/cage_dynasty/systems:/Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty_web" python3 /Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty_web/app.py
+```
+
+Open `http://localhost:5001/` (root redirects to `/new-game`).
+
+**PYTHONPATH is load-bearing.** Without it, the `SIMULATION-SHIM`
+warning fires (`🚨 world_init.FULL_ENGINE_AVAILABLE will be False`)
+and pre-gen falls back to `simulate_fight_simple` — the crude 74%-
+clamped fallback that produces near-random champions and belt
+lineages. The Phase B/C population Van shipped only appears when
+the PYTHONPATH is set correctly so `commentary` resolves via
+`narrative/`, `systems.injury` resolves via `systems/`, and the
+web tree's `fight_engine`/`fight_integration` load into
+`simulation.*` via the shim. Verified this session — with the
+PYTHONPATH set, boot log shows `✅ [IMPORT-PATH-PROOF]` for all
+three plus `✅ Real game modules loaded successfully!`.
+
+Ctrl-C stops the server (or `pkill -f "python3.*app.py"`).
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim

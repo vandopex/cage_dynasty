@@ -20,19 +20,24 @@
 # C37 graduate OVR recomputed at signing via _compute_ovr (Van
 # option ii); C38 GENERATOR1 Phase B SHIPPED (layered generation,
 # 8 templates, class tendencies, style-from-body; F1-F8 fix pass
-# folded — F1 elite drift accepted structural + baseline
-# re-banked, F2 6/8 predicate weak accepted per Phase D badge
-# argument, F8 PF cardio re-key tried+reverted); C39 GENERATOR1
-# Phase C SHIPPED (amateur generator on the layered engine —
-# canonical stat names at source, pure-transfer graduation +
-# legacy Phase A derivation for pre-Phase-C amateurs, C39 DEDUP
-# collapses Phase C tables to derivations from Phase B via
-# _LEGACY_TO_CANONICAL, Glass Cannon divergence killed, legacy
-# style-label remap at graduation closes the silent-default trap
-# on Boxer/Kickboxer/Sambo/etc. + docs ride-along
+# folded); C39 GENERATOR1 Phase C SHIPPED (amateur generator on the
+# layered engine — canonical stat names at source, pure-transfer
+# graduation + legacy Phase A derivation for pre-Phase-C amateurs,
+# DEDUP collapses Phase C tables to derivations from Phase B,
+# Glass Cannon divergence killed, legacy style-label remap at
+# graduation closes silent-default trap + docs ride-along
 # scheduling_notes_2026-09-05.md + session backlog appended);
-# next: Phase D (badges) → P5-C calibration → P3-6 ship.
-# Updated 2026-09-05 (C39 Phase C ship).
+# C40 GENERATOR1 Phase D SHIPPED (6 computed badges pure/never-
+# stored/losable — Iron Chin, Heavy Hands, Gas Tank, Warrior
+# Heart, Freak Athlete, Complete Fighter; thresholds tuned per
+# Van C40 ruling: Heavy Hands 85→90, Freak Athlete +15→+18;
+# amateur profiles get badges via shared /fighter route; G4 REAL
+# RENDER via Flask test client promoted to NEW STANDARD for UI
+# gates where template-data mismatch is the risk class — closes
+# C23 lesson as method). GENERATOR1 arc COMPLETE (Phases A-D
+# shipped as C35-C40). Next: P5-C single calibration pass
+# (architect drafts exec spec for Van ratification) → P3-6 ship.
+# Updated 2026-09-05 (C40 Phase D ship, GENERATOR1 arc closes).
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -817,7 +822,7 @@ new styles / etc.); nothing here ships mid-arc.
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C38 acfabf4. Standing
+Fresh date + HEAD gate (last shipped: C39 b3ef731. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

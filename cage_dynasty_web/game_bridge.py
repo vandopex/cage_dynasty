@@ -1631,6 +1631,100 @@ class WebNewsItem:
 
 
 # ============================================================================
+# GENERATOR1 PHASE D — COMPUTED BADGES (KIND 2 traits)
+# ============================================================================
+# PURE FUNCTION. NEVER STORED. Computed at render time only — badge
+# strings do not appear in `_fighter_data`, do not enter saves, do
+# not persist across weeks. If a fighter loses the qualifying stat
+# (aging, cardio drain, chin decay), the badge disappears next
+# render by construction. That's the aging story working for free.
+#
+# Six ratified badges (Van 2026-09-05, GENERATOR1 spec §5 KIND 2;
+# thresholds tuned per Van C40 ruling — see filing):
+#   - Iron Chin:     chin ≥ 85           (lottery, ~1% pool)
+#   - Heavy Hands:   power ≥ 90          (C40: was 85, tier-coupled
+#                                          via D18 pushed prevalence
+#                                          to 11%; 90 restores band)
+#   - Gas Tank:      cardio ≥ 85 AND recovery ≥ 75
+#   - Warrior Heart: heart ≥ 85          (lottery, ~1.5% pool)
+#   - Freak Athlete: strength, speed, cardio each ≥ class-adjusted
+#                    mean + 18 (C40: was +15, elite composite
+#                    prevalence was 11%; +18 restores band)
+#   - Complete Fighter: STK-family mean ≥ 75 AND GRP-family mean ≥ 75
+#                       AND no stat < 50
+#
+# Thresholds are DISPLAY KNOBS — tuned to rarity, not to
+# distributions. The underlying stat distributions (Phase B pro
+# tiers, Phase C amateur tiers, D18 power derivation) are
+# unchanged. Heavy Hands class-concentration among elite Strikers
+# is design-correct realism (KO Artist +10 offset on strength ~82.5
+# → power routinely 90+); the raised threshold restores population-
+# level rarity while preserving that per-style concentration.
+#
+# Class offsets + family map + pool mean are single-sourced from
+# `world_init.FighterGenerator` (Phase B/C dedup guarantees pro and
+# amateur pull from the same tables).
+def compute_badges(attrs: Dict[str, int], weight_class: str) -> List[str]:
+    """PURE, NEVER STORED. Return list of badge names the given attrs
+    dict qualifies for at this weight class. See module docstring
+    above for the six ratified badges.
+
+    `attrs` is a dict of canonical stat names → int values (any
+    WebFighter can be converted via `{k: getattr(wf, k) for k in
+    CANONICAL_19}` at the caller).
+    `weight_class` is the fighter's competition weight class string.
+    """
+    from world_init import FighterGenerator  # lazy — avoid top-level cycle
+    badges: List[str] = []
+    _g = lambda k: int(attrs.get(k, 0) or 0)
+
+    # Single-stat badges
+    if _g('chin') >= 85:
+        badges.append('Iron Chin')
+    if _g('power') >= 90:
+        badges.append('Heavy Hands')
+    if _g('cardio') >= 85 and _g('recovery') >= 75:
+        badges.append('Gas Tank')
+    if _g('heart') >= 85:
+        badges.append('Warrior Heart')
+
+    # Freak Athlete: class-adjusted mean + 15 on each of str/spd/car.
+    # Class-adjusted mean = pool_mean + CLASS_OFFSET[stat] (Phase B
+    # single-sourced offset function).
+    _pool_mean = FighterGenerator._PHASE_B_POOL_MEAN
+    _class_offsets = FighterGenerator._phase_b_class_offsets(weight_class)
+    _freak_ok = True
+    for _stat in ('strength', 'speed', 'cardio'):
+        _adj_mean = _pool_mean + _class_offsets.get(_stat, 0)
+        if _g(_stat) < _adj_mean + 18:
+            _freak_ok = False
+            break
+    if _freak_ok:
+        badges.append('Freak Athlete')
+
+    # Complete Fighter: STK-family mean ≥ 75 AND GRP-family mean ≥ 75
+    # AND every canonical stat ≥ 50. Family membership from Phase C
+    # canonical family map (derived from Phase B, single-sourced).
+    _fam_map = FighterGenerator._PHASE_C_FAMILY_ASSIGN
+    _stk_stats = [s for s, f in _fam_map.items() if f == 'STK']
+    _grp_stats = [s for s, f in _fam_map.items() if f == 'GRP']
+    _stk_mean = sum(_g(s) for s in _stk_stats) / max(1, len(_stk_stats))
+    _grp_mean = sum(_g(s) for s in _grp_stats) / max(1, len(_grp_stats))
+    # "no stat < 50" — check the 19 canonical stats. Fighters missing
+    # any canonical key evaluate that key as 0 → fails the floor.
+    _CANONICAL_19 = ('strength', 'speed', 'cardio', 'chin', 'recovery',
+                      'power', 'boxing', 'kicks', 'clinch_striking',
+                      'striking_defense', 'takedowns', 'takedown_defense',
+                      'top_control', 'submissions', 'guard',
+                      'clinch_control', 'heart', 'fight_iq', 'composure')
+    _no_hole = all(_g(k) >= 50 for k in _CANONICAL_19)
+    if _stk_mean >= 75 and _grp_mean >= 75 and _no_hole:
+        badges.append('Complete Fighter')
+
+    return badges
+
+
+# ============================================================================
 # CARD CAPACITY CONSTANT (sub-ship A)
 # Shared between _build_card_for_week's target count, Phase 2 capacity gate
 # in _top_up_pipeline, and load-time auto-truncate in from_dict.

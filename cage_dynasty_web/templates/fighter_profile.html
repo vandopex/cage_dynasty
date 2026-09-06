@@ -800,6 +800,44 @@
 </div>
 
 {# ═══════════════════════════════════════════════════════════
+   BADGES — GENERATOR1 PHASE D (KIND 2 traits, computed at render,
+   never stored). Six ratified: Iron Chin / Heavy Hands / Gas Tank /
+   Warrior Heart / Freak Athlete / Complete Fighter. Chips render
+   above the traits list because badges are derived-from-stats
+   (attribute-anchored), while traits are identity (template-anchored).
+   Both can coexist — no conflict by construction.
+══════════════════════════════════════════════════════════════ #}
+{% if badges %}
+<div class="card mb-lg">
+    <div class="card-header">
+        <h3>🏅 Badges</h3>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:var(--spacing-sm);
+                padding:var(--spacing-md);">
+        {% set badge_meta = {
+            'Iron Chin':       {'icon':'🛡️', 'color':'#c9a959'},
+            'Heavy Hands':     {'icon':'👊', 'color':'#e04d3a'},
+            'Gas Tank':        {'icon':'🫁', 'color':'#4ecca3'},
+            'Warrior Heart':   {'icon':'❤️', 'color':'#e63946'},
+            'Freak Athlete':   {'icon':'⚡', 'color':'#ffd166'},
+            'Complete Fighter':{'icon':'🎯', 'color':'#a084dc'},
+        } %}
+        {% for badge in badges %}
+        {% set bm = badge_meta.get(badge, {'icon':'🏅', 'color':'var(--text-muted)'}) %}
+        <span data-badge="{{ badge }}"
+              style="display:inline-flex;align-items:center;gap:6px;
+                     padding:6px 12px;background:var(--bg-dark);
+                     border:1px solid {{ bm.color }};border-radius:16px;
+                     font-family:var(--font-display);font-size:.82rem;
+                     color:{{ bm.color }};">
+            <span>{{ bm.icon }}</span>{{ badge }}
+        </span>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════
    TRAITS — placed under stats since they contextualize attributes
 ══════════════════════════════════════════════════════════════ #}
 {% if fighter.traits %}
