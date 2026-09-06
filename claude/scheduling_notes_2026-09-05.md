@@ -87,3 +87,60 @@ Gate 0.
   rules? (Presumably yes — "3 fights left" contracts already bind.)
 - Interaction with amateur/prospect activity rates (prospects should
   fight often — that is their development).
+
+## Item 6 — Burnout / time off (Van ruled 2026-09-05)
+
+Van ruling: YES, personality-driven, folded into SCHEDULING1.
+Companion filing to claude/life_sim_notes_2026-09-05.md.
+
+FATIGUE ACCUMULATOR (one new stored field). Rises with training
+intensity + fight frequency; falls with rest weeks. Not visible to
+opponents as a scoutable stat by default — it's private state that
+DRIVES time-off requests via the SCHEDULING1 clock, and its shape
+is a design choice for the arc's spec (rise/fall rates, cap,
+zero-floor, interaction with camp intensity).
+
+TIME-OFF REQUEST = SELF-IMPOSED LOCKOUT on the SCHEDULING1 clock.
+Once a fighter's fatigue crosses their personality-derived
+threshold, they exit the offer pool for N weeks (also personality-
+derived). Winners returning from lockout re-enter with fatigue
+reset to zero (rest works); losers whose lockout was extended by
+injury (running CONCURRENT with fatigue lockout per Item 3) re-
+enter when the LATER clock expires.
+
+PERSONALITY MODULATION (both threshold AND expression):
+- Warrior: NEVER asks for time off. Fatigue accumulates unchecked
+  → injury risk rises silently → the two-KO tragedy arc (short
+  career, big finishes, then the wall). No news event fires; the
+  fighter just gets hurt.
+- Political: DEMANDS PUBLICLY. Fatigue-triggered lockout arrives
+  with a news feed story ("[FIGHTER] needs time to focus on
+  family, sources say"). Camp reads it in the news, not from the
+  fighter. Public expression = maximum drama.
+- Calculated: SCHEDULES post-fight. Fatigue lockout fires quietly
+  after a fight, no news, standard cooldown extended by the
+  fatigue amount. Predictable, no story friction.
+- Hungry: TRAINS THROUGH the fatigue signal. Ignores the threshold
+  during the ascent; burns bright; eventually crashes hard when
+  fatigue caps and forces an injury event. The "meteor" archetype.
+- Competitor: normal threshold, normal expression. Baseline.
+
+PED/DRUG EVENTS DEFERRED (Van, conflicted on tone). The SUSPENSION
+MECHANIC ships free with SCHEDULING1 lockouts — the clock is
+already generic, PEDs would just be another lockout source. The
+SCANDAL LABEL (specific PED accusations, drug-test failures) is a
+later opt-in. Tone-safe alternative filed under LIFE_SIM notes:
+generic "personal issues" events (missed camp, unprepared, six
+weeks gone) driven by the same personality mapping — same clock,
+same drama, no syringes.
+
+Design gates for whichever session picks this up:
+- Fatigue accumulator: rise/fall rates by intensity band; cap;
+  interaction with camp length; visible-to-player-vs-scouted.
+- Personality threshold + duration tables per type.
+- News copy pool for Political/Calculated public/quiet expressions.
+- Injury-risk multiplier curve for Warrior/Hungry fatigue-through-
+  wall archetypes (needs coordination with the injury system's
+  existing severity distribution).
+- Player-side parity: player faces the same rules (presumably yes
+  — the "3 fights left" contracts already bind the player).

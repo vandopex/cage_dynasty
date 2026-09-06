@@ -818,11 +818,83 @@ new styles / etc.); nothing here ships mid-arc.
   lines. **Tier 3 (real progress-bar tied to server state)
   is parked behind the owed PA endpoint-latency measurement.**
 - **SCHEDULING1** pointer → `claude/scheduling_notes_2026-09-05.md`
-  (Van FILE 3, verbatim-preserved this ship).
+  (Van FILE 3, verbatim-preserved this ship). C42 amendment:
+  Item 6 (Burnout / time off) appended per Van 2026-09-05 ruling
+  — fatigue accumulator (one new stored field) + personality-
+  modulated threshold-and-expression (Warrior/Political/Calculated/
+  Hungry differ in when they ask and how; Warrior never asks →
+  injury). PED/drug events DEFERRED (tone call, Van conflicted);
+  suspension mechanic ships free with lockouts, scandal label
+  is later opt-in; generic "personal issues" tone-safe alternative
+  filed.
+- **LIFE_SIM notes** pointer → `claude/life_sim_notes_2026-09-05.md`
+  (Van FILE 4, C42). Companion to SCHEDULING1 — MMA Manager
+  feature review. Verdicts on time off, missed weight, purse-%,
+  PEDs, stat decay. Van rulings baked in: NO multiple pro leagues;
+  AMATEUR CIRCUITS YES; TIME OFF YES personality-driven; PEDs
+  deferred; PERSONALITY METERS NO (derive from existing types
+  plus morale, one derivation table, no new stored hidden meters).
+
+- **AMATEUR CIRCUITS** (Van ruled 2026-09-05, C42): formalize the
+  existing regional amateur pools into named circuits with
+  standings and amateur titles. Folds into the amateur / scouting
+  redesign as its **structural layer** — gives scouting geography
+  (region familiarity), grades measured against real standings,
+  amateur titles as story carry-over ("they met in the Americas
+  final"). Fixes tournament-winner selection as part of it. **NO
+  multiple major pro leagues** (Van ruled against — one pro org,
+  title stays singular and meaningful).
+
+- **DEVELOPMENT1 additions** (C42, life-sim informed):
+  - **Coach revival** — census the DORMANT coach system first
+    (COACHES_AVAILABLE=False since C31 finding — worlds generate
+    zero coaches, `_dominant_coach_type` always returns
+    `boxing_coach` off an empty census). Never rebuild what exists;
+    map what's there before touching. Revive as **PER-FAMILY
+    coaches**: striking coach → STK training gains; grappling
+    coach → GRP; strength & conditioning → ATH. The Phase B
+    `_PHASE_B_FAMILY_ASSIGN` map IS the coaching org chart — a
+    hook that did not exist before GENERATOR1.
+  - **Stat-decay wiring verification** — Cage Dynasty has a
+    decay-toward-baseline mechanic today, but it's a READ, not a
+    measurement. Prove it fires before anything builds on it.
+    Pairs with per-family coaches: neglect the grappling coach,
+    watch the GRP family sag — but only if decay is actually
+    wired.
+
+- **CONTRACTS1** (new, post-SCHEDULING1, C42): purse-% demands
+  driven by existing popularity as star power (missing pieces are
+  the negotiation loop + AI camp counter-offers + economy
+  balance); morale coupling; economy balancing pass. Own small
+  arc — a fighter demanding 30% only matters once fighters
+  control their own careers (SCHEDULING1 lockouts + fatigue land
+  first).
+
+- **FIGHTNIGHT1** (new, post-arc, C42): player-issued corner
+  instructions between rounds — a UI layer, NOT a new system. The
+  machinery already exists: R1-R4 aggression rules ARE corner
+  calls, read live from `self.round_scores` mid-fight, executed
+  through fighter IQ (fighters who ignore the corner are already
+  modeled at low IQ). A between-rounds choice UI wraps the
+  existing decision layer.
+
+- **WEIGHTCUT1 annotation** (C42): missed-weight consequences
+  (purse hit, ranking hit, opponent-reaction news) ride AFTER
+  the WEIGHTCUT1 audit itself. Discipline derived from
+  personality (Calculated/Political rarely miss; Warrior/Hungry
+  more likely). No drama on unmeasured plumbing.
+
+- **PERSONALITY-METERS ruling** (Van C42): **NO new stored hidden
+  meters.** Greed / discipline / ambition / happiness behavior
+  DERIVES from the five existing personality types + existing
+  morale via **one derivation table**. Zero new fields, zero new
+  systems. Hidden stored numbers are where looks-wired bugs
+  breed (STYLE-DEAD1 shape). One canonical derivation table
+  applied at the read site.
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C39 b3ef731. Standing
+Fresh date + HEAD gate (last shipped: C40 d834774. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED commit
 and is updated in the NEXT ship's docs pass. No placeholders);
 diagnose read-only first; single-purpose commits on Van's word;

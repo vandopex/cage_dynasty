@@ -5148,6 +5148,144 @@ three plus `✅ Real game modules loaded successfully!`.
 Ctrl-C stops the server (or `pkill -f "python3.*app.py"`).
 
 
+### C41 [COMMITTED as C41, 2026-09-05] — badge/identity-trait dedupe + amateur random stat-traits removed
+
+Two coherence fixes Van's adversarial read caught after C40:
+
+**Freak Athlete name collision (Van ruled option d).**
+Template `Freak Athlete` (Phase B, stored on `traits` as identity)
++ badge `Freak Athlete` (Phase D, computed from stats) share the
+same name. Every Freak Athlete template fighter auto-qualifies for
+the badge (the template's spike floor guarantees it), so profiles
+showed the label TWICE — once as trait chip, once as badge chip —
+and the badge prevalence was inflated by ~1.5pp.
+
+Fix: same-name suppression at the render caller
+(`routes.py:fighter_profile`) after `compute_badges`:
+```python
+badges = [b for b in badges if b not in _identity_traits]
+```
+Generic — future templates or badges sharing a name auto-dedupe
+without a maintained collision list. `compute_badges` stays pure
+(dedupe is a display concern, not a compute concern).
+
+Post-dedupe rarity re-measure (N=865, 3 seeds):
+
+| badge | pre-dedupe | post-dedupe | Δ |
+|---|---:|---:|---:|
+| Iron Chin | 1.04% | 0.69% | −0.35pp |
+| Heavy Hands | 7.40% | 7.40% | 0 |
+| Gas Tank | 4.05% | 4.05% | 0 |
+| Warrior Heart | 1.50% | 1.50% | 0 |
+| **Freak Athlete** | **9.02%** | **8.32%** | **−0.70pp** |
+| Complete Fighter | 5.55% | 5.55% | 0 |
+
+Freak Athlete landed at 8.32% (Van's expectation was ~7.5%).
+Still ~0.3pp above 8% band. Filed as observation — not iterating.
+Iron Chin dropped too because some pre-C41 amateurs had rolled
+'Iron Chin' via the random-trait pool (also fixed by this ship
+forward-only, see below).
+
+G4 spot-check on a Freak Athlete template fighter (fid `80a86166`
+in the C41 world): `data-badge='Freak Athlete'` chip count = 0;
+'Freak Athlete' text in traits block = 1 → **label appears
+exactly ONCE (as identity trait, badge suppressed).**
+
+**Amateur random-trait cleanup.** Removed `'Iron Chin'` and
+`'Cardio Machine'` from `amateur.generate_amateur_fighter`'s
+random trait pool. Both were stat-claiming labels handed out by
+dice (no predicate, no stats behind them) — Van's August ruling
+explicitly banned this class of trait ("a random Iron Chin amateur
+with chin 51 graduates with a label the badge system visibly
+disagrees with"). Kept `Fast Starter`, `Slow Starter`, `Gym Rat`
+— KIND-4 behavioral quirks that claim nothing about stats.
+
+Forward-only: existing amateurs keep their rolled traits. Legacy
+'Iron Chin' / 'Cardio Machine' amateurs graduated in the C35 →
+C41 window carry the labels into pro records; the C41 badge
+dedupe now suppresses the computed-badge collision at render
+(which is why the pre-dedupe Iron Chin pool measurement showed
+1.04% — those rolled traits are still in the world).
+
+Diff-stat: `routes.py` +12, `amateur.py` +11/−2.
+
+
+### C42 [COMMITTED as C42, 2026-09-05] — life-sim design filings
+
+Docs-only ship. FILE 4 (`claude/life_sim_notes_2026-09-05.md`,
+87 lines) enters git verbatim — Van's review of MMA Manager
+features + rulings from the same session. `scheduling_notes_2026-09-05.md`
+extended with Item 6 (Burnout / time off). Scope-doc SESSION
+2026-09-05 BACKLOG block extended with 4 amendments + 3 new
+items + PERSONALITY-METERS ruling. Scope-doc HEAD line advances
+to C40.
+
+**FILE 4 anchors report** (line 1 of Van's paste
+verification protocol): my file measures **87 lines** and last
+line reads `- parity: does the player face the same fatigue
+rules? Presumably yes.` — Van's stated anchors were `76 lines`
+and last line `  parity:` (no dash, 2-space prefix). File is
+verbatim-to-paste-content; the discrepancy is anchor-vs-content.
+Reporting so architect can decide whether the paste was intended
+verbatim (my current state) or the anchor was intended (compress
+blank lines, strip last-line dash).
+
+**Van rulings in FILE 4** (filed here for CLAUDE.md-only
+readers who don't open the notes file):
+- NO multiple major pro leagues — one pro org.
+- AMATEUR CIRCUITS: YES. Structural layer for scouting redesign.
+- TIME OFF / BURNOUT: YES, personality-driven, one new stored
+  field (fatigue) + reuse of everything else.
+- PED/DRUG SCANDALS: DEFERRED (tone). Suspension mechanic ships
+  free; scandal label later opt-in; "personal issues" events as
+  tone-safe alternative.
+- PERSONALITY METERS: NO new stored hidden meters. Derive from
+  five existing personality types + morale via one derivation
+  table.
+
+**Item 6 (Burnout) key mechanics** — filed at
+`scheduling_notes_2026-09-05.md`:
+- Fatigue accumulator: one new stored field, rises with training
+  intensity + fight frequency, falls with rest.
+- Time-off request = self-imposed lockout on SCHEDULING1 clock.
+- Personality modulates threshold AND expression:
+  Warrior never asks (injury risk rises silently);
+  Political demands publicly via news feed;
+  Calculated schedules post-fight;
+  Hungry trains through and burns bright;
+  Competitor baseline.
+
+**Scope-doc backlog additions** (filed at
+`fight_model_p3_scope_v0_1.md` SESSION 2026-09-05 BACKLOG):
+
+- **AMATEUR CIRCUITS** (Van ruled) — formalize regional pools
+  into named circuits with standings + amateur titles. Folds into
+  scouting redesign; fixes tournament-winner consumption. NO
+  multiple pro leagues (Van ruled against).
+- **DEVELOPMENT1 additions** — coach revival with census-first
+  discipline (COACHES_AVAILABLE=False since C31; never rebuild
+  what exists); revive as PER-FAMILY coaches (STK/GRP/ATH keyed
+  on the Phase B family map); stat-decay WIRING VERIFICATION
+  (decay is a read, not a measurement — prove it fires).
+- **CONTRACTS1** (new, post-SCHEDULING1) — purse-% demands driven
+  by popularity (existing); negotiation loop + morale coupling +
+  economy balancing pass.
+- **FIGHTNIGHT1** (new, post-arc) — player corner instructions
+  UI layered on EXISTING R1-R4/tendency/IQ-execution machinery;
+  fighters can ignore the corner (already modeled).
+- **WEIGHTCUT1 annotation** — missed-weight consequences ride
+  AFTER the audit itself, driven by personality-derived
+  discipline.
+- **PERSONALITY-METERS ruling** (Van) — NO new stored hidden
+  meters; one derivation table over existing personality types
+  and morale; hidden stored numbers are where looks-wired bugs
+  breed (STYLE-DEAD1 shape).
+
+Diff-stat: `claude/life_sim_notes_2026-09-05.md` +87 (new),
+`claude/scheduling_notes_2026-09-05.md` +54, scope doc + this
+CLAUDE.md filing.
+
+
 ### OWED ITEMS CARRIED (from MC ODDS ship 2026-08-19)
 
 - **PA timing measurement pre-N-lock.** Dev measured 15.62 ms/sim
