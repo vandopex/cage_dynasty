@@ -1246,29 +1246,6 @@ class FightConfig:
     (_assert_sanctioned_config, below) exists to catch. Live-play's values
     are the surviving contract; the defaults on this class ARE that contract.
 
-    Two OTHER triples are sanctioned by the assertion allowlist. Each carries
-    a death date:
-
-      LIVE_PLAY      = (55, 0.48, 10)  the surviving contract (this class's defaults)
-      PRE_GEN_LEGACY = (55, 0.42, 6)   KNOWN DRIFT. Deleted at Stage 3.
-                                       Do not tune.
-      FI_FALLBACK    = (55, 0.48, 6)   KNOWN CORNER. Not on production
-                                       live-play path. Deleted at Stage 3.
-                                       Do not tune.
-
-    At Stage 3 (pre-gen delegation to live-play engine + FI/FE split
-    retirement) the two lower entries are deleted from the allowlist and the
-    assertion collapses to the single invariant. Write those deletions as a
-    one-line diff with a measurement attached.
-
-    DISCIPLINE — NO SITE INHERITS THESE THREE FIELDS. Every construction
-    site in the tree passes them explicitly. If you find yourself calling
-    FightConfig() and only setting scheduled_rounds, you are creating the
-    exact class of drift this ship exists to prevent — either use one of
-    the pinned classmethods (standard_fight / championship_fight /
-    main_event, all pinned to PRE_GEN_LEGACY) or pass all three fields
-    explicitly.
-
     The assertion sits BEFORE the heat replace() at simulate_fight:~3922.
     Heat scaling (up to ×1.20 on damage_multiplier) is sanctioned mutation
     inside FE, NOT drift — filed for the Stage 1 parity map as an FI/FE
@@ -1292,12 +1269,6 @@ class FightConfig:
     is_title_fight: bool = False
     is_main_event: bool = False
 
-    # STAGE 0d — factories pin PRE_GEN_LEGACY (55, 0.42, 6) EXPLICITLY.
-    # Every classmethod below is a FE-fed pre-gen path. Byte-identical to
-    # pre-Stage-0d behavior (pre-gen ran at 0.42/6 by INHERITING the OLD
-    # defaults; now runs at 0.42/6 by explicit pin — same value, no
-    # inheritance). Deleted at Stage 3 when pre-gen delegates to
-    # live-play's engine and PRE_GEN_LEGACY dies.
     @classmethod
     def standard_fight(cls) -> 'FightConfig':
         # C45: dm 0.48 → 0.24 (Group A finish economy landing)
@@ -1320,20 +1291,10 @@ class FightConfig:
             is_main_event=True,
         )
 
-    @classmethod
-    def main_event(cls) -> 'FightConfig':
-        return cls(
-            scheduled_rounds=5,
-            exchanges_per_round=55,
-            damage_multiplier=0.42,
-            standup_threshold=6,
-            is_main_event=True,
-        )
-
 
 # STAGE 0d — SANCTIONED CONFIG TRIPLES.
 # The assertion at fight start allowlists exactly these. Anything else
-# raises. See FightConfig docstring for the full contract and death dates.
+# raises. See FightConfig docstring for the full contract.
 #
 # C45 (a4fe627, 2026-09-06 17:38:20 -0700): Van ruled dm 0.48 → 0.24 for
 # Group A finish economy. _TRIPLE_LIVE_PLAY promoted from (55, 0.48, 10)
@@ -1353,10 +1314,8 @@ class FightConfig:
 # allowlist here — a documented allowlist entry that never fires is
 # exactly the CLAUDE.md-warned "looks-wired" shape.
 _TRIPLE_LIVE_PLAY = (55, 0.24, 10)
-_TRIPLE_PRE_GEN_LEGACY = (55, 0.42, 6)
 _SANCTIONED_TRIPLES = {
     _TRIPLE_LIVE_PLAY,             # C45 — the surviving contract
-    _TRIPLE_PRE_GEN_LEGACY,        # KNOWN DRIFT. Deleted at Stage 3.
 }
 
 
@@ -1380,7 +1339,6 @@ def _assert_sanctioned_config(config: 'FightConfig') -> None:
             f"damage_multiplier={triple[1]}, standup_threshold={triple[2]}). "
             f"Allowlist:\n"
             f"  LIVE_PLAY      = {_TRIPLE_LIVE_PLAY}   the surviving contract (C45)\n"
-            f"  PRE_GEN_LEGACY = {_TRIPLE_PRE_GEN_LEGACY}    KNOWN DRIFT. Deleted at Stage 3.\n"
             f"See FightConfig docstring for the full contract."
         )
 
@@ -4771,9 +4729,9 @@ def simulate_fight(
         config = FightConfig.standard_fight()
 
     # STAGE 0d — assert the atomic config invariant BEFORE any heat scaling.
-    # Fires on every FE call site (world_init pre-gen, quick_simulate, direct
-    # callers). See FightConfig docstring + _assert_sanctioned_config for the
-    # full contract.
+    # Fires on every FE call site (world_init pre-gen, direct callers).
+    # See FightConfig docstring + _assert_sanctioned_config for the full
+    # contract.
     _assert_sanctioned_config(config)
 
     # Calculate heat modifiers
@@ -5253,61 +5211,6 @@ def simulate_fight(
 # ============================================================================
 # CONVENIENCE FUNCTIONS
 # ============================================================================
-
-def quick_simulate(
-    f1_overall: int,
-    f2_overall: int,
-    rounds: int = 3
-) -> FightResult:
-    """Quick simulation with just overall ratings."""
-    fighter1 = FighterAttributes(
-        fighter_id="f1",
-        name="Fighter 1",
-        # Physical (P3-4d added power)
-        strength=f1_overall, speed=f1_overall, cardio=f1_overall,
-        chin=f1_overall, recovery=f1_overall, power=f1_overall,
-        # Striking
-        boxing=f1_overall, kicks=f1_overall, clinch_striking=f1_overall,
-        striking_defense=f1_overall,
-        # Grappling
-        takedowns=f1_overall, takedown_defense=f1_overall, top_control=f1_overall,
-        submissions=f1_overall, guard=f1_overall,
-        # Clinch (1)
-        clinch_control=f1_overall,
-        # Mental
-        heart=f1_overall, fight_iq=f1_overall, composure=f1_overall
-    )
-    fighter2 = FighterAttributes(
-        fighter_id="f2",
-        name="Fighter 2",
-        # Physical
-        # Physical (P3-4d added power)
-        strength=f2_overall, speed=f2_overall, cardio=f2_overall,
-        chin=f2_overall, recovery=f2_overall, power=f2_overall,
-        # Striking
-        boxing=f2_overall, kicks=f2_overall, clinch_striking=f2_overall,
-        striking_defense=f2_overall,
-        # Grappling
-        takedowns=f2_overall, takedown_defense=f2_overall, top_control=f2_overall,
-        submissions=f2_overall, guard=f2_overall,
-        # Clinch (1)
-        clinch_control=f2_overall,
-        # Mental
-        heart=f2_overall, fight_iq=f2_overall, composure=f2_overall
-    )
-    
-    # STAGE 0d — pinned to PRE_GEN_LEGACY explicitly. quick_simulate is a
-    # tests/CLI helper; pre-Stage-0d it inherited (55, 0.42, 6) via the OLD
-    # dataclass defaults. Explicit pin keeps that behavior when the default
-    # lifted to LIVE_PLAY. Deleted at Stage 3 with PRE_GEN_LEGACY.
-    config = FightConfig(
-        scheduled_rounds=rounds,
-        exchanges_per_round=55,
-        damage_multiplier=0.42,
-        standup_threshold=6,
-    )
-    return simulate_fight(fighter1, fighter2, config)
-
 
 def get_fight_outcome(result: FightResult) -> FightOutcome:
     """Convert FightResult to FightOutcome enum."""
