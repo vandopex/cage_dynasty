@@ -4,25 +4,34 @@ Paste block is canonical; backup at claude/handoff_fight_model_p3.md.
 Supersedes claude/handoff_fight_model_p1.md (P1 CLOSED 2026-09-03).
 
 === STATE (proof-verified) ===
-HEAD = b824a429b0971d0a3cf994f9eea36fb54cc46e3c (DEAD_042_STRIP,
-post-C48 ARCHIVE2), PUSHED (proven rev-parse HEAD == origin/main,
-2026-09-07). PA remains on C17 1d8b4e1, deployed 2026-09-03 on proof
-(running-file greps primary: kd_inflicted_by_1 in fe, coin-flip line
-in fi; PA ref = C17; site healthy; 2026-09-03 ~21:00 PDT). b824a42
-is NOT deployed. Working tree CLEAN. Recent chain:
+HEAD = f113004cbfdd3f6bf342f209f5c8c6c96679bed9 (TPLFIX — Jinja
+comment strip on `compare.html:51` + `fight_camp.html:138`,
+post-b6e1d74 DOCS, 2026-09-07). LOCAL ONLY, NOT PUSHED. PA is on
+**b6e1d74** (deployed 2026-09-07 via console `git pull --ff-only`
+from `~/cage_dynasty` + PA API reload; step-4 triad + 5b probe
+green; PA-SMOKE1 5a N=18 confirmed 100% at `(55, 0.24, 10)`).
+Filing: `claude/interim_deploy_2026-09-07.md`. **TPLFIX + DOCS
+NOT yet deployed** — deploy #2 rolls both after DOCS review + token
+rotation. Working tree CLEAN. Recent chain:
 C14 3f9c889 (DMGCURVE1 identity wire + P1 rulings filing) →
 C16 e54d3cc (fi fairness fixes + C15 filing + instrument notes) →
-C17 1d8b4e1 (#22 scoring-convention fix).
-Post-C17 chain (not detailed here — see CLAUDE.md filings at HEAD):
-C48 07340da (ARCHIVE2 — 30 shipping-filing blocks moved from CLAUDE.md
-to claude_md_archive_2026b.md, 2026-09-07) → DEAD_042_STRIP b824a42
-(deleted FightConfig.main_event / quick_simulate / _TRIPLE_PRE_GEN_LEGACY,
-2026-09-07). CLAUDE.md: 1561 lines (2026-09-07 post-ARCHIVE2,
-post-DEAD_042_STRIP).
+C17 1d8b4e1 (#22 scoring-convention fix, deployed 2026-09-03).
+Post-C17 chain (all committed, not detailed here — see CLAUDE.md
+filings at HEAD and `claude/claude_md_archive_2026b.md`):
+C18–C46 (P3-2 through SAVELOAD1) → C47 62d3fc6 (SAVELOAD1 docs +
+`claude/tools/config_observe_harness.py`) → C48 07340da (ARCHIVE2)
+→ b824a42 (DEAD_042_STRIP) → b6e1d74 (DOCS: post-DEAD_042_STRIP
+truth-at-HEAD) → f113004 (TPLFIX). CLAUDE.md line count at C47 =
+**6226** (git show 62d3fc6:CLAUDE.md | wc -l); prior handoff body
+said "6,217" — FALSE, corrected here. CLAUDE.md at HEAD post-DOCS
+is 1662 lines (measured `wc -l CLAUDE.md`; post-ARCHIVE2 + backlog
+additions).
 **DEPLOY FREEZE ACTIVE (ruling S2): no deploys until P3-5 gates
-pass.** INTERIM DEPLOY is a Van-ruled exception (C47, option b) —
-scope doc OPERATING ORDER step 1. Authoritative record: CLAUDE.md
-filings C12-C17 at HEAD — cite filings, not this summary.
+pass.** INTERIM DEPLOY was Van's ruled exception (C47, option b),
+DONE 2026-09-07 (b6e1d74). Deploy #2 (TPLFIX + DOCS) is a
+follow-up ff-only within the same interim-exception scope.
+Authoritative record: CLAUDE.md filings + `claude/interim_deploy_2026-09-07.md`
+— cite filings, not this summary.
 
 === THE ARC IN SIX SENTENCES ===
 P1 (design) closed 2026-09-03 with a ratified contract: fi is the

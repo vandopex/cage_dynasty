@@ -475,6 +475,24 @@ and 2026-07-03.
 If the webhook returns HTTP 500 (rare, intermittent): manual fallback is `git pull`
 on the PA bash console, then "Reload" on the PA Web tab.
 
+**[SUPERSEDED 2026-09-07 — see mechanism of record below.]**
+
+**Mechanism of record (2026-09-07 interim deploy onward):** console
+`git pull --ff-only` from `~/cage_dynasty` (repo root; NOT
+`cage_dynasty_web`) + PA API POST `/webapps/<domain>/reload/`. `deploy.sh`
+webhook is fallback, never proof. Full procedure + raw output:
+`claude/interim_deploy_2026-09-07.md`.
+
+**Standing gates (2026-09-07 onward, before every deploy):**
+- **G0. Template compile sweep** N/N clean required
+  (`python3 -u claude/tools/template_compile_sweep.py` from repo root).
+  Detail: `claude/interim_deploy_2026-09-07.md`.
+- **G1. PA console CPU quota** 100 s/day (Hacker tier); console harness
+  runs CPU-metered, web-app requests unmetered. N≥500-on-PA RETIRED
+  (Van 2026-09-07). Detail: `claude/interim_deploy_2026-09-07.md`.
+- **G2. Deploy mechanism recorded verbatim** in every deploy filing.
+  Template: `claude/interim_deploy_2026-09-07.md`.
+
 **Where startup diagnostics land on PA (verified 2026-07-12).**
 Under uWSGI, module-load-time prints from `game_bridge.py`, `app.py`, and the
 rest of the web app go to **`server.log`**, regardless of whether they use
@@ -493,6 +511,25 @@ Files-API paths:
 - `/var/log/vandopegaming.pythonanywhere.com.access.log`
 
 ## Top-of-backlog
+
+**New dockets from interim deploy 2026-09-07** (one line each; full context
+in `claude/playtest_notes_2026-09-07.md` + `claude/interim_deploy_2026-09-07.md`):
+- **POWER1** — fix `generate_prospect_attributes` (18 stats, no `power`; player gets `.get('power',50)` fallback); add power tile to `training.html` `_STAT_CATS`; audit other callers (amateur→pro signing); forward-only.
+- **PERF1** — local timing 1d8b4e1 vs b6e1d74 on one seed to make the PA hypothesis (start-game 11.5→31.1s, advance-week 16.1→32.3s, N=1 each) a measurement.
+- **OFFER-SCREEN1** — playtest note #15: Fight Offers screen currently shows Risk/Reward at ★★★★★ both sides; add opponent archetype, 4-6 stat side-by-side (link Compare), last-3 results, MC odds, contract context.
+- **DEVELOPMENT1 Gate 0** — playtest note #3: OVR dropped 67→63 in one week while every reported stat delta was positive; measurement first (dump 18 stats at wk0 and wk1, recompute OVR both ways).
+- **at_signing player path** — playtest note #5: capture fires on AI signing, not on `setup_fighter`; player's own fresh fighter shows blank.
+- **god-stat + height/reach/nationality census** — playtest notes #6+#7: 11-of-19 stats at 95 on FLW champ (88 OVR); three fighters all "Brazil, 5'10\", 72\" reach"; plus `72""` double-quote render bug.
+- **streak vs record** — playtest note #9: founding-title row counted in streak but not in record (Almeida 8-0-0 with 9W streak).
+- **record-book stat keys** — playtest note #10: pre-gen fights carry no stat keys; "No records yet" for Sig. Strikes / Sub Attempts / Takedowns.
+- **UI-strings batch** — playtest notes #8+#12+#13+#14: snake_case leaks in UI ("Fight Iq", "Bjj", "Kickboxing_coach", "calf_slicer", "General Mma"); Scout Report weaknesses as bottom-3 not absolute threshold; injury body-part vs technique mismatch ("Shoulder strain via calf_slicer"); coach corner generic; training focus label mismatch ("General Mma" vs "Sparring").
+- **SECRET_KEY on PA** — 5b probe surfaced startup warning: `SECRET_KEY env var is unset` on PA, cookies forgeable. CLAUDE.md L1203-1206 already flagged the shape; this ships the env var.
+- **Four dead fight_engine.py copies census** — root + interface/ + simulation/ + systems/. First three CLI-only (already Ship-1-queued); the 5th (`cage_dynasty_web/fight_engine.py`) stays. Reconcile with the pre-existing Ship-1 filing before `git rm`.
+- **HARNESS-OUTPATH1** — `claude/tools/config_observe_harness.py` hardcodes output under `outputs/sm1/saveload1/`; PA-SMOKE1 wrapper had to text-sub the path. Fix: derive from CLI arg or env, its own single-purpose commit.
+- **No dependency manifest** — repo has no `requirements.txt` / `pyproject.toml` / `Pipfile` / `setup.py`. PA's venv is out of git. Reproducibility docket.
+- **ARCHIVE3** — CLAUDE.md is ~92KB (~2×Claude Code's 40KB guidance) even post-ARCHIVE2. Backlog block dominates the KEEP set. Move top-of-backlog to its own indexed library file.
+
+Full playtest context (all 19 items + measured/hypothesis-graded confirmations): `claude/playtest_notes_2026-09-07.md`.
 
 **Gameplan dial state (live as of 2026-07-05):**
 Four ships wired the aggression axis end-to-end: GAMEPLAN-WIRE1 (`ec78b3b`,
@@ -1088,6 +1125,21 @@ accident.
 - Flat-first import loop: `from foo import x` finds `cage_dynasty_web/foo.py`
   before `cage_dynasty_web/foo/__init__.py`, before top-level. Adding a flat
   file with a name that collides with a package shadows the package.
+- **Bare-import shadow census (dev C40 PYTHONPATH, `narrative:systems:cage_dynasty_web`).**
+  A bare `import fight_engine` from repo CWD before `game_bridge` runs its
+  `sys.path.insert` + force-delete fixup at `game_bridge.py:190-199` finds
+  the WRONG copy. Two shadow candidates, not one:
+  - `fight_engine.py` (repo root) — default triple `(55, 0.70, 6)` (dm=0.7).
+    CLAUDE.md's original hazard note (see below) named this one.
+  - `systems/fight_engine.py` (repo top-level, CLI copy) — default triple
+    `(80, 0.43, 6)` (exchanges=80, dm=0.43). Measured 2026-09-07 by the
+    step-2 preamble in `outputs/sm1/deploy1/step1_2_report.md`; a preamble
+    that imported `fight_engine` before `game_bridge` bound to this file.
+  game_bridge's fixup defeats both on the live app. Any diagnostic or
+  harness must import `game_bridge` first, THEN read
+  `sys.modules['fight_engine']` — never bare-import `fight_engine`. On PA
+  the fixup + WSGI's non-repo-root sys.path insulate both shadows; on dev
+  the C40 PYTHONPATH exposes them.
 - `types.py` shadows stdlib `types`. Use built-in `dict`, `list`, `set` —
   never `Dict`, `List`, `Set` type hints.
 - WebFighter dataclass crashed once because fields with defaults were placed
@@ -1169,6 +1221,21 @@ accident.
   narrative/commentary + systems/fotn resolutions this pass). Text
   preserved for provenance; the byte-equivalence claim is retired, the
   behavior claim survives.]
+  **[SUPERSEDING, 2026-09-07 interim deploy — the 2026-08-15 STRIKE's
+  "PA measured 610 bytes" claim is FALSE at HEAD. PA `wsgi.py` measured
+  **479 bytes** this pass (md5 `91531930abb2f818ccc21cad7b6c6386`); repo
+  `cage_dynasty_web/wsgi.py` is 610 bytes. The 131-byte delta is
+  comments + whitespace only; functional `sys.path.insert` lines are
+  byte-identical between PA and repo. This exactly matches the 2026-08-20
+  correction filed at
+  `claude/claude_md_archive_2026b.md:379-407` (`### wsgi-610` re-measured);
+  the 2026-08-15 STRIKE was an intermediate observation superseded 5 days
+  later and not corrected here until now. sys.path insertion order and
+  bare-import resolution behavior UNCHANGED-IN-EFFECT (independently
+  re-verified 2026-09-07 for fight_engine + fight_integration +
+  commentary resolutions in `outputs/sm1/deploy1/step1_2_report.md` +
+  `outputs/sm1/deploy1/pa_wsgi_verbatim.txt`). Full filing:
+  `claude/interim_deploy_2026-09-07.md`.]
 - **Multi-user env-var dependencies (post-2026-07-03).** `SECRET_KEY` unset →
   cookies forgeable, session identity broken. `LEGACY_CLAIM_TOKEN` unset →
   `/api/claim-legacy` becomes a 404 (safe default). Any new PA deployment or
@@ -1558,6 +1625,15 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - MODULE-RELOAD1 (harness-pattern note, NOT scheduled) [filed C45] → `claude/claude_md_archive_2026b.md` : L4435-4468 <!-- ARCHIVE2 -->
 - SUB-DRIFT → Group D (handoff from C45) → `claude/claude_md_archive_2026b.md` : L4469-4496 <!-- ARCHIVE2 -->
 - C46 [COMMITTED as C46, 2026-09-06, engine only] — SAVELOAD1 T5: drop drift dm=0.48 pins + retire two triples → `claude/claude_md_archive_2026b.md` : L4497-4703 <!-- ARCHIVE2 -->
+- INTERIM DEPLOY 2026-09-07 — b6e1d74 deployed, TPLFIX `f113004` follow-up → `claude/interim_deploy_2026-09-07.md`
+
+**Number-of-record corrections (2026-09-07 interim deploy):**
+- Handoff body's "6,217 lines at C47" is **FALSE**. True count is
+  **6226** (`git show 62d3fc6:CLAUDE.md | wc -l`). ARCHIVE2's
+  measurement was right; the handoff drift is filed only, not fixed
+  in that doc (it's frozen-in-time thread state per its own header;
+  the correction lives here + in `claude/interim_deploy_2026-09-07.md`).
+
 ## Terminal diagnostics (for tuning)
 
 - 📊 [DFC N] — fight card summary (KO/TKO/SUB/DEC counts)
@@ -1577,6 +1653,9 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 
 - `claude/claude_md_archive_2026a.md` — pre-fight-model-arc history (created 2026-09-05, C28/ARCHIVE1) <!-- ARCHIVE2 -->
 - `claude/claude_md_archive_2026b.md` — C22–C46 shipping filings (created 2026-09-07, ARCHIVE2; 30 blocks, in-place pointers tagged <!-- ARCHIVE2 -->) <!-- ARCHIVE2 -->
+- `claude/interim_deploy_2026-09-07.md` — interim deploy filing (b6e1d74 deploy proof triad, 5b probe, PA-SMOKE1 5a, perf hypothesis, TPLFIX regression, power finding, token breach, N≥500-on-PA retirement)
+- `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
+- `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 Detailed ship recaps from before 2026-05-23 live in `CLAUDE_archive.md`
 at the project root. That file is for historical reference — Claude
 Code does not auto-load it. Open it manually when researching past

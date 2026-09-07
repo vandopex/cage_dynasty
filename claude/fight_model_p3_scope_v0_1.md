@@ -74,6 +74,13 @@ only open items.**
    PA-SMOKE1 canary confirms zero constructions at any retired
    triple on the deployed SHA (cc-proposed, Van-ratified
    2026-09-07).
+   **DONE 2026-09-07: b6e1d74 deployed via console `git pull
+   --ff-only` from `~/cage_dynasty` + PA API reload; step-4 triad
+   green + 5b probe matches local BEFORE; PA-SMOKE1 5a run at N=18
+   (instrument-change wrapper, `N_WEEKS=20→2` text-sub) confirmed
+   100% of 3140 constructions on `(55, 0.24, 10)` and zero at any
+   retired triple. Filing: `claude/interim_deploy_2026-09-07.md`.
+   TPLFIX `f113004` + DOCS commit ride deploy #2.**
 2. **Groups B–E** (attribute worth, judge certification,
    aggression rules, cardio/heart) — calibrated on the ripened
    population post-interim-deploy. **Measurement of record
@@ -82,6 +89,14 @@ only open items.**
    reconciliation at N≥500 is filed for interim-deploy so the
    offset is known before Group B tunes. Ruled by Van at C47
    (previously architect-recommended; ratified 2026-09-06).**
+   **AMENDED 2026-09-07: N≥500-on-PA RETIRED (Van's ruling;
+   infeasible under PA console CPU quota 100 s/day — PA-SMOKE1
+   5a consumed 60 CPU-s for 18 fights, so N≥500 would need ≥ ~1650 s
+   upper bound (60 CPU-s/18 fights includes world-gen — per-fight
+   marginal CPU is lower and the bound is not tight; the arithmetic
+   still exceeds the daily budget by >10×). Replacement: local
+   harness-vs-local-bridge N≥500 + PA bridge shares from played
+   weeks.**
 3. **P5-C GREEN** — Groups B-E landed, all P5-C dials in-band
    or explicitly deferred.
 4. **P3-6 FULL ACCEPTANCE** — UI batch, PA-SMOKE1, method-string
