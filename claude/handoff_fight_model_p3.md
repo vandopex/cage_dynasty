@@ -4,16 +4,25 @@ Paste block is canonical; backup at claude/handoff_fight_model_p3.md.
 Supersedes claude/handoff_fight_model_p1.md (P1 CLOSED 2026-09-03).
 
 === STATE (proof-verified) ===
-HEAD = 1d8b4e1e71806f04ca070ffc7a2632048d81aa48 (C17). PUSHED and
-DEPLOYED to PythonAnywhere on proof (running-file greps primary:
-kd_inflicted_by_1 in fe, coin-flip line in fi; PA ref = C17; site
-healthy; 2026-09-03 ~21:00 PDT). Working tree CLEAN. Recent chain:
+HEAD = b824a429b0971d0a3cf994f9eea36fb54cc46e3c (DEAD_042_STRIP,
+post-C48 ARCHIVE2), PUSHED (proven rev-parse HEAD == origin/main,
+2026-09-07). PA remains on C17 1d8b4e1, deployed 2026-09-03 on proof
+(running-file greps primary: kd_inflicted_by_1 in fe, coin-flip line
+in fi; PA ref = C17; site healthy; 2026-09-03 ~21:00 PDT). b824a42
+is NOT deployed. Working tree CLEAN. Recent chain:
 C14 3f9c889 (DMGCURVE1 identity wire + P1 rulings filing) →
 C16 e54d3cc (fi fairness fixes + C15 filing + instrument notes) →
 C17 1d8b4e1 (#22 scoring-convention fix).
+Post-C17 chain (not detailed here — see CLAUDE.md filings at HEAD):
+C48 07340da (ARCHIVE2 — 30 shipping-filing blocks moved from CLAUDE.md
+to claude_md_archive_2026b.md, 2026-09-07) → DEAD_042_STRIP b824a42
+(deleted FightConfig.main_event / quick_simulate / _TRIPLE_PRE_GEN_LEGACY,
+2026-09-07). CLAUDE.md: 1561 lines (2026-09-07 post-ARCHIVE2,
+post-DEAD_042_STRIP).
 **DEPLOY FREEZE ACTIVE (ruling S2): no deploys until P3-5 gates
-pass.** Authoritative record: CLAUDE.md filings C12-C17 at HEAD —
-cite filings, not this summary.
+pass.** INTERIM DEPLOY is a Van-ruled exception (C47, option b) —
+scope doc OPERATING ORDER step 1. Authoritative record: CLAUDE.md
+filings C12-C17 at HEAD — cite filings, not this summary.
 
 === THE ARC IN SIX SENTENCES ===
 P1 (design) closed 2026-09-03 with a ratified contract: fi is the
@@ -80,6 +89,30 @@ pool ≥2 seed blocks (cascade variance > naive binomial).
 Seed blocks consumed: 400000s (anchors — reusable BY DESIGN for
 exact reproduction), 900000-970000 (P2/P2b/P2c/P3-1 — do not
 reuse).
+CAVEAT — INSTRUMENT NOISE FLOOR (measured DEAD_042_STRIP, 2026-09-07):
+config_observe_harness is seeded (random.seed(6500000)) but live-play
+construction counts drift ~20% run-to-run under identical seed +
+PYTHONPATH. Measurement: two AFTER runs of the harness on the same
+DEAD_042_STRIP tree = 17,800 vs 14,395 _assemble_prefight
+constructions (150 vs 145 fights emitted). Root cause: uuid.uuid4()
+uses os.urandom and bypasses random.seed (CLAUDE.md CRITICAL block).
+World-gen paths ARE exact — fe:standard_fight (762/762/762) and
+fe:championship_fight (60/60/60) were byte-identical across three
+runs (BEFORE, AFTER-1, AFTER-2). Consequence: count-level gates on
+live play are unreliable at ~20% noise; the ruled N≥500 harness-vs-
+bridge reconciliation (fight_model_p3_scope_v0_1.md OPERATING ORDER
+step 2, Groups B–E) does not buy what the sample size implies.
+Reconciliation needs either a normalized measure (share, per-fight
+rate) or a categorical measure (zero-tolerance on the sanctioned-
+triple axis, which DID discriminate this ship), or a seed-respecting
+UUID path in the harness. Filed as a hazard against the P5-C
+measurement design; does not block DEAD_042_STRIP's own gate (which
+passed categorically).
+HAZARD (measured 2026-09-07): repo-root fight_engine.py (dead-in-
+runtime) shadows cage_dynasty_web/fight_engine.py on bare import from
+repo CWD; its FightConfig default is dm=0.7. Probes must sys.path.insert
+the web copy and del sys.modules['fight_engine'] (game_bridge's shim
+shape) and print __file__. Cleanup of the four dead copies is queued.
 
 === OPEN ITEMS CARRIED ===
 Post-deploy owed trio now runs against the C17 game: PA

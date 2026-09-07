@@ -54,19 +54,16 @@
 # DEAD_042_STRIP backlog item filed.
 # Updated 2026-09-06 (C46 engine + C47 docs ship).
 
-## OPERATING ORDER (Van, 2026-09-06, C47 amended)
+## OPERATING ORDER (Van, 2026-09-07, post-DEAD_042_STRIP)
 
-**Prior C45 text was cc-drift.** The order it named matched
-the amended one below (SAVELOAD1 → deploy → Group B); the
-drift was structural, not content: cc wrote an OPERATING ORDER
-without a Van ruling behind it. C47 records the same order
-under an explicit Van ruling.
+**Prior C47 text had SAVELOAD1 as step 1; SAVELOAD1 SHIPPED (C46
+engine + C47 docs) + DEAD_042_STRIP b824a42 (2026-09-07) landed on
+top of it. Both drop out of the numbered list. Order below numbers
+only open items.**
 
-**Amended order (Van, 2026-09-06):**
+**Amended order (Van, 2026-09-07):**
 
-1. **SAVELOAD1** (C46 engine + C47 docs) — save-fidelity gate;
-   SHIPPED.
-2. **INTERIM DEPLOY** — Van ruled option (b): mini-acceptance
+1. **INTERIM DEPLOY** — Van ruled option (b): mini-acceptance
    is T4 method-string sweep + PA-SMOKE1 run + one bridge-path
    finish-rate re-read on the deployed SHA (since 70/29/32/38
    is what the local build produces at C46 and what the player
@@ -74,7 +71,10 @@ under an explicit Van ruling.
    build). Deploy on proof. Not "deploy on completion of P5-C";
    deploy on this scoped acceptance set. **Ruled by Van at C47
    (previously architect-recommended; ratified 2026-09-06).**
-3. **Groups B–E** (attribute worth, judge certification,
+   PA-SMOKE1 canary confirms zero constructions at any retired
+   triple on the deployed SHA (cc-proposed, Van-ratified
+   2026-09-07).
+2. **Groups B–E** (attribute worth, judge certification,
    aggression rules, cardio/heart) — calibrated on the ripened
    population post-interim-deploy. **Measurement of record
    shifts to the bridge path (not the harness) wherever the
@@ -82,11 +82,11 @@ under an explicit Van ruling.
    reconciliation at N≥500 is filed for interim-deploy so the
    offset is known before Group B tunes. Ruled by Van at C47
    (previously architect-recommended; ratified 2026-09-06).**
-4. **P5-C GREEN** — Groups B-E landed, all P5-C dials in-band
+3. **P5-C GREEN** — Groups B-E landed, all P5-C dials in-band
    or explicitly deferred.
-5. **P3-6 FULL ACCEPTANCE** — UI batch, PA-SMOKE1, method-string
+4. **P3-6 FULL ACCEPTANCE** — UI batch, PA-SMOKE1, method-string
    sweep re-run, save-load reality check re-run, stamped set.
-6. **FINAL DEPLOY** — the ship the player will feel.
+5. **FINAL DEPLOY** — the ship the player will feel.
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.

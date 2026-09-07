@@ -1273,21 +1273,43 @@ references. Historical ship recaps are in `CLAUDE_archive.md`.
 
 ## Key constants (don't change without telling me)
 
-**Truth at HEAD** [MEASURED, sourced to STAGE 0d `ba8cece`, 2026-07-12; verbatim from the archived correction-layer narrative]**:** live-play per-strike damage scale is
-`self.config.damage_multiplier`, read live in the strike-damage path
-(currently `fight_integration.py:867`). The `FightConfig.damage_multiplier`
-dataclass field defaults to `0.48` (currently `fight_engine.py:798`).
-The value the config carries is pinned by the atomic-config-invariant
-contract via `_SANCTIONED_TRIPLES` (currently `fight_engine.py:853–859`)
-to one of `{0.42, 0.48}`. `_TRIPLE_LIVE_PLAY = (55, 0.48, 10)` is
-annotated as "the surviving contract" in the `_SANCTIONED_TRIPLES` set
-(currently `fight_engine.py:857`). The 0.48 value survives 0d by design
-— the read site's own comment (currently `fight_integration.py:866`)
-states "Byte-identical to the pre-0d FI_DAMAGE_MULTIPLIER=0.48." Every
-line reference above is tagged "currently" because line numbers drift;
-the identity of each fact is its symbol (`config.damage_multiplier`,
-`FI_DAMAGE_MULTIPLIER`, `_SANCTIONED_TRIPLES`, `_assert_sanctioned_config`,
-`_TRIPLE_LIVE_PLAY`, `FightConfig.damage_multiplier`).
+**Truth at HEAD** [MEASURED, sourced to STAGE 0d `ba8cece` 2026-07-12,
+correction-layer narrative retained; C45–DEAD_042_STRIP updates applied
+in-place per the false-numbers-documented-as-false rule]**:** live-play
+per-strike damage scale is `self.config.damage_multiplier`, read live in
+the strike-damage path (currently `fight_integration.py:867`). The
+`FightConfig.damage_multiplier` dataclass field defaults to `0.48`
+[FALSE since C45 `a4fe627` — measured default 0.24 at `b824a42`;
+retained for provenance] (currently `fight_engine.py:798`). The value
+the config carries is
+pinned by the atomic-config-invariant contract via `_SANCTIONED_TRIPLES`
+(currently `fight_engine.py:1317-1319`) to the single surviving triple
+`{(55, 0.24, 10)}`. `_TRIPLE_LIVE_PLAY = (55, 0.24, 10)` is annotated as
+"the surviving contract" in the `_SANCTIONED_TRIPLES` set (currently
+`fight_engine.py:1318`), promoted from the pre-Group-A value at C45
+`a4fe627`. The 0.48 value survives 0d by design [FALSE since C45
+`a4fe627` — measured default 0.24 at `b824a42`; retained for
+provenance] — the read site's own comment (currently
+`fight_integration.py:866`) states "Byte-identical to the pre-0d
+FI_DAMAGE_MULTIPLIER=0.48." Every line reference above is
+tagged "currently" because line numbers drift; the identity of each
+fact is its symbol (`config.damage_multiplier`, `FI_DAMAGE_MULTIPLIER`,
+`_SANCTIONED_TRIPLES`, `_assert_sanctioned_config`, `_TRIPLE_LIVE_PLAY`,
+`FightConfig.damage_multiplier`).
+
+**Retired triples (kept for reader trust; do not re-introduce):**
+- `(55, 0.48, 10)` — was `_TRIPLE_LIVE_PLAY` pre-Group-A; FALSE at C45
+  `a4fe627` (Van ruled dm 0.48 → 0.24). Kept briefly as
+  `_TRIPLE_LIVE_PLAY_LEGACY_C45` in the allowlist; dropped at C46
+  `612f918` when the T5 spot-check found all 5 remaining constructors
+  were drift-pins, not deliberate legacy.
+- `(55, 0.48, 6)` — was `_TRIPLE_FI_FALLBACK`; dropped at C46 `612f918`
+  alongside the LEGACY_C45 entry (the 4 fi drift-pins at fi:420 +
+  fi:2670/2679/2687 were converted to inherit defaults).
+- `(55, 0.42, 6)` — was `_TRIPLE_PRE_GEN_LEGACY`; deleted at
+  DEAD_042_STRIP `b824a42` (2026-09-07) with the two dead constructors
+  (`FightConfig.main_event()`, `quick_simulate()`) that were its only
+  producers by grep and by 20-week observation.
 
 **Other current constants** [⚠️ HOIST — these three bullets are HOISTED from the tail of `### STAGE 1 addendum — config-lever measurement [filed 2026-07-14]` where they lived in the pre-phase-2 bytes at L1657-1659. Semantic home is here, not there. This is a location move, not a content edit; the three bullets are verbatim]:
 - Submission threshold: 70.0
