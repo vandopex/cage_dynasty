@@ -1223,6 +1223,18 @@ After editing a .py file:
 1. Run `python3 -c "import ast; ast.parse(open('FILE').read())"` to syntax-check.
 2. Show me a diff. I want to see what changed before declaring done.
 
+Standing rule (C46 SAVELOAD1, 2026-09-06):
+**Config verifies OBSERVE (wrap-log with caller attribution);
+never IMPOSE (mutate).** A verify that monkey-patches
+`FightConfig.__init__` to force a value can't observe hard
+pins; C45's P3 verify made that error and hid the drift the
+T5 spot-check later found. Reference OBSERVE shape (committed
+into the repo at C47 per Van ruling R2 so the rule is not
+wired-to-nothing): `claude/tools/config_observe_harness.py`.
+It wraps `FightConfig.__init__` in an observer that logs
+`(exchanges, dm, standup)` + caller-frame identity, then calls
+the original. Full detail in CLAUDE.md's C46 filing block.
+
 I will:
 - Restart Flask myself. You don't run servers.
 - Test in the browser and report terminal output.
@@ -5695,7 +5707,9 @@ DEPLOY-TARGET per OPERATING ORDER.
 **Van's spec clause invoked.** P6 bomb channel is the P5-C
 Group A **mechanism exception** — the ONE new mechanism this
 calibration pass admits under Van's ruling
-(2026-09-05, C43 spec §5). Rationale: `damage_multiplier` alone
+(2026-09-05, C43 spec §PRINCIPLE unreachable-target clause;
+C47 correction — the C45-original citation of "§5" was
+imprecise). Rationale: `damage_multiplier` alone
 cannot lift KO share because the KO label attaches to the last
 strike that zeroes cumulative health (not to a discrete KO
 event). Real MMA KOs are tail events layered on otherwise-
@@ -5859,19 +5873,27 @@ finding, or (b) records an attribution correction where
 architect and cc reframed after measurement.
 
 1. **P4 damage-economy hypothesis** (architect's, refuted by
-   cc measurement). Original: "checker holds up dying fighters
-   at 8 HP; grinding damage feeds them into decision territory."
-   REFUTED at P4c: DEC-fighters end median health = 60.9 (not
-   ~8). Van reframed to spiral-entry (bimodal fights: either a
-   fight enters the spiral early and cascades to finish, or it
-   never enters and grinds to decision). **Attribution honesty:
-   the spiral-entry framing is Van's reframe after Van's first
-   hypothesis died — the filing keeps attribution straight in
-   both directions.**
+   cc measurement; C47 correction). Original: "checker holds up
+   dying fighters at 8 HP; grinding damage feeds them into
+   decision territory." REFUTED at P4c: DEC-fighters end median
+   health = 60.9 (not ~8). Architect reframed to spiral-entry
+   (bimodal fights: either a fight enters the spiral early and
+   cascades to finish, or it never enters and grinds to
+   decision). **Attribution correction (C47, SAVELOAD1 review
+   catch): the C45-original wording attributed both the
+   hypothesis AND the spiral-entry reframe to Van. Both were the
+   ARCHITECT's — Van held neither. The filing now reads: architect
+   proposed hypothesis v1, cc's measurement refuted it, architect
+   reframed to spiral-entry. Caught in architect review;
+   Van ruled the correction (C47).**
 
-2. **P0 "42.66% cut rate" reading.** Category error — the
-   denominator was cut-attempts not fight-count. Corrected at
-   Phase 0-bis T1 to 11.17% sim-layer (see C44 filing above).
+2. **P0 "42.66% cut rate" reading.** Specific mechanism (C47
+   correction of the C45-original "category error" hand-wave):
+   the numerator was cut-fire events counted across ALL sims
+   (including MC-odds pre-compute batches — many sims per bridge
+   fight), while the denominator was only bridge-fights emitted.
+   Corrected at Phase 0-bis T1 to 11.17% sim-layer (see C44
+   filing above).
 
 3. **P0 "44.8% baseline p(win) noise-band" reading.** Was a
    ~5pp slot-symmetric bias from the DASHBOARD FIXTURE's reused
@@ -5972,6 +5994,214 @@ single-scalar view. Measurement lands BEFORE the floor value
 ratification is final. If the reading shows differentiation
 room, FATIGUE-SHAPE1 (per-channel floors) becomes eligible for
 Van scoping post-Group-D.
+
+
+### C46 [COMMITTED as C46, 2026-09-06, engine only] — SAVELOAD1 T5: drop drift dm=0.48 pins + retire two triples
+
+SAVELOAD1 was Van's deploy gate: prove pre-C45 saves survive
+under post-C45 code, then land the docs corrections that had
+queued since C43. T1-T4 came back green (loads 4/4, field
+survival, real-render, method-string coverage 30/30). T5 —
+the legacy-triple audit — turned up the finding that reshaped
+the whole ship.
+
+**Plain-English (architect's read, not Van's).** After C45
+shipped, the game people were actually playing had not moved
+to the new economy: the bridge builds its own fight config
+by hand at gb:17510 and had 0.48 typed in, and that one
+construction site feeds all three production paths (player
+fights, AI card sim, MC odds). Group A's dm=0.24 landing
+was true of the engine constants and false of production.
+C45's numbers (Fin ~62%, DEC ~35%, etc.) were measured on
+a harness that used the engine default; the prod verify then
+FORCED 0.24 rather than watching what the bridge did. Filed
+as architect's plain-English read (Van did not author this
+framing; Van required attribution honesty on how it lands
+in the filing).
+
+**Instrument rule established (C46, filed to CLAUDE.md
+standing rules):** **Config verifies OBSERVE (wrap-log with
+caller attribution); never IMPOSE (mutate).** The T5 harness
+that ran was this shape; the tracked reference copy lives at
+`claude/tools/config_observe_harness.py` (committed at C47
+per Van ruling R2). Working copy under `outputs/sm1/saveload1/`
+is untracked (per CLAUDE.md's `outputs/` convention). Tracked
+copy is byte-verbatim from the working copy EXCEPT (a) a new
+docstring naming its constitutional role, (b) sys.path setup
+derived from `__file__` (working copy hardcoded dev-machine
+absolute paths), (c) OUT output path derived from `__file__`
+(same reason). `diff outputs/sm1/saveload1/t5_bridge_spotcheck.py
+claude/tools/config_observe_harness.py` reports 5 change-blocks
+(2 unified-diff hunks); all documented in the harness's own
+docstring.
+
+**Five sites classified (cc classification under Van's
+ruling — Van ruled the METHOD; cc did the classification):**
+
+| # | site | commit intro (git blame) | path served | ruling |
+|---|---|---|---|---|
+| 1 | `game_bridge.py:17514` | `9adfeba` 2026-08-15 18:36:03 -0700 | Path A + Path B + MC odds (via `_assemble_prefight` bundle) | DRIFT |
+| 2 | `fight_integration.py:420` | `ba8cece` 2026-07-12 13:35:46 -0700 | `NarratedFightSimulator` no-config fallback | DRIFT |
+| 3 | `fight_integration.py:2670` | `ba8cece` | `simulate_narrated_fight` title-fight fallback | DRIFT |
+| 4 | `fight_integration.py:2679` | `ba8cece` | Main-event fallback | DRIFT |
+| 5 | `fight_integration.py:2687` | `ba8cece` | Regular-fight fallback | DRIFT |
+
+None deliberate legacy. `_TRIPLE_LIVE_PLAY_LEGACY_C45` and
+`_TRIPLE_FI_FALLBACK` both retired from `_SANCTIONED_TRIPLES`
+and the assertion error string.
+
+**Van rulings for the fix:**
+- **(a) Commit split**: C46 engine only, C47 docs (this filing).
+- **(b) gb:17510**: drop all three triple dials AND the sub
+  thresholds (grep: one pin site sets them to the dataclass
+  defaults — code read, not measurement). Keep only
+  `scheduled_rounds=total_rounds` (the true per-fight input).
+- **(c) fi:420, fi:2670/2679/2687**: drop `damage_multiplier`
+  per ruling. cc scope-addition dropped `standup_threshold=6`
+  too (a no-config fallback should inherit the whole default,
+  not partial — same class of hidden drift). Van approved
+  the scope-addition 2026-09-06.
+- **(d) DELETE** `_TRIPLE_LIVE_PLAY_LEGACY_C45` AND
+  `_TRIPLE_FI_FALLBACK` from `_SANCTIONED_TRIPLES` and the
+  assertion error string — with all 5 drift sites converted,
+  neither has a constructor; a documented allowlist entry
+  that never fires is the "looks-wired" shape.
+
+**PRE-FIX baseline of record** (T5 spot-check on the a4fe627
+tree, `outputs/sm1/saveload1/t5_prefix_full.log`):
+new_game + 20 advance_week, 148 fights emitted, 16770
+FightConfig constructions observed via wrapper record:
+
+| triple | caller | count | share |
+|---|---|---:|---:|
+| `(55, 0.48, 10)` LEGACY_C45 | `game_bridge.py:17357:_assemble_prefight` | 15948 | 95.1% |
+| `(55, 0.24, 10)` LIVE_PLAY | `fight_engine.py:1301:standard_fight` | 762 | 4.5% |
+| `(55, 0.24, 10)` LIVE_PLAY | `fight_engine.py:1311:championship_fight` | 60 | 0.4% |
+
+**POST-FIX** (same harness, `outputs/sm1/saveload1/t5_spotcheck_post_fix.json`):
+147 fights emitted, 17419 constructions, **100% at LIVE_PLAY
+`(55, 0.24, 10)`. LEGACY_C45 constructions: 0.**
+
+**First bridge-path finish-rate read, N=147, NOT A GATE**
+(Van C46 spec — do not compare to Group A harness numbers
+as pass/fail): KO 1.4%, TKO 36.7%, SUB 32.0%, DEC 29.3%,
+DRAW 0.7%. Group A harness (62/35/26/36) is the harness's
+number. **Van ruled at C47 (previously architect-recommended;
+ratified 2026-09-06):** a one-time harness-vs-bridge
+reconciliation at N≥500 is filed for interim-deploy mini-
+acceptance so the offset is known before Group B calibrates.
+Bridge path becomes measurement of record where affordable.
+
+**Classmethod caller attribution (post-C46, Van task 3).**
+Rerun of the T5 wrapper with `fight_engine.py` REMOVED from
+the frame-match list attributed the 822 classmethod
+constructions to `world_init.py:2076:simulate_fight_full_engine`
+(during pre-gen history simulation, not "leftover paths" as
+the pre-Van-review draft had guessed). All 822 at
+`(55, 0.24, 10)` post-fix; disposition unchanged.
+
+**Item 16 finding — pre-gen economy history (Van task 16).**
+`git show a4fe627 -- cage_dynasty_web/fight_engine.py`
+diff hunk on `standard_fight()` and `championship_fight()`:
+
+```
+     @classmethod
+     def standard_fight(cls) -> 'FightConfig':
++        # C45: dm 0.48 → 0.24 (Group A finish economy landing)
+         return cls(
+             scheduled_rounds=3,
+             exchanges_per_round=55,
+-            damage_multiplier=0.48,
++            damage_multiplier=0.24,
+             standup_threshold=10,
+         )
+```
+
+Pre-C45, both classmethods returned `(55, 0.48, 10)` — the
+pre-C45 LIVE_PLAY triple. **NOT** `(55, 0.42, 6)` (=
+`_TRIPLE_PRE_GEN_LEGACY`) as the deleted fi:410-416 comment
+claimed ("standard_fight() now returns PRE_GEN_LEGACY").
+That comment was **stale/false at the time of its deletion**
+— the classmethods had already tracked LIVE_PLAY values as
+far back as the diff shows.
+
+**`_TRIPLE_PRE_GEN_LEGACY` documented FALSE** (per wrong-
+numbers rule; C47 finding). The constant's name and the
+deleted fi comment both claim pre-gen ran at 0.42. The
+diff hunk above shows the classmethods returned 0.48
+pre-C45 and 0.24 post-C45; no pre-gen path has constructed
+`(55, 0.42, 6)` as far back as `a4fe627~`. Its only
+constructors are `FightConfig.main_event()` (`fe:1319-1326`)
+and `quick_simulate()` (`fe:5257-5308`), both DEAD BY GREP
+(zero callers in `cage_dynasty_web/`) and zero constructions
+observed across 20 weeks. Same "documented allowlist entry
+that never fires" shape as the just-deleted
+`_TRIPLE_FI_FALLBACK`. **Not deleted in C46/C47** — filed
+to the P3 board as one small engine commit after C47
+(see scope doc backlog).
+
+**Van ruling 1 (recorded here, 2026-09-06): pre-gen runs
+at LIVE_PLAY.** Deliberate, forward-only, no separate
+pre-gen economy. **Honest note (Van required):** this
+outcome pre-dates the ruling — the classmethods happened
+to track live-play values before Van ratified the design
+choice. The behavior became deliberate at C47; before that
+it was a shared-pin coincidence. Enforcement by structure
+(classmethods stop pinning) is a separate engine commit
+after C47 per Van ruling 2 — see backlog item DEAD_042_STRIP.
+
+**Van ruling 2 (recorded here, 2026-09-06): the
+classmethods stop pinning the triple.** They inherit the
+`FightConfig` default so ruling 1 is enforced by structure
+rather than memory. Bundled with `_TRIPLE_PRE_GEN_LEGACY`
+removal + `main_event()` + `quick_simulate()` deletion
+into one small engine commit after C47. Filed as
+DEAD_042_STRIP in the scope doc backlog.
+
+**MC odds C45→C46 addendum (verbatim from the C46 commit
+message).** MC odds via `_compute_mc_odds_for_fight`
+(gb:17558) read `_bundle["config"]` from `_assemble_prefight`
+(gb:17510) which pinned `(55, 0.48, 10)` — LEGACY_C45.
+Every MC odds computation in that window ran on the old
+economy. S2 freeze held; no live-play impact. Local-only
+harness runs and any pre-deploy testing computed odds on
+the pre-C45 economy.
+
+**Blame evidence (git show -s --format=%ci):**
+- `gb:17510` — `9adfeba` (2026-08-15 18:36:03 -0700,
+  `_assemble_prefight` extraction).
+- `fi:420, fi:2670, fi:2679, fi:2687` — `ba8cece`
+  (2026-07-12 13:35:46 -0700, atomic-config-invariant
+  assertion).
+
+**C46 commit message per-file counts were WRONG** (per
+wrong-numbers rule; documented not silently amended).
+Message said `fight_engine.py +19/-14`, `fight_integration.py
++26/-21`, `game_bridge.py +16/-6`. `git show --numstat
+612f918` reports:
+
+| file | actual +/- | message +/- |
+|---|---|---|
+| `fight_engine.py` | **+19 / −16** | +19 / −14 (−16 correct) |
+| `fight_integration.py` | **+22 / −25** | +26 / −21 (+22, −25 correct) |
+| `game_bridge.py` | +16 / −6 | +16 / −6 (matched) |
+
+Numbers of record: `git show --numstat 612f918`.
+
+Full artifacts under `outputs/sm1/saveload1/` (list matches
+`ls outputs/sm1/saveload1/` exactly at C47 write time):
+- `t1_survival.py`, `t1_survival_out.json`
+- `t2_field_census.py`, `t2_field_census_out.json`
+- `t3_render.py`, `t3_render_out.json`
+- `t4_method_sweep.py`, `t4_sweep_out.json`
+- `t5_bridge_spotcheck.py` (working copy; canonical tracked
+  reference at `claude/tools/config_observe_harness.py`)
+- `t5_prefix_full.log` (PRE-fix log)
+- `t5_spotcheck_out.json` (POST-fix, most recent run)
+- `t5_spotcheck_post_fix.json` (POST-fix backup snapshot)
+- `scratch_saves/` (T2 round-trip intermediate scratch;
+  bridge writes here so real save files aren't overwritten)
+
 
 ## Terminal diagnostics (for tuning)
 

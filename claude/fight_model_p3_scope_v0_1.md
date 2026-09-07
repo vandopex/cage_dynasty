@@ -43,18 +43,50 @@
 # bomb channel KO_CHANCE_SCALE=0.5, cut set 0.06/0.020/3,
 # guard-damp repair, KO naming amendment; P7a invariant proven
 # 0/400 winner-round drift; MODULE-RELOAD1 census CLEAN).
-# Updated 2026-09-06 (C45 GROUP A ship).
+# C46 SAVELOAD1 T5 — dropped 5 drift dm=0.48 pins at gb:17510 +
+# fi:420/2670/2679/2687; retired _TRIPLE_LIVE_PLAY_LEGACY_C45
+# AND _TRIPLE_FI_FALLBACK from sanctioned allowlist; post-fix
+# 100% at LIVE_PLAY (55, 0.24, 10) across 17419 constructions,
+# 147 fights emitted; first bridge-path finish-rate read filed
+# (not a gate). C47 SAVELOAD1 docs — refutation-ledger
+# corrections, OPERATING ORDER rewrite to Van's amended interim-
+# deploy path, PA-SMOKE1 canary update for retired triples,
+# DEAD_042_STRIP backlog item filed.
+# Updated 2026-09-06 (C46 engine + C47 docs ship).
 
-## OPERATING ORDER (Van, 2026-09-06, C45)
+## OPERATING ORDER (Van, 2026-09-06, C47 amended)
 
-**NEXT DEPLOY IS THE TARGET.** Group A landed as C45; deploy is
-the next milestone (breaks the S2 freeze that has held since
-2026-09-03). Between C45 and deploy: SAVELOAD1 reality check
-runs first (a save that survives Group A's constant changes is
-non-negotiable for anyone with a live playthrough); PA-SMOKE1
-files under P3-6 UI batch as the post-deploy verification
-protocol. Group B (attribute worth / judge certification) picks
-up after deploy on the ripened population.
+**Prior C45 text was cc-drift.** The order it named matched
+the amended one below (SAVELOAD1 → deploy → Group B); the
+drift was structural, not content: cc wrote an OPERATING ORDER
+without a Van ruling behind it. C47 records the same order
+under an explicit Van ruling.
+
+**Amended order (Van, 2026-09-06):**
+
+1. **SAVELOAD1** (C46 engine + C47 docs) — save-fidelity gate;
+   SHIPPED.
+2. **INTERIM DEPLOY** — Van ruled option (b): mini-acceptance
+   is T4 method-string sweep + PA-SMOKE1 run + one bridge-path
+   finish-rate re-read on the deployed SHA (since 70/29/32/38
+   is what the local build produces at C46 and what the player
+   will see post-interim-deploy — PA is still on the pre-deploy
+   build). Deploy on proof. Not "deploy on completion of P5-C";
+   deploy on this scoped acceptance set. **Ruled by Van at C47
+   (previously architect-recommended; ratified 2026-09-06).**
+3. **Groups B–E** (attribute worth, judge certification,
+   aggression rules, cardio/heart) — calibrated on the ripened
+   population post-interim-deploy. **Measurement of record
+   shifts to the bridge path (not the harness) wherever the
+   bridge path is affordable; a one-time harness-vs-bridge
+   reconciliation at N≥500 is filed for interim-deploy so the
+   offset is known before Group B tunes. Ruled by Van at C47
+   (previously architect-recommended; ratified 2026-09-06).**
+4. **P5-C GREEN** — Groups B-E landed, all P5-C dials in-band
+   or explicitly deferred.
+5. **P3-6 FULL ACCEPTANCE** — UI batch, PA-SMOKE1, method-string
+   sweep re-run, save-load reality check re-run, stamped set.
+6. **FINAL DEPLOY** — the ship the player will feel.
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -921,36 +953,39 @@ new styles / etc.); nothing here ships mid-arc.
   own careers); DEVELOPMENT1 economy census runs alongside;
   CONTRACTS1 own small arc after.
 
-- **SAVELOAD1** (new, C45 promoted to post-Group-A / pre-Group-B
-  slot per Van's OPERATING ORDER). Group A shipped constant
-  changes (damage_multiplier default 0.48 → 0.24, sanctioned
-  triple retagged, KO_CHANCE_SCALE default 0.0 → 0.5, cut
-  constants moved, KO naming amendment). A save from before C45
-  reloading into post-C45 code should still work — but hasn't
-  been proven. Scope:
-  - Load a pre-C45 save (any of `bridge_van_slot*.json` /
-    `bridge_van_autosave.json`); confirm no crash, no lost
-    fighters, no broken fight_history entries.
-  - Verify serialized configs (if any) don't reference
-    dm=0.48 directly in a way that breaks under new default.
-  - Verify pre-C45 fight_history entries render correctly in
-    the Record Book + fighter profile (label strings hold).
-  - Verify champion/rankings state carries.
-  - If any deserialization path errors on the new constants,
-    file a reconcile hook (forward-only, applied at load).
-  **RUNS BEFORE DEPLOY** per Van OPERATING ORDER — the deploy
-  is the target and a save that doesn't survive is
-  non-negotiable.
+- **SAVELOAD1** (SHIPPED as C46 engine + C47 docs, 2026-09-06).
+  T1-T4 green (loads 4/4, no fields dropped, real-render OK,
+  30/30 method-string coverage). T5 turned up the C45 completeness
+  gap — 15948/16770 (95.1%) FightConfig constructions still
+  ran on the pre-C45 LEGACY_C45 triple via one drift-pin at
+  gb:17510 + four fi fallback sites. C46 engine dropped the
+  5 drift pins, retired both `_TRIPLE_LIVE_PLAY_LEGACY_C45` and
+  `_TRIPLE_FI_FALLBACK` from the allowlist, and confirmed 100%
+  LIVE_PLAY on the same harness post-fix. First bridge-path
+  finish-rate read (not a gate): 70% finish / 29% DEC / 32% SUB
+  / 38% KO+TKO merged at N=147. Full detail in CLAUDE.md's
+  C46 filing block.
 
-- **PA-SMOKE1** (new, C45 filed to P3-6 UI batch). Post-deploy
+- **PA-SMOKE1** (C45 filed, C47 amended for interim-deploy
+  acceptance per Van OPERATING ORDER ruling 2). Post-deploy
   verification protocol for PA. Small, tight, checklist-only:
   - PA `git rev-parse HEAD` matches local after webhook.
-  - PA `server.log` grep for the standing set + new entries:
+  - PA `server.log` grep for the standing set + C46 update:
     `"Real fight engine failed"` (Path A crash canary),
     `"commentary miss"` (COMMENTARY-STALE1 canary),
-    `"UNSANCTIONED CONFIG TRIPLE"` (C45 sanction-assert canary —
-    if any code path constructs a config outside the four
-    sanctioned triples, this fires).
+    `"UNSANCTIONED CONFIG TRIPLE"` (sanction-assert canary —
+    now that C46 retired LEGACY_C45 + FI_FALLBACK, this fires
+    on ANY construction of `(55, 0.48, 10)` or `(55, 0.48, 6)`
+    as a regression canary; grep for those exact triple values
+    in the error text).
+  - Interim-deploy specific (Van ruled at C47; previously
+    architect-recommended, ratified 2026-09-06): re-run the T5
+    bridge spot-check on the deployed SHA (via the tracked
+    reference harness at `claude/tools/config_observe_harness.py`)
+    and confirm 100% at `(55, 0.24, 10)`; re-run the first
+    bridge-path finish-rate read at N≥147 and file the number.
+    If the deployed rate drifts materially from 70% finish /
+    29% DEC, that is a FINDING, not a tuning target.
   - Live-play smoke: advance one week on a fresh save,
     confirm at least one card fires, confirm method labels
     render (KO/TKO/SUB/DEC), confirm no crashes on
@@ -1028,12 +1063,42 @@ new styles / etc.); nothing here ships mid-arc.
   all-in measurement (gassed-fighter vs fresh) showing room for
   differentiation. Post-P5-C, own ratification arc.
 
+- **DEAD_042_STRIP** (new, C47 filed under Van rulings 1 + 2
+  from the C46 review). One small engine commit AFTER C47 that
+  makes pre-gen = LIVE_PLAY structural rather than accidental,
+  and retires the documented-false `_TRIPLE_PRE_GEN_LEGACY`:
+  - `FightConfig.standard_fight()` / `championship_fight()`
+    STOP PINNING the triple — drop `damage_multiplier` and
+    `standup_threshold` (keep `scheduled_rounds` and any
+    fight-type flags). They inherit the `FightConfig` default;
+    ruling 1 (pre-gen tracks LIVE_PLAY) becomes structural.
+  - DELETE `FightConfig.main_event()` classmethod (`fe:1319-1326`)
+    and `quick_simulate()` helper (`fe:5257-5308`) — both DEAD
+    BY GREP (zero callers in `cage_dynasty_web/`). Together they
+    were the only remaining `(55, 0.42, 6)` constructors.
+  - DELETE `_TRIPLE_PRE_GEN_LEGACY` from `_SANCTIONED_TRIPLES`
+    and the assertion error string. With the constructors gone
+    it has no callers; a documented allowlist entry that never
+    fires is the "looks-wired" shape (same class as the
+    C46-retired `_TRIPLE_FI_FALLBACK`).
+  Reason: `_TRIPLE_PRE_GEN_LEGACY` is documented FALSE (per
+  C46 filing — the deleted fi comment claimed pre-gen returned
+  0.42, but the C45 diff hunk proves the classmethods returned
+  0.48 pre-C45 / 0.24 post-C45, and no code has constructed
+  0.42 within grep range). Filed after C47 as one small
+  single-purpose engine commit; not bundled with anything.
+
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C44 bebbd60. Standing
+Fresh date + HEAD gate (last shipped: C46 612f918. Standing
 convention as of C26: the HEAD line names the LAST SHIPPED
 commit and is updated in the NEXT ship's docs pass. No
-placeholders);
+placeholders. ARCHIVE2 scheduled immediately after C47 —
+verbatim hash-verified move of closed filings to
+`claude/claude_md_archive_2026b.md` so CLAUDE.md returns to
+guidance-sized. Do NOT trim / summarize / restructure
+CLAUDE.md filings mid-C47; ARCHIVE2 does that as its own
+commit.);
 diagnose read-only first; single-purpose commits on Van's word;
 stop before commit; adjusted instruments prove discrimination; a
 no-op control cannot prove life; instruments match the DEFINING
