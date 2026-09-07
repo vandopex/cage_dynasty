@@ -1335,23 +1335,28 @@ class FightConfig:
 # The assertion at fight start allowlists exactly these. Anything else
 # raises. See FightConfig docstring for the full contract and death dates.
 #
-# C45 (2026-09-06): Van ruled dm 0.48 → 0.24 for Group A finish economy
-# landing. _TRIPLE_LIVE_PLAY promoted from (55, 0.48, 10) to
-# (55, 0.24, 10). The old (55, 0.48, 10) demoted to
-# _TRIPLE_LIVE_PLAY_LEGACY_C45 and retained in the allowlist for
-# backward compatibility (any FightConfig constructed in code paths not
-# yet updated to the new default falls through here rather than raising).
-# Delete _TRIPLE_LIVE_PLAY_LEGACY_C45 at the next natural touch after
-# call-site audit confirms no dm=0.48 constructors remain.
+# C45 (a4fe627, 2026-09-06 17:38:20 -0700): Van ruled dm 0.48 → 0.24 for
+# Group A finish economy. _TRIPLE_LIVE_PLAY promoted from (55, 0.48, 10)
+# to (55, 0.24, 10). C45 kept (55, 0.48, 10) as _TRIPLE_LIVE_PLAY_LEGACY_C45
+# "in case any code path still constructed at 0.48."
+#
+# C46 (2026-09-06): SAVELOAD1 T5 measured 15948/16770 constructions
+# (95.1%) fell on the LEGACY_C45 triple through gb:17510 (single
+# _assemble_prefight site), plus 4 more drift-pin sites in fi (fi:420,
+# fi:2670, fi:2679, fi:2687). cc classification under Van's ruling:
+# ALL 5 sites were DRIFT of the old default, NONE deliberate legacy.
+# Van ruling: STOP PINNING drifted values (drop pins, inherit new
+# default; never re-pin 0.24 — pins are how this fork happened). Van
+# also approved cc scope-addition to drop standup_threshold=6 on the
+# fi fallbacks. With all 5 sites converted, NEITHER (55, 0.48, 10)
+# NOR (55, 0.48, 6) has a constructor. Both DELETED from the
+# allowlist here — a documented allowlist entry that never fires is
+# exactly the CLAUDE.md-warned "looks-wired" shape.
 _TRIPLE_LIVE_PLAY = (55, 0.24, 10)
-_TRIPLE_LIVE_PLAY_LEGACY_C45 = (55, 0.48, 10)
 _TRIPLE_PRE_GEN_LEGACY = (55, 0.42, 6)
-_TRIPLE_FI_FALLBACK = (55, 0.48, 6)
 _SANCTIONED_TRIPLES = {
     _TRIPLE_LIVE_PLAY,             # C45 — the surviving contract
-    _TRIPLE_LIVE_PLAY_LEGACY_C45,  # RETIRED at C45. Backward-compat only.
     _TRIPLE_PRE_GEN_LEGACY,        # KNOWN DRIFT. Deleted at Stage 3.
-    _TRIPLE_FI_FALLBACK,           # KNOWN CORNER. Deleted at Stage 3.
 }
 
 
@@ -1374,10 +1379,8 @@ def _assert_sanctioned_config(config: 'FightConfig') -> None:
             f"UNSANCTIONED CONFIG TRIPLE: (exchanges={triple[0]}, "
             f"damage_multiplier={triple[1]}, standup_threshold={triple[2]}). "
             f"Allowlist:\n"
-            f"  LIVE_PLAY             = {_TRIPLE_LIVE_PLAY}   the surviving contract (C45)\n"
-            f"  LIVE_PLAY_LEGACY_C45  = {_TRIPLE_LIVE_PLAY_LEGACY_C45}   RETIRED at C45. Backward-compat only.\n"
-            f"  PRE_GEN_LEGACY        = {_TRIPLE_PRE_GEN_LEGACY}    KNOWN DRIFT. Deleted at Stage 3.\n"
-            f"  FI_FALLBACK           = {_TRIPLE_FI_FALLBACK}    KNOWN CORNER. Deleted at Stage 3.\n"
+            f"  LIVE_PLAY      = {_TRIPLE_LIVE_PLAY}   the surviving contract (C45)\n"
+            f"  PRE_GEN_LEGACY = {_TRIPLE_PRE_GEN_LEGACY}    KNOWN DRIFT. Deleted at Stage 3.\n"
             f"See FightConfig docstring for the full contract."
         )
 

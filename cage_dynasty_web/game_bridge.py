@@ -17506,14 +17506,24 @@ class GameBridge:
                 except Exception:
                     pass
 
-        # STAGE 0d — pins LIVE_PLAY (55, 0.48, 10) EXPLICITLY.
+        # C46 SAVELOAD1 T5 fix (2026-09-06): this constructor was
+        # introduced by `9adfeba` (2026-08-15 18:36:03 -0700,
+        # _assemble_prefight refactor) with dm/standup/exchanges/
+        # sub-thresholds all pinned to the then-current LIVE_PLAY
+        # values. Under C45 (a4fe627, 2026-09-06 17:38:20 -0700)
+        # LIVE_PLAY moved to (55, 0.24, 10) but the pins here didn't
+        # follow — cc classification under Van's ruling: DRIFT of
+        # the old default. T5 spot-check measured 15948/16770
+        # constructions (95.1%) fell on old triple through this
+        # site alone. Van ruling (C46): STOP PINNING all three
+        # triple dials (dm, standup, exchanges) AND the two sub
+        # thresholds — none vary per fight. Keep only the true
+        # per-fight input (scheduled_rounds). Path served: Path A
+        # player fights (gb:18253), Path B AI card sim (gb:13917),
+        # MC odds (gb:17652) — all consume _bundle["config"] from
+        # this single _assemble_prefight construction site.
         _fight_cfg = _FightConfig(
             scheduled_rounds=total_rounds,
-            standup_threshold=10,
-            exchanges_per_round=55,
-            damage_multiplier=0.48,
-            submission_progress_to_finish=70.0,
-            submission_escape_threshold=85.0,
         ) if _FightConfig else None
 
         # BRIDGE-WIRE-AGGR1 / GAMEPLAN-AI-SELECT1: resolve both sides'

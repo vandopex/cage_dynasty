@@ -407,18 +407,20 @@ class NarratedFightSimulator:
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
-        # STAGE 0d — FI's no-config fallback pins FI_FALLBACK explicitly.
-        # standard_fight() now returns PRE_GEN_LEGACY (55, 0.42, 6); FI's
-        # no-config path historically ran at (55, 0.48, 6) because FI
-        # ignored config.damage_multiplier. B3 makes FI READ that field, so
-        # if this fallback still called standard_fight() the FI-no-config
-        # path would silently drop 12.5% damage. Explicit FI_FALLBACK
-        # preserves today's behavior byte-identically. Deleted at Stage 3.
+        # C46 SAVELOAD1 T5 fix (2026-09-06): this fallback was pinned to
+        # FI_FALLBACK (55, 0.48, 6) by `ba8cece` (2026-07-12 13:35:46
+        # -0700, atomic-config-invariant assertion). cc classification
+        # under Van's ruling: DRIFT of the pre-C45 default. Van ruled
+        # drop damage_multiplier; cc scope-addition also drops
+        # standup_threshold=6 (a no-config fallback should inherit the
+        # WHOLE default, not partial — same class of hidden drift as
+        # the dm pin). Van approved the scope-addition 2026-09-06.
+        # Result: fallback inherits new LIVE_PLAY (55, 0.24, 10).
+        # Production bridge always passes an explicit config, so this
+        # fallback is reached only by direct-instantiation harness/test
+        # paths (statement from code read, not measurement).
         self.config = config or FightConfig(
             scheduled_rounds=3,
-            exchanges_per_round=55,
-            damage_multiplier=0.48,
-            standup_threshold=6,
         )
         # P3-4b Stage 2b — heat wiring, ported from fe:4243-4263.
         # At heat_level=0 all tiered branches are False → all mults=1.0
@@ -2656,36 +2658,31 @@ def simulate_narrated_fight(
     simulator and on to select_action, but are not yet consumed
     (SHIP2 will activate the AGGRESSION dial). Defaults None → no-op.
     """
-    # STAGE 0d — FI's no-config fallback pins FI_FALLBACK explicitly.
-    # See NarratedFightSimulator.__init__ for the full rationale. classmethods
-    # standard_fight/championship_fight/main_event return PRE_GEN_LEGACY
-    # (55, 0.42, 6); FI's no-config path preserves today's FI-effective
-    # (55, 0.48, 6) triple byte-identically by constructing directly.
-    # Deleted at Stage 3.
+    # C46 SAVELOAD1 T5 fix (2026-09-06): these three fallbacks were pinned
+    # to FI_FALLBACK (55, 0.48, 6) by `ba8cece` (2026-07-12 13:35:46
+    # -0700). cc classification under Van's ruling: DRIFT of the pre-C45
+    # default. Van ruled drop damage_multiplier; cc scope-addition also
+    # drops standup_threshold=6 (see NarratedFightSimulator.__init__
+    # rationale). Van approved 2026-09-06. Result: fallbacks inherit new
+    # LIVE_PLAY (55, 0.24, 10). Production bridge always passes explicit
+    # config; these fallbacks are reached only by direct
+    # simulate_narrated_fight(config=None, ...) callers (statement from
+    # code read, not measurement).
     if config is None:
         if is_title_fight:
             config = FightConfig(
                 scheduled_rounds=5,
-                exchanges_per_round=55,
-                damage_multiplier=0.48,
-                standup_threshold=6,
                 is_title_fight=True,
                 is_main_event=True,
             )
         elif is_main_event:
             config = FightConfig(
                 scheduled_rounds=5,
-                exchanges_per_round=55,
-                damage_multiplier=0.48,
-                standup_threshold=6,
                 is_main_event=True,
             )
         else:
             config = FightConfig(
                 scheduled_rounds=3,
-                exchanges_per_round=55,
-                damage_multiplier=0.48,
-                standup_threshold=6,
             )
 
     if rounds == 5:
