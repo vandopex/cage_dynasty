@@ -5684,6 +5684,295 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
   post-fix. Worth one clean re-read after enough post-fix fights
   land; not blocking.
 
+
+### GROUP A — FINISH ECONOMY LANDED [COMMITTED as C45, 2026-09-06]
+
+Full P5-C Group A ship. Fights that last, decisions that happen,
+cuts that are rare, knockouts that are knockouts (with a
+naming-honesty caveat filed loudly below). ONE commit;
+DEPLOY-TARGET per OPERATING ORDER.
+
+**Van's spec clause invoked.** P6 bomb channel is the P5-C
+Group A **mechanism exception** — the ONE new mechanism this
+calibration pass admits under Van's ruling
+(2026-09-05, C43 spec §5). Rationale: `damage_multiplier` alone
+cannot lift KO share because the KO label attaches to the last
+strike that zeroes cumulative health (not to a discrete KO
+event). Real MMA KOs are tail events layered on otherwise-
+survivable fights. The bomb channel activates the previously-
+buried STRIKE_PROPERTIES `ko_chance` slot as a per-strike
+probability roll on head strikes; on hit, applies raw base_damage
+un-scaled by damage_multiplier and routes through the existing
+KD gate + chin vote + check_stoppage machinery.
+
+**FIVE code changes landed together:**
+
+1. **`FightConfig.damage_multiplier` default: 0.48 → 0.24**
+   (`fight_engine.py`). Also updated classmethod pins in
+   `standard_fight()` and `championship_fight()`.
+
+2. **`_SANCTIONED_TRIPLES` proper update** (`fight_engine.py`).
+   `_TRIPLE_LIVE_PLAY = (55, 0.24, 10)` (the surviving contract).
+   Old triple retained as `_TRIPLE_LIVE_PLAY_LEGACY_C45 =
+   (55, 0.48, 10)` in the allowlist for backward compatibility.
+   Sanction-assert error text updated. **NO HARNESS BYPASS
+   SHIPS** — the sanction-assert accepts the new triple by
+   allowlist, not by lambda-nop.
+
+3. **`KO_CHANCE_SCALE`: 0.0 → 0.5** (`fight_engine.py`), the P6
+   bomb channel dial at its P6c-grid landing value. Full comment
+   block at the constant documents the mechanism-exception filing.
+   Wire in `fi._execute_strike` (staged post-P5); reads via
+   `import fight_engine as _fe_mod` module-attr lookup so runtime
+   rebinds propagate.
+
+4. **Cut set** (`window_registry.py` + auto-picked up by
+   `fight_integration.py`'s import at `fi:78`):
+   `CUT_BASE_CHANCE: 0.25 → 0.06`; `CUT_DOCTOR_STOP_STEP: 0.08 →
+   0.020`. `FINISH_CUT_STOP_THRESHOLD: 2 → 3`
+   (`fight_engine.py`). Cut-finish rate lands in 1-3% target
+   band.
+
+5. **P4a guard-damp wiring repair** (`fight_integration.py`).
+   `safe_in_guard` context flag was declared in check_stoppage's
+   contract at fe:754 but never passed by ANY caller — dead by
+   caller omission (probe measured 0 fires in 9,935 checks
+   across 400 fights). Now derived from position + defender-is-
+   bottom at both call sites (`fi:1685`, `fi:2322`).
+
+6. **P7a KO naming amendment** (`fight_engine.py check_stoppage`,
+   context wire in `fi._execute_strike`). Van's ruling: "a
+   stoppage whose finishing sequence is a KNOCKDOWN from the
+   final strike (bomb-wire or ordinary), with check_stoppage
+   firing in that same exchange, labels 'KO (<strike>)' instead
+   of the TKO-family label. Doctor/corner/cut/between-round
+   labels UNCHANGED." Pure classification — no physics change.
+   `finish_had_kd_this_exchange` context flag added.
+
+**Recommended candidate** (from P6c grid, Van-approved via P7
+paste):
+
+| dial | value | prior |
+|---|---:|---:|
+| damage_multiplier (default + LIVE_PLAY triple) | 0.24 | 0.48 |
+| KO_CHANCE_SCALE | 0.5 | 0.0 (OFF) |
+| CUT_BASE_CHANCE | 0.06 | 0.25 |
+| CUT_DOCTOR_STOP_STEP | 0.020 | 0.08 |
+| FINISH_CUT_STOP_THRESHOLD | 3 | 2 |
+| guard-damp wiring | REPAIRED | dead |
+| KO naming amendment | LIVE | (n/a) |
+
+**P6b gate table (mechanism-exception rigor, all four PASS):**
+
+| gate | signal | verdict |
+|---|---|---|
+| (i) OFF-state equivalence | scale=0 byte-identical to P5 candidate | ★ PASS |
+| (ii) Fire count | bombs=1.175/fight at scale=1.0, dm=0.24 | ★ PASS |
+| (iii) Discrimination | monotone KO/bomb response across 0-3 scale | ★ PASS |
+| (iv) Chin's vote | chin+20 reduces KDs delivered −12% (165→146) | ★ PASS |
+| (iv) Power re-rung | +10.5pp → +12.9pp per +20 power (bomb adds worth) | ★ PASS |
+
+**P6c grid** (fixed-card CRN, N=400, seeds 6000100+, cut set +
+guard-damp layered):
+
+| dm | scale | fin | KO | TKO | SUB | DEC | cut | bomb/f | KD/f | R3rch |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0.28 | 0.5 | 69.25% | 1.00 | 43.25 | 25.00 | 30.00 | 2.50% | 0.568 | 0.043 | 46.5% |
+| 0.28 | 1.0 | 73.25% | 1.00 | 48.75 | 23.50 | 26.50 | 2.25% | 1.117 | 0.087 | 42.2% |
+| 0.28 | 2.0 | 80.50% | 0.75 | 57.75 | 22.00 | 18.50 | 2.25% | 1.885 | 0.147 | 35.8% |
+| 0.28 | 3.0 | 84.25% | 1.00 | 61.75 | 21.50 | 15.25 | 3.25% | 2.587 | 0.193 | 31.0% |
+| **0.24** | **0.5** | **62.75%** | **0.50** | **35.75** | **26.50** | **36.00** | **2.00%** | **0.595** | **0.050** | **52.2%** |
+| 0.24 | 1.0 | 67.25% | 0.75 | 41.25 | 25.25 | 32.00 | 1.75% | 1.175 | 0.092 | 49.0% |
+| 0.24 | 2.0 | 74.25% | 0.75 | 49.75 | 23.75 | 24.25 | 3.00% | 1.975 | 0.155 | 41.0% |
+| 0.24 | 3.0 | 80.25% | 2.00 | 55.25 | 23.00 | 19.00 | 3.00% | 2.735 | 0.195 | 34.8% |
+
+Selected: **dm=0.24 + KO_CHANCE_SCALE=0.5**. Hits fin band
+(62.75% in 55-65 target) and cut band (2.00% in 1-3 target).
+
+**P7a INVARIANT GATE — PROVEN.** Same seeds, same 400 fights,
+P7a-off vs P7a-on:
+
+| metric | value | target |
+|---|---:|---:|
+| Winner mismatches | 0/400 | 0 |
+| Finish-round mismatches | 0/400 | 0 |
+| Method label swaps | 3/400 | (n/a — pure relabel) |
+
+**PURE CLASSIFICATION CONFIRMED.** KO share moved 0.50% → 1.25%
+(TKO 35.75% → 35.00%, delta −0.75pp). All 3 relabels were bare
+"TKO" → "KO (<specialty>)".
+
+**KO/TKO merged column (real MMA reporting shape) — the
+"physics landed" reading:**
+`KO + TKO combined = 145/400 = 36.25%` **byte-identical
+pre/post** (invariant). Van's ~38% combined target sits 1.75pp
+above — well within measurement noise at N=400. **The physics
+IS landed at the combined column; the label split is a naming
+convention.**
+
+**KO-share fallback invoked** (per Van's P7 paste): "if it
+still lands shy of the 22-band, the honest fallback is
+re-banding KO/TKO as the merged column real MMA uses —
+loudly, in the filing, with this rationale." Filed loudly:
+**Cage Dynasty's KO/TKO distinction is a naming convention
+built on which specific strike zeros health; real commissions
+score any referee-stoppage-over-fallen-fighter as KO.** The
+P7a amendment relabels the truest-KO cases (finish-strike
+KD → stoppage in same exchange), leaving the referee-waves-
+off-after-rocked-follow-ups cases as TKO. Both are "he got
+knocked out" narratively; the record book distinguishes for
+players who care about the split, and the merged column is
+the honest number.
+
+**P3 production verify** (executed post-P6, pre-C45 commit).
+Harness `p3_prod_verify.py` exercised STAGED candidate through
+`bridge.new_game` + 8 × `advance_week`. Verdicts:
+- ★ Live `fe.KO_CHANCE_SCALE` = 0.5 (config survives sys.modules
+  resolution).
+- ★ Live `fe.FINISH_CUT_STOP_THRESHOLD` = 3.
+- ★ `FightConfig.damage_multiplier` = 0.24 on every bridge-
+  constructed config.
+- ★ Bombs fire in bridge context (through Path B
+  `_simulate_card_fights`).
+- ★ Path B writes correct method labels (TKO/DEC/SUB observed
+  across 50 fights on 5 events; no OTHER bucket).
+- **Instrument caveat (documented, not corrected):** raw bomb
+  count 3389 across "50 fights" is inflated because the bomb
+  counter increments on every `_execute_strike` call including
+  MC-odds pre-compute sims (each MC batch runs many full sims
+  per bridge fight, each with its own strike calls; wire fires
+  independently in every MC sim). True bomb-per-real-fight rate
+  matches sweep at ~0.6/fight. Harness limitation, not wire
+  defect.
+- **Path A caveat:** zero player fights landed in the 8-week
+  window (player fighter not booked). Normal for early weeks.
+  Path A live-play verify remains OWED — first post-C45 deploy
+  player fight is the natural first observation. PA-SMOKE1 in
+  the scope doc's SESSION 2026-09-05 BACKLOG captures the
+  post-deploy protocol.
+
+### C45 REFUTATION LEDGER
+
+Ships alongside GROUP A as the correctness record. Each entry
+either (a) documented a prior false reading with the correct
+finding, or (b) records an attribution correction where
+architect and cc reframed after measurement.
+
+1. **P4 damage-economy hypothesis** (architect's, refuted by
+   cc measurement). Original: "checker holds up dying fighters
+   at 8 HP; grinding damage feeds them into decision territory."
+   REFUTED at P4c: DEC-fighters end median health = 60.9 (not
+   ~8). Van reframed to spiral-entry (bimodal fights: either a
+   fight enters the spiral early and cascades to finish, or it
+   never enters and grinds to decision). **Attribution honesty:
+   the spiral-entry framing is Van's reframe after Van's first
+   hypothesis died — the filing keeps attribution straight in
+   both directions.**
+
+2. **P0 "42.66% cut rate" reading.** Category error — the
+   denominator was cut-attempts not fight-count. Corrected at
+   Phase 0-bis T1 to 11.17% sim-layer (see C44 filing above).
+
+3. **P0 "44.8% baseline p(win) noise-band" reading.** Was a
+   ~5pp slot-symmetric bias from the DASHBOARD FIXTURE's reused
+   fighter objects accumulating the aggression buff at
+   `fi:502-522`. C33's fresh-per-iter fixture reads 49.5/50.5.
+   T7 verified MC odds is NOT affected (bridge constructs fresh
+   FighterAttributes per MC sim per `game_bridge:17563`
+   docstring; harness-only footgun). See C44 filing.
+
+4. **P0 "14pp speed discrepancy vs C33" reading.** Reconciled
+   via unit conversion: C33 metric = `(wins_atk − wins_def) / N`,
+   T4 metric = `Δp × 100`; factor of ~2. Byte-identical
+   `wins_atk = 402/N` at same seed. T9 convention retires the
+   C33 metric shape.
+
+5. **P0 chin "flat" reading.** Chin OWNS the KD channel
+   correctly (kd_mean −18% relative at chin+20; C22 T4
+   measurement). Aggregate Δp(win) is small on the fixture
+   because most striker wins are non-KD paths at the C44
+   population; when C45 lands, chin's KD-channel leverage
+   grows because bombs raise the KD path share. Chin verdict
+   at Δp DEFERRED pending post-C45 re-ladder (Van C44 ruling 4).
+
+6. **P0 "≥55% dominant plan" threshold** (cc-proposed, NOT
+   Van-ruled). Softened in scope doc to "cc-proposed, awaiting
+   Van ratification when GAMEPLAN1 opens for spec." Van
+   deliberately left the threshold unset in FILE 6.
+
+7. **Bomb-fire zero readings** (harness bug, uncovered by
+   this ship's own instrument work — see MODULE-RELOAD1 below).
+   Initial P6 harness measured "0 bombs at scale=3" because
+   `import game_bridge` force-deletes `fight_engine` from
+   `sys.modules` and re-imports at module-load time; the
+   harness's local `fe` reference pointed at the STALE
+   pre-reload module. `fe.KO_CHANCE_SCALE = 3.0` was modifying
+   the dead copy; the fi wire's `import fight_engine as _fe_mod`
+   correctly resolved to the LIVE copy where the constant was
+   still 0.0. Fixed by binding `fe = sys.modules['fight_engine']`
+   AFTER importing gb.
+
+### MODULE-RELOAD1 (harness-pattern note, NOT scheduled) [filed C45]
+
+`game_bridge.py:207-209` force-deletes `fight_engine` and
+`fight_integration` from `sys.modules` at module-load time and
+re-imports, to beat CLI-root shadowing. Any Python code that
+imports either engine module BEFORE `game_bridge` loads holds
+a reference to the pre-reload module; setting attributes on
+that stale reference does not propagate to the live module the
+production wire reads.
+
+**Production risk: NONE (verified this ship).** Census (via
+Explore agent, 2026-09-06) found only two production files
+import fe/fi: `game_bridge.py` (loads them AFTER its own force-
+reload) and `fight_integration.py` (loaded as a consequence of
+game_bridge's post-reload import; imports fight_engine from
+inside the force-reload window). No pre-bridge production
+module touches fe/fi. `routes.py` imports game_bridge, never
+fe/fi directly. Verdict: CLEAN.
+
+**Harness risk: REAL.** Any diagnostic harness under `outputs/`
+that follows the pattern `import fight_engine; import game_bridge;
+fe.X = y` sets attributes on the dead module. The correct
+pattern is `import game_bridge as gb; fe = sys.modules['fight_engine']`
+(bind after gb load). Filed as a lesson — future harnesses
+must use the corrected pattern, especially when tuning
+constants at fe module level.
+
+**Files-shape checkers this bug DID silently break** (traced
+from C44's Phase 0-bis session logs): T1 first-cut and
+second-cut instrument runs both landed on the same "0
+harness-detected fires" pattern that P6 hit; those readings
+were re-derived correctly via different instruments but the
+"stale module" root cause was never traced until P6.
+
+### SUB-DRIFT → Group D (handoff from C45)
+
+At C45 candidate (`dm=0.24, KO_CHANCE_SCALE=0.5, cut set,
+guard-damp`), SUB rate sits at **26.5%** on the recommended arm.
+Van's target: **≤25%**. Bombs partially compensated (baseline
+29% → 26.5%, ~2.5pp buyback) but did not fully close the gap.
+
+**Group D (attribute-worth calibration) inherits the remaining
+1.5pp SUB compression target.** Handoff spec:
+- Instrument: same fixed-card CRN pool (seeds 6000000+),
+  same candidate config, N=400.
+- Dial candidates (per Van's Group D scope): sub-attempt
+  weight scale, submission-model tap threshold width,
+  submission-model refusal band, sub_escape S convention,
+  RANGE dial for grapple/sub tilt.
+- **NOT allowed:** damage_multiplier, KO_CHANCE_SCALE, cut
+  constants (those are Group A landed dials — do not re-tune).
+
+**Additional Group D READING owed** (Van C44 addendum rule 1):
+gassed-fighter all-in penalty. Win rate + output for a fighter
+entering a round near-empty vs fresh, so the STAMINA FLOOR 0.5
+debate happens against the TOTAL stacked degradation, not the
+single-scalar view. Measurement lands BEFORE the floor value
+ratification is final. If the reading shows differentiation
+room, FATIGUE-SHAPE1 (per-channel floors) becomes eligible for
+Van scoping post-Group-D.
+
 ## Terminal diagnostics (for tuning)
 
 - 📊 [DFC N] — fight card summary (KO/TKO/SUB/DEC counts)

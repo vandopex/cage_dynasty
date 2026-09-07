@@ -110,9 +110,9 @@ CUT_ELBOW_STRIKE_VALUES = frozenset({
     "elbow_spinning", "elbow_upward",
     "gnp_elbow", "clinch_elbow",
 })
-CUT_BASE_CHANCE: float = 0.25       # per-strike prior
+CUT_BASE_CHANCE: float = 0.06       # per-strike prior — C45 GROUP A (was 0.25)
 CUT_STRENGTH_DIVISOR: float = 400.0  # + attacker.strength / divisor
-CUT_DOCTOR_STOP_STEP: float = 0.08   # per cut above (threshold-1)
+CUT_DOCTOR_STOP_STEP: float = 0.020  # per cut above (threshold-1) — C45 GROUP A (was 0.08)
 CUT_DOCTOR_STOP_MAX: float = 0.35
 CUT_DOCTOR_HEART_DIVISOR: float = 200.0
 CUT_DOCTOR_HEART_FLOOR: float = 0.4

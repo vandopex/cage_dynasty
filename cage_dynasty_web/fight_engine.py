@@ -622,7 +622,31 @@ FINISH_CONTEXT_ROCKED_BUMP      = 8.0
 FINISH_CONTEXT_GUARD_DAMP       = 5.0
 FINISH_BETWEEN_ROUND_MULT       = 2.5
 FINISH_LEG_KICK_ACCUM_THRESHOLD = 6     # carve-out (D12, private dial)
-FINISH_CUT_STOP_THRESHOLD       = 2     # carve-out (structural cuts)
+FINISH_CUT_STOP_THRESHOLD       = 3     # carve-out (structural cuts) — C45 GROUP A
+
+# P5-C GROUP A P6 — BOMB CHANNEL (Van-ruled mechanism exception,
+# 2026-09-05). Gated by spec's unreachable-target clause for KO:
+# damage_multiplier alone drives KO to 0.0% because current KO
+# mechanism is cumulative-damage-crosses-health-zero labeled by
+# last strike. Real MMA KOs are tail events — the bomb layered on
+# fights that are otherwise survivable. This dial activates the
+# STRIKE_PROPERTIES per-strike `ko_chance` slot (previously
+# declared+unused at fe:2572 and fe:3054 — a documented buried
+# finding) as a probability roll on each head strike.
+#
+# Formula (wired at fi._execute_strike):
+#   p_bomb = ko_chance[strike] × KO_CHANCE_SCALE × clamp(power/70, 0.5, 1.5)
+# On success: apply raw base_damage (un-scaled by damage_multiplier
+# — that's the point; bombs are tail events immune to grinding
+# economy) via apply_damage → amount>=12 KD gate + chin_kd_mult
+# vote → chin_erosion cascade → check_stoppage.
+#
+# DEFAULT 0.0 was OFF; Van ruled 0.5 at C45 (P6c grid). Bomb-fire
+# rate ~0.6/fight, KD delivery ~0.05/fight at candidate config
+# (dm=0.24). See CLAUDE.md GROUP A block for the mechanism-exception
+# filing and the P7a KO naming amendment that classifies bomb-KD
+# stoppages as KO instead of TKO.
+KO_CHANCE_SCALE                 = 0.5
 
 # P5-B4 JUDGE SCORING WEIGHTS (2026-09-05, item 4, sibling of #22).
 # Van's stated target: wrestler share on split rounds (one fighter
@@ -726,12 +750,15 @@ def check_stoppage(defender_state, defender, context: dict) -> Optional[str]:
             - 'rocked_unanswered' (bool): context bump
             - 'safe_in_guard' (bool): context damp
             - 'unanswered_streak' (int): for referee-stoppage label routing
+            - 'finish_had_kd_this_exchange' (bool): P7a KO amendment —
+              in-exchange KD in this exchange promotes label to KO family.
 
     Naming table:
         health <= 0                              → KO (specialty or fallback)
         between_round + cuts >= threshold        → TKO (Doctor Stoppage - Cuts)
         between_round + KDs >= 2 + round >= 2    → TKO (Corner Stoppage)
         between_round otherwise                  → TKO (Doctor Stoppage)
+        in_exchange + finish_had_kd              → KO (specialty or fallback)   [P7a]
         in_exchange + dominant + top             → TKO (Ground and Pound)
         in_exchange + clinch + body              → TKO (Body Shots)
         in_exchange + body                       → TKO (Body Shot)  (specialty for body_kick)
@@ -782,6 +809,25 @@ def check_stoppage(defender_state, defender, context: dict) -> Optional[str]:
     position = context.get('position', '')
     pos_upper = str(position).upper() if position else ''
     is_top = context.get('attacker_is_top', False)
+
+    # P7a KO NAMING AMENDMENT (Van ruled 2026-09-05, C45).
+    # When the finishing sequence had a KNOCKDOWN in the SAME
+    # exchange (from bomb wire or ordinary heavy damage), the
+    # in-exchange stoppage labels as KO instead of TKO. Merges
+    # the "referee waves it off over a fallen fighter" case that
+    # every commission on earth scores as KO. Route through the
+    # health_zero=True path in _finish_specialty_label so the
+    # KO-specialty map (Flying Knee / Head Kick / Wheel Kick /
+    # Spinning Elbow / Superman Punch / etc.) is honored; falls
+    # back to bare "KO" if not on the specialty map.
+    # PURE CLASSIFICATION — no physics change. Same fights, same
+    # winners, same rounds; only labels move (P7a invariant gate).
+    # UNCHANGED: doctor/corner/cut/between-round labels (handled
+    # above in the is_between_round branch).
+    finish_had_kd = context.get('finish_had_kd_this_exchange', False)
+    if finish_had_kd:
+        return _finish_specialty_label(strike_val, target_area,
+                                         health_zero=True)
 
     if is_top and any(p2 in pos_upper for p2 in
                        ('MOUNT', 'BACK_MOUNT', 'SIDE_CONTROL')):
@@ -1231,7 +1277,7 @@ class FightConfig:
     scheduled_rounds: int = 3
     # LIVE_PLAY contract — see docstring. NO SITE INHERITS THESE.
     exchanges_per_round: int = 55
-    damage_multiplier: float = 0.48
+    damage_multiplier: float = 0.24    # C45: Van ruled 0.48 → 0.24 (Group A finish economy)
     standup_threshold: int = 10
     # ENGINE-DEAD-KNOBS1 (2026-07-11): default was 2, but both engines
     # hardcoded the threshold at `>= 3`. Default lifted to 3 to match the
@@ -1254,19 +1300,21 @@ class FightConfig:
     # live-play's engine and PRE_GEN_LEGACY dies.
     @classmethod
     def standard_fight(cls) -> 'FightConfig':
+        # C45: dm 0.48 → 0.24 (Group A finish economy landing)
         return cls(
             scheduled_rounds=3,
             exchanges_per_round=55,
-            damage_multiplier=0.48,
+            damage_multiplier=0.24,
             standup_threshold=10,
         )
 
     @classmethod
     def championship_fight(cls) -> 'FightConfig':
+        # C45: dm 0.48 → 0.24 (Group A finish economy landing)
         return cls(
             scheduled_rounds=5,
             exchanges_per_round=55,
-            damage_multiplier=0.48,
+            damage_multiplier=0.24,
             standup_threshold=10,
             is_title_fight=True,
             is_main_event=True,
@@ -1286,13 +1334,24 @@ class FightConfig:
 # STAGE 0d — SANCTIONED CONFIG TRIPLES.
 # The assertion at fight start allowlists exactly these. Anything else
 # raises. See FightConfig docstring for the full contract and death dates.
-_TRIPLE_LIVE_PLAY = (55, 0.48, 10)
+#
+# C45 (2026-09-06): Van ruled dm 0.48 → 0.24 for Group A finish economy
+# landing. _TRIPLE_LIVE_PLAY promoted from (55, 0.48, 10) to
+# (55, 0.24, 10). The old (55, 0.48, 10) demoted to
+# _TRIPLE_LIVE_PLAY_LEGACY_C45 and retained in the allowlist for
+# backward compatibility (any FightConfig constructed in code paths not
+# yet updated to the new default falls through here rather than raising).
+# Delete _TRIPLE_LIVE_PLAY_LEGACY_C45 at the next natural touch after
+# call-site audit confirms no dm=0.48 constructors remain.
+_TRIPLE_LIVE_PLAY = (55, 0.24, 10)
+_TRIPLE_LIVE_PLAY_LEGACY_C45 = (55, 0.48, 10)
 _TRIPLE_PRE_GEN_LEGACY = (55, 0.42, 6)
 _TRIPLE_FI_FALLBACK = (55, 0.48, 6)
 _SANCTIONED_TRIPLES = {
-    _TRIPLE_LIVE_PLAY,        # the surviving contract
-    _TRIPLE_PRE_GEN_LEGACY,   # KNOWN DRIFT. Deleted at Stage 3. Do not tune.
-    _TRIPLE_FI_FALLBACK,      # KNOWN CORNER. Deleted at Stage 3. Do not tune.
+    _TRIPLE_LIVE_PLAY,             # C45 — the surviving contract
+    _TRIPLE_LIVE_PLAY_LEGACY_C45,  # RETIRED at C45. Backward-compat only.
+    _TRIPLE_PRE_GEN_LEGACY,        # KNOWN DRIFT. Deleted at Stage 3.
+    _TRIPLE_FI_FALLBACK,           # KNOWN CORNER. Deleted at Stage 3.
 }
 
 
@@ -1315,9 +1374,10 @@ def _assert_sanctioned_config(config: 'FightConfig') -> None:
             f"UNSANCTIONED CONFIG TRIPLE: (exchanges={triple[0]}, "
             f"damage_multiplier={triple[1]}, standup_threshold={triple[2]}). "
             f"Allowlist:\n"
-            f"  LIVE_PLAY      = {_TRIPLE_LIVE_PLAY}   the surviving contract\n"
-            f"  PRE_GEN_LEGACY = {_TRIPLE_PRE_GEN_LEGACY}    KNOWN DRIFT. Deleted at Stage 3.\n"
-            f"  FI_FALLBACK    = {_TRIPLE_FI_FALLBACK}    KNOWN CORNER. Deleted at Stage 3.\n"
+            f"  LIVE_PLAY             = {_TRIPLE_LIVE_PLAY}   the surviving contract (C45)\n"
+            f"  LIVE_PLAY_LEGACY_C45  = {_TRIPLE_LIVE_PLAY_LEGACY_C45}   RETIRED at C45. Backward-compat only.\n"
+            f"  PRE_GEN_LEGACY        = {_TRIPLE_PRE_GEN_LEGACY}    KNOWN DRIFT. Deleted at Stage 3.\n"
+            f"  FI_FALLBACK           = {_TRIPLE_FI_FALLBACK}    KNOWN CORNER. Deleted at Stage 3.\n"
             f"See FightConfig docstring for the full contract."
         )
 

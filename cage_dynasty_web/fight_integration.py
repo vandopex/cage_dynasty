@@ -1475,6 +1475,41 @@ class NarratedFightSimulator:
                 damage, target_area
             )
 
+            # P5-C GROUP A P6 — BOMB CHANNEL (Van-ruled mechanism
+            # exception, 2026-09-05). Wires the previously-buried
+            # STRIKE_PROPERTIES slot 1 (`ko_chance`) as a per-strike
+            # KO probability. On success: apply raw base_damage
+            # (un-scaled by damage_multiplier — bombs are tail events
+            # immune to the grinding-damage economy) through the
+            # EXISTING KD → chin-resist → check_stoppage machinery.
+            # Chin gets its vote (via apply_damage's amount>=12 KD
+            # roll modulated by chin_kd_mult). Default
+            # KO_CHANCE_SCALE=0.0 → p_bomb=0 → byte-inert (channel OFF).
+            # KO_CHANCE_SCALE read via module attr (import fight_engine
+            # as _fe_mod) at call time so a runtime rebind on the
+            # module (like the P6 harness does) propagates. Bare
+            # `from fight_engine import KO_CHANCE_SCALE` would
+            # capture the value at import time and never see later
+            # sweeps — same import-cache lesson as STRIKE-SKILL-DMG1.
+            import fight_engine as _fe_mod
+            _ko_scale = float(getattr(_fe_mod, 'KO_CHANCE_SCALE', 0.0))
+            if _ko_scale > 0 and target_area == "head" and not is_finish:
+                _props = STRIKE_PROPERTIES.get(strike,
+                                                (5, 0.02, 4, "head"))
+                _ko_chance_val = float(_props[1])
+                if _ko_chance_val > 0:
+                    _power = int(getattr(attacker, 'power', 70) or 70)
+                    _power_scale = max(0.5, min(1.5, _power / 70.0))
+                    _p_bomb = _ko_chance_val * _ko_scale * _power_scale
+                    if random.random() < _p_bomb:
+                        _bomb_amt = float(_props[0])  # raw base_damage
+                        _bkd, _bfin = defender_state.apply_damage(
+                            _bomb_amt, "head")
+                        if _bkd:
+                            caused_knockdown = True
+                        if _bfin:
+                            is_finish = True
+
             # P3-4b Stage 2a — CUT WRITER, port of fe:3625-3634.
             # WINDOW: elbow_cut_writer [WRITE] (new). Fires on
             # elbow-family head strike when the flag is ON. Position
@@ -1669,6 +1704,22 @@ class NarratedFightSimulator:
             # apply_damage → health<=0 KO path via specialty labels.
             _unanswered_streak = getattr(defender_state, '_rocked_shots', 0)
             _pos_str = str(getattr(self.fight_state, 'position', ''))
+            # P5-C GROUP A P4a — guard-damp wiring repair (Van ruled).
+            # `safe_in_guard` was declared in check_stoppage's context
+            # contract at fe:754 but never passed by ANY caller — the
+            # dial was DEAD by caller omission (probe measured 0 fires
+            # in 9,935 checks across 400 fights). Bug-fix repair:
+            # derive from fight_state.position + defender-is-bottom.
+            _pos_lower = _pos_str.lower()
+            _defender_on_bottom = (
+                self.fight_state.top_fighter_id != defender.fighter_id
+            )
+            _safe_in_guard = _defender_on_bottom and any(
+                g in _pos_lower for g in
+                ('guard_bottom', 'full_guard_bottom',
+                 'closed_guard_bottom', 'half_guard_bottom',
+                 'butterfly_guard_bottom', 'rubber_guard_bottom')
+            )
             _ctx = {
                 'is_between_round': False,
                 'current_round': self.current_round,
@@ -1681,6 +1732,13 @@ class NarratedFightSimulator:
                 'rocked_unanswered': (
                     defender_state.is_rocked and _unanswered_streak >= 1),
                 'unanswered_streak': _unanswered_streak,
+                'safe_in_guard': _safe_in_guard,
+                # P7a KO NAMING AMENDMENT wire (Van ruled 2026-09-05,
+                # C45). caused_knockdown is True if the normal apply
+                # above OR the P6 bomb-wire's extra apply set it —
+                # either KD source promotes the in-exchange stoppage
+                # label to KO family. Pure classification.
+                'finish_had_kd_this_exchange': bool(caused_knockdown),
             }
             _stop = check_stoppage(defender_state, defender, _ctx)
             if _stop is not None:
@@ -2328,6 +2386,10 @@ class NarratedFightSimulator:
                         'strike_value': '',
                         'rocked_unanswered': False,
                         'unanswered_streak': 0,
+                        # P5-C GROUP A P4a — between-round: fighters
+                        # return to corners; position doesn't apply,
+                        # safe_in_guard stays False by construction.
+                        'safe_in_guard': False,
                     }
                     _stop = check_stoppage(_ftr_state, _ftr, _ctx)
 

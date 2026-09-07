@@ -35,9 +35,26 @@
 # RENDER via Flask test client promoted to NEW STANDARD for UI
 # gates where template-data mismatch is the risk class — closes
 # C23 lesson as method). GENERATOR1 arc COMPLETE (Phases A-D
-# shipped as C35-C40). Next: P5-C single calibration pass
-# (architect drafts exec spec for Van ratification) → P3-6 ship.
-# Updated 2026-09-05 (C40 Phase D ship, GENERATOR1 arc closes).
+# shipped as C35-C40). C41 badge/identity-trait dedupe + amateur
+# random stat-traits removed. C42 life_sim docs + backlog items.
+# C43 P5-C calibration spec ratified. C44 P5-C Phase 0 COMPLETE
+# (baseline of record + Van rulings). C45 GROUP A — finish
+# economy landed (dm 0.24 via proper _SANCTIONED_TRIPLES update,
+# bomb channel KO_CHANCE_SCALE=0.5, cut set 0.06/0.020/3,
+# guard-damp repair, KO naming amendment; P7a invariant proven
+# 0/400 winner-round drift; MODULE-RELOAD1 census CLEAN).
+# Updated 2026-09-06 (C45 GROUP A ship).
+
+## OPERATING ORDER (Van, 2026-09-06, C45)
+
+**NEXT DEPLOY IS THE TARGET.** Group A landed as C45; deploy is
+the next milestone (breaks the S2 freeze that has held since
+2026-09-03). Between C45 and deploy: SAVELOAD1 reality check
+runs first (a save that survives Group A's constant changes is
+non-negotiable for anyone with a live playthrough); PA-SMOKE1
+files under P3-6 UI batch as the post-deploy verification
+protocol. Group B (attribute worth / judge certification) picks
+up after deploy on the ripened population.
 
 Disk copy canonical; this project copy is backup. Implements the
 ratified contract claude/fight_model_v1_0.md on the fi chassis.
@@ -868,13 +885,80 @@ new styles / etc.); nothing here ships mid-arc.
     watch the GRP family sag — but only if decay is actually
     wired.
 
-- **CONTRACTS1** (new, post-SCHEDULING1, C42): purse-% demands
-  driven by existing popularity as star power (missing pieces are
-  the negotiation loop + AI camp counter-offers + economy
-  balance); morale coupling; economy balancing pass. Own small
-  arc — a fighter demanding 30% only matters once fighters
-  control their own careers (SCHEDULING1 lockouts + fatigue land
-  first).
+- **CONTRACTS1** (new, post-SCHEDULING1, C42; enriched C45 to
+  TWO-CONTRACT SHAPE): the fighter-camp bond has two layers,
+  each with dials.
+  - **Commission slider** — camp takes a % of purse; higher %
+    saps morale over time, lower % constrains the camp economy.
+    Standing tension between two consequences the player already
+    feels through other systems.
+  - **Personality tolerance derivation table** — how much purse-%
+    a fighter will accept AT what star-power tier derives from
+    the five existing personality types plus morale. NO new
+    hidden stored fields (PERSONALITY-METERS ruling, C42): one
+    derivation table applied at the read site. Warrior tolerates
+    a squeeze better than Political; Calculated walks earlier
+    than Hungry.
+  - **Morale enforcement via SCHEDULING1 hooks** — an underpaid
+    fighter fires the same time-off-request path Warrior/Political
+    already use under burnout; existing machinery, new trigger.
+  - **Expiry leverage** — final-fight-on-deal negotiation window
+    is where the fighter has real leverage (title contenders
+    especially). Missing today; this is where "shocked the world,
+    now demands a raise" beats live.
+  - **Card-placement negotiation** — main-event-only clause,
+    co-main floor, "no prelims" clause. Prestige lever the player
+    trades against purse.
+  - **Dev-deal lock-in** — long, low-purse contracts on prospects
+    give the camp asymmetric upside; forecloses if the prospect
+    becomes a star early (see: real MMA developmental deals).
+  - **Economy Gate-0 census shared with DEVELOPMENT1** — one
+    census pass measures the current camp economy (revenue,
+    coach costs, facility upkeep, purse outflow) BEFORE either
+    ship touches numbers. Both ships read the same baseline.
+  Sequencing: SCHEDULING1 lockouts + fatigue land first (a
+  fighter demanding 30% only matters once fighters control their
+  own careers); DEVELOPMENT1 economy census runs alongside;
+  CONTRACTS1 own small arc after.
+
+- **SAVELOAD1** (new, C45 promoted to post-Group-A / pre-Group-B
+  slot per Van's OPERATING ORDER). Group A shipped constant
+  changes (damage_multiplier default 0.48 → 0.24, sanctioned
+  triple retagged, KO_CHANCE_SCALE default 0.0 → 0.5, cut
+  constants moved, KO naming amendment). A save from before C45
+  reloading into post-C45 code should still work — but hasn't
+  been proven. Scope:
+  - Load a pre-C45 save (any of `bridge_van_slot*.json` /
+    `bridge_van_autosave.json`); confirm no crash, no lost
+    fighters, no broken fight_history entries.
+  - Verify serialized configs (if any) don't reference
+    dm=0.48 directly in a way that breaks under new default.
+  - Verify pre-C45 fight_history entries render correctly in
+    the Record Book + fighter profile (label strings hold).
+  - Verify champion/rankings state carries.
+  - If any deserialization path errors on the new constants,
+    file a reconcile hook (forward-only, applied at load).
+  **RUNS BEFORE DEPLOY** per Van OPERATING ORDER — the deploy
+  is the target and a save that doesn't survive is
+  non-negotiable.
+
+- **PA-SMOKE1** (new, C45 filed to P3-6 UI batch). Post-deploy
+  verification protocol for PA. Small, tight, checklist-only:
+  - PA `git rev-parse HEAD` matches local after webhook.
+  - PA `server.log` grep for the standing set + new entries:
+    `"Real fight engine failed"` (Path A crash canary),
+    `"commentary miss"` (COMMENTARY-STALE1 canary),
+    `"UNSANCTIONED CONFIG TRIPLE"` (C45 sanction-assert canary —
+    if any code path constructs a config outside the four
+    sanctioned triples, this fires).
+  - Live-play smoke: advance one week on a fresh save,
+    confirm at least one card fires, confirm method labels
+    render (KO/TKO/SUB/DEC), confirm no crashes on
+    Advance Week.
+  - Runs against the FIRST post-C45 deploy AND every
+    subsequent deploy until Group A behavior stabilizes.
+  Rides in the P3-6 UI batch; PA-SMOKE1 output is the
+  deploy-verification section of that ship's report.
 
 - **FIGHTNIGHT1** (new, post-arc, C42): player-issued corner
   instructions between rounds — a UI layer, NOT a new system. The
@@ -946,9 +1030,10 @@ new styles / etc.); nothing here ships mid-arc.
 
 ## STANDING RULES
 
-Fresh date + HEAD gate (last shipped: C43 ddb9a47. Standing
-convention as of C26: the HEAD line names the LAST SHIPPED commit
-and is updated in the NEXT ship's docs pass. No placeholders);
+Fresh date + HEAD gate (last shipped: C44 bebbd60. Standing
+convention as of C26: the HEAD line names the LAST SHIPPED
+commit and is updated in the NEXT ship's docs pass. No
+placeholders);
 diagnose read-only first; single-purpose commits on Van's word;
 stop before commit; adjusted instruments prove discrimination; a
 no-op control cannot prove life; instruments match the DEFINING
