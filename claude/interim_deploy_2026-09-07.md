@@ -294,6 +294,8 @@ transcript.
 mid-arc would strand cc mid-procedure). `deploy.sh` will need the
 new token pasted; the new value doesn't touch git.
 
+ROTATED 2026-09-07 14:47 PDT, old token invalidated, new token last4=4f5a.
+
 ## N≥500-on-PA retirement (Van ruling, this deploy)
 
 Van C47 spec called for a one-time harness-vs-bridge reconciliation

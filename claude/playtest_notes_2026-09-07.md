@@ -149,6 +149,192 @@ power = 50 by `.get('power', 50)` fallback, guaranteed (probe: player 50, AI N=2
 continuous mean 58.9, 3.8% at 50). POWER1 docket: fix at the function (check other
 callers, e.g. amateur→pro signings), add the training tile, forward-only.
 
+## 20. 🛡️ defense marker on a non-title win
+Andrade (BW #2, not champion) shows 🛡️ on his CD61 prelim win vs Lauzon (#7 v #6).
+Flag is not "winner held the belt at fight time." Measurement: the CD61 fight dict
+(fight_1_7adb4da7_c57803de) title/defense fields + the template condition. Note the
+same card carried two real title fights (LW, HW) — check for event-level leakage.
+
+## 21. KO'd at CD60 (last pre-gen card), fought at CD61 (week 1) — no suspension, no rest window
+Andrade KO'd by Hall at CD60, subbed Lauzon at CD61 one week later; Lauzon also fought
+both cards. Causes: (a) C22 rider — pre-gen history persists no injuries, so pre-gen
+KOs carry no suspension into live play; (b) matchmaker rest window at the pre-gen→live
+seam appears to be zero. Measurement: weeks-since-last-fight for all 18 CD61 fighters;
+grep live-play post-KO suspension; grep matchmaker min-gap.
+
+## 22. Inaugural-champion display inconsistency
+Andrade was the founding BW champ (awarded, not fought) and lost the belt at CD5 —
+data consistent (Svensson's reign says "Won from Jose Andrade · CD5"). But the
+"WIN 🏆 Founding Champ" history row renders only for fighters who still hold the
+crown (Prochazka, Almeida) and inflates their streak (#9); Andrade has no such row.
+"Won from Inaugural" is bad copy. Rule: founding row on every inaugural champ's
+history or none, and never counted in streak/record.
+
+## 23. "✂️ Cutting from Flyweight" on bantamweights
+Svensson and Jedrzejczyk (BW top 10) show it. A natural flyweight competing at BW is
+moving UP — copy inverted, or natural class assigned independent of division.
+Measurement: natural_class vs division across the world; count of mismatches by direction.
+
+## 24. Age-stage label vs career-arc text disagree
+Andrade "35 yrs Prime" header + "Late career fighter" arc text; Svensson 32 / Jedrzejczyk 33
+"Prime" + "Veteran"; all three "📈 Maturing" with 3-point ceilings. Two age-stage
+functions, or one with two thresholds. PEAK103-adjacent.
+
+## 25. Height/reach constant
+Six of six fighters seen (three divisions) are 5'10" / 72". Strengthens #7 from
+"smells like" to near-certain. Same measurement.
+UPDATE: seven of seven incl. a strawweight (Costa, player path). It is a default.
+
+## 26. Badges — verified against GENERATOR1 spec
+Six computed badges (spec §5 kind 2, thresholds ratified at 85): Iron Chin, Heavy Hands,
+Gas Tank, Warrior Heart, Freak Athlete, Complete Fighter. Never stored; pure functions of
+the current sheet at render time; losable. All four profiles seen today match the
+predicates. Not a bug; recorded because Van asked.
+
+## 27. Title lineage gap (observation)
+BW: Andrade (inaugural) → Svensson CD5 → Volkov CD24 → ? → Hall (7-0, C). Volkov not in
+the top 9. Probably fine; Champions page should show the chain end-to-end.
+
+## 28. Personality label "WARRIOR" on 22 of 24 listed free agents (week 2)
+Exceptions: bidding-war fighter CALCULATED, ranked FA CONTENDER. Fallback-shaped.
+Measurement: personality distribution across the world split by creation path
+(world-gen vs churn/cut vs amateur graduation); WARRIOR share per path.
+
+## 29. Weight-class abbreviation schemes collide
+Free-agent filter: STR/FLY/BAN/FEA/LGT/WEL/MID/LHW/HVY. Camp roster table:
+STW/FLW/BW/FW/LW/WW/MW/LHW/HW. Weekend recap: 3-letter truncation — week-1 recap
+tagged a Light Heavyweight fight `[Lig]` (Araujo v McCarthy), identical to the
+Lightweight tag. Three schemes, one collision. One helper + one table. UI-strings batch.
+
+## 30. Unexplained $1,825 weekly balance drop vs stated $125 overhead
+$48,175 → $46,350 over week 1→2. Finance panel shows only overhead. Measurement:
+the bridge's weekly ledger for the player camp; if no itemized ledger exists, that
+is the finding. Folds into the economy docket (#16).
+
+## 31. Free-agent market composition
+26 available: 22 of 24 listed are 0-5 to 1-7 with OVR 31–55, several age 22 at 0-6.
+Implies (a) the matchmaker books winless fighters 6–7 times, (b) nothing feeds
+prospects or veteran bargains into the market. "Sort: Potential" exists but cards do
+not show ceiling. Design docket (MARKET1) after the measurement in (a): fights-per-
+fighter vs record for all pre-gen fighters. Economy scale mismatch: $36k top bid vs
+$46k balance vs $12.6k debut purse vs $125/week overhead.
+
+## 32. Real fighter names in the pool (Van's call)
+Darren Till, Joanna Jedrzejczyk, Buakaw Banchamek, Saenchai Petchyindee, Weili Yan,
+Bonjasky, Spong, Gane, plus recombinations. Fine private; decide before anything public.
+
+## 33. MATCHMAKING1 — matchmaking rules + card slotting + slot shown on the offer (Van, 2026-09-07)
+Backlog already carries "wire calculate_matchup_score / assign_slot for intentional
+Main/Co-Main" — unverified whether wired. Week-1 card LOOKED slotted by rank (two title
+fights on top, #1v#2s on main card, #6/#7s on prelims); one card is a read.
+Gate 0 (read-only, alongside the other read-only tracks): (a) live-caller grep for
+assign_slot / calculate_matchup_score on the card-build path; (b) census over every
+pre-gen + live card: slot vs rank-sum / title flag / OVR — intentional or accidental;
+(c) rest-window census (folds #21): weeks-since-last-fight per booking, fights-per-
+fighter vs record (the 0-7s), any booking inside a KO window.
+Part 2 (rules, after Gate 0): minimum gap between fights; post-KO/TKO medical
+suspension; stop rebooking winless fighters indefinitely; ranked-proximity pairing.
+Part 3 (offer surface, merges with OFFER-SCREEN1): offer shows projected slot —
+"Cage Dynasty 66 · projected Main Card, bout 3 of 9" — purse scaled to slot, so the
+player can trade a prelim now against a main-card slot later. Actionable by design.
+
+## 34. Deploy reload wipes unsaved game state — no autosave
+Van's week-2 world (fresh new_game on b6e1d74, accepted fight, CD66 booking) was lost
+on the deploy #2 reload; no PA save file had been written since Aug 29. Every reload
+(deploy, PA maintenance, idle restart) erases any player who has not manually saved.
+Measurement: confirm no autosave hook fires on advance_week / accept / new_game; list
+save triggers. Docket: AUTOSAVE1 — autosave on advance-week (at minimum), plus the
+existing "auto-load most recent save on landing" backlog item. Player-facing and
+data-loss-shaped; should sit high.
+
+## 35. Inbound offer cadence — 11 weeks, no offer for a debut fighter
+Session 1: offer at week 1. cc local G2 test: week 3. Session 2 (fresh world, same SHA):
+none through week 11. _maybe_generate_inbound_offers is probabilistic; what it keys on
+is unmeasured. Measurement: weeks-to-first-offer distribution across ≥20 seeded worlds
+for a fresh player fighter; the gate conditions (OVR? rank? condition? camp tier? roster
+size?). A debut fighter idle 11 weeks is a player walking away. Folds into MATCHMAKING1
+Part 2 or its own OFFERS-CADENCE1.
+
+## 36. POWER1 confirmed live on PA, second fighter
+Tyler Costa (player, Wrestler, STR, 65 OVR): Power 50 vs Ankalaev 69; strength 58.
+Second player-created fighter, different style, same 50. Closes the loop on #19.
+
+## 37. Condition 16% at week 14 — coach recommendations disagree across screens (CORRECTED)
+Correction (Van): the dashboard Coach's Corner DOES warn — "Pull back and reset" and
+"running dangerously hot — strongly consider REST". Van had not acted on it. The actual
+finding: the fight-camp page's Recommends block said MODERATE with the "Coach" tag on
+Light at the same moment the dashboard coach said REST — one coach, two screens, three
+answers. Same 16% labelled "Tired" (camp page), "Exhausted" (roster card), "Fatigued"
+(Coach's Corner). Fix: one condition→label function, one recommendation source, and the
+rest warning on the camp page where the intensity decision is made. The drain itself
+(14 idle weeks at MODERATE → 16%) still needs the per-week measurement under
+DEVELOPMENT1 Gate 0.
+ADDENDUM: training page shows "🔴 Critical fatigue — AUTO-REST ACTIVE this week" at 16%,
+but weeks 11–14 ran MODERATE with gains and no trip — threshold is low enough that the
+fighter is wrecked before the safety fires. Open question: fight camp (locked MODERATE)
+vs auto-rest — which wins on advance? Read next week's Training Log: MODERATE gains =
+camp beat auto-rest and the safety is decorative during camps.
+
+## 38. Fight-camp page: three contradictions on one screen
+(a) Coach's Corner slot-filling bug: "their ground & pound will exploit your ground
+and pound (70)" — opponent style substituted where the player's weakness belongs.
+(b) "Coach pick" tag on Counter & Punish while Recommends says Pace & Control.
+(c) "Coach" tag on Light intensity while Recommends says MODERATE; Recommends also
+shows raw key "Conditioning:chin" where the grid says Toughness. Two sources of truth
+for one recommendation. UI-strings batch + coach-corner item (#13).
+
+## 39. Player-path style/stat mismatch
+Costa "Wrestler": Boxing 76, Kicks 62, Takedowns 66. GENERATOR1 §4 (style = argmax
+over the rolled profile) evidently does not run on generate_prospect_attributes /
+setup_fighter. Third player-path gap after at_signing (#5) and power (#19/#36).
+Measurement: for N player-generated prospects, does the chosen style match the
+argmax family? POWER1 should fix the function, not the symptom — this rides it.
+
+## 40. Card slot is assigned and visible on Upcoming Events — but not on the offer
+CD74 list shows 📋 on Costa's fight, 🏆 on the title fight, ⭐ co-main, 🥊 main card.
+MATCHMAKING1 Part 3 is therefore surfacing existing data on the offer screen. Separately
+the list order is co-main → prelims → main card → main event — neither card order nor
+broadcast order. Sort by slot.
+
+## 41. Actual burn ≈ $1,350/week vs stated $125/week
+Week 14 balance $29,350 from ~$48k start; Financial Pulse shows −$125/week and "234w
+runway". ~$19k left in 14 weeks unitemised (training costs? camp?). Strengthens #30 by
+10×; runway figure is false as displayed. Measurement: per-week ledger for the player camp.
+
+## 42. Sig strikes ARE tracked in live play
+Headline "Tyler Jackson lands their 100th career significant strike" — so record-book
+"No records yet" (#10) is a pre-gen gap, not a missing key. Record book should populate
+from live fights; verify after N weeks.
+
+## 43. Compare page shows 14 of 19 stats
+Missing: Speed, Recovery, Heart, Composure, Top Control. Training grid shows 18 (no
+Power), profile shows 19. Three stat surfaces, three lists. One canonical stat list
+(the 19 in core.types) feeding every surface; SAVE-INVARIANTS1 rule: every stat surface
+renders all 19.
+
+## 44. WITHDRAWN — profile hero block was a screenshot crop (Van confirmed), not a blank render.
+
+## 45. Fight-camp lock-in posts to `/fight-camp//save` (empty fight id)
+Access log at step 4: `POST /fight-camp//save 302`. The form action omits the fight
+id. Settings did apply (dashboard showed the camp afterward), so the route resolves
+"current fight" somehow — but a blank path segment is a smell, and a 302 is not proof
+of a write. Measurement: template form action + route signature; what happens with two
+booked fights.
+
+## SAVE-INVARIANTS1 (architect proposal, not ruled)
+Read-only checker over any save; one rule per line, violation count per rule; run on a
+fresh seeded world and on the PA save. Rules from today: wins-by-method sum to record;
+streak ≤ wins; 🛡️ iff winner held the belt at fight time; founding row iff Inaugural
+reign, uniformly, never in streak/record; reign lineage chains without gaps; no booking
+within N weeks of last fight; no booking inside a KO suspension; age-stage label ==
+career-arc stage; badges == predicates; power present and non-default on every fighter;
+height/reach/nationality not constant; at_signing populated for every post-capture
+fighter. Output is the fix list ordered by count.
+RULED (Van, 2026-09-07): runs ALONGSIDE POWER1, together with DEVELOPMENT1 Gate 0, all
+read-only. Sequencing inside "alongside": invariants baseline on HEAD → DEVELOPMENT1
+Gate 0 baseline on HEAD → POWER1 edit → both re-run on the new HEAD (this is POWER1's
+before/after; it needs no separate instrument).
+
 ## Ordering recommendation (architect, not ruled)
 1 (traceback + classification) → CPU gate → PA-SMOKE1 5a → deploy accept →
 docs/filing commit (punch list: 6,217→6226; WSGI 610→479 at L1162-1171;
