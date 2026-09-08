@@ -514,11 +514,12 @@ Files-API paths:
 
 **New dockets from interim deploy 2026-09-07** (one line each; full context
 in `claude/playtest_notes_2026-09-07.md` + `claude/interim_deploy_2026-09-07.md`):
-- **POWER1** — fix `generate_prospect_attributes` (18 stats, no `power`; player gets `.get('power',50)` fallback); add power tile to `training.html` `_STAT_CATS`; audit other callers (amateur→pro signing); forward-only.
+- **PLAYER-CREATE1** (supersedes POWER1) — SHIPPED LOCALLY 4f50b78→1839545→64a879f, awaiting deploy #3. Prospect generator returns 19 stats with §4-derived style; player record gets style, _compute_ovr, at_signing; training/compare render 19. Seed-20260907 baseline MOVED to outputs/sm_inv/dump_20260908.json — the old dump is a pre-(a) world. Filing: claude/player_create1_filing_2026-09-08.md.
+- **PLAYER-CREATE1 findings, none fixed** — PROSPECT-BONUS1 (5/9 draft prospects derive Balanced; balance-touching), OVR-FORMULA1 (AI OVR frozen at unweighted mean, player on _compute_ovr; pool bias −1.6), SETUP-OVR1, HARNESS-RNG1 (only the instrument's numbers are quoted), stale systems/game_start.py, G&P commentary string. Detail: filing §5.
 - **PERF1** — local timing 1d8b4e1 vs b6e1d74 on one seed to make the PA hypothesis (start-game 11.5→31.1s, advance-week 16.1→32.3s, N=1 each) a measurement.
 - **OFFER-SCREEN1** — playtest note #15: Fight Offers screen currently shows Risk/Reward at ★★★★★ both sides; add opponent archetype, 4-6 stat side-by-side (link Compare), last-3 results, MC odds, contract context.
-- **DEVELOPMENT1 Gate 0** — playtest note #3: OVR dropped 67→63 in one week while every reported stat delta was positive; measurement first (dump 18 stats at wk0 and wk1, recompute OVR both ways).
-- **at_signing player path** — playtest note #5: capture fires on AI signing, not on `setup_fighter`; player's own fresh fighter shows blank.
+- **DEVELOPMENT1 Gate 0** — playtest note #3: OVR dropped 67→63 in one week while every reported stat delta was positive; measurement first (dump 18 stats at wk0 and wk1, recompute OVR both ways). — CLOSED by PLAYER-CREATE1 (b): the drop was the wizard's roll target vs _compute_ovr at first advance (Gate 0 two-formulas finding); creation OVR is now _compute_ovr. Remaining DEVELOPMENT1 Gate 0 items unchanged.
+- **at_signing player path** — playtest note #5: capture fires on AI signing, not on `setup_fighter`; player's own fresh fighter shows blank. — CLOSED by PLAYER-CREATE1 (b): _create_player_fighter now writes ovr_at_signing and week_signed (R12 PASS).
 - **god-stat + height/reach/nationality census** — playtest notes #6+#7: 11-of-19 stats at 95 on FLW champ (88 OVR); three fighters all "Brazil, 5'10\", 72\" reach"; plus `72""` double-quote render bug.
 - **streak vs record** — playtest note #9: founding-title row counted in streak but not in record (Almeida 8-0-0 with 9W streak).
 - **record-book stat keys** — playtest note #10: pre-gen fights carry no stat keys; "No records yet" for Sig. Strikes / Sub Attempts / Takedowns.
@@ -1655,6 +1656,7 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/claude_md_archive_2026b.md` — C22–C46 shipping filings (created 2026-09-07, ARCHIVE2; 30 blocks, in-place pointers tagged <!-- ARCHIVE2 -->) <!-- ARCHIVE2 -->
 - `claude/interim_deploy_2026-09-07.md` — interim deploy filing (b6e1d74 deploy proof triad, 5b probe, PA-SMOKE1 5a, perf hypothesis, TPLFIX regression, power finding, token breach, N≥500-on-PA retirement)
 - `claude/gate0_baselines_2026-09-07.md` — Gate 0 baselines at cf2fecf: week-axis, creation path, camp-vs-safety (measured; rulings 1–4)
+- `claude/player_create1_filing_2026-09-08.md` — PLAYER-CREATE1 shipping filing: three commits, gates, baseline move, six findings (2026-09-08)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 - `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1
