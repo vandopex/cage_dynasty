@@ -2650,6 +2650,24 @@ class GameBridge:
             _fdata[k] = fighter_data.get(k, 50)
         self._game_state._fighter_data[fighter_id] = _fdata
 
+        # PLAYER-CREATE1 (b) 2026-09-08 — mirror sign_amateur:22087-22274
+        # for the player fighter. Without this, the player is the only
+        # sole R12 violator (no ovr_at_signing) AND FighterRecord's
+        # fighting_style default '' leaks into _compute_ovr, which reads
+        # record.fighting_style at :7881 and falls through to Balanced
+        # weights. Four writes in order — style-first-then-compute —
+        # matches sign_amateur:22087-88 → :22270 → :22273-74. _fdata is
+        # bound by reference at :2651 above, so the two _fdata writes
+        # land in _fighter_data[fighter_id]. OVR-FORMULA1 filed:
+        # player OVR uses _compute_ovr (style-weighted) while AI OVR
+        # stays on world_init's simple mean; reconciliation is a
+        # separate ship (Van ruling 2026-09-08 after M1 measurement).
+        if hasattr(fighter, 'fighting_style'):
+            fighter.fighting_style = fighter_data.get("style", "Balanced")
+        fighter.overall_rating = self._compute_ovr(fighter)
+        _fdata['ovr_at_signing'] = int(fighter.overall_rating)
+        _fdata['week_signed'] = int(self._game_state.week_number)
+
         # Initialize founding-fighter contract. Closes pre-existing bug where
         # the starter never had a contract entry — _process_contracts would
         # silently skip them. Shape mirrors resign_fighter's contract dict
