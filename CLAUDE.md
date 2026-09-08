@@ -1654,8 +1654,10 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/claude_md_archive_2026a.md` — pre-fight-model-arc history (created 2026-09-05, C28/ARCHIVE1) <!-- ARCHIVE2 -->
 - `claude/claude_md_archive_2026b.md` — C22–C46 shipping filings (created 2026-09-07, ARCHIVE2; 30 blocks, in-place pointers tagged <!-- ARCHIVE2 -->) <!-- ARCHIVE2 -->
 - `claude/interim_deploy_2026-09-07.md` — interim deploy filing (b6e1d74 deploy proof triad, 5b probe, PA-SMOKE1 5a, perf hypothesis, TPLFIX regression, power finding, token breach, N≥500-on-PA retirement)
+- `claude/gate0_baselines_2026-09-07.md` — Gate 0 baselines at cf2fecf: week-axis, creation path, camp-vs-safety (measured; rulings 1–4)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
+- `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1
 Detailed ship recaps from before 2026-05-23 live in `CLAUDE_archive.md`
 at the project root. That file is for historical reference — Claude
 Code does not auto-load it. Open it manually when researching past
