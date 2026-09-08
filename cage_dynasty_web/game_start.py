@@ -202,12 +202,13 @@ class StartingProspect:
     potential_grade: str = "Average"
     potential_ceiling: int = 75
     
-    # Physical Attributes (5)
+    # Physical Attributes (6) — power added 2026-09-08 PLAYER-CREATE1 (a)
     strength: int = 60      # Power behind strikes, clinch control
     speed: int = 60         # Hand speed, movement, reaction time
     cardio: int = 60        # Stamina, gas tank
     chin: int = 60          # Ability to absorb damage
     recovery: int = 60      # Between-round recovery, shaking off being hurt
+    power: int = 60         # KO force — derived from strength + POWER_STYLE_OFFSET
     
     # Striking Attributes (4)
     boxing: int = 60            # Punching technique, combinations
@@ -251,12 +252,13 @@ class StartingProspect:
             "fighting_style": self.fighting_style,
             "overall_rating": self.overall_rating,
             "potential_ceiling": self.potential_ceiling,
-            # Physical (5)
+            # Physical (6) — power added 2026-09-08 PLAYER-CREATE1 (a)
             "strength": self.strength,
             "speed": self.speed,
             "cardio": self.cardio,
             "chin": self.chin,
             "recovery": self.recovery,
+            "power": self.power,
             # Striking (4)
             "boxing": self.boxing,
             "kicks": self.kicks,
@@ -442,8 +444,20 @@ def generate_prospect_name(country: str, region: str) -> str:
 def generate_prospect_attributes(
     overall: int,
     fighting_style: str,
-) -> Dict[str, int]:
-    """Generate attributes based on overall rating and style (17 total)."""
+    country: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Generate attributes based on overall rating and style (19 total,
+    plus derived fighting_style).
+
+    Van 2026-09-08 ruling (ii, shape-then-argmax): the `fighting_style`
+    input shapes the stat rolls (:519-522 bonuses), then the returned
+    style is the argmax over the shaped body via
+    world_init.FighterGenerator._phase_b_derive_style — mirrors the
+    Phase C call at world_init.py:1710-1714 byte for byte. `power` is
+    derived from the argmax style via POWER_STYLE_OFFSET (world_init.py
+    :1784-1786 formula). Return shape stays a dict so game_bridge.py:2638
+    `_synth.get(k, 50)` keeps working unmodified.
+    """
     # Base variance around overall
     def vary(base: int, variance: int = 8) -> int:
         return max(40, min(95, base + random.randint(-variance, variance)))
@@ -520,7 +534,41 @@ def generate_prospect_attributes(
     bonuses = style_bonuses.get(fighting_style, {})
     for attr, bonus in bonuses.items():
         attrs[attr] = min(95, attrs[attr] + bonus)
-    
+
+    # Local imports — game_start doesn't import world_init or core.types
+    # at module level; localise to avoid circular-import risk and to keep
+    # the touched surface minimal (this commit is game_start + routes only).
+    from world_init import FighterGenerator
+    from core.types import POWER_STYLE_OFFSET
+
+    # §4 label — mirror world_init.py:1710-1714 EXACTLY.
+    # template_name=None (prospects have no template layer today).
+    # country: the §4 tiebreak (+5% flavor when body ambiguous, per
+    # world_init.py:1479-1481). Threaded through as an optional third
+    # arg 2026-09-08; default None keeps the bridge fallback caller
+    # game_bridge.py:2638 (positional 2-arg) valid.
+    # key_map=_LEGACY_TO_CANONICAL is mandatory — part-2 step 3 proved
+    # that key_map=None returns Balanced for canonical-name bodies.
+    derived = FighterGenerator._phase_b_derive_style(
+        attrs, None, country,
+        templates=FighterGenerator._PHASE_C_TEMPLATES,
+        key_map=FighterGenerator._LEGACY_TO_CANONICAL,
+    )
+
+    # Power via D18 formula (world_init.py:1784-1786 verbatim).
+    # POWER_STYLE_OFFSET is keyed by display names ("Wrestler",
+    # "BJJ Specialist", ...) which is exactly what _phase_b_derive_style
+    # returns (see core/types.py:129 display-name block).
+    _pw_off = int(POWER_STYLE_OFFSET.get(derived, 0))
+    attrs['power'] = max(20, min(95,
+        attrs['strength'] + _pw_off + random.randint(-8, 8)))
+
+    # Return the derived label alongside the 19 stats. Dict-with-extra-key
+    # (not tuple) — game_bridge.py:2638 does `_synth.get(k, 50)` for each
+    # canonical stat key; the extra 'fighting_style' string entry is
+    # harmless there and readable by StartingProspect at game_start.py:650.
+    attrs['fighting_style'] = derived
+
     return attrs
 
 
@@ -606,8 +654,9 @@ def generate_starting_prospects(
         else:
             age = random.randint(23, 26)
         
-        # Generate attributes
-        attrs = generate_prospect_attributes(overall, fighting_style)
+        # Generate attributes — pass country so §4 tiebreak (world_init
+        # country_bias table) applies when the shaped body is ambiguous.
+        attrs = generate_prospect_attributes(overall, fighting_style, country)
         
         # Generate traits (1-2 per prospect)
         available_traits = [
@@ -647,16 +696,22 @@ def generate_starting_prospects(
             country=country,
             region=region,
             weight_class=weight_class,
-            fighting_style=fighting_style,
+            # PLAYER-CREATE1 (a) 2026-09-08 — carry the DERIVED §4 label,
+            # not the :597 random.choice input. The input still shapes the
+            # stats (:519-522 bonuses); argmax on the shaped body is the
+            # authority. In option-(ii), argmax almost always matches the
+            # pick — G6 measures divergence per seed.
+            fighting_style=attrs["fighting_style"],
             overall_rating=overall,
             potential_grade=potential_grade,
             potential_ceiling=potential_ceiling,
-            # Physical (5)
+            # Physical (6) — power added 2026-09-08 PLAYER-CREATE1 (a)
             strength=attrs["strength"],
             speed=attrs["speed"],
             cardio=attrs["cardio"],
             chin=attrs["chin"],
             recovery=attrs["recovery"],
+            power=attrs["power"],
             # Striking (4)
             boxing=attrs["boxing"],
             kicks=attrs["kicks"],

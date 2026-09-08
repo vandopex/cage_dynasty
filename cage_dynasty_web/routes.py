@@ -501,6 +501,7 @@ def register_routes(app):
                     "cardio":            p.cardio,
                     "chin":              p.chin,
                     "recovery":          p.recovery,
+                    "power":             p.power,
                     "boxing":            p.boxing,
                     "kicks":             p.kicks,
                     "clinch_striking":   p.clinch_striking,
