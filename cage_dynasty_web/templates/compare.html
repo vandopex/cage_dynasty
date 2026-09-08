@@ -40,15 +40,24 @@
 </div>
 
 {% if f1 and f2 %}
+{# PLAYER-CREATE1 (c) 2026-09-08 — canonical 19-stat order matches
+   game_bridge.py:7861-7871 _TRAINABLE: physical (6) → striking (4) →
+   grappling (5) → clinch (1) → mental (3). Overall stays at the top
+   as the summary tile. #}
 {% set stats = [
     ('Overall','overall_rating',None),
-    ('Boxing','boxing',None),('Kicks','kicks',None),('Clinch','clinch_striking',None),
+    ('Strength','strength',None),('Speed','speed',None),
+    ('Cardio','cardio',None),('Chin','chin',None),
+    ('Recovery','recovery',None),('Power','power',None),
+    ('Boxing','boxing',None),('Kicks','kicks',None),
+    ('Clinch','clinch_striking',None),
+    ('Striking Def','striking_defense',None),
+    ('Takedowns','takedowns',None),('TD Defense','takedown_defense',None),
+    ('Top Control','top_control',None),
+    ('Submissions','submissions',None),('Guard','guard',None),
     ('Clinch Ctrl','clinch_control',None),
-    ('Striking Def','striking_defense',None),('Takedowns','takedowns',None),
-    ('TD Defense','takedown_defense',None),('Submissions','submissions',None),
-    ('Guard','guard',None),('Chin','chin',None),('Cardio','cardio',None),
-    ('Strength','strength',None),('Fight IQ','fight_iq',None),
-    ('Power','power',None),
+    ('Heart','heart',None),('Fight IQ','fight_iq',None),
+    ('Composure','composure',None),
 ] %}
 <div class="card">
     {# Header #}
