@@ -1140,6 +1140,7 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/gate0_baselines_2026-09-07.md` — Gate 0 baselines at cf2fecf: week-axis, creation path, camp-vs-safety (measured; rulings 1–4)
 - `claude/player_create1_filing_2026-09-08.md` — PLAYER-CREATE1 shipping filing: three commits, gates, baseline move, six findings (2026-09-08)
 - `claude/deploy3_2026-09-08.md` — Deploy #3 (PLAYER-CREATE1 to PA) filing: mechanism, proof triad at 7555c35, browser check week 0→1, TOKEN-HYGIENE1.
+- `claude/week_axis1_gate0_2026-09-09.md` — WEEK-AXIS1 Gate 0 filing: cooldown dict measured empty at week 0, R03 founding hit, cross-axis census, four-commit ruling (2026-09-09)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 - `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1
