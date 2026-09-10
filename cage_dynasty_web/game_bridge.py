@@ -2832,6 +2832,18 @@ class GameBridge:
         seed = (week + self._dfc_event_offset) * 17 + 31
         return _evr.Random(seed).choice(self._GLOBAL_CITIES)
 
+    def _event_number_from_name(self, event_name: str) -> Optional[int]:
+        """Event number for a fight_history row, parsed from the row's own
+        event_name ("Cage Dynasty 61" -> 61). Single source of truth per
+        row: the name the player saw. Returns None when the name does not
+        carry a number — an honest gap the T-4 census counts; never
+        computed from week (off-week collision, two clocks)."""
+        if not event_name:
+            return None
+        import re
+        m = re.search(r"(\d+)\s*$", event_name.strip())
+        return int(m.group(1)) if m else None
+
     def _dfc_label(self, week: int) -> str:
         """Format live event name with sequential numbering that
         skips off-week gaps (Ship Cadence: every 3rd week is an
@@ -5708,6 +5720,7 @@ class GameBridge:
             "method":         method,
             "round_finished": round_finished,
             "event_name":     fight.get("event_name", ""),
+            "event_number":   self._event_number_from_name(fight.get("event_name", "")),
             "fight_id":       fight.get("fight_id", ""),
             "week":           self._game_state.week_number if self._game_state else 1,
             "was_title_fight": is_title_fight,
@@ -5721,6 +5734,7 @@ class GameBridge:
             "method":         method,
             "round_finished": round_finished,
             "event_name":     fight.get("event_name", ""),
+            "event_number":   self._event_number_from_name(fight.get("event_name", "")),
             "fight_id":       fight.get("fight_id", ""),
             "week":           self._game_state.week_number if self._game_state else 1,
             "was_title_fight": is_title_fight,
@@ -14268,7 +14282,9 @@ class GameBridge:
                     "opponent_id":   opp.fighter_id,
                     "result": res,
                     "method": method, "round_finished": rnd,
-                    "event_name": event_name, "week": week,
+                    "event_name": event_name,
+                    "event_number": self._event_number_from_name(event_name),
+                    "week": week,
                     "was_title_fight": fight.get("is_title_fight", False),
                     # FINISH-DETAIL-PERSIST
                     "specialty_method":       _specialty,
@@ -18473,6 +18489,7 @@ class GameBridge:
                 "method":         method,
                 "round_finished": round_finished,
                 "event_name":     fight.get("event_name", ""),
+                "event_number":   self._event_number_from_name(fight.get("event_name", "")),
                 "week":           self._game_state.week_number if self._game_state else 1,
                 "was_title_fight": is_title_fight,
                 # FINISH-DETAIL-PERSIST
