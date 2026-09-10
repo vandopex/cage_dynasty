@@ -513,7 +513,7 @@ Files-API paths:
 ## Top-of-backlog
 
 <!-- ARCHIVE3 --> The live backlog is `claude/backlog.md` (disk canonical, edited in place). Read it before scoping any docket. Moved verbatim from here at f9b1b8a (md5 0062f1d92a7116dead4842959130cc88, 524 lines).
-<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-08): WEEK-AXIS1 Gate 0 (read-only) → PROSPECT-BONUS1 instrument rule (tools commit, own stop) → PROSPECT-BONUS1 retune (balance-touching, own stop). Behind: see the board.
+<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10): HARNESS-RNG2 Gate 0 (tools, read-only then instrument fix, own stop) → WEEK-AXIS1 (b) SEED → (c) PREDICATE → (d) _recently_fought → PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. WEEK-AXIS1 (a) STAMP on main at dcee687 (not on PA). Behind: see the board.
 
 # CAGE DYNASTY — Claude Code instructions
 
