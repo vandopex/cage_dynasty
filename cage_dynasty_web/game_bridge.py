@@ -16879,6 +16879,7 @@ class GameBridge:
                 self._game_state.get_fighter(fid)
                 for fid in ranked_ids
                 if fid and fid not in pipeline_booked and fid != champ_id_here
+                and self._is_available(fid, target_week)
             ]
             available_ranked = [f for f in available_ranked
                                  if f and f.is_active]
@@ -16920,6 +16921,7 @@ class GameBridge:
                 self._game_state.get_fighter(fid)
                 for fid in top_ids
                 if fid and fid not in pipeline_booked and fid != champ_id_here
+                and self._is_available(fid, target_week)
             ]
             available_top = [f for f in available_top if f and f.is_active]
             if len(available_top) >= 2:
