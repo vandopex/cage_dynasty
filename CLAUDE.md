@@ -513,7 +513,7 @@ Files-API paths:
 ## Top-of-backlog
 
 <!-- ARCHIVE3 --> The live backlog is `claude/backlog.md` (disk canonical, edited in place). Read it before scoping any docket. Moved verbatim from here at f9b1b8a (md5 0062f1d92a7116dead4842959130cc88, 524 lines).
-<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10): WEEK-AXIS1 (b) SEED (HARNESS-RNG2 measured, non-blocking) → (c) PREDICATE → (d) _recently_fought → PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. WEEK-AXIS1 (a) STAMP on main at dcee687 (not on PA). Behind: see the board.
+<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10): WEEK-AXIS1 (c) PREDICATE (template-only, R03 gate) → DEPLOY #4 (main is 4 code commits ahead of PA 7555c35: dcee687, 266e382, 1ccefa0, 23c7599) → (d) _recently_fought (measure first) → PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. Behind: see the board.
 
 # CAGE DYNASTY — Claude Code instructions
 
@@ -1141,6 +1141,7 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/player_create1_filing_2026-09-08.md` — PLAYER-CREATE1 shipping filing: three commits, gates, baseline move, six findings (2026-09-08)
 - `claude/deploy3_2026-09-08.md` — Deploy #3 (PLAYER-CREATE1 to PA) filing: mechanism, proof triad at 7555c35, browser check week 0→1, TOKEN-HYGIENE1.
 - `claude/week_axis1_gate0_2026-09-09.md` — WEEK-AXIS1 Gate 0 filing: cooldown dict measured empty at week 0, R03 founding hit, cross-axis census, four-commit ruling (2026-09-09)
+- `claude/week_axis1_b_filing_2026-09-10.md` — WEEK-AXIS1 (a)+(b) shipping filing: four commits, R06 8→0 by predicted steps, HARNESS-RNG2 measurements, five findings (2026-09-10)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 - `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1
