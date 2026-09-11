@@ -373,7 +373,7 @@ except Exception as _cbe:
 
 MATCHMAKING_AVAILABLE = False
 try:
-    from matchmaking import calculate_cooldown, is_title_eligible, MatchmakingEngine
+    from matchmaking import calculate_cooldown, is_title_eligible, MatchmakingEngine, COOLDOWN_WINNER
     MATCHMAKING_AVAILABLE = True
     print("✅ matchmaking loaded")
 except Exception as _mme:
@@ -2386,6 +2386,26 @@ class GameBridge:
                     _next_dfc = _initializer.get_next_event_number()
                     if _next_dfc and _next_dfc > 1:
                         self._dfc_event_offset = _next_dfc - 1
+                        # WEEK-AXIS1 (b) SEED — world-gen wrote 60 weeks of history and nothing to
+                        # _fighter_cooldowns, so _is_available's .get(fid, 0) made every fighter
+                        # bookable at live week 1 (claude/week_axis1_gate0_2026-09-09.md §1).
+                        # One blanket value per fighter with pre-gen rows: last pre-gen week on the
+                        # live axis (PREGEN_LAST_WEEK == live week 0) + COOLDOWN_WINNER. Loser and
+                        # champion cooldowns are NOT reconstructed from history (documented
+                        # simplification, Van ruling 2026-09-09). Forward-only: new_game only.
+                        PREGEN_LAST_WEEK = _initializer.history_weeks
+                        _seeded, _smin, _smax = 0, None, None
+                        for _fid, _ftr in self._game_state.fighters.items():
+                            _hist = getattr(_ftr, 'fight_history', None) or []
+                            _wks = [int(_r.get('week') or 0) for _r in _hist if isinstance(_r, dict)]
+                            if not _wks:
+                                continue
+                            _seed = (max(_wks) - PREGEN_LAST_WEEK) + COOLDOWN_WINNER
+                            self._fighter_cooldowns[_fid] = _seed
+                            _seeded += 1
+                            _smin = _seed if _smin is None else min(_smin, _seed)
+                            _smax = _seed if _smax is None else max(_smax, _seed)
+                        print(f"[WEEK-AXIS1 b] seeded cooldowns: {_seeded} fighters, seed range {_smin}..{_smax}")
                 except Exception:
                     pass
                 print(f"Created {len(_initializer.camps)} camps, "
