@@ -16843,6 +16843,8 @@ class GameBridge:
             champ = self._game_state.get_fighter(champ_id)
             if not champ or not champ.is_active:
                 continue
+            if not self._is_available(champ_id, target_week):
+                continue  # Champion on cooldown — skip this division's title fight
             # Find highest-available ranked contender
             # Must not be pipeline_booked AND must not be on cooldown
             top = None
