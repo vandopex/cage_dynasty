@@ -483,6 +483,18 @@ on the PA bash console, then "Reload" on the PA Web tab.
 webhook is fallback, never proof. Full procedure + raw output:
 `claude/interim_deploy_2026-09-07.md`.
 
+**[SUPERSEDED 2026-09-11 deploy #4 onward — prior valid as fallback.]**
+
+**Mechanism of record (deploy #4 onward):** API-driven, cc executes
+end-to-end. Procedure + raw output: `claude/deploy4_2026-09-11.md` §1.
+Token at `~/.pa_token` chmod 600, read inline `T=$(cat ~/.pa_token)`
+inside `bash -c '...'`; never echoed/written to a script/`set -x`.
+Token IS in `curl` argv per call (`ps`-visible); `-H @file` closes it.
+Proof triad unchanged. CONSOLE-STARTED1: HTTP 412 on listed-but-
+unloaded consoles — pick one whose `get_latest_output` shows a recent
+prompt. `claude/deploy3_2026-09-08.md:121` "cc has no PA access …" is
+FALSE as of deploy #4; preserved there.
+
 **Standing gates (2026-09-07 onward, before every deploy):**
 - **G0. Template compile sweep** N/N clean required
   (`python3 -u claude/tools/template_compile_sweep.py` from repo root).
@@ -513,7 +525,7 @@ Files-API paths:
 ## Top-of-backlog
 
 <!-- ARCHIVE3 --> The live backlog is `claude/backlog.md` (disk canonical, edited in place). Read it before scoping any docket. Moved verbatim from here at f9b1b8a (md5 0062f1d92a7116dead4842959130cc88, 524 lines).
-<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10): DEPLOY #4 (main is 5 code commits ahead of PA 7555c35: dcee687, 266e382, 1ccefa0, 23c7599, ada3955 — plus docs/tools commits) → (d) _recently_fought (measure first) → PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. (c) PREDICATE shipped ada3955 (2026-09-11). Filings claude/week_axis1_b_filing_2026-09-10.md + claude/week_axis1_c_filing_2026-09-11.md. Behind: see the board.
+<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10): (d) _recently_fought (measure first) → PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. WEEK-AXIS1 (a)+(b)+(c) ON PA at 54e3b68 (deploy #4, 2026-09-11, API-driven, 12/12 gates PASS, filing claude/deploy4_2026-09-11.md). Filings claude/week_axis1_b_filing_2026-09-10.md + claude/week_axis1_c_filing_2026-09-11.md + claude/deploy4_2026-09-11.md. Behind: see the board.
 
 # CAGE DYNASTY — Claude Code instructions
 
@@ -1143,6 +1155,7 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/week_axis1_gate0_2026-09-09.md` — WEEK-AXIS1 Gate 0 filing: cooldown dict measured empty at week 0, R03 founding hit, cross-axis census, four-commit ruling (2026-09-09)
 - `claude/week_axis1_b_filing_2026-09-10.md` — WEEK-AXIS1 (a)+(b) shipping filing: four commits, R06 8→0 by predicted steps, HARNESS-RNG2 measurements, five findings (2026-09-10)
 - `claude/week_axis1_c_filing_2026-09-11.md` — WEEK-AXIS1 (c) PREDICATE shipping filing: five edits, R03 1→0, render probe 0 violations across 3 fighters, ROW-SCHEMA1 two-stage lossy pipeline, VACATED-REIGN1 out-of-scope with reason (2026-09-11)
+- `claude/deploy4_2026-09-11.md` — Deploy #4 filing: API-driven, 12/12 gates PASS, PA at 54e3b68, Van's browser check on fresh save wk 1 (3 fighters), CONSOLE-STARTED1 + TOKEN-HYGIENE1 half-done (2026-09-11)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 - `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1

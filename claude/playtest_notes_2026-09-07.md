@@ -342,3 +342,10 @@ webhook pull-dir at L468-476; token breach + rotation; systems/ shadow;
 harness hardcoded output path; deploy mechanism recorded verbatim) → then
 dockets: #1 fix, #3 measurement (folds into DEVELOPMENT1 Gate 0), #5, #9,
 #15 offer-screen, #19 power-trainable + player-path power, #8/#12/#13/#14 as a UI-strings batch.
+
+## Deploy #4 addendum (Van, 2026-09-11 browser check on 54e3b68)
+
+- Cosmetic nit: coach card renders "Sc_coach" (raw key leaking into the UI —
+  key-lookup path mistakenly stringifies the identifier itself). Not filed
+  as its own docket; add to the UI-strings batch alongside the earlier
+  snake_case leaks (playtest notes #8/#12/#13/#14).
