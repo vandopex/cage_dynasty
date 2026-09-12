@@ -358,16 +358,25 @@ def r03_defense_marker(data) -> Tuple[str, int, List[str], Dict]:
                 unclassifiable += 1
                 continue
 
-            # TEMPLATE predicate — cross-axis raw comparison
+            # TEMPLATE predicate — mirror of the new fighter_profile.html
+            # template (WEEK-AXIS1 (c), ruling α). Derives reign event_number
+            # inline (matches game_bridge.get_fighter_reigns): Founding by
+            # string, lost_event by parse. Structurally identical to the
+            # CORRECT predicate below; this mirror serves as a serializer +
+            # template-emulation cross-check, not a rendered-DOM check.
             template_would_mark = False
             template_reign = None
+            _fight_en = h.get("event_number")
             for r in my_reigns:
-                r_ww = int(r.get("won_week", 0) or 0)
-                r_lw = r.get("lost_week")
-                if r_ww < raw_fw and (
-                    r.get("is_active", r_lw is None)
-                    or (r_lw is not None and int(r_lw) > raw_fw)
-                ):
+                if r.get("weight_class") != fight_wc:
+                    continue
+                _r_won_en = _parse_event_number_from_name(r.get("won_event", "") or "")
+                if _r_won_en is None and 'Founding' in (r.get("won_event", "") or ''):
+                    _r_won_en = 0
+                _r_lost_en = _parse_event_number_from_name(r.get("lost_event", "") or "")
+                if _fight_en is None or _r_won_en is None:
+                    continue
+                if _r_won_en < _fight_en and (_r_lost_en is None or _fight_en < _r_lost_en):
                     template_would_mark = True
                     template_reign = r
                     break

@@ -7561,6 +7561,14 @@ class GameBridge:
                     'method':        str(f.get('method',    '')) if isinstance(f, dict) else '',
                     'round_finished':f.get('round_finished', 0) if isinstance(f, dict) else 0,
                     'event_name':    f.get('event_name',    '') if isinstance(f, dict) else '',
+                    # WEEK-AXIS1 (c) PREDICATE: template's new belt-defense
+                    # compare reads fight.event_number (stamped by STAMP) and
+                    # fight.weight_class (falls back to fighter.weight_class
+                    # when absent — ROW-SCHEMA1). Without these two keys
+                    # forwarded here, the template sees Undefined regardless
+                    # of what the raw row carries.
+                    'event_number':  f.get('event_number')     if isinstance(f, dict) else None,
+                    'weight_class':  f.get('weight_class', '') if isinstance(f, dict) else '',
                     'fight_id':      f.get('fight_id',      '') if isinstance(f, dict) else '',
                     'week':          f.get('week',          0) if isinstance(f, dict) else 0,
                 }
@@ -9576,16 +9584,30 @@ class GameBridge:
             reigns = self._belt_history.get_fighter_reigns(fighter_id)
             out = []
             for r in reigns:
+                # WEEK-AXIS1 (c) PREDICATE: derived event_number for the
+                # template's unified belt-defense compare. Founding reigns
+                # have won_event "Cage Dynasty Founding — {WC} Championship"
+                # which doesn't parse a trailing int; map to 0 by string.
+                # VACATED-REIGN1: lost_event on vacated reigns is not
+                # reached by _belt_history today (vacate paths write only
+                # _title_history); when it eventually is, this parse
+                # handles it uniformly.
+                _won_en = self._event_number_from_name(r.won_event)
+                if _won_en is None and 'Founding' in (r.won_event or ''):
+                    _won_en = 0
+                _lost_en = self._event_number_from_name(r.lost_event)
                 out.append({
                     "weight_class":        r.weight_class,
                     "won_week":            r.won_week,
                     "won_event":           r.won_event,
+                    "won_event_number":    _won_en,
                     "won_from":            r.won_from,
                     "won_from_name":       r.won_from_name,
                     "won_method":          r.won_method,
                     "successful_defenses": r.successful_defenses,
                     "lost_week":           r.lost_week,
                     "lost_event":          r.lost_event,
+                    "lost_event_number":   _lost_en,
                     "lost_to":             r.lost_to,
                     "lost_to_name":        r.lost_to_name,
                     "lost_method":         r.lost_method,

@@ -1200,17 +1200,31 @@
            semantics, different key names. Read both. #}
         {% set _rnd = fight.round_finished or fight.round %}
 
-        {# Belt context — cross-reference fight.week against belt_history.
+        {# WEEK-AXIS1 (c) PREDICATE: division-gated + unified event_number
+           compare. Live fight_history rows omit weight_class (ROW-SCHEMA1),
+           so fall back to fighter.weight_class (mirrors instrument's cur_wc
+           fallback at save_invariants.py:330). event_number stamped on
+           live rows by STAMP; derived on reigns by get_fighter_reigns.
+           Bind via .get so missing keys become real None (Jinja Undefined
+           passes `is not none`, then compares raise UndefinedError).
            Namespace pattern: {% set %} inside {% for %} doesn't escape loop scope. #}
         {% set bns = namespace(won=false, defended=false) %}
+        {% set _fight_wc = fight.get('weight_class') or fighter.weight_class %}
+        {% set _fight_en = fight.get('event_number') %}
         {% for r in (belt_history or []) %}
-            {% if r.won_week == fight.week %}
-                {% set bns.won = true %}
-            {% elif r.won_week < fight.week
-                    and (r.is_active or (r.lost_week is not none
-                    and r.lost_week > fight.week))
-                    and fight.result == 'W' %}
-                {% set bns.defended = true %}
+            {% set _r_won_en = r.get('won_event_number') %}
+            {% set _r_lost_en = r.get('lost_event_number') %}
+            {% if r.weight_class == _fight_wc
+                  and _fight_en is not none
+                  and _r_won_en is not none %}
+                {% if _r_won_en == _fight_en %}
+                    {% set bns.won = true %}
+                {% elif _r_won_en < _fight_en
+                        and (_r_lost_en is none
+                             or _fight_en < _r_lost_en)
+                        and fight.get('result') == 'W' %}
+                    {% set bns.defended = true %}
+                {% endif %}
             {% endif %}
         {% endfor %}
         <div style="display:flex;align-items:center;gap:var(--spacing-md);
