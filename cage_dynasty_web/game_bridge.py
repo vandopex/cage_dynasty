@@ -2065,11 +2065,17 @@ def grade_color(display_grade: str) -> str:
 class GameBridge:
     """
     Bridges the Flask web app to the real game engine.
-    
+
     Handles all translation between game data structures and
     web-friendly formats expected by templates.
     """
-    
+
+    # REMATCH-COOLDOWN1 guard state — class-level so warnings are
+    # once-per-process across every bridge instance (multi-user sessions
+    # share the process). See _weeks_since_fought.
+    _rc1_inert_axis_warned: bool = False
+    _rc1_drift_warned_pairs: set = set()
+
     def __init__(self):
         # MULTIUSER-ISOLATION1: user_id namespaces save files and identifies
         # this bridge's owner. Set externally by routes.get_bridge() when
@@ -15608,26 +15614,100 @@ class GameBridge:
 
     def _weeks_since_fought(self, f1, f2) -> Optional[int]:
         """
-        Return how many weeks ago f1 and f2 last fought each other.
-        Returns None if they have never fought.
-        Used to enforce rematch cooldowns in card building.
+        Weeks between f1 and f2's last meeting, on a unified axis
+        spanning pre-gen and live-play. Returns None only when they
+        never fought — that answer is maximally permissive; no other
+        path in this method should reach it.
+
+        Two axes: pre-gen rows carry event_number in 1..span and week
+        in 1..span under the current 1:1 pre-gen cadence; live rows
+        carry event_number > span and week that restarts at 1. Under
+        the unified axis, pre-gen unified_fought = row.week, live
+        unified_fought = span + row.week, current_unified = span +
+        game_state.week_number; return = current_unified - unified.
+
+        Guard: for a pre-gen-classified row, the 1:1 cadence invariant
+        requires en == fw. Any mismatch (cadence has drifted for that
+        row) falls the whole call back to raw = current_week - fw,
+        matching pre-fix behavior; a once-per-process warning names
+        the drifting pair. Missing event_number defaults to LIVE
+        treatment (pre-gen rows always carry one — world_init.py sets
+        it on both winner and loser records), so an absent field means
+        a live row that dropped it. span == 0 (legacy save without
+        rich world-gen) also degrades to raw, with a distinct one-time
+        inert-axis notice — silent inertness would make this fix a
+        phantom.
+
+        Relax guarantee: unified return >= raw for every case that
+        does the unified transform (pre-gen: raw + span; live and
+        every fallback: raw). No pair raw currently permits becomes
+        blocked. Filing: claude/rematch_cooldown1_filing_2026-09-14.md
         """
+        span = int(getattr(self, '_dfc_event_offset', 0) or 0)
         current_week = self._game_state.week_number if self._game_state else 0
         f2_id = f2.fighter_id
-        for entry in getattr(f1, 'fight_history', []):
-            if isinstance(entry, dict) and entry.get('opponent_id') == f2_id:
-                fought_week = entry.get('week', 0)
-                if fought_week:
-                    return current_week - fought_week
-        # Also check _fighter_data for belt-and-suspenders
-        if self._game_state:
-            fd = self._game_state._fighter_data.get(f1.fighter_id, {})
-            for entry in fd.get('fight_history', []):
+
+        def _first_match(seq):
+            for entry in seq or []:
                 if isinstance(entry, dict) and entry.get('opponent_id') == f2_id:
-                    fought_week = entry.get('week', 0)
-                    if fought_week:
-                        return current_week - fought_week
-        return None
+                    fw_ = entry.get('week', 0)
+                    if fw_:
+                        return int(fw_), entry.get('event_number')
+            return None, None
+
+        fw, en = _first_match(getattr(f1, 'fight_history', None))
+        if fw is None and self._game_state is not None:
+            fd = self._game_state._fighter_data.get(f1.fighter_id, {})
+            fw, en = _first_match(fd.get('fight_history', []))
+        if fw is None:
+            return None  # never fought — the only path that yields None
+
+        raw = current_week - fw
+
+        # Legacy save: no rich world-gen ran, so _dfc_event_offset was
+        # never populated. The unified axis has no reference to shift
+        # against; degrade to raw. When rows nevertheless carry event
+        # numbers, name the inertness once so the degradation is
+        # audible rather than silent.
+        if span == 0:
+            if en is not None and not GameBridge._rc1_inert_axis_warned:
+                GameBridge._rc1_inert_axis_warned = True
+                print("⚠️ [REMATCH-COOLDOWN1] span=0 with event-numbered "
+                      "rows — unified axis INERT on this save; raw "
+                      "formula in effect. See "
+                      "claude/rematch_cooldown1_filing_2026-09-14.md")
+            return raw
+
+        # Missing event_number → LIVE treatment. Correct because
+        # world_init.py:2398/2413 sets event_number on every pre-gen
+        # row (both winner and loser copies); a live-play row that
+        # drops the field is the only path here, and for live rows
+        # (span cancels) unified return equals raw.
+        if en is None:
+            return raw
+
+        en_i = int(en)
+        if en_i > span:
+            return raw  # live row: (span + cw) - (span + fw) = cw - fw
+
+        # Pre-gen row. 1:1 pre-gen cadence invariant: en == fw.
+        # If drifted (multi-event weeks, off-weeks, or an artificial
+        # row), fall the whole call back to raw. Never return None
+        # from here — that would look like "never fought" to every
+        # caller and defeat cooldowns entirely for this pair.
+        if en_i != fw:
+            pair_key = tuple(sorted((f1.fighter_id, f2_id)))
+            if pair_key not in GameBridge._rc1_drift_warned_pairs:
+                GameBridge._rc1_drift_warned_pairs.add(pair_key)
+                print(f"⚠️ [REMATCH-COOLDOWN1] pre-gen cadence drift on "
+                      f"{f1.fighter_id[:8]} vs {f2_id[:8]}: en={en_i} "
+                      f"fw={fw} span={span} — raw fallback for this "
+                      "call. See "
+                      "claude/rematch_cooldown1_filing_2026-09-14.md")
+            return raw
+
+        # Unified pre-gen return.
+        return (span + current_week) - fw
 
     def _record_title_result(
         self,
