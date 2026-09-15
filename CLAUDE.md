@@ -525,7 +525,7 @@ Files-API paths:
 ## Top-of-backlog
 
 <!-- ARCHIVE3 --> The live backlog is `claude/backlog.md` (disk canonical, edited in place). Read it before scoping any docket. Moved verbatim from here at f9b1b8a (md5 0062f1d92a7116dead4842959130cc88, 524 lines).
-<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10): (d) _recently_fought (measure first) → PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. WEEK-AXIS1 (a)+(b)+(c) ON PA at 54e3b68 (deploy #4, 2026-09-11, API-driven, 12/12 gates PASS, filing claude/deploy4_2026-09-11.md). Filings claude/week_axis1_b_filing_2026-09-10.md + claude/week_axis1_c_filing_2026-09-11.md + claude/deploy4_2026-09-11.md. Behind: see the board.
+<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10, resolution recorded 2026-09-14): (d) resolved into RECENTLY-FOUGHT1 (deferred; player-only caller, negligible; filed on board) and REMATCH-COOLDOWN1 (`_weeks_since_fought`, live surface; SHIPPED LOCALLY eeff834, not on PA — deploy #5 is a separate decision, PA at 54e3b68). Continuing: PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. WEEK-AXIS1 (a)+(b)+(c) ON PA at 54e3b68 (deploy #4, 2026-09-11, API-driven, 12/12 gates PASS, filing claude/deploy4_2026-09-11.md). Filings claude/week_axis1_b_filing_2026-09-10.md + claude/week_axis1_c_filing_2026-09-11.md + claude/deploy4_2026-09-11.md + claude/rematch_cooldown1_filing_2026-09-14.md. Behind: see the board.
 
 # CAGE DYNASTY — Claude Code instructions
 
@@ -1156,6 +1156,7 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/week_axis1_b_filing_2026-09-10.md` — WEEK-AXIS1 (a)+(b) shipping filing: four commits, R06 8→0 by predicted steps, HARNESS-RNG2 measurements, five findings (2026-09-10)
 - `claude/week_axis1_c_filing_2026-09-11.md` — WEEK-AXIS1 (c) PREDICATE shipping filing: five edits, R03 1→0, render probe 0 violations across 3 fighters, ROW-SCHEMA1 two-stage lossy pipeline, VACATED-REIGN1 out-of-scope with reason (2026-09-11)
 - `claude/deploy4_2026-09-11.md` — Deploy #4 filing: API-driven, 12/12 gates PASS, PA at 54e3b68, Van's browser check on fresh save wk 1 (3 fighters), CONSOLE-STARTED1 + TOKEN-HYGIENE1 half-done (2026-09-11)
+- `claude/rematch_cooldown1_filing_2026-09-14.md` — REMATCH-COOLDOWN1 shipping filing: `_weeks_since_fought` unified-axis fix with pre-gen cadence guard, six gates + guard fire test + two discrimination proofs, R05 sort finding (LINEAGE1 amended), OPENCARD-REMATCH1 finding named, ~30% matchmaker call-count drop as unpredicted side effect (2026-09-14)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 - `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1
