@@ -825,6 +825,14 @@ I will:
 - Do not edit top-level `core/`, `entities/`, `systems/` if the goal is to
   affect the web app — those don't reach it.
 
+## Commits and handoffs
+
+- Commit trailers: `Co-Authored-By: Claude Code <noreply@anthropic.com>` — tool-level, never a model version. 9faeba8 / 6d7abc2 / a1fd40c carry an older model-version trailer as history; do not rewrite.
+- Handoffs land in `claude/` first; the claude.ai project store is a mirror with no readback path, not a source.
+- A handoff never asserts its own HEAD — name the last CODE commit and the PA SHA.
+
+Rationale for all three: `claude/transport_notes_2026-09-15.md`.
+
 ## Current top-of-list
 
 See `claude/backlog.md` for the live backlog board (moved out 2026-09-09 by ARCHIVE3; rewritten 2026-07-03 prior). <!-- ARCHIVE3 -->
@@ -1157,6 +1165,7 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
 - `claude/week_axis1_c_filing_2026-09-11.md` — WEEK-AXIS1 (c) PREDICATE shipping filing: five edits, R03 1→0, render probe 0 violations across 3 fighters, ROW-SCHEMA1 two-stage lossy pipeline, VACATED-REIGN1 out-of-scope with reason (2026-09-11)
 - `claude/deploy4_2026-09-11.md` — Deploy #4 filing: API-driven, 12/12 gates PASS, PA at 54e3b68, Van's browser check on fresh save wk 1 (3 fighters), CONSOLE-STARTED1 + TOKEN-HYGIENE1 half-done (2026-09-11)
 - `claude/rematch_cooldown1_filing_2026-09-14.md` — REMATCH-COOLDOWN1 shipping filing: `_weeks_since_fought` unified-axis fix with pre-gen cadence guard, six gates + guard fire test + two discrimination proofs, R05 sort finding (LINEAGE1 amended), OPENCARD-REMATCH1 finding named, ~30% matchmaker call-count drop as unpredicted side effect (2026-09-14)
+- `claude/transport_notes_2026-09-15.md` — rationale for CLAUDE.md's "Commits and handoffs" rules (trailer names tool not model; handoffs land in repo first; handoff never asserts its own HEAD) + 7 instrument lessons from the arc producing 7d789d0 (2026-09-15)
 - `claude/playtest_notes_2026-09-07.md` — architect playtest notes on b6e1d74 (Van's first browser session, 19 items, 3 measured)
 - `claude/tools/template_compile_sweep.py` — deploy-time standing gate (N/N template compile check; ships with the 2026-09-07 DOCS commit)
 - `claude/tools/{_harness_env,save_invariants,dev1_gate0,phase2_holes}.py` — SAVE-INVARIANTS1 checker (--dump/--save replay) + DEVELOPMENT1 Gate 0 probes; standing before/after instruments for PLAYER-CREATE1 and WEEK-AXIS1
