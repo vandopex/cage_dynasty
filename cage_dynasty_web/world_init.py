@@ -302,6 +302,39 @@ MAIN_EVENT_MIN_RANK = 5  # At least one fighter must be top 5
 
 
 # ============================================================================
+# FOUNDING-ROW PREDICATE (FOUNDING-ROW2, 2026-09-15)
+# ============================================================================
+# The founding row is the synthetic fight_history entry appended at
+# crown_initial_champions (this module, :1984-1995) — the "tombstone"
+# marking the inaugural crowning. It carries method="Inaugural Crown"
+# and event_name starting with "Cage Dynasty Founding — {WC}
+# Championship". By ruling 3, it must not count in streak or record.
+#
+# CONVENTION: detect on the "Inaugural"/"Founding" string in method or
+# event_name; event_number in (None, 0) is a prefilter, not the key.
+# Ruling 1 forbids won_week == 0 as the detector (the season-opener
+# stub also writes week 0 — same two-clocks collision as REMATCH-
+# COOLDOWN1's pre-gen/live axis split).
+#
+# Single source of truth for the whole repo. save_invariants imports
+# this; the bridge streak/record readers will filter through it in the
+# FOUNDING-ROW2 fix commit.
+def is_founding_row(h: Dict[str, Any]) -> bool:
+    """T-2 detector: True iff this fight_history row is a founding-
+    champion tombstone. Keys on method/event_name string; event_number
+    in (None, 0) is a prefilter, not the detector. Ruling 1 forbids
+    detecting on won_week == 0.
+    """
+    en = h.get("event_number")
+    if en not in (None, 0):
+        return False
+    m = str(h.get("method", "") or "")
+    ev = str(h.get("event_name", "") or "")
+    return ("Inaugural" in m or "Founding" in m
+            or "Founding" in ev or "Inaugural" in ev)
+
+
+# ============================================================================
 # DATA STRUCTURES
 # ============================================================================
 

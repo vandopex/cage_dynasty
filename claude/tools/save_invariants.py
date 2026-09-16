@@ -173,22 +173,17 @@ def _get_player_fids(data) -> List[str]:
             if f.get("camp_id") == pcid]
 
 
-def _is_founding_row(h: Dict[str, Any]) -> bool:
-    """T-2: founding row = event_number in (None, 0) AND method/event_name
-    matches Inaugural/Founding. Excluded from R01/R02/R06 by fiat.
-    """
-    en = h.get("event_number")
-    if en not in (None, 0):
-        return False
-    m = str(h.get("method", "") or "")
-    ev = str(h.get("event_name", "") or "")
-    return ("Inaugural" in m or "Founding" in m
-            or "Founding" in ev or "Inaugural" in ev)
+# FOUNDING-ROW2 (2026-09-15): the single source of truth for the
+# founding-row detector lives at world_init.is_founding_row — same
+# module that authors the row. Imported here so the instrument and the
+# engine agree by construction, not by drift. Direction is instrument
+# -> engine; never the reverse.
+from world_init import is_founding_row  # noqa: E402
 
 
 def _fights_ex_founding(f: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [h for h in (f.get("fight_history", []) or [])
-            if isinstance(h, dict) and not _is_founding_row(h)]
+            if isinstance(h, dict) and not is_founding_row(h)]
 
 
 def r01_wins_by_method(data) -> Tuple[str, int, List[str]]:
