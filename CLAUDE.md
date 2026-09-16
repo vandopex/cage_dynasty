@@ -831,7 +831,10 @@ I will:
 - Handoffs land in `claude/` first; the claude.ai project store is a mirror with no readback path, not a source.
 - A handoff never asserts its own HEAD — name the last CODE commit and the PA SHA.
 
-Rationale for all three: `claude/transport_notes_2026-09-15.md`.
+Rationale for the three trailer/transport/HEAD rules above: `claude/transport_notes_2026-09-15.md`.
+
+- STOP-BEFORE-COMMIT IS TIERED (Van, 2026-09-15). Engine or balance-touching: every gate, three-turn protocol unchanged. Player-visible template/display: render probe + browser check + stop before commit. Docs and backlog: commit freely, no stop, no hash gate. A change is engine-tier if the function it touches feeds morale, matchmaking, or story logic — even when the visible symptom is display. FOUNDING-ROW2 was classified engine-tier on exactly that test.
+- Carried state is `claude/backlog.md` (ranked, edited in place) plus `git log`. Handoff prose that names HEAD is stale the moment it commits — belongs nowhere. Docket-specific rulings live inline on the docket; general rulings live here.
 
 ## Current top-of-list
 
