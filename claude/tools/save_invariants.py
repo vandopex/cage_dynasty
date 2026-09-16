@@ -822,6 +822,70 @@ def r13_stat_surfaces(data) -> Tuple[str, int, List[str]]:
             len(violations), violations[:3])
 
 
+def r14_streak_bounds(data) -> Tuple[str, int, List[str], Dict[str, Any]]:
+    """FOUNDING-ROW2 discriminator (ruling 3): three bounds that
+    must hold under the canonical filtered streak semantics —
+
+      (a) active_streak <= wins
+      (b) longest_streak <= wins
+      (c) active_streak <= longest_streak
+
+    Active and longest come from the canonical history-taking
+    primaries on GameBridge (`_win_streak_from_history`,
+    `_longest_win_streak_from_history`), called directly with the
+    row list. Both filter via world_init.is_founding_row — the same
+    source of truth this rule imports. R14 tests the LIVE code path;
+    a rule that mirrors deleted code is a permanent PASS and would
+    prove nothing (ruling-α mirror hazard).
+
+    Per-violation report: (name, wins, active, longest, has_founding_row).
+
+    Active-vs-longest failure modes differ:
+    - active over-counts only when the founding row is contiguous
+      with an unbeaten active run (fighter never lost since crowning);
+    - longest over-counts for any founding champion whose founding
+      row was contiguous with the peak run (typically the first
+      post-crown fight was a win, no intermediate loss until later).
+    Bound (c) is a definitional consistency check between the two
+    canonical functions.
+    """
+    # Lazy import — GameBridge import chain is heavy, only needed
+    # here in --save runs. --seed already imports it via load_from_seed.
+    from game_bridge import GameBridge
+
+    violations = []
+    per_fighter = []
+    for fid, f in data["fighters"].items():
+        wins = int(f.get("wins", 0))
+        hist = f.get("fight_history", []) or []
+        active  = GameBridge._win_streak_from_history(hist)
+        longest = GameBridge._longest_win_streak_from_history(hist)
+        has_fr = any(isinstance(h, dict) and is_founding_row(h) for h in hist)
+        name = f.get("name", fid[:8])
+
+        broke = []
+        if active > wins:
+            broke.append(f"active={active}>wins={wins}")
+        if longest > wins:
+            broke.append(f"longest={longest}>wins={wins}")
+        if active > longest:
+            broke.append(f"active={active}>longest={longest}")
+
+        if broke:
+            violations.append(
+                f"{name} ({fid[:8]}): {'; '.join(broke)}  "
+                f"wins={wins} active={active} longest={longest} "
+                f"founding_row={has_fr}")
+            per_fighter.append({
+                "fid": fid, "name": name, "wins": wins,
+                "active": active, "longest": longest,
+                "founding_row": has_fr,
+            })
+    details = {"per_fighter_violations": per_fighter}
+    return ("PASS" if not violations else "FAIL",
+            len(violations), violations[:3], details)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Runner
 # ─────────────────────────────────────────────────────────────────────────────
@@ -873,6 +937,17 @@ def run_all_rules(data: Dict[str, Any], details_out: List[str]) -> int:
     details_out.append(f"R11 details: {r11[3]}")
     line("R12", "at_signing_populated_for_post_capture", r12_at_signing(data))
     line("R13", "stat_surface_renders_all_19_stats", r13_stat_surfaces(data))
+    r14 = r14_streak_bounds(data)
+    line("R14", "streak_bounds_a_active_le_wins_b_longest_le_wins_c_active_le_longest",
+         r14[:3])
+    _r14_pf = r14[3].get("per_fighter_violations", [])
+    details_out.append(
+        f"R14 details: {len(_r14_pf)} violating fighters"
+        + (":\n  " + "\n  ".join(
+            f"{p['name']} ({p['fid'][:8]}): wins={p['wins']} "
+            f"active={p['active']} longest={p['longest']} "
+            f"founding_row={p['founding_row']}"
+            for p in _r14_pf) if _r14_pf else ""))
 
     # T-4 census (informational, not a rule)
     t4 = t4_event_number_none_census(data)

@@ -13,6 +13,13 @@ import zlib
 from typing import Dict, List, Optional, Any, Set
 from dataclasses import dataclass, field
 
+# FOUNDING-ROW2 (2026-09-15): single source of truth for founding-row
+# detection. Module-scope import — safe because world_init does not
+# import game_bridge (no cycle risk). Used by the canonical streak
+# staticmethods below and the inline lose-streak walk in
+# _convert_real_fighter.
+from world_init import is_founding_row as _wi_is_founding_row
+
 # A3-a (2026-08-29): removed a GAME_PATH block here that inserted repo
 # root at sys.path[0]. Its primary branch computed <parent>/cage_dynasty
 # — a nested subdirectory that exists on neither PA nor local dev. Its
@@ -7322,49 +7329,29 @@ class GameBridge:
         wc_str   = fighter.weight_class if isinstance(fighter.weight_class, str) else str(fighter.weight_class)
 
         # ── Streaks ───────────────────────────────────────────────
-        # STREAK-INAUGURAL-FILTER1: skip founding-champion tombstones
-        # (world_init.py:1275 appends a synthetic result="W" entry that
-        # is not a real fight and does not bump .wins).
-        win_streak = lose_streak = 0
-        for f in reversed(history):
-            _method = f.get('method') if isinstance(f, dict) else getattr(f, 'method', '')
-            if _method == 'Inaugural Crown':
-                continue
-            res = f.get('result') if isinstance(f, dict) else getattr(f, 'result', '')
-            if win_streak == 0 and lose_streak == 0:
-                if res == 'W':
-                    win_streak += 1
-                elif res == 'L':
-                    lose_streak += 1
-                else:
-                    break
-            elif win_streak > 0:
-                if res == 'W':
-                    win_streak += 1
-                else:
-                    break
-            elif lose_streak > 0:
-                if res == 'L':
-                    lose_streak += 1
-                else:
-                    break
+        # FOUNDING-ROW2 (2026-09-15): win-streak and longest-win-streak
+        # computations delegated to the canonical history-taking
+        # primaries on GameBridge — history list piped directly, no
+        # shim needed. Filter widened from the exact-string check of
+        # STREAK-INAUGURAL-FILTER1 (method == 'Inaugural Crown') to
+        # world_init.is_founding_row — same source of truth used by
+        # save_invariants R14. lose_streak stays inline pending its
+        # own docket (_get_fighter_lose_streak is unfiltered, out of
+        # scope for this commit); the inline uses the module-scope
+        # _wi_is_founding_row for symmetry with the canonical pair.
+        win_streak = GameBridge._win_streak_from_history(history)
+        _best_ws   = GameBridge._longest_win_streak_from_history(history)
 
-        # ── Career-best win streak ───────────────────────────────
-        # Walk full history forward, track max consecutive Ws.
-        # STREAK-INAUGURAL-FILTER1: same tombstone filter as above.
-        _best_ws = 0
-        _run_ws = 0
-        for f in history:
-            _method = f.get('method') if isinstance(f, dict) else getattr(f, 'method', '')
-            if _method == 'Inaugural Crown':
+        lose_streak = 0
+        for f in reversed(history):
+            if isinstance(f, dict) and _wi_is_founding_row(f):
                 continue
             res = f.get('result') if isinstance(f, dict) else getattr(f, 'result', '')
-            if res == 'W':
-                _run_ws += 1
-                if _run_ws > _best_ws:
-                    _best_ws = _run_ws
+            if res == 'L':
+                lose_streak += 1
             else:
-                _run_ws = 0
+                break
+
         # Mirror to engine fighter so retirement summary
         # (game_bridge.py:7782) reads the same value.
         try:
@@ -11425,9 +11412,17 @@ class GameBridge:
             _titles = getattr(fighter, 'titles_held', 0) or 0
             _ko_wins = getattr(fighter, 'ko_wins', 0) or 0
             _sub_wins = getattr(fighter, 'sub_wins', 0) or 0
-            _best_streak = getattr(
-                fighter, 'best_win_streak',
-                getattr(fighter, 'win_streak', 0)) or 0
+            # FOUNDING-ROW2 (2026-09-15): compute longest streak from
+            # history instead of reading the stored `best_win_streak`
+            # attribute. The stored attribute is written by the mirror
+            # at _convert_real_fighter :7358-7360, which is ratchet-only
+            # (writes upward only) and may carry pre-FOUNDING-ROW2
+            # inflated values on existing saves. Retirement-news is the
+            # only player-visible reader that consumed the stored value
+            # directly; switching to the canonical eliminates that
+            # inflation at this surface for every save, including PA's.
+            _best_streak = GameBridge._longest_win_streak_from_history(
+                getattr(fighter, 'fight_history', []) or [])
             _sig = ''
             try:
                 _fdata_ret = self._game_state._fighter_data.get(
@@ -14765,33 +14760,27 @@ class GameBridge:
         fighters = list(self._game_state.fighters.values())
         active   = [f for f in fighters if f.is_active]
 
-        def streak(f):
-            s = 0
-            for h in reversed(getattr(f, 'fight_history', [])):
-                if isinstance(h, dict) and h.get('result') == 'W':
-                    s += 1
-                else:
-                    break
-            return s
-
-        def max_streak(f):
-            best = cur = 0
-            for h in getattr(f, 'fight_history', []):
-                if isinstance(h, dict) and h.get('result') == 'W':
-                    cur += 1; best = max(best, cur)
-                else:
-                    cur = 0
-            return best
+        # FOUNDING-ROW2 (2026-09-15): the pre-existing streak() and
+        # max_streak() closures here were founding-row-blind — they
+        # walked fight_history filtering only on result=='W', so the
+        # inaugural tombstone (result='W', method='Inaugural Crown')
+        # leaked into both active and longest streaks. Replaced by
+        # calls to the canonical history-taking primaries on
+        # GameBridge (_win_streak_from_history / _longest_win_streak_
+        # _from_history), which filter via world_init.is_founding_row.
 
         def web(f):
             return self._convert_real_fighter(f)
+
+        def _hist(f):
+            return getattr(f, 'fight_history', []) or []
 
         # Sort helpers
         by_wins     = sorted(active, key=lambda f: f.wins, reverse=True)
         by_ko       = sorted(active, key=lambda f: getattr(f,'ko_wins',0), reverse=True)
         by_sub      = sorted(active, key=lambda f: getattr(f,'sub_wins',0), reverse=True)
-        by_streak   = sorted(active, key=lambda f: streak(f), reverse=True)
-        by_maxstreak= sorted(active, key=lambda f: max_streak(f), reverse=True)
+        by_streak   = sorted(active, key=lambda f: GameBridge._win_streak_from_history(_hist(f)), reverse=True)
+        by_maxstreak= sorted(active, key=lambda f: GameBridge._longest_win_streak_from_history(_hist(f)), reverse=True)
         by_total    = sorted(active, key=lambda f: f.wins + f.losses, reverse=True)
 
         # Career fight-stat helpers
@@ -14817,8 +14806,10 @@ class GameBridge:
             "most_wins":      [{"fighter": web(f), "value": f.wins}       for f in by_wins[:5]],
             "most_ko":        [{"fighter": web(f), "value": getattr(f,'ko_wins',0)} for f in by_ko[:5]],
             "most_sub":       [{"fighter": web(f), "value": getattr(f,'sub_wins',0)} for f in by_sub[:5]],
-            "active_streak":  [{"fighter": web(f), "value": streak(f)}    for f in by_streak[:5] if streak(f) > 0],
-            "longest_streak": [{"fighter": web(f), "value": max_streak(f)} for f in by_maxstreak[:5] if max_streak(f) > 0],
+            "active_streak":  [{"fighter": web(f), "value": GameBridge._win_streak_from_history(_hist(f))}
+                               for f in by_streak[:5] if GameBridge._win_streak_from_history(_hist(f)) > 0],
+            "longest_streak": [{"fighter": web(f), "value": GameBridge._longest_win_streak_from_history(_hist(f))}
+                               for f in by_maxstreak[:5] if GameBridge._longest_win_streak_from_history(_hist(f)) > 0],
             "most_fights":    [{"fighter": web(f), "value": f.wins+f.losses} for f in by_total[:5]],
             "most_strikes":   [{"fighter": web(f), "value": career_strikes(f)}
                                for f in by_strikes[:5] if career_strikes(f) > 0],
@@ -15476,11 +15467,28 @@ class GameBridge:
                     count += 1
         return count
 
-    def _get_fighter_win_streak(self, fighter) -> int:
-        """Compute current win streak from fight_history.
-        Canonical source — mirrors _get_fighter_lose_streak."""
+    # ─────────────────────────────────────────────────────────────
+    # FOUNDING-ROW2 canonical streak walkers (2026-09-15)
+    #
+    # Primary functions take a HISTORY LIST directly — no shim needed
+    # to route through them. Thin fighter-taking wrappers preserve
+    # existing bound-method call sites (four callers in this module
+    # at :9844, :19621, :20916, :21157). Filter delegated to the
+    # module-scope import `_wi_is_founding_row` (single source of
+    # truth in world_init) — no per-call imports.
+    # ─────────────────────────────────────────────────────────────
+    @staticmethod
+    def _win_streak_from_history(history) -> int:
+        """Canonical active win streak. Reverse-walks the passed
+        history list, filters founding-row tombstones via
+        world_init.is_founding_row, counts consecutive W-results
+        from the tail. Ruling 3: founding row is not a real fight
+        and must not contribute to streak. Ruling 1: detect on
+        method/event_name, not on won_week/event_number."""
         streak = 0
-        for h in reversed(getattr(fighter, 'fight_history', []) or []):
+        for h in reversed(history or []):
+            if isinstance(h, dict) and _wi_is_founding_row(h):
+                continue
             r = h.get('result') if isinstance(h, dict) \
                 else getattr(h, 'result', '')
             if r == 'W':
@@ -15488,6 +15496,45 @@ class GameBridge:
             else:
                 break
         return streak
+
+    @staticmethod
+    def _longest_win_streak_from_history(history) -> int:
+        """Canonical longest win streak. Forward-walks the passed
+        history list, filters founding rows, tracks max consecutive
+        W-run. Same ruling-3 discipline as _win_streak_from_history.
+        Extracted from the pre-FOUNDING-ROW2 filtered walk at
+        _convert_real_fighter (STREAK-INAUGURAL-FILTER1)."""
+        best = cur = 0
+        for h in history or []:
+            if isinstance(h, dict) and _wi_is_founding_row(h):
+                continue
+            r = h.get('result') if isinstance(h, dict) \
+                else getattr(h, 'result', '')
+            if r == 'W':
+                cur += 1
+                if cur > best:
+                    best = cur
+            else:
+                cur = 0
+        return best
+
+    @staticmethod
+    def _get_fighter_win_streak(fighter) -> int:
+        """Thin fighter-taking wrapper over _win_streak_from_history.
+        Kept so the four existing bound-method call sites
+        (self._get_fighter_win_streak(fighter)) continue to work
+        with no churn. New code should call the history-taking
+        primary directly."""
+        return GameBridge._win_streak_from_history(
+            getattr(fighter, 'fight_history', []) or [])
+
+    @staticmethod
+    def _get_fighter_longest_win_streak(fighter) -> int:
+        """Thin fighter-taking wrapper over
+        _longest_win_streak_from_history. Callable via instance
+        (self._get_fighter_longest_win_streak(f)) too."""
+        return GameBridge._longest_win_streak_from_history(
+            getattr(fighter, 'fight_history', []) or [])
 
     def _cooldown_weeks(self, fighter, is_champion: bool = False) -> int:
         """
