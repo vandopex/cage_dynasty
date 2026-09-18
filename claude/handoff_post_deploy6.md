@@ -54,10 +54,10 @@ TITLE-CADENCE1 (corroborated twice 2026-09-16), plus the standing board.
   before it is quoted.
 * Asserted an exclusive writer without grepping the repo ("wins is
   live-only") and was wrong. Demand the grep, not the claim.
-* Self-corrects cleanly when caught, and caught the architect three
+* Self-corrects cleanly when caught, and caught the architect four
   times (longest-streak rule; rationale-line scope; a prompt that
   referenced a paste which never crossed threads — cc stopped rather
-  than improvise). Acknowledge it.
+  than improvise; deploy_procedure v1 omissions). Acknowledge it.
 
 ## The architect was wrong four times, corrected by measurement each time
 * Extended ruling 1's week-0 prohibition to event_number. Ruling 1 says
@@ -76,5 +76,21 @@ The central lesson applies to this seat too. Measure, then say.
   this.
 * Tiered stop-before-commit (CLAUDE.md, 979d0f1). Docs commit freely.
   Apply it from turn one.
+
+## Addendum 2026-09-18 (same architect thread, post-push audit)
+* NEW under Owed: DEPLOY-GATE-REF1 filed (576501c). claude/deploy_procedure.md
+  v1 is now disk-canonical; deploy #7 follows it, not deploy5 §1. The PA
+  ghost-file checkout (`git checkout HEAD -- fight_engine.py`) is a live
+  touch — stops before execution, after the import-path gate passes in-app
+  once.
+* DUMP-PROVENANCE1 Gate 0 result: outputs/ is 784M, 602M of it cited by
+  filings, app does not write there, PA pulls via git. Wholesale tracking
+  is out; hash manifest generated from claude/*.md is the shape. Not scoped.
+* Architect wrong a fifth time: drafted deploy_procedure.md v1 omitting the
+  G0 template sweep, the local ls-remote check, and the API auth check, and
+  labelled a new step as inherited. cc caught all of it against deploy5 §1
+  — fourth catch this arc. Same lesson: a read of one filing is not a diff
+  against it.
+* Ruling from 2026-09-15 still open.
 
 Supersedes claude/handoff_post_rematch_cooldown1.md.
