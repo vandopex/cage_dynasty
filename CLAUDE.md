@@ -495,6 +495,8 @@ unloaded consoles — pick one whose `get_latest_output` shows a recent
 prompt. `claude/deploy3_2026-09-08.md:121` "cc has no PA access …" is
 FALSE as of deploy #4; preserved there.
 
+**[SUPERSEDED 2026-09-18 — procedure of record is `claude/deploy_procedure.md` (v1, 9b69d3f). deploy4 §1 and deploy5 §1 are history, not procedure. Standing gates G0–G2 below remain; G0 is v1 step 4.]**
+
 **Standing gates (2026-09-07 onward, before every deploy):**
 - **G0. Template compile sweep** N/N clean required
   (`python3 -u claude/tools/template_compile_sweep.py` from repo root).
@@ -833,7 +835,7 @@ I will:
 
 Rationale for the three trailer/transport/HEAD rules above: `claude/transport_notes_2026-09-15.md`.
 
-- STOP-BEFORE-COMMIT IS TIERED (Van, 2026-09-15). Engine or balance-touching: every gate, three-turn protocol unchanged. Player-visible template/display: render probe + browser check + stop before commit. Docs and backlog: commit freely, no stop, no hash gate. A change is engine-tier if the function it touches feeds morale, matchmaking, or story logic — even when the visible symptom is display. FOUNDING-ROW2 was classified engine-tier on exactly that test.
+- STOP-BEFORE-COMMIT IS TIERED (Van, 2026-09-15). Engine or balance-touching: every gate, three-turn protocol unchanged. Player-visible template/display: render probe + browser check + stop before commit. Docs and backlog: no hash gate, no three-turn protocol. Show the diff, then STOP. The commit lands on Van's word in the following turn — never in the same turn as the show. This tier relaxes the gates, not the release step; "Do not commit anything" under `## Do not` remains the default this tier sits inside. A change is engine-tier if the function it touches feeds morale, matchmaking, or story logic — even when the visible symptom is display. FOUNDING-ROW2 was classified engine-tier on exactly that test.
 - Carried state is `claude/backlog.md` (ranked, edited in place) plus `git log`. Handoff prose that names HEAD is stale the moment it commits — belongs nowhere. Docket-specific rulings live inline on the docket; general rulings live here.
 
 ## Current top-of-list

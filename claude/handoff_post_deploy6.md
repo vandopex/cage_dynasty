@@ -92,5 +92,7 @@ The central lesson applies to this seat too. Measure, then say.
   — fourth catch this arc. Same lesson: a read of one filing is not a diff
   against it.
 * Ruling from 2026-09-15 still open.
+* 9b69d3f (deploy_procedure.md v1) shipped without architect read-through of the revised file. The prompt bundled "show + commit"; cc executed both as one action rather than pausing between show and commit. Stop-before-commit breach on a docs commit that is now canonical for deploy #7. Van's read before that deploy is the missing gate. Root cause was rule-level: CLAUDE.md "Do not commit" vs "commit freely" left the release step unstated for docs tier; reconciled this commit.
+* New architect thread opened 2026-09-18; read order completed against attached copies hash-matched to b16e4a1. Findings filed in this commit.
 
 Supersedes claude/handoff_post_rematch_cooldown1.md.
