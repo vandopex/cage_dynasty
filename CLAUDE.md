@@ -799,7 +799,7 @@ It wraps `FightConfig.__init__` in an observer that logs
 the original. Full detail in CLAUDE.md's C46 filing block.
 
 I will:
-- Restart Flask myself. You don't run servers.
+- Restart Flask myself. You don't run servers. [STALE-AS-PRACTICE 2026-09-19: Van tests on PA post-deploy, not local. Preserved for provenance.]
 - Test in the browser and report terminal output.
 - Multi-user is live (post-2026-07-03): save slot names are `bridge_van_*.json`.
   Don't hardcode a specific slot as "the main save" — describe the mechanism
@@ -835,7 +835,7 @@ I will:
 
 Rationale for the three trailer/transport/HEAD rules above: `claude/transport_notes_2026-09-15.md`.
 
-- STOP-BEFORE-COMMIT IS TIERED (Van, 2026-09-15). Engine or balance-touching: every gate, three-turn protocol unchanged. Player-visible template/display: render probe + browser check + stop before commit. Docs and backlog: no hash gate, no three-turn protocol. Show the diff, then STOP. The commit lands on Van's word in the following turn — never in the same turn as the show. This tier relaxes the gates, not the release step; "Do not commit anything" under `## Do not` remains the default this tier sits inside. A change is engine-tier if the function it touches feeds morale, matchmaking, or story logic — even when the visible symptom is display. FOUNDING-ROW2 was classified engine-tier on exactly that test.
+- STOP-BEFORE-COMMIT IS TIERED (Van, 2026-09-15). Engine or balance-touching: every gate, three-turn protocol unchanged. Player-visible template/display: render probe + stop before commit; Van's browser check is on PA after deploy (deploy_procedure.md step 12) — Van does not run a local build (ruled 2026-09-19). A miss on PA is a follow-up commit, not an amend. Docs and backlog: no hash gate, no three-turn protocol. Show the diff, then STOP. The commit lands on Van's word in the following turn — never in the same turn as the show. This tier relaxes the gates, not the release step; "Do not commit anything" under `## Do not` remains the default this tier sits inside. A change is engine-tier if the function it touches feeds morale, matchmaking, or story logic — even when the visible symptom is display. FOUNDING-ROW2 was classified engine-tier on exactly that test.
 - Carried state is `claude/backlog.md` (ranked, edited in place) plus `git log`. Handoff prose that names HEAD is stale the moment it commits — belongs nowhere. Docket-specific rulings live inline on the docket; general rulings live here.
 
 ## Current top-of-list
@@ -953,6 +953,8 @@ is not evidence when the change lives above the engine.
 - GENERATOR1 PHASE C [COMMITTED as C39, 2026-09-05] → `claude/claude_md_archive_2026b.md` : L3487-3675 <!-- ARCHIVE2 -->
 - GENERATOR1 PHASE D [COMMITTED as C40, 2026-09-05] → `claude/claude_md_archive_2026b.md` : L3676-3806 <!-- ARCHIVE2 -->
 ### LOCAL PLAYTEST COMMAND (verified C40, 2026-09-05)
+
+[NOTE 2026-09-19: Van does not run local builds; this command is for cc harnesses and cc-side render probes only. The PYTHONPATH is load-bearing for those — see HARNESS-ENV1.]
 
 ```
 PYTHONPATH="/Users/vandope/Desktop/Games/cage_dynasty/narrative:/Users/vandope/Desktop/Games/cage_dynasty/systems:/Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty_web" python3 /Users/vandope/Desktop/Games/cage_dynasty/cage_dynasty_web/app.py
