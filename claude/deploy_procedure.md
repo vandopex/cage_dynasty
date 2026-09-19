@@ -1,8 +1,10 @@
-# Deploy procedure — disk-canonical (v1, 2026-09-18)
+# Deploy procedure — disk-canonical (v1.1, 2026-09-18)
 
 Supersedes the procedure text embedded in claude/deploy5_2026-09-15.md §1.
 Filings record what happened; this file records what to do. Edit here, never
 in a filing. Each deploy filing cites the version of this file it followed.
+
+v1.1 — step 3 ghost tolerance, 2026-09-18.
 
 ## Inputs
 * prevPA — SHA PA is running before this deploy (from pre-state).
@@ -15,9 +17,7 @@ in a filing. Each deploy filing cites the version of this file it followed.
 2. `GET /webapps/` — 200, target domain listed. Confirms auth token and
    target web-app existence (deploy5 step 2).
 3. Pre-state via console: `cd ~/cage_dynasty && git rev-parse HEAD && git status
-   --porcelain`. Expected drift: `?? outputs/sm1/` only. Any ` M` line is a
-   STOP until DEPLOY-GATE-REF1 step (3) has retired the root fight_engine.py
-   ghost; after that, any ` M` line is a STOP, full stop.
+   --porcelain`. Expected drift: `?? outputs/sm1/` and ` M fight_engine.py` (root ghost, April 2026 code; DEPLOY-GATE-REF1 step (3) pending). For the ghost line: paste `git diff --stat fight_engine.py` from the PA console into the deploy filing; proceed. Any other ` M` line is a STOP. This tolerance expires when step (3) retires the ghost; after that, any ` M` line is a STOP, full stop. [v1.1, ruled 2026-09-18, deploy #7 gate]
 4. G0 template compile sweep: `python3 -u claude/tools/template_compile_sweep.py`,
    must return `N/N clean` (deploy5 step 7; CLAUDE.md Standing Gates).
 5. Pull: `git fetch origin && git pull --ff-only origin main && git rev-parse
