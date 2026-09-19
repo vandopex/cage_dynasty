@@ -15107,25 +15107,30 @@ class GameBridge:
             })
 
     def _get_title_records(self) -> Dict[str, Any]:
-        """Ship HOF1: aggregate title-related records across champions."""
+        """Ship HOF1: aggregate title-related records across champions.
+        Reads _belt_history (single canonical store per Van ruling 2026-09-18).
+        Per-fighter sum across reigns preserved from the pre-repoint definition.
+        """
+        if self._belt_history is None:
+            return {"most_reigns": [], "most_defenses": []}
         champ_data: Dict[str, Dict[str, Any]] = {}
-        for _wc_reigns in self._title_history.values():
+        for _wc_reigns in self._belt_history.reigns.values():
             for _r in _wc_reigns:
-                _fid = _r.get("champion_id", "")
+                _fid = _r.champion_id
                 if not _fid:
                     continue
                 if _fid not in champ_data:
                     champ_data[_fid] = {
                         "fighter_id": _fid,
-                        "name":       _r.get("champion_name", ""),
+                        "name":       _r.champion_name,
                         "reigns":     0,
                         "defenses":   0,
                         "divisions":  set(),
                     }
                 _cd = champ_data[_fid]
                 _cd["reigns"]   += 1
-                _cd["defenses"] += _r.get("successful_defenses", 0)
-                _cd["divisions"].add(_r.get("weight_class", ""))
+                _cd["defenses"] += _r.successful_defenses
+                _cd["divisions"].add(_r.weight_class)
         for _cd in champ_data.values():
             _cd["division_count"] = len(_cd["divisions"])
             del _cd["divisions"]
