@@ -15900,35 +15900,30 @@ class GameBridge:
                           f"reconciliation on load needed")
 
     def get_champions_history(self, weight_class: str) -> Dict[str, Any]:
-        """Return belt lineage data for the champions page."""
+        """Return belt lineage data for the champions page.
+        Reads _belt_history (single canonical store per Van ruling 2026-09-18).
+        Synthetic-seed fallback deliberately removed.
+        """
         if not self._game_state:
             return {"reigns": [], "total_changes": 0, "most_defenses": 0}
 
-        history = self._title_history.get(weight_class, [])
+        if self._belt_history is None:
+            return {"reigns": [], "total_changes": 0, "most_defenses": 0}
 
-        # If no recorded history, seed from current division state
-        if not history:
-            division = self._game_state.divisions.get(weight_class)
-            if division and division.champion_id:
-                champ = self._game_state.fighters.get(division.champion_id)
-                if champ:
-                    history = [{
-                        "champion_id":         champ.fighter_id,
-                        "champion_name":       champ.name,
-                        "weight_class":        weight_class,
-                        "won_week":            0,
-                        "won_event":           "Season Opener",
-                        "won_from_name":       None,
-                        "won_method":          "Inaugural Champion",
-                        "successful_defenses": 0,
-                        "is_active":           True,
-                        "lost_week":           None,
-                        "lost_event":          None,
-                        "lost_to_name":        None,
-                        "lost_method":         None,
-                    }]
+        reigns_list = self._belt_history.reigns.get(weight_class, [])
 
-        total_changes  = sum(1 for r in history if r.get("won_method") != "Inaugural Champion")
+        # Convert BeltReign dataclass to the dict shape the template already
+        # consumes. is_active is a @property on BeltReign; explicit key here
+        # matches the pre-repoint dict schema.
+        history = []
+        for r in reigns_list:
+            d = r.to_dict()
+            d["is_active"] = r.is_active
+            history.append(d)
+
+        # Founders have won_from=None; title changes have won_from=<old_id>.
+        # Structural filter, method-string-independent.
+        total_changes  = sum(1 for r in history if r.get("won_from") is not None)
         most_defenses  = max((r.get("successful_defenses", 0) for r in history), default=0)
 
         return {
