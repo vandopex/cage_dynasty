@@ -4388,14 +4388,15 @@ class GameBridge:
     def _compute_hof_score(self, fighter) -> tuple:
         """Compute HOF prestige score for a fighter.
         Returns (score, title_reigns, title_defenses, best_rank).
-        Pure read — no side effects. Shared by year-end and on-retire."""
-        _reigns = [
-            r for _wc_list in self._title_history.values()
-            for r in _wc_list
-            if r.get("champion_id") == fighter.fighter_id
-        ]
+        Pure read — no side effects. Shared by year-end and on-retire.
+        Reigns read from _belt_history (canonical store, Van ruling 2026-09-18); founding reigns count."""
+        if self._belt_history is None:
+            raise RuntimeError(
+                "_compute_hof_score: _belt_history is None — canonical store "
+                "missing (ruling 2026-09-18); refusing to score reigns as zero")
+        _reigns = self._belt_history.get_fighter_reigns(fighter.fighter_id)
         title_count = len(_reigns)
-        def_count = sum(r.get("successful_defenses", 0) for r in _reigns)
+        def_count = sum(r.successful_defenses for r in _reigns)
         best = getattr(fighter, 'best_rank', 99)
         rank_pts = max(0, (15 - best) * 2)
         score = (
