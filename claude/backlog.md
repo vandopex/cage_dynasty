@@ -566,3 +566,90 @@ ship on the board.
 - **REMATCH-COOLDOWN1** — CLOSED 2026-09-16. Shipped `9faeba8` (2026-09-14 commit), ON PA at deploy #5 (2026-09-15 `6d7abc2`) and deploy #6 (2026-09-16 `46c094f`). Van's browser check on fresh save 2026-09-16: Tsarukyan def. Nicholas Bailey at CD62 (live-play, week 2) having beaten him at CD49 (pre-gen) — structurally impossible pre-`9faeba8` (raw `current_week - fought_week` returned large negative on pre-gen rows, cooldown gates blocked). Filings: `claude/rematch_cooldown1_filing_2026-09-14.md`, `claude/deploy5_2026-09-15.md`, `claude/deploy6_2026-09-16.md` §4. Owed browser check delivered; docket closed.
 - **FOUNDING-ROW2** — CLOSED 2026-09-16. Shipped `46c094f` (2026-09-15 commit), ON PA at deploy #6 (2026-09-16). Canonical filtered streak walkers (`_win_streak_from_history` / `_longest_win_streak_from_history`) unify five consumers; retirement-news reader at :11416 switched to canonical (removes ratchet dependency). Van's browser check on fresh save 2026-09-16: Piotr Jedrzejczyk founding Welterweight champion 9-0-0 shows streak = 9 (pre-fix: 10); all five rows on both streak boards satisfy streak ≤ wins; Tsarukyan 10-1-0 correctly shows active=4 post-loss reset. Retirement-news reader fix means the same is true for any founding champion who retires — surfacing depends on retire trigger. Filing: `claude/deploy6_2026-09-16.md` §4. FOUNDING-ROW2 symptom (streak+1) row at L25 is the closed docket's genesis observation.
 - **COOLDOWN-CONSTANTS1 / TITLE-CADENCE1 — corroboration 2026-09-16** (deploy #6 browser check). Piotr Jedrzejczyk's inaugural Welterweight reign shows 9 defenses across 9 pre-gen wins — every fight of his career was a title fight. Week 6's live card was #13 vs unranked main event with six unranked prelims, two weeks after two title fights. Consistent with the champion-metronome pattern COOLDOWN-CONSTANTS1 flagged and the "title cadence bunches then droughts" pattern TITLE-CADENCE1 captured. Not new; corroborates existing dockets. Detail: `claude/deploy6_2026-09-16.md` §5.
+
+## Defects — open (moved from CLAUDE.md, ARCHIVE4 commit 2, 2026-09-23)
+
+OPEN at 3896da9: no `_eng = None` initializer exists; live sites cage_dynasty_web/game_bridge.py `_eng = _simulate_narrated_fight_fn(` ×2 (13981, 17850 at 3896da9). Anchor by symbol, not line.
+### `_eng` UnboundLocalError at `game_bridge.py:13816` — one bad fight cascades [filed 2026-07-13]
+
+`cage_dynasty_web/game_bridge.py:13633-13816` — the Path A fight loop:
+
+```python
+if FIGHT_ENGINE_AVAILABLE:
+    try:
+        # ... setup ...
+        _eng = _simulate_narrated_fight_fn(fa1, fa2, ...)     # :13633
+        # ... commentary storage, winner/loser derivation ...
+        winner = f1 if _eng.winner_id in (...) else f2         # :13725
+        # ...
+    except Exception:
+        # Fallback: set winner/loser/method/rnd via score-based path
+        winner = f1 if f1_s >= f2_s else f2                    # :13744
+        # ... but _eng is NEVER bound here
+# Later, OUTSIDE the try/except:
+_specialty = canonical_specialty_method(
+    getattr(_eng, 'method', '') or method,                     # :13816
+    _eng_sub_type,
+)                                                              # UnboundLocalError
+```
+
+When `_simulate_narrated_fight_fn` at `:13633` raises, the `except`
+at `:13741` catches it and builds a score-based fallback (sets
+`winner/loser/method/rnd`). **But `_eng` is never bound in the except
+path.** The downstream line at `:13816` reads `getattr(_eng, 'method', ...)`,
+which raises `UnboundLocalError` — **crashing not just the current
+fight but the whole card via the outer exception boundary in
+`_advance_week_impl:3589`.**
+
+**Surfaced by ORACLE-BRIDGE1 perturbation #1** during the initial
+damage-multiplier nudge test: any damage_multiplier ≠ 0.48 tripped
+Stage 0d's `_assert_sanctioned_config` inside `simulate_narrated_fight`,
+which raised, which unbound `_eng`, which crashed 74 of 78 fights
+in the fixture run. **Dormant in production today** because
+`simulate_narrated_fight` doesn't normally raise (Stage 0d assertion
+only fires on tampered configs, which never occur in prod). **Fragile
+if it ever does raise** — a single bad fight would cascade into
+killing the rest of the card.
+
+**Fix candidate (not scheduled):** add `_eng = None` at the top of the
+`try:` block (or in the `except:` handler) so `getattr(_eng, 'method', '')`
+returns `''` cleanly. One-line fix. Waiting on scope alignment because
+touching this file requires re-verifying against both Stage 0c and
+ORACLE-BRIDGE1.
+
+OPEN at 3896da9: fallback `f"player_fighter_{id(fighter_data)}"` still present, game_bridge.py:2612. Whether any caller reaches it post-PLAYER-CREATE1 is unmeasured.
+### `_create_player_fighter` fighter_id falls back to a memory address [filed 2026-07-13]
+
+`cage_dynasty_web/game_bridge.py:2418`:
+
+```python
+fighter_id = fighter_data.get('id', f"player_fighter_{id(fighter_data)}")
+```
+
+When `fighter_data` doesn't include an `id` key, the fallback embeds
+Python's `id(fighter_data)` — a **runtime memory address** — into the
+fighter_id string. That value:
+
+- Is **nondeterministic** across runs (address randomization).
+- Is **non-portable**: a save file containing `player_fighter_{addr}`
+  cannot round-trip meaningfully across Python processes.
+- **Landed in ORACLE-BRIDGE1's first fixture run** — the checker failed
+  on the PLAYER tier because run 1's `player_fighter_4528888384`
+  differed from run 2's `player_fighter_4310611776`. Fixed in the harness
+  by passing an explicit `id` field.
+
+**Why it hasn't bitten hard yet:** the two real callers (new-game route
++ setup wizards) always populate `id` via the prospect selection flow,
+so the fallback is dormant in normal play. But it's a live path — any
+future caller that skips `id` writes a nondeterministic ID into the
+save.
+
+**Fix candidate (not scheduled):** replace with a stable default —
+`fighter_id = fighter_data.get('id') or f"player_fighter_{uuid.uuid4().hex[:8]}"`
+— so the fallback still uniqueizes without embedding process state.
+Or hard-fail the missing-id case since it's a caller bug.
+
+**Ship discipline:** the ORACLE-BRIDGE1 harness works around this by
+requiring explicit `id`. That is a HARNESS workaround, not a fix. File
+as production defect. Do NOT fix inside ORACLE-BRIDGE1 — single-purpose.
+
