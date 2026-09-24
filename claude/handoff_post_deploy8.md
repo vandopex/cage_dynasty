@@ -43,3 +43,14 @@ Supersedes handoff_post_deploy7.md. Anchors carry no HEAD (CLAUDE.md L842); use 
 
 ## 7. Opening sequence for the next thread (cc, read-only, then STOP)
 Read CLAUDE.md and claude/backlog.md into context (do not print). Then Bash: `git log --oneline -8; git status --short | grep -v '^??'; git ls-remote origin main | cut -c1-7; git log --oneline 0c4bfb6..HEAD | grep -v DOCS`. Expect the last command to print nothing. STOP.
+
+## 8. Addendum 2026-09-23 — ARCHIVE4 commit 1 landed (supersedes §4 item 4 "ARCHIVE3 second pass")
+- c5f0d35 DOCS ARCHIVE4 commit 1: four verbatim extractions, CLAUDE.md 1195→906 lines, 76078→60083 bytes (pre cd6f7e80…, post 62d6241…). New library files: claude/golden_master_oracle.md, claude/local_playtest_command.md, claude/claude_md_archive_2026c.md, claude/certified_cell_baselines.md. Gates: per-block md5 4/4 vs HEAD blob, hunk headers -92,108 / -959,50 / -1010,139 / -1191,0, 8 added lines, all printed. Census: outputs/archive4/census_2026-09-22.txt (untracked).
+- LINE REFERENCES: every CLAUDE.md line number cited in this handoff, deploy7, deploy8, and slice1 predates c5f0d35 and is off by up to 297 lines. Re-find by heading or `<!-- ARCHIVE2 -->`/`<!-- ARCHIVE4 -->` marker, never by L-number. §1 "CLAUDE.md L842" and §3 "L841" are the first two to re-find.
+- Remaining ARCHIVE4 commits, in order, each stop-before-commit:
+  2. Known defects (5 items, filed 2026-07-13..24, ~9.9k) + "SAME SEED" 🚨 section (~2.3k): census each against `git log` for a fixing SHA. Fixed → claude_md_archive_2026c.md; open → claude/backlog.md. Van ruled backlog.md, not a defects file.
+  3. Known hazards (### under Architecture, ~9.3k) live/dead census; ## Archive index (~6.9k — why an index is 7k); Top-of-backlog vs Current top-of-list dedup; Current deployment state (PA SHA goes stale by design).
+  4. Reorder: constitution (Project overview..Commits and handoffs) to the top, 🚨 blocks below it. Last, once, because it moves every line number again. NEW STANDING RULE relocates out from under Key constants here.
+  Target 40 KB. Rulings: 40 KB, backlog.md, reorder last — Van 2026-09-22.
+- cc pattern, add to §5: cc appends a Co-Authored-By trailer to every -m via heredoc. Harmless; the approved message is never quite the landed message. Say "no trailer" if it matters.
+- Transport: this architect thread clipped the top of pastes and folded the middle on three consecutive gate turns. Reset both seats before commit 2.
