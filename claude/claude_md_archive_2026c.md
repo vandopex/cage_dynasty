@@ -135,3 +135,23 @@ flow fired zero times across available saves; a shape that would inject
 default/offset stats *if* a record ever reached it, not an observed bug.
 Confirmed on fresh bytes at HEAD `8e721c9`, this session.
 
+
+ARCHIVE4 commit 3 — Top-of-backlog status paragraphs (deploy #6/#7 era), superseded by deploy #8 (CLAUDE.md L230–231 at f0684fa4)
+<!-- ARCHIVE3 --> Next in order (Van's ruling 2026-09-10, resolution recorded 2026-09-14, deploy #6 2026-09-16): (d) resolved into RECENTLY-FOUGHT1 (deferred; player-only caller, negligible) and REMATCH-COOLDOWN1 (CLOSED 2026-09-16 by browser check; shipped 9faeba8, on PA at 46c094f). FOUNDING-ROW2 also CLOSED 2026-09-16 (shipped 46c094f, canonical streak walkers, browser-verified). NEW dockets from deploy #6 browser session: BELT-LINEAGE1, RECAP-STALE1, HISTORY-CAP1, NAME-COLLISION1, DIVISION-GENDER1, DRAW-SEMANTICS1 (upgraded), HARNESS-ENV1, DUMP-PROVENANCE1. Continuing: PROSPECT-BONUS1 instrument rule → PROSPECT-BONUS1 retune. WEEK-AXIS1 (a)+(b)+(c) ON PA at 46c094f (deploy #6, 2026-09-16, API-driven, 10/10 gates PASS, filing claude/deploy6_2026-09-16.md). Filings claude/week_axis1_b_filing_2026-09-10.md + claude/week_axis1_c_filing_2026-09-11.md + claude/deploy4_2026-09-11.md + claude/rematch_cooldown1_filing_2026-09-14.md + claude/deploy5_2026-09-15.md + claude/deploy6_2026-09-16.md. Behind: see the board.
+<!-- ARCHIVE3 --> DEPLOY #7 (2026-09-20 PDT, filing claude/deploy7_2026-09-20.md): shipped 25adadd (CHAMPIONS-PAGE1) + 6540d3c (RECORD-BOOK-REPOINT1) to PA at 4e72bab; steps 0–11 PASS; runtime set N=1 (cage_dynasty_web/game_bridge.py); IMPORT-PATH-PROOF confirms cage_dynasty_web/ resolution; DEPLOY-GATE-REF1 (a) invoked; Van's PA browser check PASS 2026-09-20 (deploy7 filing §k); RECORD-BOOK1 + BELT-LINEAGE1 display half closed.
+
+ARCHIVE4 commit 3 — Current top-of-list section, redundant with Top-of-backlog pointer (CLAUDE.md L545–551 at f0684fa4)
+## Current top-of-list
+
+See `claude/backlog.md` for the live backlog board (moved out 2026-09-09 by ARCHIVE3; rewritten 2026-07-03 prior). <!-- ARCHIVE3 -->
+The April-May items previously listed here (FOTN wire, fighter profile polish,
+card-builder slot assignment) all shipped and were removed to prevent stale
+references. Historical ship recaps are in `CLAUDE_archive.md`.
+
+
+ARCHIVE4 commit 3 — legacy save migration record, completed 2026-07-03 (CLAUDE.md L157–161 at f0684fa4)
+**Legacy save migration already ran** on both dev and PA — `bridge_slot*.json` and
+`bridge_autosave.json` were backed up (`.bak`) then renamed to `bridge_van_*.json`.
+The old `.legacy_claimed` marker file (from the retired first-visitor auto-claim) is
+inert — no code reads it anymore.
+
