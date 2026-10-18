@@ -2271,8 +2271,8 @@ class GameBridge:
         # Belt history — populated by Ship #28's WorldInitializer handoff at
         # new_game time, restored from save in web_load. Holds BeltReign
         # records for sim-history champion lineages (won_from, defenses,
-        # lost_to, retire-vacate events). Runtime title-fight writes go to
-        # self._title_history, NOT here — two separate stores by design.
+        # lost_to, retire-vacate events). Runtime title-fight and vacate writes mirror into this
+        # store (BELT-STORE-UNIFY1, VACATED-REIGN1); _title_history is the legacy parallel store, retirement pending (TITLE-KEYS1).
         try:
             from world_init import BeltHistory as _BH_cls
             self._belt_history = _BH_cls()
@@ -4053,6 +4053,8 @@ class GameBridge:
                             champ.is_champion = False
                         div.champion_id   = None
                         div.champion_name = None
+                        if self._belt_history is not None:
+                            self._belt_history.vacate_belt(weight_class=wc, week=current_week, event_name=f"Stripped after {weeks_injured} weeks injured", reason="Vacated (injury)")
                         self._champ_weeks_since_defense[wc] = 0
                         # Close the reign in title history
                         history = self._title_history.get(wc, [])
@@ -6937,6 +6939,8 @@ class GameBridge:
                 ftr.is_champion = False
                 div.champion_id = None
                 div.champion_name = None
+                if self._belt_history is not None:
+                    self._belt_history.vacate_belt(weight_class=wc, week=self._game_state.week_number, event_name="Player decision during injury", reason="Vacated (player choice)")
                 history = self._title_history.get(wc, [])
                 if history and history[-1].get("is_active"):
                     history[-1]["is_active"]   = False
@@ -21435,6 +21439,8 @@ class GameBridge:
             if old_div:
                 old_div.champion_id = None
                 old_div.champion_name = None
+                if self._belt_history is not None:
+                    self._belt_history.vacate_belt(weight_class=old_class, week=current_week, event_name=f"Moved to {new_class}", reason="Vacated (weight move)")
             self._news_items.insert(0, {
                 "headline": (f"🏆 {fighter.name} vacates the "
                              f"{old_class} title to move "
