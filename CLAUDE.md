@@ -346,6 +346,7 @@ accident.
   sounding theory got repeated as if established. The truly-fresh
   post-fix save showed a 97.7% favorite win rate at 21+ OVR gap, not 72%.
 - game_bridge.py `elif` at the "backfill from world gen data" comment (:7392 at 3896da9) writes 4 metadata keys and zero of the 18 engine stats; latent, 0× in census; a record reaching it carries no engine stats. Body: claude/claude_md_archive_2026c.md. <!-- ARCHIVE4 -->
+- Saves created before 1791962 may carry an open BeltReign for any champion vacated in live play (injury, player decision, weight move); forward-only, not backfilled. Profile reign cards and HOF read it as ongoing; get_longest_reign excludes it. claude/vacated_reign1_gate0_2026-10-17.md §5. <!-- VACATED-REIGN1 -->
 
 ## Recurring architectural pattern: "data exists but doesn't reach the surface"
 
