@@ -2196,10 +2196,6 @@ class GameBridge:
         # Fight commentary cache — generated lazily on first view
         self._fight_commentary: Dict[str, List[str]] = {}
 
-        # Title history — {weight_class: [reign_dict, ...]}
-        # Records every championship reign chronologically
-        self._title_history: Dict[str, List[Dict[str, Any]]] = {}
-
         # Ship HOF1: Hall of Fame inductees — career-end records
         # for retired fighters who crossed the prestige threshold.
         self._hof_inductees: List[Dict[str, Any]] = []
@@ -2272,7 +2268,7 @@ class GameBridge:
         # new_game time, restored from save in web_load. Holds BeltReign
         # records for sim-history champion lineages (won_from, defenses,
         # lost_to, retire-vacate events). Runtime title-fight and vacate writes mirror into this
-        # store (BELT-STORE-UNIFY1, VACATED-REIGN1); _title_history is the legacy parallel store, retirement pending (TITLE-KEYS1).
+        # store (BELT-STORE-UNIFY1, VACATED-REIGN1).
         try:
             from world_init import BeltHistory as _BH_cls
             self._belt_history = _BH_cls()
@@ -2974,7 +2970,6 @@ class GameBridge:
             "fight_interviews":         self._fight_interviews,
             "watchlist":                self._watchlist,
             "fight_commentary":         {k: v for k, v in self._fight_commentary.items()},
-            "title_history":            self._title_history,
             "yearly_awards":            self._yearly_awards if hasattr(self, '_yearly_awards') else [],
             "hof_inductees":            self._hof_inductees,
             "camp_stat_totals":         self._camp_stat_totals,
@@ -3200,7 +3195,6 @@ class GameBridge:
         self._fight_interviews        = data.get("fight_interviews", {})
         self._watchlist               = data.get("watchlist", {})
         self._fight_commentary        = data.get("fight_commentary", {})
-        self._title_history           = data.get("title_history", {})
         self._camp_stat_totals        = data.get("camp_stat_totals", {})
         self._training_history        = data.get("training_history", {})
         self._contracts               = data.get("contracts", {})
@@ -4056,14 +4050,6 @@ class GameBridge:
                         if self._belt_history is not None:
                             self._belt_history.vacate_belt(weight_class=wc, week=current_week, event_name=self._dfc_label(current_week), reason="Vacated (injury)")
                         self._champ_weeks_since_defense[wc] = 0
-                        # Close the reign in title history
-                        history = self._title_history.get(wc, [])
-                        if history and history[-1].get("is_active"):
-                            history[-1]["is_active"]   = False
-                            history[-1]["lost_week"]    = current_week
-                            history[-1]["lost_event"]   = "Vacated (injury)"
-                            history[-1]["lost_to_name"] = "Vacated"
-                            history[-1]["lost_method"]  = "Injury"
 
                         # ── Slice 2: book vacant-title fight ──────────
                         # Top-2 non-player contenders fight for the
@@ -6941,13 +6927,6 @@ class GameBridge:
                 div.champion_name = None
                 if self._belt_history is not None:
                     self._belt_history.vacate_belt(weight_class=wc, week=self._game_state.week_number, event_name=self._dfc_label(self._game_state.week_number), reason="Vacated (player choice)")
-                history = self._title_history.get(wc, [])
-                if history and history[-1].get("is_active"):
-                    history[-1]["is_active"]   = False
-                    history[-1]["lost_week"]   = self._game_state.week_number
-                    history[-1]["lost_event"]  = "Vacated (player choice)"
-                    history[-1]["lost_to_name"] = "Vacated"
-                    history[-1]["lost_method"] = "Injury (vacated)"
                 self._news_items.insert(0, {
                     "headline": (f"👑 TITLE VACATED: {ftr.name} relinquishes "
                                  f"the {wc} belt during recovery."),
@@ -9586,10 +9565,6 @@ class GameBridge:
                 # template's unified belt-defense compare. Founding reigns
                 # have won_event "Cage Dynasty Founding — {WC} Championship"
                 # which doesn't parse a trailing int; map to 0 by string.
-                # VACATED-REIGN1: lost_event on vacated reigns is not
-                # reached by _belt_history today (vacate paths write only
-                # _title_history); when it eventually is, this parse
-                # handles it uniformly.
                 _won_en = self._event_number_from_name(r.won_event)
                 if _won_en is None and 'Founding' in (r.won_event or ''):
                     _won_en = 0
@@ -15777,8 +15752,6 @@ class GameBridge:
         week: int,
     ) -> None:
         """
-        Record a title fight result into _title_history and update
-        division.champion_id and fighter.is_champion flags.
         Called after every title fight regardless of player involvement.
         """
         if not self._game_state:
@@ -15807,46 +15780,7 @@ class GameBridge:
             print(f"  🏆 [TITLE DEFENSE] {winner.name} retains {weight_class} belt "
                   f"vs {loser.name} via {method} R{rnd} at {event_name}")
 
-        # Record into _title_history
-        if weight_class not in self._title_history:
-            self._title_history[weight_class] = []
-
-        history = self._title_history[weight_class]
-
         if is_new_champ:
-            # Close out previous reign
-            if history and history[-1].get("is_active"):
-                history[-1]["is_active"]      = False
-                history[-1]["lost_week"]       = week
-                history[-1]["lost_event"]      = event_name
-                history[-1]["lost_to_name"]    = winner.name
-                history[-1]["lost_method"]     = method
-
-            # Open new reign
-            old_name = loser.name if is_new_champ else None
-            history.append({
-                "champion_id":         winner.fighter_id,
-                "champion_name":       winner.name,
-                "weight_class":        weight_class,
-                "won_week":            week,
-                "won_event":           event_name,
-                "won_from_name":       old_name,
-                "won_method":          method,
-                "successful_defenses": 0,
-                "is_active":           True,
-                "lost_week":           None,
-                "lost_event":          None,
-                "lost_to_name":        None,
-                "lost_method":         None,
-            })
-
-            # BELT-STORE-UNIFY1: mirror the transfer into _belt_history
-            # (BeltHistory) so the profile page's belt-reign view stays in
-            # sync with _title_history + division.champion_id. Without this,
-            # a live-play title change updates division.champion_id but
-            # leaves _belt_history's prior reign marked active — the fork
-            # the 2026-07-11 belt diagnostic saw on Featherweight (1/9
-            # divisions divergent on the local save).
             if self._belt_history is not None:
                 if old_champ_id:
                     # Resolve old-champion name from the belt-holder pointer
@@ -15884,13 +15818,6 @@ class GameBridge:
                         won_method=f"Won Vacant Title ({method})",
                     )
         else:
-            # Successful defense — increment counter on active reign
-            if history and history[-1].get("is_active"):
-                history[-1]["successful_defenses"] = \
-                    history[-1].get("successful_defenses", 0) + 1
-
-            # BELT-STORE-UNIFY1: mirror the defense into _belt_history so
-            # the profile's reign card increments alongside _title_history.
             # Identity guard: only tick the counter if _belt_history's active
             # reign belongs to this winner. On a divergent save (the exact
             # state this ship exists to prevent going forward), the active
