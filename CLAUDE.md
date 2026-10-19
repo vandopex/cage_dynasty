@@ -594,6 +594,8 @@ is not evidence when the change lives above the engine.
 - `claude/claude_md_archive_2026c.md` — OWED ITEMS + 5c1477d resolution (moved from CLAUDE.md L989–1008 at cd6f7e80, ARCHIVE4, 2026-09-22; ARCHIVE4 c2: three closed/latent defects; c3: Top-of-backlog status paragraphs, Current top-of-list, legacy-migration record) <!-- ARCHIVE4 -->
 - `claude/known_hazards_detail.md` — three hazard detail blocks (bare-import census, root fight_engine.py ghost, PA wsgi.py verification) moved from ### Known hazards (ARCHIVE4 c3, 2026-10-17) <!-- ARCHIVE4 -->
 - `claude/handoff_post_deploy8.md` — post deploy #8 handoff + §8/§9 addenda; supersedes handoff_post_deploy7; ARCHIVE4 sequencing <!-- ARCHIVE4 -->
+- `claude/vacated_reign1_gate0_2026-10-17.md` — VACATED-REIGN1 Gate 0 + measured (probe v3, 3/3 ghosts closed; (b) card-label event_name) <!-- VACATED-REIGN1 -->
+- `claude/slice3_title_history_gate0_2026-10-19.md` — Slice 3 _title_history census (14 hits, 0 readers) + retirement gates (92bd7fa) <!-- VACATED-REIGN1 -->
 - `claude/certified_cell_baselines.md` — certified cell baselines symmetric skill (moved from CLAUDE.md L1010–1148 at cd6f7e80, ARCHIVE4, 2026-09-22) <!-- ARCHIVE4 -->
 Detailed ship recaps from before 2026-05-23 live in `CLAUDE_archive.md`
 at the project root. That file is for historical reference — Claude
