@@ -598,6 +598,8 @@ is not evidence when the change lives above the engine.
 - `claude/handoff_post_deploy9.md` — post deploy #9 handoff; supersedes handoff_post_deploy8 + §8–§10; BELT-HISTORY arc complete on PA at 873b2a8; sequencing to RETIRE-VACATE1, VACANT-FILL1, deploy_procedure v1.2, ARCHIVE4 c4, features <!-- VACATED-REIGN1 -->
 - `claude/vacated_reign1_gate0_2026-10-17.md` — VACATED-REIGN1 Gate 0 + measured (probe v3, 3/3 ghosts closed; (b) card-label event_name) <!-- VACATED-REIGN1 -->
 - `claude/slice3_title_history_gate0_2026-10-19.md` — Slice 3 _title_history census (14 hits, 0 readers) + retirement gates (92bd7fa) <!-- VACATED-REIGN1 -->
+- `claude/retire_vacate1_gate0_2026-10-19.md` — RETIRE-VACATE1 Gate 0: two live retire sites write no belt state; vacate_belt callers + bucket set; readers + predicted ghost shape (prediction) <!-- VACATED-REIGN1 -->
+- `claude/retire_vacate1_gate1_2026-10-19.md` — RETIRE-VACATE1 Gate 1 + §6 (g2 sitting-champion measured, one case seed 20260921 Strawweight) + Gate 2 corrections (pre-gen read, A/B diff, three-site writes, _dfc_label); §6e carries KNOWN FALSE line <!-- VACATED-REIGN1 -->
 - `claude/certified_cell_baselines.md` — certified cell baselines symmetric skill (moved from CLAUDE.md L1010–1148 at cd6f7e80, ARCHIVE4, 2026-09-22) <!-- ARCHIVE4 -->
 Detailed ship recaps from before 2026-05-23 live in `CLAUDE_archive.md`
 at the project root. That file is for historical reference — Claude
