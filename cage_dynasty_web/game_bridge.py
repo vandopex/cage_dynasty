@@ -6957,6 +6957,52 @@ class GameBridge:
         ]
         return {"success": True, "choice": choice, "fighter_name": ftr.name}
 
+    def _vacate_on_retire(self, fighter, week: int) -> Optional[str]:
+        """RETIRE-VACATE1 (Gate 3): if a retiring fighter holds a belt,
+        vacate it. Mirrors the player-choice vacate at :6922-6937
+        (site 2) in site 2's order: is_champion → champion_id →
+        champion_name → _belt_history.vacate_belt → title news →
+        _book_title_fight. Bucket "Vacated (retirement)". Returns the
+        vacated weight_class, or None if the fighter holds no belt
+        (ex-champion case — leave _belt_history untouched)."""
+        if not self._game_state:
+            return None
+        fid = fighter.fighter_id
+        wc = None
+        for _wc, _div in self._game_state.divisions.items():
+            if _div and _div.champion_id == fid:
+                wc = _wc
+                break
+        if wc is None:
+            return None
+        div = self._game_state.divisions.get(wc)
+        # Clear is_champion on the registry FighterRecord (site 2 writes
+        # `ftr.is_champion = False` where ftr is already the registry
+        # record; routes.py :2746 passes a WebFighter copy whose mutation
+        # does not persist, so resolve back to the registry here).
+        reg_fighter = self._game_state.fighters.get(fid)
+        if reg_fighter is not None:
+            reg_fighter.is_champion = False
+        else:
+            fighter.is_champion = False
+        div.champion_id = None
+        div.champion_name = None
+        if self._belt_history is not None:
+            self._belt_history.vacate_belt(
+                weight_class=wc,
+                week=week,
+                event_name=self._dfc_label(week),
+                reason="Vacated (retirement)",
+            )
+        self._news_items.insert(0, {
+            "headline": (f"👑 TITLE VACATED: {fighter.name} retires as "
+                         f"{wc} champion."),
+            "category": "title",
+            "week":     week,
+        })
+        self._book_title_fight(wc, exclude_ids={fid})
+        return wc
+
     def get_scheduled_fights(self) -> List[Dict[str, Any]]:
         """Get all scheduled fights for player's fighters"""
         if self._mock_mode:
@@ -11369,6 +11415,7 @@ class GameBridge:
         # Process retirements
         for fighter, ret_age in retiring:
             fighter.is_active = False
+            self._vacate_on_retire(fighter, week)
 
             # ── Remove from camp roster ──────────────────
             # Without this, retired fighters accumulate in

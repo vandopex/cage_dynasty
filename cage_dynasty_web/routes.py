@@ -2745,6 +2745,7 @@ def register_routes(app):
         if decision == 'retire':
             if fighter:
                 fighter.is_active = False
+                bridge._vacate_on_retire(fighter, bridge._game_state.week_number)
                 camp = bridge._game_state.camps.get(
                     getattr(fighter, 'camp_id', None))
                 if camp and hasattr(camp, 'fighter_ids'):
