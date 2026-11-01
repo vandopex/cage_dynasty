@@ -233,6 +233,10 @@ Not building any of them in this Gate 0.
 - **Risks**: `check_retirement` is RNG; set age high enough (≥45 →
   base_prob=0.8) + morale low to guarantee ≥1.0 effective probability.
   Still a stochastic gate; may need a seeded random.
+  **[KNOWN FALSE 2026-10-29, gate3]** "≥1.0 effective probability"
+  omitted the −0.15 champion modifier; actual 0.895 at age 51/morale
+  1; 10.5% miss (g3). The seeded-random hedge in the final sentence
+  was correct direction but under-specified.
 
 ### Option B — Flask test client POST `/retirement-decision`
 - **Mechanism**: Build bridge; crown a PLAYER-owned fighter as champion

@@ -600,6 +600,7 @@ is not evidence when the change lives above the engine.
 - `claude/slice3_title_history_gate0_2026-10-19.md` — Slice 3 _title_history census (14 hits, 0 readers) + retirement gates (92bd7fa) <!-- VACATED-REIGN1 -->
 - `claude/retire_vacate1_gate0_2026-10-19.md` — RETIRE-VACATE1 Gate 0: two live retire sites write no belt state; vacate_belt callers + bucket set; readers + predicted ghost shape (prediction) <!-- VACATED-REIGN1 -->
 - `claude/retire_vacate1_gate1_2026-10-19.md` — RETIRE-VACATE1 Gate 1 + §6 (g2 sitting-champion measured, one case seed 20260921 Strawweight) + Gate 2 corrections (pre-gen read, A/B diff, three-site writes, _dfc_label); §6e carries KNOWN FALSE line <!-- VACATED-REIGN1 -->
+- `claude/retire_vacate1_gate3_2026-10-23.md` — RETIRE-VACATE1 Gate 3 fix (e459701, _vacate_on_retire helper + both call sites); gates 3a–3f measured; §6 commit message; §7 AGING-AGE1 census (0/290 FighterRecords carry age — fix is forward-insurance) <!-- VACATED-REIGN1 -->
 - `claude/certified_cell_baselines.md` — certified cell baselines symmetric skill (moved from CLAUDE.md L1010–1148 at cd6f7e80, ARCHIVE4, 2026-09-22) <!-- ARCHIVE4 -->
 Detailed ship recaps from before 2026-05-23 live in `CLAUDE_archive.md`
 at the project root. That file is for historical reference — Claude
