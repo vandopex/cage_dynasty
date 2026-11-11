@@ -10,6 +10,34 @@ Pointer back: CLAUDE.md "## Top-of-backlog" (<!-- ARCHIVE3 --> lines).
 
 ---
 
+**New dockets from PA playthrough + GREEN-batch 2026-11-11** (Van playthrough on 873b2a8; architect-seat triage; one line each):
+
+PA playthrough bugs:
+- **FIGHT-STORY-TRIPLE1** [filed 2026-11-11, EXAMPLE] — one fight, three accounts: commentary shows a standing head-kick finish, result reads "TKO (Groun" truncated on every surface, headline says the winner "grinds out the decision".
+- **OVERHEAD-DISPLAY1** [filed 2026-11-11, MEASURED five consecutive recaps] — Weekly Overhead shows -$125; balance falls $1,525/week; runway is computed from the $125.
+- **COACH-SLOT1** [filed 2026-11-11, EXAMPLE, two fights] — Coach's Corner quotes the wrong stat for the named skill, reads "their wrestler will exploit", recommends Top Control against a takedown-85 wrestler.
+- **INJURY-DOUBLE1** [filed 2026-11-11, EXAMPLE, two fighters] — two injury headlines from one fight with different durations, the shorter one applied; body part does not match technique; raw id "neck_crank" shown; a 38-week CTE entry.
+- **EVENT-WEEK1** [filed 2026-11-11, EXAMPLE, two events] — ladder lists one event under two different weeks; one fighter booked at week 11 and week 15.
+- **CONDITION-LABEL1** [filed 2026-11-11, EXAMPLE] — condition 62% and falling 5/week while labeled Rested/Ready.
+- **CAMP-INTENSITY1** [filed 2026-11-11, EXAMPLE] — Coach's Corner says Moderate, Training Report says LIGHT; "this camp" total keeps counting after the fight.
+- **RECAP-STALE-CARD1** [filed 2026-11-11, UNEXPLAINED] — off-week recaps re-show the previous card as current; one event number never appeared.
+- **PURSE-PAYOUT1** [filed 2026-11-11, EXAMPLE] — offer $13,291 + $6,645 win bonus; paid $26,582. Van to confirm whether he negotiated.
+- **OFFER-RESUBMIT1** [filed 2026-11-11, EXAMPLE] — back-button resubmit of an accepted offer returns "could not find offer".
+- **RANK-MOVE1** [filed 2026-11-11, TREND ~50 fights] — winners move +3 regardless of opponent; one winner dropped.
+- **TITLE-SHOT1** [filed 2026-11-11, EXAMPLE, two bookings] — title shots to #6 and #9 while #1 is booked against an unranked fighter.
+- **RECORD-LIVE-ONLY1** [filed 2026-11-11, EXAMPLE] — strikes, takedowns and sub-attempt leaderboards hold only live-play totals under an all-time label.
+- **Cosmetic batch** [filed 2026-11-11] — every prospect "High potential"; duplicate first/last names on two champions; tournament headlines flood the feed.
+
+Measured today:
+- **EXPORT-500** [filed 2026-11-11, SHIPPED local 21dedee] — get_universe_export read self._game_state.champions which GameState does not have; every export of a loaded game returned 500 on PA (error log 2026-10-19 and 2026-11-11). Fix uses bridge.get_champion(wc). Gate of record: two fresh games, weeks 0 and 10, 4/4 status 200, json loads, 9/9 vs raw divisions[wc].champion_id; negative control fires at 8/9 on corrupted name. Not on PA.
+- **EXPORT-RECORDS1** [filed 2026-11-11, MEASURED, cause named] — record_highlights renders empty in every export (wk 0 and wk 10 in both games). get_record_book() returns a dict whose values are lists; get_universe_export calls `.get('most_wins', {}).get('name')` which raises AttributeError on the list, swallowed by the try/except at game_bridge.py:15340. Two keys the exporter requests (most_ko_wins, most_sub_wins) do not exist in get_record_book's output — key mismatch on top of shape mismatch. Not fixed.
+- **SLOW-WEEK1** [filed 2026-11-11, MEASURED local] — event weeks 37 s and 61 s wall in the timing table (weeks 10 and 11, 12 fights each); 177 s for a 9-fight week under cProfile; off weeks under 1 s. Dominant caller in all four profiled slow weeks: _precompute_odds_for_fights (game_bridge.py:17881) → _compute_mc_odds_for_fight (:17754) → simulate_narrated_fight (fight_integration.py:2634); 99.5%/95.7%/96.6%/99.4% of cumulative time across the measured weeks. Simulations per bout per event week: 167.67 / 167.67 / 138.5 / 206.56 (mean ≈170).
+- **VENUE-US1** [filed 2026-11-11, MEASURED] — single uniform picker GameBridge._event_city(week) at game_bridge.py:2855 draws from _GLOBAL_CITIES (109 cities, 12 US = 11.009%). Three fresh games: _dfc_event_offset=60 all three; weeks 1-12 produce byte-identical city sequences (Porto/Tashkent/Amman/Seattle/Chicago/Boston/Houston/Tel Aviv/Budapest/Seattle/Miami/Vienna); 7/7 event-week cities match the Q2 sweep cities. Van's target: at least 50% US.
+- **AGING-AGE1 addendum** [filed 2026-11-11, LEAD, not measured] — an age exists in _fighter_data, written at fighter creation; the aging block reads the record.
+- **CLAUDE-LEN1** [filed 2026-11-11, MEASURED] — CLAUDE.md is 610 lines; any claim that it is held to 200 is false.
+- **WORKTREE-STALE1** [filed 2026-11-11, MEASURED] — stale registered worktrees remain from earlier arcs.
+- **Deploy #9 step 12 Record Book check** [filed 2026-11-11, PASS, Van PA 873b2a8] — three champions checked against Champions lineage pages, not profile reign cards.
+
 **New dockets from interim deploy 2026-09-07** (one line each; full context
 in `claude/playtest_notes_2026-09-07.md` + `claude/interim_deploy_2026-09-07.md`):
 - **PLAYER-CREATE1** (supersedes POWER1) — SHIPPED LOCALLY 4f50b78→1839545→64a879f, ON PA at 7555c35 (deploy #3, 2026-09-08, accepted on proof — filing `claude/deploy3_2026-09-08.md`). Prospect generator returns 19 stats with §4-derived style; player record gets style, _compute_ovr, at_signing; training/compare render 19. Seed-20260907 baseline MOVED to outputs/sm_inv/dump_20260908.json — the old dump is a pre-(a) world. Filing: claude/player_create1_filing_2026-09-08.md.
@@ -697,6 +725,26 @@ Status: idea ratified in chat (Van 2026-10-02); design doc not yet written. Do n
 
 ### VACATE-REASON-RENDER1 [filed 2026-10-19 from gate2 §1 grep]
 Vacated reign cards (fighter_profile.html:924, champions.html) render "· Vacated" regardless of bucket; retirement, injury strip, player choice and weight move are indistinguishable on the card. Template-only; render the bucket. Makes lost_method player-facing, so the RETIRE-VACATE1 bucket string should be chosen with this in mind.
+
+### TITLE-TOURNEY1 [filed 2026-11-11]
+Top-four tournament to fill an empty belt; candidate fix for VACANT-FILL1. Rulings (Van, 2026-11-11): a champion who leaves the weight class does not keep the belt; a champion injured 26+ weeks gives it up — deploy9 filing says 25, reconcile when touched.
+
+### SUPERCARD1 [filed 2026-11-11]
+### AUDITION1 [filed 2026-11-11]
+With an amateur-system review.
+
+### FINISH-BONUS1 [filed 2026-11-11]
+Capped per card.
+
+### LOADING-SCREEN1 [filed 2026-11-11]
+New-game wait.
+
+### TRAINING-REVIEW1 [filed 2026-11-11]
+
+### AI-DECISIONS1 [filed 2026-11-11]
+Discussion.
+
+### Rival promotion [filed 2026-11-11, DECLINED by Van]
 
 ### FIGHTNIGHT1 shape ruling + CORNER-STATE1 [filed 2026-10-02]
 - FIGHTNIGHT1 (between-round instructions, layered after GAMEPLAN1): STANDING CORNER POLICY per fighter, set once, passed into the engine call and applied at round boundaries inside the engine via existing tendency machinery, coach fight-IQ as execution modifier. NEVER a per-round pause for player input — Van ruled no micromanagement 2026-10-02. Balance-touching; after GAMEPLAN1 Gate 0 proves plan labels change output.
