@@ -432,6 +432,7 @@ Rationale for the three trailer/transport/HEAD rules above: `claude/transport_no
 - **Ruling (a) (Van, 2026-09-19):** cc commits and deploys only on a sentence Van wrote. Architect conditionals — "if you rule X, then Y" — are not directives; cc waits for the explicit ruling clause. Recommendations and hypothetical fork-descriptions surface options but do not authorize actions. Filing: `claude/deploy7_2026-09-20.md` §h.
 - cc's self-report of which tool it used is not evidence. The architect's fold-check (ctrl+o on the collapsed call) is ground truth. Any instruction that hinges on tool choice is verified by expanding the fold, not by asking cc. (deploy7 filing §j, 2026-09-20) Measured 2026-09-20: 0 Grep tool calls across 8 sessions (deploy7 §k); a collapsed 'Searched for N patterns' header is a summary, not evidence of which tool ran.
 - Carried state is `claude/backlog.md` (ranked, edited in place) plus `git log`. Handoff prose that names HEAD is stale the moment it commits — belongs nowhere. Docket-specific rulings live inline on the docket; general rulings live here.
+- cc operates in three zones (GREEN try/measure, YELLOW sandbox-and-report, RED release-only). Authority: claude/cc-operating-rules.md.
 
 ## Key constants (don't change without telling me)
 
@@ -566,6 +567,7 @@ is not evidence when the change lives above the engine.
 - `claude/claude_md_archive_2026a.md` — pre-fight-model-arc history (created 2026-09-05, C28/ARCHIVE1) <!-- ARCHIVE2 -->
 - `claude/claude_md_archive_2026b.md` — C22–C46 shipping filings (created 2026-09-07, ARCHIVE2; 30 blocks, in-place pointers tagged <!-- ARCHIVE2 -->) <!-- ARCHIVE2 -->
 - `claude/backlog.md` — LIVE backlog board (ARCHIVE3, 2026-09-09; moved verbatim from CLAUDE.md Top-of-backlog at f9b1b8a; edited in place thereafter) <!-- ARCHIVE3 -->
+- `claude/cc-operating-rules.md` — zones, sandbox, report definition of done. Read at session start.
 - `claude/interim_deploy_2026-09-07.md` — interim deploy filing (b6e1d74 deploy proof triad, 5b probe, PA-SMOKE1 5a, perf hypothesis, TPLFIX regression, power finding, token breach, N≥500-on-PA retirement)
 - `claude/gate0_baselines_2026-09-07.md` — Gate 0 baselines at cf2fecf: week-axis, creation path, camp-vs-safety (measured; rulings 1–4)
 - `claude/player_create1_filing_2026-09-08.md` — PLAYER-CREATE1 shipping filing: three commits, gates, baseline move, six findings (2026-09-08)
