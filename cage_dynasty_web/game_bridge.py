@@ -15297,17 +15297,16 @@ class GameBridge:
         ]
         champions = {}
         for wc in weight_classes:
-            champ_id = self._game_state.champions.get(wc)
-            if champ_id:
-                champ = self._game_state.get_fighter(champ_id)
-                if champ:
-                    champions[wc] = {
-                        "name":   champ.name,
-                        "record": champ.record_str,
-                        "style":  champ.fighting_style,
-                        "age":    champ.age,
-                        "career_phase": getattr(champ, 'career_phase', ''),
-                    }
+            # EXPORT-500: GameState has no .champions; use bridge.get_champion (same accessor as the Champions page).
+            champ = self.get_champion(wc)
+            if champ:
+                champions[wc] = {
+                    "name":   champ.name,
+                    "record": champ.record_str,
+                    "style":  champ.fighting_style,
+                    "age":    champ.age,
+                    "career_phase": getattr(champ, 'career_phase', ''),
+                }
 
         rankings = {}
         for wc in weight_classes:
