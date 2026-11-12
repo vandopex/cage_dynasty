@@ -125,6 +125,8 @@ number in this section. No pre-gen Wr-BJJ baseline currently exists.
   post-fix. Worth one clean re-read after enough post-fix fights
   land; not blocking.
 
+SUPERSEDED AS CURRENT STATE (2026-11-11): the 44.6% DEC and 1.3% SUB readings above describe engine e1be619. At HEAD a19a921 an engine-direct probe measured DEC 35.6% and SUB 26.4% (n=1080); see backlog METHOD-MIX1. "Live is 1.3% and stable" is false for the current engine. The 40–50% DEC band has not been re-ruled.
+
 
 - GROUP A — FINISH ECONOMY LANDED [COMMITTED as C45, 2026-09-06] → `claude/claude_md_archive_2026b.md` : L4198-4365 <!-- ARCHIVE2 -->
 - C45 REFUTATION LEDGER → `claude/claude_md_archive_2026b.md` : L4366-4434 <!-- ARCHIVE2 -->

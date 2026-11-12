@@ -34,7 +34,7 @@ RED — only on Van's explicit release, routed through the architect seat:
 - `git worktree add /tmp/cd-exp-<name> HEAD`. The working tree is never the experiment.
 - One lever per experiment. Up to THREE candidates per question without checking in. Report the losers alongside the winner, with numbers.
 - Screen first (small n), full gate only for survivors. A screen can kill a candidate; it can never pass one.
-- To compare against what is live: `git worktree add /tmp/cd-live <PA SHA from CLAUDE.md>`.
+- To compare against what is live: `git worktree add /tmp/cd-live <PA SHA from the newest deploy filing indexed in CLAUDE.md>`.
 - After the ruling, the accepted change is rebuilt in the real tree and gated there. That run is the gate of record. Nothing ships from a sandbox. Sandbox worktrees are removed after the ruling so they cannot become stale evidence.
 - Sandbox scope is empirical questions: "which of these moves the number." It is not for forks that are design calls. cc surfaces those and stops.
 
