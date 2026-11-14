@@ -414,3 +414,14 @@ B. New row inserted directly after the SUB-RATE1 row in claude/backlog.md:
 C. Two lines inserted directly after CLAUDE.md line 609:
 - `claude/style1_filing_2026-11-13.md` — STYLE1 Phase 0 → Gate 0b filing (sandbox + read-only, nothing built): stored label vs detect_fighter_style differ for 140 of 293; label-as-brain 21.24% SUB vs 28.04% baseline on the fixed population; rulings 2026-11-13 (label is the one judge; Sambo is its own visible type); SUB-RATE1 rulings 2026-11-12/13; 22 false-as-written items; reader and table census for fighting_style
 - `claude/handoff_style1_2026-11-13.md` — architect handoff, committed verbatim as history (SUB-RATE1 live dose and rounds 4b–6, rulings, false-as-written list); carried state, not re-verified
+
+Addendum 2026-11-14 (STYLE1 one-judge build, 48f9704). The round-2 arm
+table above did not record its invocation. Recovered from
+outputs/style1_round2.py: SEED_SETS offsets 0, 10_000_000, 20_000_000,
+30_000_000, 40_000_000; worker outputs/style1_round2_worker.py with
+SB_SEED_OFFSET and ST1R2_L1=1. L1 per-seed SUB: 244, 227, 233, 227, 216
+of 1080 = 1147/5400. L1 record shas, s1-s5: 784c5d38...796e,
+b1189bb9...ab0db, 7ac3f3c2...3295, 9ba5d319...532a, 562cf436...e4a3 (full
+values in claude/style1_onejudge_build_filing_2026-11-14.md, Gate A). The
+21.24% stands as filed and was reproduced record-for-record by the real
+tree at 48f9704.

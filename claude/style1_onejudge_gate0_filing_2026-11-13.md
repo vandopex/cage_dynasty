@@ -314,3 +314,12 @@ Recommended by the architect seat; accepted by Van 2026-11-13.
   per-side entries (matches 1642 but is not "fights"). INFERRED pending
   a read of `world_init.HistorySimulator`'s own `fight_history` append
   path at :2426 + extend at :2918.
+
+Addendum 2026-11-14. "0 missing labels in 249,882 detector calls" above
+is true as counted, but it was counted at the detector, downstream of
+game_bridge's conversion (`fdata.get("style", ...,"Balanced")` then
+`_STYLE_MAP.get(style_str, "BALANCED")`), which turns a missing or
+unmapped stored label into Balanced before the detector sees it. That
+count could not have detected a missing stored label. The stored labels
+were counted directly at 48f9704: 0 missing, 0 not-in-11 over 293 and
+290 fighters (claude/style1_onejudge_build_filing_2026-11-14.md, FIX 5).
