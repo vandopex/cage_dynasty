@@ -1805,6 +1805,22 @@ def get_available_grappling_actions(
 # FIGHTER STYLE DETECTION
 # ============================================================================
 
+# STYLE1 ONE-JUDGE: module-level counter for label-resolution outcomes.
+# Keyed 'missing' (count of calls with no label) and 'unmapped' (dict of
+# label-string -> count, for labels not in the hint map).
+_STYLE1_LABEL_COUNTER = {"missing": 0, "unmapped": {}}
+
+def _style1_label_counter_read():
+    """Return a snapshot of the one-judge label-resolution counter."""
+    return {"missing": _STYLE1_LABEL_COUNTER["missing"],
+            "unmapped": dict(_STYLE1_LABEL_COUNTER["unmapped"])}
+
+def _style1_label_counter_reset():
+    """Reset the one-judge label-resolution counter to zero."""
+    _STYLE1_LABEL_COUNTER["missing"] = 0
+    _STYLE1_LABEL_COUNTER["unmapped"] = {}
+
+
 def detect_fighter_style(fighter: FighterAttributes) -> str:
     """
     Detect a fighter's primary style based on attributes.
@@ -1812,6 +1828,38 @@ def detect_fighter_style(fighter: FighterAttributes) -> str:
     Thresholds calibrated for LOCAL tier (60-75 range) so styles emerge
     at mid-level play, not just elite.
     """
+    # ─── STYLE1 ONE-JUDGE: label-first return ────────────────────────
+    # The stored fighting_style is the single judge. If it's present and
+    # maps to a known style, return that. If it's missing or unmapped, the
+    # fighter fights as 'balanced' and is counted. The ladder below stays
+    # untouched but is unreachable in production under this slice.
+    _onejudge_fs = getattr(fighter, 'fighting_style', None)
+    if _onejudge_fs is None:
+        _STYLE1_LABEL_COUNTER["missing"] += 1
+        return "balanced"
+    _onejudge_name = str(_onejudge_fs.name if hasattr(_onejudge_fs, 'name')
+                          else _onejudge_fs).upper()
+    _ONEJUDGE_HINT_MAP = {
+        "BJJ_SPECIALIST":   "bjj",
+        "WRESTLER":         "wrestler",
+        "MUAY_THAI":        "muay_thai",
+        "GROUND_AND_POUND": "ground_and_pound",
+        "SPRAWL_AND_BRAWL": "sprawl_and_brawl",
+        "CLINCH_FIGHTER":   "clinch_fighter",
+        "PRESSURE_FIGHTER": "pressure_fighter",
+        "COUNTER_STRIKER":  "counter_striker",
+        "POINT_FIGHTER":    "point_fighter",
+        "STRIKER":          "striker",
+        "SAMBO":            "sambo",
+        "BALANCED":         "balanced",
+    }
+    if _onejudge_name in _ONEJUDGE_HINT_MAP:
+        return _ONEJUDGE_HINT_MAP[_onejudge_name]
+    _STYLE1_LABEL_COUNTER["unmapped"][_onejudge_name] = \
+        _STYLE1_LABEL_COUNTER["unmapped"].get(_onejudge_name, 0) + 1
+    return "balanced"
+
+    # ─── BELOW: original ladder (kept, unreachable in production) ───
     striking_score    = (fighter.boxing * 2 + fighter.kicks) / 3
     wrestling_score   = (fighter.takedowns + fighter.top_control) / 2
     bjj_score         = (fighter.submissions + fighter.guard) / 2

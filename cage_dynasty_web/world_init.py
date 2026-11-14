@@ -2061,6 +2061,22 @@ class HistorySimulator:
             # attributes dict without power viable via strength).
             _pow_val = fighter.attributes.get(
                 "power", fighter.attributes.get("strength", 65))
+            # STYLE1 ONE-JUDGE: convert fighter.style (string) to the engine's
+            # FightingStyle enum via the bridge's _STYLE_MAP. A fighter with
+            # no style passes None. An unmapped label passes through raw.
+            # No inner try/except — any failure here reaches the existing
+            # outer handler at the enclosing `except Exception as _fa_e:`.
+            _sj_style_raw = getattr(fighter, 'style', None)
+            if _sj_style_raw is None:
+                _sj_style_val = None
+            else:
+                from game_bridge import GameBridge as _SJ_GB
+                _sj_style_key = _SJ_GB._STYLE_MAP.get(_sj_style_raw)
+                if _sj_style_key is not None:
+                    from core.types import FightingStyle as _SJ_FS
+                    _sj_style_val = _SJ_FS[_sj_style_key]
+                else:
+                    _sj_style_val = _sj_style_raw
             attrs = FighterAttributes(
                 fighter_id=fighter.fighter_id,
                 name=fighter.name,
@@ -2090,6 +2106,8 @@ class HistorySimulator:
                 # remap happens only in the downstream fdata block (:2970).
                 fight_iq=fighter.attributes.get("iq", 60),
                 composure=fighter.attributes.get("composure", 60),
+                # STYLE1 ONE-JUDGE: pass the stored label to the engine.
+                fighting_style=_sj_style_val,
             )
             return attrs
         except Exception as _fa_e:
