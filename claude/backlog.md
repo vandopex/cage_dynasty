@@ -32,6 +32,20 @@ PA playthrough bugs:
 - **EXPORT-RANK1** [filed 2026-11-11, cosmetic] — export lists the champion as rank 1; the UI ranks contenders from 1.
 - **HISTORY-METHOD-GAP** [filed 2026-11-11, TREND two saves] — pre-gen lineages are almost all TKO while live cards run about one third submissions; see METHOD-MIX1.
 
+**New dockets from PA playthrough 2026-11-17 (deploy #11, PA fe4d8b3)** (Van, one fresh save, week 2; all OBSERVED once and not traced unless marked):
+- **TRAINING-LOCK1** [filed 2026-11-17] — rethink the Training page. Van: the per-attribute lock may not be needed now that target numbers are shown. Not ruled.
+- **TRAINING-TEMPLATES1** [filed 2026-11-17] — more than one training template per fighting type. Van. Waits on STYLE-TYPES1.
+- **EXPORT-DRAW-NAMES1** [filed 2026-11-17, OBSERVED] — the export prints a draw as " def.  (Draw R3)" with both names blank; the recap page shows both names.
+- **WEIGHT-CUT-LABEL1** [filed 2026-11-17, OBSERVED] — Featherweight fighters show "Cutting from Bantamweight", the lighter class. Two of two Featherweights viewed.
+- **HEIGHT-REACH-UNIFORM1** [filed 2026-11-17, OBSERVED] — seven of seven fighters viewed, Strawweight to Middleweight, show 5'10" and 72"" reach; the inch mark is doubled.
+- **RECAP-RANK1** [filed 2026-11-17, OBSERVED] — the recap showed a winner "#5 -> #5" while his page and the ladder showed #3 the same week. For the export's rank offset see EXPORT-RANK1.
+- **SUB-ATTEMPT-COUNT1** [filed 2026-11-17, OBSERVED] — Record Book shows 9 submission attempts for a BJJ Specialist whose only live fight was a round-1 submission.
+- **STARTER-OVR1** [filed 2026-11-17, OBSERVED] — the player's starting prospect was 79 overall; a sitting champion in the same world was 79. Not ruled.
+- **CHAMP-STYLE-WATCH1** [filed 2026-11-17, TREND, one world] — five of nine champions are Counter Strikers, all undefeated.
+- **METHOD-MIX1 addendum** [filed 2026-11-17, TREND, n=18, two live cards on fe4d8b3] — 12 TKO, 0 KO, 2 SUB, 3 DEC, 1 draw.
+- **SLOW-WEEK1 addendum** [filed 2026-11-17] — Van's estimate on PA, about 30 s for new game and about 45 s for the first week advance. No baseline taken.
+- **COSMETIC batch 2026-11-17** [filed 2026-11-17, OBSERVED] — "Boxing_coach" shown raw; scout text "Solid: Elite"; nine "wins the Tournament" headlines with no tournament name; "79 OVR -> 0.0" on the Training page.
+
 Measured today:
 - **EXPORT-500** [filed 2026-11-11, ON PA a19a921 (deploy #10)] — get_universe_export read self._game_state.champions which GameState does not have; every export of a loaded game returned 500 on PA (error log 2026-10-19 and 2026-11-11). Fix uses bridge.get_champion(wc). Gate of record: two fresh games, weeks 0 and 10, 4/4 status 200, json loads, 9/9 vs raw divisions[wc].champion_id; negative control fires at 8/9 on corrupted name. Van's PA step 12 at deploy #10: 9/9 divisions carry a champion in the exported JSON.
 - **EXPORT-RECORDS1** [filed 2026-11-11, MEASURED, cause named] — record_highlights renders empty in every export (wk 0 and wk 10 in both games). get_record_book() returns a dict whose values are lists; get_universe_export calls `.get('most_wins', {}).get('name')` which raises AttributeError on the list, swallowed by the try/except at game_bridge.py:15340. Two keys the exporter requests (most_ko_wins, most_sub_wins) do not exist in get_record_book's output — key mismatch on top of shape mismatch. Not fixed.
@@ -71,6 +85,7 @@ Measured today:
     the bridge fallback at :17404, which turns a missing or unmapped
     label into BALANCED before the engine sees it. Filing
     claude/sub_rate1_cut_filing_2026-11-16.md, embed 7.
+  - STYLE1 status 2026-11-17: one-judge on PA at fe4d8b3, deploy #11.
 - **AMATEUR-STYLE1** [filed 2026-11-13, READ] — amateur bouts do NOT use the fighter's `fighting_style`. The fight-decision line is `if random.random() < f1_win_prob:` at `cage_dynasty_web/amateur.py:1259`; `f1_win_prob` (amateur.py:1253-1256) is a function of effective-score diffs on `.attributes.get(<stat>, <default>)` composites. `amateur._simulate_fight` (amateur.py:1208-1310) does not call `fight_engine.simulate_fight`, does not call `fight_integration.simulate_narrated_fight`, and does not read `FighterAttributes.fighting_style` for fight resolution. The `fighting_style` reach inside the :1370-1420 window is POST-fight attribute-gain (winner's primary/secondary stat pick via `_STYLE_PRIMARY_AMATEUR.get(style, 'boxing')`), not fight resolution. If STYLE1's "the label is the one judge" is meant to apply to amateur bouts too, amateur needs its own slice.
 - **PREGEN-FIGHTCOUNT1** [filed 2026-11-13, INFERRED] — world_init.py's HistorySimulator stdout line `Simulated N fights across M events` reads `N = 1642` on a fresh new_game while the engine-wrapper per-fight call count is 821 (measured, outputs/style1_onejudge_gate0_addendum3_201314.md). The per-fighter `fight_history` aggregate (1651 entries across 293 fighters, half-sum 825) sitting at ~2× the engine call count is EXPECTED — each fight writes one entry on each side (winner + loser), so 821 fights produce **1642 per-side entries**; the measured sum was **1651**; **9 entries are unexplained**. The only open question is what `N` in the stdout line `Simulated N fights` counts: fights (should equal 821), or per-side entries (matches 1642 but is not "fights"). INFERRED pending a read of world_init.HistorySimulator's own `fight_history` append path at :2426 + extend at :2918.
 - **DUAL-ENGINE-MODULE1** [filed 2026-11-14, MEASURED] — fight_engine.py
@@ -166,6 +181,13 @@ Measured today:
   22.89%, C0r pool 23.13% (+0.25 pp), F1=C7s 19.00% (-3.88 pp),
   F2=C5s 19.25% (-3.63 pp). Filing
   claude/sub_rate1_cut_filing_2026-11-16.md.
+  - PAIRED-HARNESS1 addendum 2026-11-17 (READ of the worker, sha
+    94e18a3a..., not measured): no roster hash, so "same rosters"
+    across arms is unproven; the output records no repo SHA, engine
+    hash, reseed value or PYTHONHASHSEED; a crashed week still writes
+    normal JSON; style is looked up at the end of the run and rows
+    with no style are not counted; captured and stored fight counts
+    are printed but never compared.
 - **BALANCED-WINRATE1** [filed 2026-11-16, TREND] — per-arm pooled
   Balanced win rate in the round-5 paired run:
   C0 47/162 = 29.01%; C0r 40/142 = 28.17%; F1 56/143 = 39.16%;
