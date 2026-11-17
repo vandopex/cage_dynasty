@@ -2441,13 +2441,13 @@ def select_action(
         "COUNTER_STRIKER":   {"strike":1.3,"grapple":0.8,"submission":0.3},
         "POINT_FIGHTER":     {"strike":1.4,"grapple":0.6,"submission":0.2},
         "KARATE":            {"strike":1.3,"grapple":0.7,"submission":0.3},
-        "WRESTLER":          {"strike":0.8,"grapple":1.4,"submission":0.9},
+        "WRESTLER":          {"strike":0.8,"grapple":1.4,"submission":0.45},
         "BJJ_SPECIALIST":    {"strike":0.6,"grapple":1.2,"submission":2.0},
         "SAMBO":             {"strike":0.9,"grapple":1.3,"submission":1.4},
         "JUDO":              {"strike":0.8,"grapple":1.5,"submission":0.9},
-        "GROUND_AND_POUND":  {"strike":1.0,"grapple":1.4,"submission":0.6},
+        "GROUND_AND_POUND":  {"strike":1.0,"grapple":1.4,"submission":0.4},
         "SPRAWL_AND_BRAWL":  {"strike":1.3,"grapple":0.7,"submission":0.4},
-        "CLINCH_FIGHTER":    {"strike":1.0,"grapple":1.3,"submission":0.7},
+        "CLINCH_FIGHTER":    {"strike":1.0,"grapple":1.3,"submission":0.5},
         "BRAWLER":           {"strike":1.3,"grapple":0.8,"submission":0.4},
         "HYBRID":            {"strike":1.0,"grapple":1.0,"submission":0.8},
         "STRIKER":           {"strike":1.4,"grapple":0.7,"submission":0.3},
@@ -2600,10 +2600,15 @@ def select_action(
     
     # Ensure minimum weights
     strike_weight = max(5, strike_weight) if strikes else 0
-    # Sub gate: BJJ/Sambo can attempt subs at 45+, everyone else at 60+
+    # Sub gate: BJJ/Sambo can attempt subs at 45+, everyone else at 60+.
+    # Floor rule (Van, 2026-11-16): max(1, sub_weight) applies only when
+    # the style key is BJJ_SPECIALIST or fighter_attrs.submissions >= 80;
+    # any other non-BJJ style below 80 keeps its computed sub_weight
+    # (which may be 0 after int() truncation of the style-weight multiply).
     _sub_threshold = 45 if my_style in ("bjj", "sambo") else 60
     if submissions and fighter_attrs.submissions >= _sub_threshold:
-        sub_weight = max(1, sub_weight)
+        if _style_key == "BJJ_SPECIALIST" or fighter_attrs.submissions >= 80:
+            sub_weight = max(1, sub_weight)
     else:
         sub_weight = 0
     grapple_weight = max(5, grapple_weight) if grappling else 0
