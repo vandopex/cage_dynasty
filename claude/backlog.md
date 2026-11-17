@@ -44,7 +44,7 @@ Measured today:
 - **METHOD-MIX1** [filed 2026-11-11, MEASURED] — engine-direct probe at HEAD a19a921, n=1080 cross-matched pairs from a week-0 roster: SUB 26.4% (SE 1.34pp), TKO 35.1%, KO 0.6%, DEC 35.6% (SE 1.46pp), DRAW 0.8%, OTHER 1.5% (category not identified); finish 62.0%; subs 42.5% of finishes. By winner style: BJJ Specialist 67% of wins by sub, Wrestler 40%, Ground & Pound 35%, striking styles 3–7%. Round split and takedown-to-sub link NOT MEASURED (probe field mismatches; counters read zero). Filed readings disagree: fight_model_p3_scope_v0_1.md :980 records a bridge-path read of 70% finish / 29% DEC / 32% SUB at N=147 and :1002 calls drift from it a finding, not a tuning target; certified_cell_baselines.md :86-89 and :116-121 record DEC 44.6% in a 40–50% band and SUB 1.3% "stable" on pre-fix engine e1be619. Van's two PA saves 2026-11-11: 76 fights, 34% SUB, 71% finish (TREND). No target is ruled for the current engine. Report: outputs/method_mix_report.txt (untracked). Ruling (Van, 2026-11-11): the current submission rate is too high; target not yet set. Work item SUB-RATE1, Phase 0 read-only first. Phase 0 filing claude/sub_rate1_phase0_filing.md (2026-11-12): KO count = 4 of 1080 on direct-engine (0.37%), 7 of 591 on live-path (1.18%); 0c's "22215 fights" and "SE ±0.29pp" marked false-as-reported, true n is 591 unique after dedup (0d §1); 0d §3b "sub rate increases with defender stat" marked false-as-reported, superseded by 0e §1 (D.submissions fixed=40, D.guard sweep 30→90, A.subs=95: sub rate 83.3%→58.5%, direction correct).
 - **LIVE-METHOD-FORMAT1** [filed 2026-11-12, MEASURED] — on the live card_builder path the raw engine result carries one of three method forms — "Submission (<sub_type>)", "Submission (Injury - <sub_type>)", "Technical Submission" — and the "Injury -" marker is dropped at the gb-store boundary. At store, method='SUB' for all three raw forms; specialty_method='SUB (<sub_type>)' keeps the hold identity. Measured: 215 SUB fights out of 932 unique stored (2026-11-12 harvest), 215/215 non-empty specialty_method, 14 distinct values (armbar 58, twister 32, calf_slicer 29, rear_naked_choke 29, neck_crank 16, arm_triangle 15, americana 12, kimura 11, triangle_choke 4, wrist_lock 3, guillotine 2, von_flue_choke 2, darce_choke 1, kneebar 1), 0 of 215 containing "Injury" in either method or specialty_method; 0 of 101 stored SUB methods containing "Injury" in INJURY-INFO §3 (30 of 101 raw results did carry "Injury -" before the collapse). News feed does carry the injury text (observed: "🤕 <name> injured — <body_part> via <sub_type>. Out ~Nw."). News coverage across injury finishes NOT MEASURED.
 - **STATS-EMPTY-DOCSTOP1** [filed 2026-11-12, MEASURED, 26/1080 fights] — fights ending by TKO (Doctor Stoppage[-Cuts]) at R1 5:00 and 7 of 8 draws persist with empty fighter{1,2}_stats[0]. 2108 R1 fighter-rounds observed (ideal 2160); gap 52 = 26 fights × 2 sides. [INFERRED] Readers computing per-round stats from stats_per_round[fr-1] get an IndexError or "no stats" bucket for these fights.
-- **SUB-RATE1** [filed 2026-11-12] — Phase 0 complete, filing claude/sub_rate1_phase0_filing.md. Live baseline 470 of 1865 = 25.2% SUB pooled across three separately generated worlds (26.06% n=591; 23.07% n=932; 29.53% n=342). Rulings (Van, 2026-11-12): target 16–20% SUB on the live path, measured over ≥1000 unique fights; a specialist floor is a gate on the sandbox table, its definition not yet ruled. Injury-path decision pending. Next: sandbox scope. Addendum 2026-11-13: rulings (Van, 2026-11-12) — injury-sub finish type removed (locks past the band resolve as tap; injuries come from the normal injury system); the cut comes from non-specialists, BJJ Specialists keep their identity; specialist floor ≥ 60% of BJJ Specialist wins by SUB, provisional. Ruling (Van, 2026-11-13): "specialist" = the BJJ Specialist fighting_style label. Fixed-population baseline 28.04% SUB over 5400 fights (five seed sets, 26.7–30.1%); no candidate through round 6 reached 16–20% (carried, claude/handoff_style1_2026-11-13.md). Tuning is paused behind STYLE1 on the architect seat's recommendation, not a ruling. Nothing built. Ruling (Van, 2026-11-14): working target 19-20% SUB on live, BJJ Specialists untouched. Live baseline (pre one-judge, 450eb08) measured 324/1211 = 26.75% pooled across three worlds; live one-judge (c7fe846) 292/1206 = 24.21%. Both above target.
+- **SUB-RATE1** [filed 2026-11-12] — Phase 0 complete, filing claude/sub_rate1_phase0_filing.md. Live baseline 470 of 1865 = 25.2% SUB pooled across three separately generated worlds (26.06% n=591; 23.07% n=932; 29.53% n=342). Rulings (Van, 2026-11-12): target 16–20% SUB on the live path, measured over ≥1000 unique fights; a specialist floor is a gate on the sandbox table, its definition not yet ruled. Injury-path decision pending. Next: sandbox scope. Addendum 2026-11-13: rulings (Van, 2026-11-12) — injury-sub finish type removed (locks past the band resolve as tap; injuries come from the normal injury system); the cut comes from non-specialists, BJJ Specialists keep their identity; specialist floor ≥ 60% of BJJ Specialist wins by SUB, provisional. Ruling (Van, 2026-11-13): "specialist" = the BJJ Specialist fighting_style label. Fixed-population baseline 28.04% SUB over 5400 fights (five seed sets, 26.7–30.1%); no candidate through round 6 reached 16–20% (carried, claude/handoff_style1_2026-11-13.md). Tuning is paused behind STYLE1 on the architect seat's recommendation, not a ruling. Nothing built. Ruling (Van, 2026-11-14): working target 19-20% SUB on live, BJJ Specialists untouched. Live baseline (pre one-judge, 450eb08) measured 324/1211 = 26.75% pooled across three worlds; live one-judge (c7fe846) 292/1206 = 24.21%. Both above target. Status 2026-11-16: SHIPPED LOCAL d1f2568, not pushed, not deployed. Rulings (Van, 2026-11-16): submission column WRESTLER 0.45, GROUND_AND_POUND 0.4, CLINCH_FIGHTER 0.5; skill floor at submissions 80 for every non-BJJ style; one-judge deploys alone first. Paired-live (seeded-uuid worker, three worlds, seeds 20261114/15/16): C0 276/1206 = 22.89%; C0r (same tree, LOJ_LIVE_RESEED=1) 279/1206 = 23.13% (+3 pool, +0.25pp); F1=C7s 232/1221 = 19.00% (-44 pool, -3.88pp); F2=C5s 232/1205 = 19.25% (-44 pool, -3.63pp). Fixed-population five-seed match: 943/5400 pooled. Filing claude/sub_rate1_cut_filing_2026-11-16.md.
 - **STYLE1** [filed 2026-11-13, MEASURED sandbox + READ] — one style system. Two rules classify every fighter from the same stats: the stored fighting_style label (world_init._phase_b_derive_style, set at creation) and detect_fighter_style (fight_engine.py:1808, run inside each fight); they differ for 140 of 293 fighters on the fixed population. Rulings (Van, 2026-11-13): the stored label is the one judge — the engine fights by the label; Sambo is its own visible fighting type, which supersedes going forward the Sambo→Wrestler conversions at game_bridge.py:455, :17371 and :22254 (the last marked ratified 2026-09-05). Sandbox, 5400 fights, baseline 28.04% SUB: label-as-brain 21.24% (per-seed 20.00–22.59%), BJJ Specialist 73.40% of wins by SUB, OVR 70+ win rate 88.25% in both arms. Pre-generation history fights pass no label to the engine (world_init.py:2064-2093). Nothing built. Filing claude/style1_filing_2026-11-13.md. Next (architect recommendation): one-judge engine slice; Sambo label-rule sandbox. Gate 0 addendum 2026-11-13: on fixed P2 (N=293) `_fighter_data['style']` and `record.fighting_style` disagree for 0 of 293 fighters (both stored fields byte-identical on this save); the 140 of 293 "today-vs-label" headline REPRODUCED under the engine's own normalize+alias chain on both sides (T ≠ L = 140); stripped-vs-label (detector called with `fa.fighting_style=None`) differs for 242 of 293 (S ≠ L); the label changes the detector's answer for 102 of 293 (T ≠ S). The sandbox1 edit that produced 21.24% is INSIDE `detect_fighter_style` (fight_engine.py function body, early-return at the L1 arm gated by env var `ST1R2_L1=1`), not at the call sites. Under L1 label resolution, zero non-Balanced labels return `'balanced'` (0/293 label-coercion leaks); both L1 controls PASS (Balanced label → `'balanced'`; unmapped in-memory label → `'balanced'`). The bridge passes a `core.types.FightingStyle` enum on every call for all 11 labels on P2. Live and MC paths on the loaded save (Addendum 5, f_back depth 40, one advance_week) recorded 247,710 MC-tagged and 2,172 LIVE-tagged detect calls through `fight_integration.py:2704 (simulate_narrated_fight)`, with 0 `None` on either side across all six caller-rows (callers: fe:1666, fe:2017, fe:2018). Pre-gen 821/821 `fighting_style=None` at the engine on a fresh new_game; `fighter.style` is in scope at `world_init.py:2064` and unread (READ). The four rulings (Van, 2026-11-13): (1) the edit is inside `detect_fighter_style`; (2) missing or unmapped label fights as `'balanced'` and is counted, the gate requires zero; (3) ladder code stays this slice; (4) pre-gen passes the label in the same commit. Gate 0 filing: `claude/style1_onejudge_gate0_filing_2026-11-13.md`.
   - STYLE1 status 2026-11-14: one-judge slice SHIPPED LOCAL 48f9704,
     pushed, NOT on PA (PA at a19a921 by Van's console rev-parse,
@@ -61,6 +61,16 @@ Measured today:
     uninformative. Different populations per arm, three worlds each,
     TREND. Filing claude/style1_live_measure_filing_2026-11-14.md
     (embeds thread_open_phase0, live_onejudge, live_baseline verbatim).
+  - STYLE1 bridge-label control 2026-11-16: 10-live-week unplanted run
+    on c7fe846 shows site_17404_make_fighter_attrs 0 fallbacks over
+    15,832 conversions; engine _STYLE1_LABEL_COUNTER missing=0 /
+    unmapped={} on both fe module objects. Planted control (fighter1
+    label None, fighter2 "Not A Style") produces 51 BALANCED per
+    fighter at the engine with the same zero on the counter — the
+    one-judge gate is clear on the measured population; the gap is
+    the bridge fallback at :17404, which turns a missing or unmapped
+    label into BALANCED before the engine sees it. Filing
+    claude/sub_rate1_cut_filing_2026-11-16.md, embed 7.
 - **AMATEUR-STYLE1** [filed 2026-11-13, READ] — amateur bouts do NOT use the fighter's `fighting_style`. The fight-decision line is `if random.random() < f1_win_prob:` at `cage_dynasty_web/amateur.py:1259`; `f1_win_prob` (amateur.py:1253-1256) is a function of effective-score diffs on `.attributes.get(<stat>, <default>)` composites. `amateur._simulate_fight` (amateur.py:1208-1310) does not call `fight_engine.simulate_fight`, does not call `fight_integration.simulate_narrated_fight`, and does not read `FighterAttributes.fighting_style` for fight resolution. The `fighting_style` reach inside the :1370-1420 window is POST-fight attribute-gain (winner's primary/secondary stat pick via `_STYLE_PRIMARY_AMATEUR.get(style, 'boxing')`), not fight resolution. If STYLE1's "the label is the one judge" is meant to apply to amateur bouts too, amateur needs its own slice.
 - **PREGEN-FIGHTCOUNT1** [filed 2026-11-13, INFERRED] — world_init.py's HistorySimulator stdout line `Simulated N fights across M events` reads `N = 1642` on a fresh new_game while the engine-wrapper per-fight call count is 821 (measured, outputs/style1_onejudge_gate0_addendum3_201314.md). The per-fighter `fight_history` aggregate (1651 entries across 293 fighters, half-sum 825) sitting at ~2× the engine call count is EXPECTED — each fight writes one entry on each side (winner + loser), so 821 fights produce **1642 per-side entries**; the measured sum was **1651**; **9 entries are unexplained**. The only open question is what `N` in the stdout line `Simulated N fights` counts: fights (should equal 821), or per-side entries (matches 1642 but is not "fights"). INFERRED pending a read of world_init.HistorySimulator's own `fight_history` append path at :2426 + extend at :2918.
 - **DUAL-ENGINE-MODULE1** [filed 2026-11-14, MEASURED] — fight_engine.py
@@ -73,9 +83,16 @@ Measured today:
   wrestler/sambo) ran 0 times in 6,480 fixed-population fights, a live
   week and a fresh game's first card. Whether CLINCH_POSITIONS is
   reachable there: not measured.
-- **BRIDGE-LABEL-FALLBACK1** [filed 2026-11-14, READ] — game_bridge's
-  conversion silently turns a missing or unmapped stored label into
-  Balanced. One-judge's counter cannot see it on the live path.
+- **BRIDGE-LABEL-FALLBACK1** [filed 2026-11-14, MEASURED 2026-11-16] —
+  game_bridge's conversion silently turns a missing or unmapped stored
+  label into Balanced. One-judge's counter cannot see it on the live
+  path. Run B (planted control, one week): fighter1 stored label
+  None, fighter2 stored "Not A Style"; both booked on plant_week 1;
+  engine received BALANCED on every one of 51 _make_fighter_attrs
+  calls per fighter; site_17404_make_fighter_attrs total 2318,
+  fallback 102 (None 51, "Not A Style" 51); engine
+  _STYLE1_LABEL_COUNTER missing=0 / unmapped={} on both fe module
+  objects. Filing claude/sub_rate1_cut_filing_2026-11-16.md, embed 7.
 - **SAMBO-ENUM1** [filed 2026-11-14, MEASURED] — FightingStyle has 11
   members, no SAMBO; GameBridge._STYLE_MAP sends "Sambo" to WRESTLER and
   "Kickboxer" to STRIKER. 16 "sambo" and 5 "kickboxer" reader sites in
@@ -104,6 +121,10 @@ Measured today:
   0.0 via `_FightingStyleEnum(...)` value lookup + swallowed
   ValueError). Path B never computes it; the MC path computes
   style_mod and does not use it. Scope set at its own Gate 0.
+  Addendum 2026-11-16: the two `_STYLE_STR_MAP.get` sites inside
+  `_assemble_prefight` at game_bridge.py:17688-17689 fired 0 times
+  in a 10-live-week unplanted run on c7fe846 (bridge-label control
+  RUN A; claude/sub_rate1_cut_filing_2026-11-16.md embed 7).
 - **PLAYER-LABEL-PATHS1** [filed 2026-11-14, MEASURED (helper call)
   + READ (:7467)] — the player's stored fighting_style differs
   between two write sites: game_bridge.py:2695 (`_create_player_fighter`)
@@ -115,9 +136,14 @@ Measured today:
   surface. Two stored forms for the same input; a third map converts
   to the engine enum.
 - **FI-WEIGHT-TABLE-DEAD1** [filed 2026-11-14, MEASURED (one live
-  week) + grep] — fight_integration.py:149 `get_style_action_weights`
-  and its :164 style-weight table have zero callers in
-  cage_dynasty_web/.
+  week) + grep; TABLE-OUT-OF-SYNC 2026-11-16] —
+  fight_integration.py:149 `get_style_action_weights` and its :164
+  style-weight table have zero callers in cage_dynasty_web/. After
+  d1f2568 the live engine's twin table at fight_engine.py:2436-2455
+  carries WRESTLER 0.45, GROUND_AND_POUND 0.4, CLINCH_FIGHTER 0.5;
+  the fight_integration.py:164 table still carries the pre-cut
+  0.9 / 0.6 / 0.7 values. Dead function body; the twin no longer
+  matches the engine.
   Measured 2026-11-14: one-week live-fight wrapper on
   simulation.fight_integration + fight_integration both show 0
   calls to this function; 336,958 calls flowed through
@@ -126,6 +152,44 @@ Measured today:
 - **FIXEDPOP-LIVE-GAP1** [filed 2026-11-14, MEASURED (numbers), cause
   NOT MEASURED] — fixed population 28.04 → 21.24 (-6.80 pp) vs live
   26.75 → 24.21 (-2.54 pp).
+- **PAIRED-HARNESS1** [filed 2026-11-16] — candidate engine changes
+  are judged on the seeded-uuid paired worker (base
+  /tmp/live_cut_worker_paired.py sha
+  8a03e3c2c993c7d25ed1190e0937a1d8dd4499d596173db002c84e4dd174206e;
+  v2 at /tmp/live_cut_worker_paired_v2.py adds one 6-line optional
+  LOJ_LIVE_RESEED hook, sha
+  94e18a3a5f7b2f105f3c3ec081e23aa941998ecc99f130550b2f1218f7db9725)
+  with a same-engine noise arm (C0r = control tree + reseed) to
+  bound within-arm RNG noise. Round-5 result: C0 and C0r on the
+  unmodified c7fe846 engine; F1 = C7s, behavior-equivalent to
+  d1f2568 (cut_build G3 and G5); F2 = C5s, not committed. C0 pool
+  22.89%, C0r pool 23.13% (+0.25 pp), F1=C7s 19.00% (-3.88 pp),
+  F2=C5s 19.25% (-3.63 pp). Filing
+  claude/sub_rate1_cut_filing_2026-11-16.md.
+- **BALANCED-WINRATE1** [filed 2026-11-16, TREND] — per-arm pooled
+  Balanced win rate in the round-5 paired run:
+  C0 47/162 = 29.01%; C0r 40/142 = 28.17%; F1 56/143 = 39.16%;
+  F2 46/143 = 32.17% (source: outputs/cut_paired_2026-11-16.txt,
+  Balanced row per arm). TREND; three worlds per arm.
+- **BJJ-WINRATE-WATCH1** [filed 2026-11-16, TREND] — BJJ Specialist
+  win rate (wins / appearances) in the round-5 paired run:
+  C0 53.47%; C0r 52.91%; F1 48.19%; F2 54.31% (source:
+  outputs/cut_paired_2026-11-16.txt, BJJ Specialist row per arm).
+  The F1 arm shifted 5.28 pp from C0 while C0r moved 0.57 pp from
+  C0; the fixed-population screen showed BJJ Specialist pooled wins
+  S0 673 and C7s 675 (outputs/cut_round5_screen_2026-11-16.txt,
+  per-winner-label tables). TREND.
+- **AI-GP-5289-ZERO1** [filed 2026-11-16, MEASURED 0 calls,
+  not investigated] — `site_5289_resolve_ai_gp` inside
+  `GameBridge._simulate_fight` (game_bridge.py:5289) fired 0 times
+  in a 10-live-week unplanted run (bridge-label control RUN A,
+  claude/sub_rate1_cut_filing_2026-11-16.md embed 7). Whether
+  `_simulate_fight` is reachable on the live path at all is not
+  measured.
+- **STYLE-TYPES1** [filed 2026-11-16, Van 2026-11-16 unruled lead]
+  — Van wants fighting types, how common each type is, and
+  per-type abilities made smart. Design draft exists outside the
+  repo. Scope and rulings pending.
 
 **New dockets from interim deploy 2026-09-07** (one line each; full context
 in `claude/playtest_notes_2026-09-07.md` + `claude/interim_deploy_2026-09-07.md`):
