@@ -403,7 +403,6 @@ class NarratedFightSimulator:
         intro_f1: Optional[dict] = None,
         intro_f2: Optional[dict] = None,
         heat_level: int = 0,
-        injury_hook: Optional[Any] = None,
     ):
         self.fighter1 = fighter1
         self.fighter2 = fighter2
@@ -430,13 +429,6 @@ class NarratedFightSimulator:
         # of C20 — filed in census.md Part B, item 10). Composite/
         # damage scaler applied per D13 discipline via config.replace.
         self.heat_level = int(heat_level or 0)
-        # P3-4c §5a — injury_hook receives (fighter_id, severity_name,
-        # sub_name, opponent_id) on joint-lock "past refusal band"
-        # finishes. Caller (game_bridge) implements via
-        # `systems.injury.generate_injury` + `InjurySystem.add_injury`.
-        # Default None → outcome method string still emitted; no
-        # persistence (forward-only, save-safe).
-        self._injury_hook = injury_hook
         _heat_damage_mult = 1.0
         _heat_composure_penalty = 0
         _heat_aggression_bonus = 0.0
@@ -2038,17 +2030,16 @@ class NarratedFightSimulator:
     def _process_submission_exchange(self, exchange_num: int) -> Optional[Tuple[str, str]]:
         """Process an exchange during active submission.
 
-        P3-4c §5a: process_submission_progress now returns
+        P3-4c §5a: process_submission_progress returns
         (escaped, finished, finish_kind). finish_kind ∈
-        {"tap", "sleep", "injury", None}. Method string is chosen
+        {"tap", "sleep", "stoppage", None}. Method string is chosen
         by kind:
-          - tap    → "Submission (<sub_name>)"                 [as before]
-          - sleep  → "Technical Submission (<sub_name>)"       [choke, never tapped]
-          - injury → "Submission (Injury - <sub_name>)"        [joint_lock, limb went]
-        Sleep and injury bypass the tap animation; the injury_hook
-        (if provided at fight-open) receives (fighter_id,
-        injury_type_name, sub_name, opponent_id) so the caller can
-        persist through systems.injury.
+          - tap      → "Submission (<sub_name>)"            [as before]
+          - sleep    → "Technical Submission (<sub_name>)"  [choke, never tapped]
+          - stoppage → "Technical Submission (<sub_name>)"  [joint_lock past refusal]
+        Van 2026-11-12 + 2026-11-17: joint-lock past refusal is a
+        technical submission — no guaranteed-injury hook; injuries come
+        only from the normal post-fight roll.
         """
         attacker_id = self.fight_state.submission_attacker_id
         attacker, attacker_state = self._get_fighter_and_state(attacker_id)
@@ -2062,40 +2053,13 @@ class NarratedFightSimulator:
 
         if finished:
             sub_name = self.fight_state.submission_type.value
-            if finish_kind == "sleep":
+            if finish_kind in ("sleep", "stoppage"):
                 method_str = f"Technical Submission ({sub_name})"
-            elif finish_kind == "injury":
-                method_str = f"Submission (Injury - {sub_name})"
-                # Route through injury hook if the caller wired one.
-                # Severity bucket by overshoot past refusal band end.
-                # progress and effective_threshold live on fight_state
-                # after the last tick.
-                _hook = getattr(self, "_injury_hook", None)
-                if callable(_hook):
-                    try:
-                        _prog = self.fight_state.submission_progress or 0.0
-                        _thr = self.fight_state.submission_effective_threshold or 0.0
-                        # REFUSAL_WIDTH scales by defender heart; approximate
-                        # via defender's actual heart at fight-time.
-                        _hrt = getattr(defender, 'heart', 70)
-                        _width = 15.0 * (1.0 + 0.60 * ((_hrt - 60) / 40.0))
-                        _overshoot = max(0.0, _prog - _thr - _width)
-                        _norm = _overshoot / max(1.0, _width)
-                        if _norm >= 2.0:
-                            _sev = "CAREER"
-                        elif _norm >= 1.0:
-                            _sev = "SEVERE"
-                        else:
-                            _sev = "MODERATE"
-                        _hook(defender.fighter_id, _sev,
-                              sub_name, attacker.fighter_id)
-                    except Exception:
-                        pass
             else:  # "tap" or None → default tap
                 method_str = f"Submission ({sub_name})"
             self._log_finish(attacker_id, method_str, exchange_num)
             # Return the ENRICHED method_str so _build_finish_result
-            # sees the sleep/injury distinction (unpacked at fi:2135).
+            # sees the sleep/stoppage distinction (unpacked at fi:2135).
             # Was: hardcoded "Submission" (loss of finish_kind detail).
             return (attacker_id, method_str, sub_name)
         
@@ -2646,7 +2610,6 @@ def simulate_narrated_fight(
     intro_f1: Optional[dict] = None,
     intro_f2: Optional[dict] = None,
     heat_level: int = 0,
-    injury_hook: Optional[Any] = None,
 ) -> NarratedFightResult:
     """
     Simulate a fight with full commentary.
@@ -2699,7 +2662,6 @@ def simulate_narrated_fight(
         intro_f1=intro_f1,
         intro_f2=intro_f2,
         heat_level=heat_level,
-        injury_hook=injury_hook,
     )
     return simulator.simulate()
 

@@ -3776,7 +3776,7 @@ def process_submission_progress(
 ) -> Tuple[bool, bool, Optional[str]]:
     """P3-4c §5a submission model. Returns (escaped, finished, finish_kind).
 
-    finish_kind ∈ {"tap", "sleep", "injury", None}. Non-None only when
+    finish_kind ∈ {"tap", "sleep", "stoppage", None}. Non-None only when
     finished=True. Old tick mechanics preserved as
     `_legacy_process_submission_progress` (returned (escaped, finished)).
 
@@ -3787,11 +3787,14 @@ def process_submission_progress(
       4. TAP threshold = TAP_BASE × HEART_MULT × STATE_MULT. Base takes
          config.submission_progress_to_finish so the existing config
          dial still governs the neutral case.
-      5. Refusal band past tap: choke → sleep, joint_lock → injury.
+      5. Refusal band past tap: choke → sleep, joint_lock → stoppage.
+         (Van 2026-11-12 + 2026-11-17: no guaranteed-injury hook; a
+         joint lock past the refusal band is a technical submission.
+         Injuries come only from the normal post-fight roll.)
 
     Callers (fi._process_submission_exchange) unpack the 3-tuple; the
     finish_kind drives the outcome-string routing (Tap vs
-    Technical Submission vs Submission (Injury)).
+    Technical Submission (sleep) vs Technical Submission (stoppage)).
     """
     if not fight_state.submission_active:
         return False, False, None
@@ -3857,7 +3860,7 @@ def process_submission_progress(
         if kind == "choke":
             return False, True, "sleep"
         else:
-            return False, True, "injury"
+            return False, True, "stoppage"
     if fight_state.submission_progress >= effective_tap:
         # Inside/at threshold — tap.
         fight_state.submission_active = False
