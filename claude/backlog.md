@@ -16,7 +16,7 @@ PA playthrough bugs:
 - **FIGHT-STORY-TRIPLE1** [filed 2026-11-11, EXAMPLE] — one fight, three accounts: commentary shows a standing head-kick finish, result reads "TKO (Groun" truncated on every surface, headline says the winner "grinds out the decision".
 - **OVERHEAD-DISPLAY1** [filed 2026-11-11, MEASURED five consecutive recaps] — Weekly Overhead shows -$125; balance falls $1,525/week; runway is computed from the $125.
 - **COACH-SLOT1** [filed 2026-11-11, EXAMPLE, two fights] — Coach's Corner quotes the wrong stat for the named skill, reads "their wrestler will exploit", recommends Top Control against a takedown-85 wrestler.
-- **INJURY-DOUBLE1** [filed 2026-11-11, EXAMPLE, two fighters] — two injury headlines from one fight with different durations, the shorter one applied; body part does not match technique; raw id "neck_crank" shown; a 38-week CTE entry.
+- **INJURY-DOUBLE1** [filed 2026-11-11, EXAMPLE, two fighters] — two injury headlines from one fight with different durations, the shorter one applied; body part does not match technique; raw id "neck_crank" shown; a 38-week CTE entry. Addendum 2026-11-18: INJURY-SUB-UNBUILT1 build removed `_sub_injury_hook` so a joint-lock Technical Submission no longer persists an injury via the hook; the normal post-fight injury roll (game_bridge.py:14191, :18624) still runs regardless of finish type. Not re-measured — total injury counts before and after were not captured.
 - **EVENT-WEEK1** [filed 2026-11-11, EXAMPLE, two events] — ladder lists one event under two different weeks; one fighter booked at week 11 and week 15.
 - **CONDITION-LABEL1** [filed 2026-11-11, EXAMPLE] — condition 62% and falling 5/week while labeled Rested/Ready.
 - **CAMP-INTENSITY1** [filed 2026-11-11, EXAMPLE] — Coach's Corner says Moderate, Training Report says LIGHT; "this camp" total keeps counting after the fight.
@@ -50,10 +50,22 @@ PA playthrough bugs:
   - 2026-11-17: coach text 'their bjj specialist will exploit your submissions (54)'; 'wrestling_coach' shown raw; scout 'World-class ground game' at submissions 67 and guard 68. Cause of the coach line (READ): the reason string is built as 'Their <style> will exploit your <threat> (<value>)' and lowercased whole in `_build_coach_quote`.
 
 **New dockets 2026-11-17 (deploy #12, PA a61a78f)**:
-- **INJURY-SUB-UNBUILT1** [filed 2026-11-17, MEASURED] — Van ruled injury submissions removed as a finish type (2026-11-12; SUB-RATE1 addendum 2026-11-13). Not built: fight_integration.py:2068 at a61a78f still writes "Submission (Injury - <name>)". In the paired run they were 86 of 276 submissions in control, 70 of 279 in the noise arm and 52 of 232 under the cut (outputs/cut_deploy_phase0b_2026-11-17.txt:139, :145, :151). The string is read at awards.py:60 and game_bridge.py:10192, :14108, :18514. See LIVE-METHOD-FORMAT1: the marker is dropped at the store boundary, so the player meets these finishes through the injury headline, not the method. Needs its own Gate 0. Queue position not ruled.
+- **QUEUE-ORDER1** [ruled, Van 2026-11-17; amended 2026-11-18] — 2026-11-17: INJURY-SUB-UNBUILT1; GAMEPLAN-SUB-FLOOR1; STYLE-MOD-REMOVE1; style-mechanics census; PAIRED-HARNESS1 into the repo; design-draft rulings, then Sambo. Same day Van agreed to run the census early, read-only. 2026-11-18, Van left placement to the architect: docs filing for d642de0; deploy d642de0 alone; census resumes; technical-submission finish lines (SUB-FINISH-TAP-WORDING1); GAMEPLAN-SUB-FLOOR1; STYLE-MOD-REMOVE1; PAIRED-HARNESS1; design rulings, then Sambo.
+- **INJURY-SUB-UNBUILT1** [filed 2026-11-17, MEASURED] — Van ruled injury submissions removed as a finish type (2026-11-12; SUB-RATE1 addendum 2026-11-13). Not built: fight_integration.py:2068 at a61a78f still writes "Submission (Injury - <name>)". In the paired run they were 86 of 276 submissions in control, 70 of 279 in the noise arm and 52 of 232 under the cut (outputs/cut_deploy_phase0b_2026-11-17.txt:139, :145, :151). The string is read at awards.py:60 and game_bridge.py:10192, :14108, :18514. See LIVE-METHOD-FORMAT1: the marker is dropped at the store boundary, so the player meets these finishes through the injury headline, not the method. Needs its own Gate 0. Queue position not ruled. Status 2026-11-18: BUILT LOCAL d642de0 (three files: fight_engine.py +7/-4, fight_integration.py +10/-48, game_bridge.py +0/-116). All gates G1-G6 PASS. G6 paired pool SUB 244/1221 = 19.98% (one world 20.15%), TECH_SUB 78 of 244 = 32.0%, INJ 0 across all 1221. Not pushed, not deployed. Van 2026-11-17: the technical-submission finish lines get their own commit. Filing: claude/injury_sub_unbuilt1_build_filing_2026-11-18.md.
 - **SUB-TYPE-MIX1** [filed 2026-11-17, MEASURED, three arms, 3,633 fights] — control arm, counting injury and technical variants: armbar 86, rear naked choke 52, twister 36, calf slicer 31, americana 16, arm triangle 16, kimura 13, neck crank 12, guillotine 2, triangle 1 (outputs/cut_deploy_phase0b_2026-11-17.txt:17-53). Twister and calf slicer are third and fourth in all three arms. Not ruled. An earlier harvest shows the same ordering (LIVE-METHOD-FORMAT1, 2026-11-12: armbar 58, twister 32, calf slicer 29, rear naked choke 29, of 215).
 - **GAMEPLAN-SUB-FLOOR1** [filed 2026-11-17, OBSERVED, not measured] — on the fight camp page the coach recommended Hunt the Finish ("Sub attempt rate +20%") to a Ground & Pound fighter with submissions 54, against a BJJ Specialist the scout report says to keep off the ground. Under the cut a non-BJJ fighter below submissions 80 has no guaranteed attempt. Whether this game plan changes anything for such a fighter is not measured. READ, not measured: `_gameplan_from_specialty` in game_bridge.py returns SUBMISSION for any wrestling or grappling coach, with no fighter or opponent input; the page labels this as coach bias.
 - **EVENT-NUMBER-GAP1** [filed 2026-11-17, OBSERVED once] — the export at week 6 lists events 61 (week 1), 62 (week 2) and 64 (week 5); no 63.
+
+**New dockets 2026-11-18 (INJURY-SUB-UNBUILT1 build filing, local d642de0):**
+- **SUB-FINISH-TAP-WORDING1** [filed 2026-11-18, MEASURED] — on the commit's fixed set (1500 narrated fights, NEW code), submission finish lines contain the word "tap" case-insensitive in 23 of 100 Technical Submissions (23.00%) and 62 of 166 taps (37.35%). Pool: `FINISH_TEMPLATES["submission"]` at `narrative/commentary.py:2350-2357`. Dispatcher at `narrative/commentary.py:3587` (preceded by the `elif "sub" in method_lower:` check at `:3586`) keys on `'sub' in method.lower()`, so Technical Submission and Submission (tap) route to the same 6-entry pool. The wording is accurate for a tap, wrong for a Technical Submission (sleep from a choke or stoppage from a joint lock). Taps 62/166 and technical submissions 23/100 differ; not explained. Separate from the cold `FIGHT_OUTRO_SUBMISSION` pool (see `FIGHT-OUTRO-DEAD1`).
+- **FIGHT-OUTRO-DEAD1** [filed 2026-11-18, MEASURED + READ] — `narrative/commentary.py:4611` (inside `narrative/commentary.py:4610` `elif 'submission' in method_lower or 'sub' in method_lower:`) picks the fight outro from a single pool `FIGHT_OUTRO_SUBMISSION` (`:472-480`) for every method whose lowercased form contains "submission" or "sub". Pool line 478 reads `"{loser} goes to sleep in the choke! {winner} with the technical mastery!"` — wrong wording for a joint-lock Technical Submission (armbar/kimura/calf slicer), which is a stoppage, not a choke sleep. MEASURED: `generate_fight_outro` at `:4578` has ZERO callers in `cage_dynasty_web/` or `narrative/`; the pool is cold code on HEAD and never emits in the live path. Direct call confirms the pool fires if invoked (`outputs/injury_sub_precommit.txt:69`). Delete or wire: not ruled.
+- **TECH-SUB-SHARE1** [filed 2026-11-18, MEASURED] — on the G6 paired pool (3 worlds, seeds 20261114/15/16, 1221 fights), 78 of 244 submission wins are Technical Submissions (choke → sleep 16; joint-lock → stoppage 62), per `SUBMISSION_KIND` at `fight_engine.py`. The share of Tech Sub within SUB is 31.97%. The filed cut arm, before the build, had 52 injury-form finishes in 232 submissions (`outputs/cut_deploy_phase0b_2026-11-17.txt:151`). Architect's view, unsourced: far more frequent than real fights. Not ruled.
+- **INJURY-FORM-LEFTOVERS1** [filed 2026-11-18, READ] — after INJURY-SUB-UNBUILT1 build, no writer produces `Submission (Injury - X)` in the live path, but two artefacts remain:
+  - `awards.py:60-63` strips the `Injury - ` marker for the specialty string; UNREACHABLE for new output (no writer).
+  - `game_bridge.py` keeps two comments describing the old Injury form: `"Submission (Injury - armbar)"  → injury (OK by accident pre-C22)` and `"Submission (Injury - …)") are submission wins for career-`. Both are inside substring-collapse blocks that still work correctly; comments are historical.
+
+  Van 2026-11-17: no fix for old saves.
+- **FIGHT-COMMENTARY-ARTICLE1** [filed 2026-11-18, OBSERVED, four samples] — commentary generates `"transitions to a Armbar! This looks TIGHT!"` and similar: the article "a" is wrong before the vowel sound in "Armbar", "Americana", "Arm Triangle". Observed in four samples from `outputs/injury_sub_precommit.txt:87-176` (section 5): k=8 "a Armbar", k=72 "a Americana", k=96 "a Armbar", k=151 "a Arm Triangle". Same class as the existing row **HOF induction cosmetic "a All-Time Great"** which fixes the same article-before-vowel problem at `_induct_into_hof` in `game_bridge.py`; this is a sibling at a different site. The **Cosmetic batch** and **COSMETIC batch 2026-11-17** rows do not mention articles. Not ruled.
 
 Measured today:
 - **EXPORT-500** [filed 2026-11-11, ON PA a19a921 (deploy #10)] — get_universe_export read self._game_state.champions which GameState does not have; every export of a loaded game returned 500 on PA (error log 2026-10-19 and 2026-11-11). Fix uses bridge.get_champion(wc). Gate of record: two fresh games, weeks 0 and 10, 4/4 status 200, json loads, 9/9 vs raw divisions[wc].champion_id; negative control fires at 8/9 on corrupted name. Van's PA step 12 at deploy #10: 9/9 divisions carry a champion in the exported JSON.
@@ -109,6 +121,17 @@ Measured today:
   wrestler/sambo) ran 0 times in 6,480 fixed-population fights, a live
   week and a fresh game's first card. Whether CLINCH_POSITIONS is
   reachable there: not measured.
+  Addendum 2026-11-18: the block is unreachable from the live path
+  `simulate_narrated_fight`; it lives inside `fight_engine.simulate_exchange`
+  at `fight_engine.py:3915`, which is called only by
+  `fight_engine.simulate_fight` at `:4936`. Live path goes through
+  `fight_integration._simulate_exchange` (`fight_integration.py:1121`),
+  which does not call `fight_engine.simulate_exchange`. Prior "0 calls in
+  6,480 fixed-pop fights" measurement is consistent with the live path
+  never reaching the block; the fixed-pop 6,480 that did measure 0 would
+  need its entry point named to know whether it went through
+  `simulate_fight` (where the block lives) or the live path (where it
+  does not).
 - **BRIDGE-LABEL-FALLBACK1** [filed 2026-11-14, MEASURED 2026-11-16] —
   game_bridge's conversion silently turns a missing or unmapped stored
   label into Balanced. One-judge's counter cannot see it on the live
@@ -226,6 +249,14 @@ Measured today:
   — Van wants fighting types, how common each type is, and
   per-type abilities made smart. Design draft exists outside the
   repo. Scope and rulings pending.
+  Rulings (Van, 2026-11-17), none built: every fighter has a background
+  and an approach; Striker retires as a label; Boxing and Kickboxing
+  are both backgrounds; Taekwondo and Sanda are in, added after the
+  core eight; catch wrestling is out; Balanced means balanced; Control
+  and Submission Hunter are added as approaches; no fix for old saves.
+  Not ruled: how approach and gameplan interact; skill gates for
+  approaches; display as one phrase; signature limits. Working draft:
+  https://claude.ai/artifact/FdLihckb3cXhytXej94nSu
 
 **New dockets from interim deploy 2026-09-07** (one line each; full context
 in `claude/playtest_notes_2026-09-07.md` + `claude/interim_deploy_2026-09-07.md`):
